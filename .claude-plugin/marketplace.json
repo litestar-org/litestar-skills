@@ -6,5 +6,20 @@
     "name": "cofin",
     "url": "https://github.com/cofin"
   },
-  "plugins": []
+  "plugins": [
+    {
+      "name": "litestar-skills",
+      "source": "./",
+      "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
+      "version": "0.0.1",
+      "author": {
+        "name": "Cody Fincher",
+        "email": "cofin@litestar.dev"
+      },
+      "homepage": "https://github.com/cofin/litestar-skills",
+      "license": "MIT",
+      "keywords": ["litestar", "skills", "sqlspec", "advanced-alchemy", "msgspec", "dishka", "granian", "saq", "vite", "mcp"],
+      "category": "Development"
+    }
+  ]
 }

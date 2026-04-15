@@ -25,6 +25,16 @@ When adding a skill, command, subagent, or MCP server, update the relevant per-h
 | New MCP server | `.codex-plugin/plugin.json` `dependencies.tools`, `gemini-extension.json` `mcpServers`, and `.codex/config.toml` |
 | New host support | New `.<host>-plugin/plugin.json` + entry in `[[tool.bumpversion.files]]` |
 
+## Manifest Expansion Plans (v0.2+)
+
+Several host-manifest fields are deferred from v0.1 to avoid shipping empty stubs that may trip strict validators:
+
+- **`gemini-extension.json`**: `mcpServers` and `excludeTools` — added when the first Litestar MCP server ships (v0.2).
+- **`.claude-plugin/plugin.json`**: `mcpServers` — same as above.
+- **`.opencode/plugins/litestar-skills.js`**: currently a minimal `export default {}` stub. Real `@opencode-ai/plugin` integration may land if programmatic registration proves necessary; OpenCode's native `.claude/skills/` + `.agents/skills/` discovery covers v0.1 needs.
+
+When adding any of the above, update both the manifest and this section.
+
 ## Version Sync Rule
 
 If a new file contains a `version` string, add it to `[[tool.bumpversion.files]]` in `pyproject.toml` **in the same commit**. This is enforced by `make check`.

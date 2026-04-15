@@ -18,10 +18,12 @@
     "category": "Development",
     "capabilities": ["Read", "Write"],
     "defaultPrompt": [
-      "Scaffold a new Litestar app with opinionated defaults (Granian + msgspec + Advanced Alchemy)",
-      "Add a Litestar ecosystem plugin to this project (Granian / SAQ / Vite / MCP / Email)",
-      "Review this Litestar route handler against first-party conventions",
-      "Convert a SQLAlchemy model to Advanced Alchemy with audit columns"
+      "Expose this SQLAlchemy model as a Litestar Controller with full CRUD routes",
+      "Make my Litestar routes available as MCP tools via litestar-mcp",
+      "Wire up a Vite frontend (React / Vue / Svelte / HTMX / Inertia) with litestar-vite",
+      "Serve an AI model from Litestar — streaming responses, batching, background workers via SAQ",
+      "Implement JWT auth with refresh tokens, rotation, and secure cookie storage",
+      "Scaffold a new Litestar app with opinionated defaults (Granian + msgspec + advanced-alchemy + sqlspec)"
     ]
   }
 }
