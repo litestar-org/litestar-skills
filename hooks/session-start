@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# SessionStart hook for litestar-skills plugin
+# Injects Litestar-aware context into agent conversations at startup.
+# Supports: Claude Code, Codex CLI, Cursor IDE.
+
+set -euo pipefail
+
+# Determine plugin root directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Escape string for JSON embedding
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+# Build session context — Litestar-specific auto-triggers and conventions.
+# Full repo conventions live in AGENTS.md; this is the activation payload.
+session_context="You have the \`litestar-skills\` plugin installed.
+
+\`litestar-skills\` provides opinionated first-party skills, subagents, slash commands, and MCP servers for the Litestar framework and its ecosystem. Agents working on Litestar code MUST follow the conventions in AGENTS.md at the plugin root.
+
+AUTO-TRIGGER RULES:
+- When source files import \`litestar\`, \`litestar_granian\`, \`litestar_saq\`, \`litestar_vite\`, \`litestar_mcp\`, \`litestar_email\`, \`sqlspec\`, \`advanced_alchemy\`, \`msgspec\`, or \`dishka\`: activate the matching Litestar skill from this plugin's \`skills/\` directory.
+- When user asks to scaffold a Litestar app, add a Litestar ecosystem plugin, expose a model as a Controller, wire up Vite/React/Vue/Svelte/HTMX, add an MCP server, or integrate JWT auth: use the Litestar first-party stack.
+- When writing Litestar code examples: PEP 604 unions only (\`T | None\`), NEVER \`from __future__ import annotations\` (breaks runtime introspection), async all I/O, msgspec over Pydantic, advanced-alchemy / sqlspec over raw SQLAlchemy, Granian over uvicorn.
+- When choosing between libraries: prefer Litestar first-party — \`litestar-granian\`, \`litestar-saq\`, \`litestar-vite\`, \`litestar-mcp\`, \`litestar-email\`, \`sqlspec\`, \`advanced-alchemy\`, \`msgspec\`, \`dishka\`.
+- When writing Guards or authentication: use Guards at route/controller/app level — NEVER check auth inside handler bodies.
+
+CONVENTIONS:
+- Authoring skills: follow the XML-tagged section order (Code Style Rules → Quick Reference → <workflow> → <guardrails> → <validation> → <example> → References Index → Official References → Shared Styleguide Baseline).
+- SKILL.md frontmatter: \`name\` (kebab-case, matches dir), \`description\` (auto-activation signal + \"Not for X — why\" clause).
+- Canonical commands run via \`make <target>\`, never raw tool invocations.
+
+See AGENTS.md in the plugin root for full authoring rules, supported-host matrix, and version-sync conventions."
+
+session_context_escaped=$(escape_for_json "$session_context")
+
+# Output context injection as JSON based on detected platform.
+if [ -n "${CODEX_PLUGIN_ROOT:-}" ]; then
+  printf '{\n  "additional_context": "%s"\n}\n' "$session_context_escaped"
+elif [ -n "${CURSOR_PLUGIN_ROOT:-}" ]; then
+  printf '{\n  "additional_context": "%s"\n}\n' "$session_context_escaped"
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context_escaped"
+else
+  printf '{\n  "additional_context": "%s"\n}\n' "$session_context_escaped"
+fi
+
+exit 0

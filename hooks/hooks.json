@@ -1,4 +1,16 @@
 {
-  "$comment": "Empty stub — populated by Saga 4 (hooks-and-context-injection). See .agents/specs/v0.1-launch/prd.md. Claude Code format.",
-  "hooks": {}
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd\" session-start",
+            "async": false
+          }
+        ]
+      }
+    ]
+  }
 }

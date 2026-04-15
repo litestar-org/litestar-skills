@@ -1,5 +1,10 @@
 {
-  "$comment": "Empty stub — populated by Saga 4 (hooks-and-context-injection). Codex format (version 1).",
   "version": 1,
-  "hooks": {}
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "./hooks/session-start"
+      }
+    ]
+  }
 }
