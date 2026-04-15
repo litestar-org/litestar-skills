@@ -1,0 +1,10 @@
+{
+  "name": "litestar-marketplace",
+  "description": "The Litestar Marketplace — opinionated first-party skills, plugins, subagents, commands, and MCP servers for Litestar and its ecosystem",
+  "version": "0.0.1",
+  "owner": {
+    "name": "cofin",
+    "url": "https://github.com/cofin"
+  },
+  "plugins": []
+}

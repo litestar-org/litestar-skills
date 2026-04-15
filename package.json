@@ -1,0 +1,37 @@
+{
+  "name": "litestar-skills",
+  "version": "0.0.1",
+  "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
+  "main": ".opencode/plugins/litestar-skills.js",
+  "type": "module",
+  "license": "MIT",
+  "author": "Cody Fincher <cofin@litestar.dev>",
+  "homepage": "https://github.com/cofin/litestar-skills",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cofin/litestar-skills.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cofin/litestar-skills/issues"
+  },
+  "keywords": [
+    "litestar",
+    "skills",
+    "agent",
+    "ai",
+    "claude",
+    "gemini",
+    "codex",
+    "opencode",
+    "cursor",
+    "mcp"
+  ],
+  "devDependencies": {
+    "markdownlint-cli2": "^0.14.0",
+    "oxlint": "^1.0.0"
+  },
+  "scripts": {
+    "lint:js": "oxlint",
+    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.agents\" \"#.beads\""
+  }
+}

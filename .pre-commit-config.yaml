@@ -1,0 +1,34 @@
+# Pre-commit hooks — run via `prek` (Rust-based pre-commit alternative).
+# Install:  uv tool install prek && prek install
+# Run all:  prek run --all-files
+#
+# Slower checks (mypy, pyright, oxlint) are intentionally NOT here — run via `make check`.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^\.agents/
+      - id: end-of-file-fixer
+        exclude: ^\.agents/
+      - id: check-json
+        exclude: ^\.agents/
+      - id: check-toml
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.10
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.14.0
+    hooks:
+      - id: markdownlint-cli2
+        exclude: ^(\.agents/|\.beads/|node_modules/)

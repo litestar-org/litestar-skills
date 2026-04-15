@@ -1,10 +1,43 @@
-node_modules
-dist
-build
-coverage
-.env
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.venv/
+venv/
+.python-version-local
+
+# JS / Bun / Node
+node_modules/
+dist/
+build/
+
+# IDE / OS
 .DS_Store
+.env
+.env.local
 *.log
-.venv
-.agents
-.beads
+.vscode/
+.idea/
+
+# Host-local settings (may contain per-machine paths or tokens)
+.claude/settings.local.json
+
+# Flow framework state — local-only per project convention
+.agents/
+.beads/
+
+# Beads / Dolt internals
+.dolt/
+*.db
+.beads-credential-key
+.python-version

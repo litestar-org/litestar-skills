@@ -1,0 +1,27 @@
+{
+  "name": "litestar-skills",
+  "version": "0.0.1",
+  "description": "Opinionated first-party agent skills for the Litestar framework ecosystem",
+  "author": {
+    "name": "Cody Fincher",
+    "email": "cofin@litestar.dev"
+  },
+  "homepage": "https://github.com/cofin/litestar-skills",
+  "repository": "https://github.com/cofin/litestar-skills",
+  "license": "MIT",
+  "keywords": ["litestar", "skills", "agent", "ai", "sqlspec", "advanced-alchemy"],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks-codex.json",
+  "interface": {
+    "displayName": "Litestar Skills",
+    "shortDescription": "First-party Litestar framework skills: handlers, DTOs, DI, plugins, MCP, SAQ, Granian, SQLSpec, Advanced Alchemy",
+    "category": "Development",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "Scaffold a new Litestar app with opinionated defaults (Granian + msgspec + Advanced Alchemy)",
+      "Add a Litestar ecosystem plugin to this project (Granian / SAQ / Vite / MCP / Email)",
+      "Review this Litestar route handler against first-party conventions",
+      "Convert a SQLAlchemy model to Advanced Alchemy with audit columns"
+    ]
+  }
+}
