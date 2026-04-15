@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+coverage
+.env
+.DS_Store
+*.log
+.venv
+.agents
+.beads
