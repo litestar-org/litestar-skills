@@ -5,6 +5,10 @@ on:
     tags:
       - "v*"
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -31,15 +35,34 @@ jobs:
         run: |
           uv sync --extra dev
           bun install
+          uv tool install prek
 
       - name: Run check
         run: make check
+
+      - name: Determine release type
+        id: release_type
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ "$REF_NAME" =~ [a-zA-Z] ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ github.ref_name }}
+          IS_PRERELEASE: ${{ steps.release_type.outputs.prerelease }}
         run: |
-          gh release create "$TAG_NAME" \
-            --title "litestar-skills $TAG_NAME" \
+          args=(
+            "$TAG_NAME"
+            --title "litestar-skills $TAG_NAME"
             --generate-notes
+          )
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${args[@]}"
