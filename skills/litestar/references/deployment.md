@@ -25,7 +25,7 @@ The `LITESTAR_APP` environment variable specifies the application factory or ins
 export LITESTAR_APP="myapp.asgi:create_app"
 ```
 
-For Granian-specific tuning (HTTP/2, RSGI, worker model), see `../../litestar-granian/SKILL.md`.
+For Granian-specific tuning (HTTP/2, worker model), see `../../litestar-granian/SKILL.md`.
 
 ### Dockerfile CMD
 
@@ -43,7 +43,7 @@ Litestar supports multiple ASGI servers:
 | **granian** | Default (via `litestar-granian`) | Rust-based, lower latency, HTTP/2 |
 | **uvicorn** | Fallback | Well-tested, broader middleware ecosystem |
 
-Prefer Granian for new projects. Drop to uvicorn only when Granian's HTTP/2 / RSGI behavior is incompatible with your deploy target.
+Prefer Granian for new projects. Drop to uvicorn only when Granian's HTTP/2 behavior is incompatible with your deploy target.
 
 ## IAP (Identity-Aware Proxy) Authentication
 
