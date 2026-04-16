@@ -418,6 +418,7 @@ For detailed guides and reference tables, refer to the following documents in `r
 
 - **[Meta Constraints Reference](references/constraints.md)** -- Full table of all Meta constraint parameters with examples for numeric, string, bytes, and OpenAPI metadata.
 - **[Tagged Union Patterns](references/tagged-unions.md)** -- Discriminated union patterns: default tags, custom tag fields/values, nested unions, API versioning, and event systems.
+- **[Litestar Patterns](references/litestar-patterns.md)** — CamelizedBaseStruct, sqlspec-vs-manual to_json branches, hybrid msgspec + Pydantic schema pattern, `__post_init__` validation for Litestar apps.
 
 ---
 
