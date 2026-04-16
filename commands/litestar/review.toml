@@ -8,18 +8,21 @@ You are reviewing code in a Litestar project against the canonical patterns docu
 
 Review the files changed in the current branch (or the files the user points at). Focus on:
 
-1. **DTO correctness** — msgspec Structs with `Meta(rename="camel")`? Not Pydantic where msgspec would do?
+Apply the project's existing stack to each criterion — flag a violation only when code uses a pattern from a *different* stack than the rest of the project, not when it uses a valid alternative.
+
+1. **DTO / serialization correctness** — if project is on `msgspec`, are DTOs Structs with `Meta(rename="camel")`? If on Pydantic, do models use `alias_generator=to_camel` + `ConfigDict(populate_by_name=True)`? Flag mixed stacks (msgspec Struct AND `BaseModel` in the same request path).
 2. **Guards** — auth enforced via Guards at Controller class level? No inline `if not request.user:` checks?
-3. **DI** — services injected via `Provide()` or Dishka `Inject[T]`? Nothing instantiated inside handlers?
-4. **Data access** — using `SQLAlchemyAsyncRepositoryService`? Not hand-rolling queries for simple CRUD?
-5. **Pagination** — `OffsetPagination[T]` + `create_filter_dependencies`? Not hand-rolled limit/offset?
+3. **DI** — services injected via `Provide()` or Dishka `Inject[T]` per the project's DI choice? Nothing instantiated inside handlers?
+4. **Data access** — matches the project's stack? `SQLAlchemyAsyncRepositoryService` in an `advanced-alchemy` project, `SQLSpecAsyncService` + driver methods in a `sqlspec` project, or `async_sessionmaker` + hand-rolled statements in a raw-SA project. Flag cross-stack imports (e.g., an `advanced_alchemy` import inside a sqlspec-only repo).
+5. **Pagination** — matches the project's stack? `OffsetPagination[T]` + `create_filter_dependencies` for `advanced-alchemy`; `LimitOffsetFilter` + `OrderByFilter` for `sqlspec`; `.limit()` / `.offset()` + hand-rolled envelope for raw-SA. Flag hand-rolled `limit` / `offset` query params inside handlers in AA / sqlspec projects.
 6. **Exceptions** — custom hierarchy extending `ApplicationError`? Registered via `exception_handlers`? No inline try/except in handlers?
-7. **Settings** — `@dataclass` + `get_env()` + `@lru_cache`? Not Pydantic Settings?
+7. **Settings** — matches the project's stack? `@dataclass(frozen=True)` + `get_env()` + `@lru_cache` if fresh project / no Pydantic; `pydantic_settings.BaseSettings` if Pydantic is already in-stack. Flag mixed (half-dataclass, half-BaseSettings). Flag `msgspec.Struct` used for config.
 8. **Async** — all I/O handlers are `async def`? No `asyncio.create_task()` for background work (use SAQ)?
 9. **Controller structure** — domain-clustered (`/api/accounts`, `/api/teams`)? Not HTTP-method-clustered?
-10. **Plugin usage** — first-party plugins used where available (Granian / SAQ / Vite / MCP / Email)?
+10. **Plugin usage** — first-party plugins used where available? Check against the project's picked stack: Granian or uvicorn (the one the project chose), SAQ with Redis or Postgres broker (matching the project), litestar-vite if there's a frontend, litestar-mcp, litestar-email, etc.
 11. **Return types** — all handlers have explicit return type annotations?
 12. **`from __future__ import annotations`** — present in consumer app modules? Absent from library-introspected modules?
+13. **Match-your-stack hygiene** — no forced-path language inside the project's own docs / READMEs (e.g., "use X, not Y" where both are valid alternatives). See `.agents/product-guidelines.md` §Match-Your-Stack Principle for the full list of decision points.
 
 ## Process
 

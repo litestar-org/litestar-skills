@@ -254,7 +254,7 @@ Before delivering Litestar + SAQ code, verify:
 
 ## Example
 
-**Task:** A Litestar app with a default queue, an email task, a cleanup CronJob, and a handler that enqueues notifications.
+**Task:** A Litestar app with a default queue, an email task, a cleanup CronJob, and a handler that enqueues notifications. This example uses Redis as the SAQ broker; swap `dsn=settings.redis.url` for `dsn=settings.database.url` if the project is PG-only — see Quick Reference above for both patterns.
 
 ```python
 # app/server/plugins.py
@@ -267,7 +267,7 @@ def create_saq_plugin() -> SAQPlugin:
     settings = get_settings()
     return SAQPlugin(
         config=SAQConfig(
-            dsn=settings.redis.url,
+            dsn=settings.redis.url,          # Redis broker — swap for settings.database.url in PG-only stacks
             use_server_lifespan=True,
             web_enabled=settings.saq.web_enabled,
             queue_configs=[
