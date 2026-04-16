@@ -559,34 +559,14 @@ async def workspace_stream(
 
 ### Realtime Event Contract
 
-Define a canonical event envelope for all realtime messages:
+`RealtimeEvent` is the canonical envelope for all realtime messages — a `CamelizedBaseStruct`
+with `scope`, `event_type`, optional `actor` / `entity` refs, and a `__post_init__` validator
+that enforces the required ID fields per scope.
 
-```python
-import msgspec
-from datetime import UTC, datetime
-from typing import Any, Literal
-from uuid import UUID
+> See [realtime-events.md](realtime-events.md) for the canonical `RealtimeEvent` contract,
+> `REALTIME_SCOPE_ACL`, `RealtimeActor`, `RealtimeEntityRef`, and full scope ACL details.
 
-RealtimeScope = Literal["workspace", "user", "global"]
-
-
-class RealtimeEvent(msgspec.Struct, kw_only=True):
-    """Canonical realtime event envelope."""
-
-    schema_version: str = "1.0"
-    event_type: str
-    scope: RealtimeScope
-    published_at: datetime = msgspec.field(
-        default_factory=lambda: datetime.now(UTC),
-    )
-    workspace_id: UUID | None = None
-    user_id: UUID | None = None
-    actor: RealtimeActor | None = None
-    entity: RealtimeEntityRef | None = None
-    payload: dict[str, Any] = msgspec.field(default_factory=dict)
-```
-
-Scope access control mapping:
+Quick-reference scope ACL:
 
 | Scope       | Access Rule                       |
 |-------------|-----------------------------------|
