@@ -1,0 +1,191 @@
+description = "Configure a Litestar project — settings approach, library integration, plugin wiring, environment management"
+prompt = """
+# Configure a Litestar Project
+
+You are helping the user configure their Litestar application. This covers settings architecture, library integration, and plugin wiring.
+
+## What to configure
+
+Ask the user what they need:
+
+1. **Settings architecture** — how to structure app configuration
+2. **Integrate a library** — add an ecosystem library with opinionated config
+3. **Environment setup** — .env files, env vars, secrets management
+
+## Option 1: Settings Architecture
+
+Ask which approach the user wants:
+
+### A) `@dataclass` + `get_env()` (canonical — recommended)
+
+This is the pattern used in `litestar-fullstack-spa` and `dma/accelerator`. Type-safe, zero external deps, cached.
+
+```python
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+from functools import lru_cache
+from typing import Any, Callable, TypeVar
+
+T = TypeVar("T")
+
+TRUE_VALUES = frozenset({"True", "true", "1", "yes", "Y", "y", "T", "t"})
+
+def get_env(key: str, default: Any = None) -> Callable:
+    \"\"\"Return a field default_factory that reads an env var with type coercion.\"\"\"
+    def _factory() -> Any:
+        value = os.environ.get(key)
+        if value is None:
+            return default
+        if isinstance(default, bool):
+            return value in TRUE_VALUES
+        if isinstance(default, int):
+            return int(value)
+        if isinstance(default, float):
+            return float(value)
+        return value
+    return _factory
+
+
+@dataclass
+class DatabaseSettings:
+    URL: str = field(default_factory=get_env("DATABASE_URL", "postgresql+asyncpg://localhost/app"))
+    POOL_SIZE: int = field(default_factory=get_env("DATABASE_POOL_SIZE", 10))
+    ECHO: bool = field(default_factory=get_env("DATABASE_ECHO", False))
+
+
+@dataclass
+class RedisSettings:
+    URL: str = field(default_factory=get_env("REDIS_URL", "redis://localhost:6379/0"))
+
+
+@dataclass
+class AppSettings:
+    NAME: str = field(default_factory=get_env("APP_NAME", "My Litestar App"))
+    DEBUG: bool = field(default_factory=get_env("APP_DEBUG", False))
+    SECRET_KEY: str = field(default_factory=get_env("APP_SECRET_KEY", "change-me-in-production"))
+    ALLOWED_CORS_ORIGINS: list[str] = field(default_factory=lambda: ["http://localhost:3000"])
+    database: DatabaseSettings = field(default_factory=DatabaseSettings)
+    redis: RedisSettings = field(default_factory=RedisSettings)
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> AppSettings:
+    return AppSettings()
+```
+
+Scaffold this at `lib/settings.py` with the `get_env` utility at `utils/env.py`.
+
+**Why this over Pydantic Settings:**
+- Zero dependency (no pydantic-settings install needed)
+- Same `@lru_cache` pattern for singleton settings
+- Type coercion via `get_env()` is explicit and debuggable
+- Nested dataclasses compose naturally
+- The `get_env()` return type is a `Callable` (field `default_factory`) which means env vars are read at instantiation time, not import time — important for testing
+
+### B) Pydantic `BaseSettings` (popular alternative)
+
+For users who already use Pydantic or want automatic `.env` file loading and validation:
+
+```python
+from __future__ import annotations
+
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class DatabaseSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="DATABASE_")
+
+    url: str = "postgresql+asyncpg://localhost/app"
+    pool_size: int = 10
+    echo: bool = False
+
+
+class AppSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="APP_", env_file=".env", extra="ignore")
+
+    name: str = "My Litestar App"
+    debug: bool = False
+    secret_key: str = "change-me-in-production"
+    database: DatabaseSettings = DatabaseSettings()
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> AppSettings:
+    return AppSettings()
+```
+
+**Trade-off:** adds `pydantic-settings` dep but gives automatic `.env` loading, nested model validation, and JSON schema generation. Canonical Litestar apps don't use this — but it's a valid choice for teams already in the Pydantic ecosystem.
+
+### C) Simple single-file config (tutorials / demos)
+
+For quick starts that don't need the full `get_env()` machinery:
+
+```python
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Settings:
+    database_url: str = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///app.db")
+    secret_key: str = os.environ.get("SECRET_KEY", "dev-secret")
+    debug: bool = os.environ.get("DEBUG", "false").lower() in ("true", "1", "yes")
+
+settings = Settings()  # singleton at module level
+```
+
+**Trade-off:** reads env at import time (not test-friendly), no nested config, no type-safe coercion. Fine for demos; refactor to option A for production.
+
+## Option 2: Integrate a Library
+
+Present this menu:
+
+1. **litestar-granian** — Granian ASGI server
+2. **litestar-saq** — Async task queue (Redis or Postgres backend)
+3. **litestar-vite** — Frontend build (React / Vue / Svelte / HTMX / Inertia / Angular / Astro)
+4. **litestar-mcp** — MCP tools/resources over JSON-RPC 2.0
+5. **litestar-email** — Email (SMTP / SendGrid / Resend / Mailgun / InMemory)
+6. **litestar-htmx** — HTMX integration (HTMXRequest, hx-ext="litestar" templating)
+7. **advanced-alchemy** — SQLAlchemy ORM + Repository Service + OffsetPagination + Alembic
+8. **sqlspec** — Low-level SQL adapter + query builder + Arrow + framework extensions
+9. **pytest-databases** — Container-based database test fixtures
+10. **litestar-deployment** — Docker / Railway / K8s / Cloud Run / systemd scaffolding
+
+For each selected library:
+
+1. **Add the dependency** to `pyproject.toml` (+ `package.json` if frontend)
+2. **Add a settings section** to the project's settings file (following whichever pattern the project uses — detect from existing code)
+3. **Register the plugin** in `Litestar(plugins=[...])`
+4. **Add configuration** following the canonical pattern from the skill at `skills/<name>/SKILL.md`
+5. **Create a minimal working example** (one route/handler)
+6. **Run `make check`**
+
+### Library-specific notes
+
+- **litestar-vite**: ask which frontend framework; scaffold the matching `vite.config.ts` from `skills/litestar-vite/references/modes.md`
+- **litestar-saq**: ask for queue backend (Redis or Postgres); configure `QueueConfig` with the chosen DSN; add `use_server_lifespan=True`
+- **litestar-mcp**: show which routes are now MCP-exposed and how to test with `POST /mcp/`
+- **advanced-alchemy**: if no models exist yet, scaffold an example domain using `/litestar:new-domain`
+- **sqlspec**: ask which database adapter (asyncpg, psycopg, oracledb, duckdb, etc.); scaffold the adapter config
+- **pytest-databases**: add to `[project.optional-dependencies.test]`, create `tests/conftest.py` with fixtures
+
+## Option 3: Environment Setup
+
+Guide the user through:
+
+1. **`.env` file** — create `.env` with all settings the app expects (from the settings dataclass)
+2. **`.env.example`** — create a committed version with placeholder values
+3. **Docker env** — create `.env.docker` for docker-compose overrides (service names instead of localhost)
+4. **Secrets management** — for production: Google Secret Manager, AWS Secrets Manager, Vault, or Railway/Fly env vars. Show the `ENV_SECRETS` pattern from the canonical apps.
+5. **`.gitignore` entry** — ensure `.env` and `.env.local` are ignored
+
+## After configuring
+
+Run `make check` to verify the configuration is valid and the app starts.
+"""
