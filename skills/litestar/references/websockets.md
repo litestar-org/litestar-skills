@@ -193,12 +193,37 @@ class ChannelSettings:
 
 Register the plugin in your application plugins list. The `ChannelsPlugin` instance is used directly as a Litestar plugin.
 
-Backend options:
+### Backend options — pick the branch for your stack
 
-- **`MemoryChannelsBackend`** - Single-process, default for development.
-- **Redis** - Multi-process / multi-node production deployments.
+There are four supported Channels backends. Pick based on what's already in the project's dependency graph — do not introduce Redis just for Channels if the stack is PostgreSQL-only, and do not use a PG-LISTEN backend if Redis is already present for cache / SAQ / sessions.
 
-### Redis-backed Channels
+| Backend | Pick when | Avoid when |
+|---|---|---|
+| `MemoryChannelsBackend` | Dev / tests / single-process CLIs; no persistence needed | Multi-process deploys (workers do not share state) |
+| `RedisChannelsPubSubBackend` | Redis is already in the stack (SAQ+Redis, cache, sessions) | The project is PostgreSQL-only and Redis would be purely for Channels |
+| `sqlspec` PG `LISTEN` / `NOTIFY` backend | Project is `sqlspec` + PostgreSQL; SAQ runs on PG; no Redis | Project uses `advanced-alchemy` (prefer its session-aware backend) or Redis is already present |
+| `advanced-alchemy` session-aware backend | Project is `advanced-alchemy` + PostgreSQL; reuse the same engine / session factory | Project is `sqlspec` or has an independent Redis broker |
+
+**Anti-patterns:**
+
+- Dropping in the `SQLAlchemy`-based Channels backend when the project is `sqlspec`-only — drags an ORM dep into a project that explicitly avoided one.
+- Wiring a PG-LISTEN backend when Redis is already handling SAQ queues and session cache — pay the connection overhead twice for no gain.
+- Forcing Redis as a "canonical" Channels backend when the deploy target is a single Postgres + app image (extra infra, extra failure surface).
+
+### Branch A — `MemoryChannelsBackend` (dev / single-process)
+
+```python
+from litestar.channels import ChannelsPlugin
+from litestar.channels.backends.memory import MemoryChannelsBackend
+
+
+channels = ChannelsPlugin(
+    backend=MemoryChannelsBackend(history=60),
+    arbitrary_channels_allowed=True,
+)
+```
+
+### Branch B — `RedisChannelsPubSubBackend` (Redis already in stack)
 
 ```python
 from litestar.channels import ChannelsPlugin
@@ -219,7 +244,35 @@ channels = ChannelsPlugin(
 app = Litestar(plugins=[channels])
 ```
 
-This auto-creates a WS handler at `/ws/{channel}` that relays published messages.
+Auto-creates a WS handler at `/ws/{channel}` that relays published messages.
+
+### Branch C — `sqlspec` PG `LISTEN` / `NOTIFY` backend
+
+Use when the project is `sqlspec` + PostgreSQL and you want Channels without introducing Redis. The sqlspec extension for Litestar Channels reuses the same Postgres connection pool. See [`../../sqlspec/SKILL.md`](../../sqlspec/SKILL.md) for the extension config.
+
+```python
+# Shape (exact import path is in the sqlspec extension — see sibling skill)
+from sqlspec.extensions.litestar.channels import PostgresListenNotifyBackend
+
+channels = ChannelsPlugin(
+    backend=PostgresListenNotifyBackend(config=sqlspec_config),
+    arbitrary_channels_allowed=True,
+    create_ws_route_handlers=True,
+)
+```
+
+### Branch D — `advanced-alchemy` session-aware backend
+
+Use when the project is `advanced-alchemy` + PostgreSQL. The session-aware backend participates in the existing async session factory, so publishes from repository services share the request's transaction boundary when you want them to.
+
+```python
+from advanced_alchemy.extensions.litestar.channels import SessionAwareChannelsBackend
+
+channels = ChannelsPlugin(
+    backend=SessionAwareChannelsBackend(session_factory=settings.db.get_session),
+    arbitrary_channels_allowed=True,
+)
+```
 
 ### Channel Naming Patterns
 
@@ -557,17 +610,19 @@ class ETLLogObserver:
 
 ## WS-vs-Channels Decision Matrix
 
-| Use case | Plain WS + Redis pub/sub (hand-rolled) | Channels plugin |
+"Broker" below means whatever pub/sub backend the project is on: Redis, PostgreSQL LISTEN/NOTIFY via sqlspec, advanced-alchemy session-aware, or in-memory for dev.
+
+| Use case | Plain WS + hand-rolled broker | Channels plugin |
 |---|---|---|
-| One-off streaming, few channel names | ✓ — simpler, no extra dep | — |
+| One-off streaming, few channel names | ✓ — simpler, fewer moving parts | — |
 | Typed channels, automatic history / backlog | — | ✓ |
-| Publishing from SAQ / CLI to WS clients | Works but you own the Redis client | ✓ — shared backend |
+| Publishing from SAQ / CLI to WS clients | Works but you own the broker client | ✓ — shared backend across app + workers |
 | Dynamic channel names (`workspace:{uuid}`) | ✓ — any string is a channel | ✓ — via `arbitrary_channels_allowed=True` |
 | Auto-generated `/ws/{channel}` handlers | — | ✓ |
 | Per-connection auth and state | ✓ — write your own | ✓ — via `@websocket` + `channels.start_subscription` |
-| Multi-process / multi-node deployments | ✓ if you wire Redis explicitly | ✓ — built in |
+| Multi-process / multi-node deployments | ✓ if you wire the broker explicitly | ✓ — built in (Redis / PG / AA backends) |
 
-Canonical apps use the hand-rolled path for simple streams (single workspace event) and Channels for broader pub/sub where multiple consumers + backlog tolerance matter. Don't run both in parallel for the same channel namespace — pick one.
+Canonical apps use the hand-rolled path for simple single-stream cases and Channels for broader pub/sub where multiple consumers + backlog tolerance matter. Don't run both in parallel for the same channel namespace — pick one. **Channels backend choice is orthogonal to this matrix** — see "Backend options" above for how to pick the backend based on your data-access stack.
 
 ---
 
