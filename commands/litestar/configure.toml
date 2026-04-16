@@ -185,6 +185,90 @@ Guide the user through:
 4. **Secrets management** — for production: Google Secret Manager, AWS Secrets Manager, Vault, or Railway/Fly env vars. Show the `ENV_SECRETS` pattern from the canonical apps.
 5. **`.gitignore` entry** — ensure `.env` and `.env.local` are ignored
 
+## Option 4: App Architecture Patterns
+
+For users structuring their `server/` module, show these canonical patterns:
+
+### A) `ApplicationCore` Plugin (from `litestar-fullstack-spa`)
+
+The app's core wiring lives in a single `InitPluginProtocol` class. This class:
+- Sets `debug`, `openapi_config`, `cors_config`, `session_config`
+- Registers all plugins (structlog, granian, alchemy, vite, saq, email, domain)
+- Adds exception handlers, signature namespace types, middleware
+- Implements `CLIPluginProtocol` to register CLI command groups
+
+```python
+from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
+
+
+class ApplicationCore(InitPluginProtocol, CLIPluginProtocol):
+    def on_app_init(self, app_config: AppConfig) -> AppConfig:
+        settings = get_settings()
+        app_config.debug = settings.app.DEBUG
+        app_config.openapi_config = OpenAPIConfig(title=settings.app.NAME, ...)
+        app_config.cors_config = config.cors
+        app_config.exception_handlers = {ApplicationError: exception_to_http_response}
+        app_config.plugins.extend([
+            plugins.structlog, plugins.granian, plugins.alchemy,
+            plugins.vite, plugins.get_saq_plugin(), plugins.email,
+            plugins.domain,
+        ])
+        return app_config
+
+    def on_cli_init(self, cli: Group) -> None:
+        cli.add_command(user_management_group)
+```
+
+Then in `asgi.py`: `app = Litestar(plugins=[ApplicationCore()])` — one plugin to rule them all.
+
+**Why:** centralizes all wiring decisions in one auditable place. Plugins, middleware, exception handlers, OpenAPI config, CLI commands — all discoverable from one class.
+
+### B) `DomainPlugin` Auto-Discovery (from `litestar-fullstack-spa`)
+
+Automatically discovers and registers controllers, services, schemas, signals, and repositories from `domain/*/` subpackages — no manual imports needed:
+
+```python
+from litestar.plugins import InitPluginProtocol
+
+
+class DomainPlugin(InitPluginProtocol):
+    def on_app_init(self, app_config: AppConfig) -> AppConfig:
+        controllers = discover_domain_controllers(["app.domain"])
+        schemas = discover_domain_schemas(["app.domain"])
+        services = discover_domain_services(["app.domain"])
+        signals = discover_domain_signals(["app.domain"])
+
+        app_config.route_handlers.extend(controllers)
+        app_config.signature_namespace.update(schemas)
+        app_config.signature_namespace.update(services)
+        app_config.listeners.extend(signals)
+        return app_config
+```
+
+**Why:** adding a new domain (via `/litestar:new-domain`) just creates the directory — the `DomainPlugin` picks it up automatically. No need to manually import and register each controller.
+
+**Trade-off:** discovery uses `importlib` to scan packages. Large apps with many domains benefit (20+ controllers). Small apps (2-3 domains) can just list controllers manually.
+
+### C) `plugins.py` Module Pattern
+
+Centralize all plugin instantiation in `server/plugins.py`:
+
+```python
+from functools import cache
+
+structlog = StructlogPlugin(config=config.log)
+vite = VitePlugin(config=config.vite)
+alchemy = SQLAlchemyPlugin(config=config.alchemy)
+granian = GranianPlugin()
+domain = DomainPlugin()
+
+@cache
+def get_saq_plugin() -> SAQPlugin:
+    return SAQPlugin(config=config.get_saq_config())
+```
+
+**Why `@cache` for SAQ:** SAQ connects to Redis at plugin instantiation. Using `@cache` defers the connection to first access — avoids requiring Redis during `import` (important for Docker builds, tests, CLI commands that don't need SAQ).
+
 ## After configuring
 
 Run `make check` to verify the configuration is valid and the app starts.
