@@ -5,7 +5,7 @@ The service layer pattern in a Litestar app depends on your data-access stack. P
 ## Pick the branch for your stack
 
 - **`advanced-alchemy`** → `SQLAlchemyAsyncRepositoryService` — opinionated ORM service with audit fields, filters, and pagination built in. Start here when you want a complete CRUD surface without writing SELECTs.
-- **`sqlspec`** → `SQLSpecAsyncService` + driver methods — thin async service over explicit SQL. Start here for direct SQL control, 15+ adapter support, or Arrow / analytics integration. See [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md) *(TODO(Ch5) — stub link, lands in Ch5)*.
+- **`sqlspec`** → `SQLSpecAsyncService` + driver methods — thin async service over explicit SQL. Start here for direct SQL control, 15+ adapter support, or Arrow / analytics integration. See [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md).
 - **raw SQLAlchemy** → `async_sessionmaker` + hand-rolled statements — start here only when you have an existing SA Core / ORM investment and explicitly do not want the repository abstraction.
 
 ## Branch A — `advanced-alchemy` repository service
@@ -121,7 +121,7 @@ class PostService(SQLSpecAsyncService):
         )
 ```
 
-Pick `sqlspec` when: you want direct SQL, you're targeting multiple database backends (15+ adapters including DuckDB and BigQuery), or you need Arrow-native result streams for analytics. See [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md) *(TODO(Ch5))* for the full pattern including filters, pagination, and transaction boundaries.
+Pick `sqlspec` when: you want direct SQL, you're targeting multiple database backends (15+ adapters including DuckDB and BigQuery), or you need Arrow-native result streams for analytics. See [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md) for the full pattern including filters, pagination, and transaction boundaries.
 
 ## Branch C — raw SQLAlchemy with manual sessions
 

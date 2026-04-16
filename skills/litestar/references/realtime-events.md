@@ -320,7 +320,7 @@ await self.publisher.publish_global_event(
 - WebSocket guard chain: [guards.md](guards.md)
 - Channels backend config + `stream_pubsub` subscriber: [websockets.md](websockets.md)
 - `to_json` serializer import choice (sqlspec vs hand-rolled): [`../../msgspec/references/litestar-patterns.md`](../../msgspec/references/litestar-patterns.md)
-- SQL-observer publishing pattern: `../../sqlspec/references/observability.md` (TODO(Ch5))
+- SQL-observer publishing pattern: [`../../sqlspec/references/observability.md`](../../sqlspec/references/observability.md) — StatementObserver → Channels bridge for broadcasting DB writes to WebSocket clients.
 
 ## Shared Styleguide Baseline
 

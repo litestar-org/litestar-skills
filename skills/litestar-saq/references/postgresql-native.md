@@ -60,7 +60,7 @@ ExecutionTarget = Literal["local", "cloudrun", "immediate"]
 
 ## `TaskService` — core CRUD
 
-The service inherits from `SQLSpecAsyncService` (see `../../sqlspec/references/service-patterns.md` *(TODO(Ch5) — stub link, lands in Ch5)*). Each method below is cited from `dma/accelerator/src/py/dma/domain/system/services/_task.py`.
+The service inherits from `SQLSpecAsyncService` (see [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md)). Each method below is cited from `dma/accelerator/src/py/dma/domain/system/services/_task.py`.
 
 ### `create_task` (L29–99)
 
@@ -344,8 +344,8 @@ If you need dashboards or you're already on Redis, stay with SAQ. If the app is 
 ## Cross-references
 
 - [`../SKILL.md`](../SKILL.md) — SAQ paths (Redis broker and PG broker)
-- [`../../litestar/references/settings.md`](../../litestar/references/settings.md) — settings patterns *(TODO(Ch5) — PEP 562 lazy-settings guidance lands in Ch5)*
-- [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md) — `SQLSpecAsyncService` base class *(TODO(Ch5) — stub link, file created in Ch5)*
+- [`../../litestar/references/settings.md`](../../litestar/references/settings.md) — settings patterns (including PEP 562 lazy materialization)
+- [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md) — `SQLSpecAsyncService` base class + canonical service patterns
 
 ## Shared Styleguide Baseline
 

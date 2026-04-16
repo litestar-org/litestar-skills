@@ -65,7 +65,7 @@ class UserService(SQLSpecAsyncService):
         )
 ```
 
-Pick `sqlspec` when you want direct SQL, multi-adapter support (15+ drivers), or Arrow integration for analytics. → See [`../sqlspec/references/service-patterns.md`](../sqlspec/references/service-patterns.md) *(landing in Ch5 — stub link TODO(Ch5))*.
+Pick `sqlspec` when you want direct SQL, multi-adapter support (15+ drivers), or Arrow integration for analytics. → See [`../sqlspec/references/service-patterns.md`](../sqlspec/references/service-patterns.md).
 
 ### msgspec DTO with camelCase
 

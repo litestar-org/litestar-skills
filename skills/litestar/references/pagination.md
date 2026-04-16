@@ -5,7 +5,7 @@ Never hand-roll `limit` / `offset` query params inside a handler. The canonical 
 ## Pick the branch for your stack
 
 - **`advanced-alchemy`** → `OffsetPagination[T]` + `create_filter_dependencies` (covered in full below). Controller declares the filter set declaratively; `list_and_count` + `to_schema` synthesize the response envelope.
-- **`sqlspec`** → `LimitOffsetFilter` + `OrderByFilter` applied to the driver call. See [`../../sqlspec/references/service-patterns.md#filters`](../../sqlspec/references/service-patterns.md#filters) *(TODO(Ch5) — stub link, lands in Ch5)*.
+- **`sqlspec`** → `LimitOffsetFilter` + `OrderByFilter` applied to the driver call. See [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md) for `*filters` composition and [`../../sqlspec/references/filters.md`](../../sqlspec/references/filters.md) for filter types.
 - **raw SQLAlchemy** → apply `.limit()` / `.offset()` on a Core statement and return a hand-rolled pagination envelope (summary below).
 
 ## Branch A — `advanced-alchemy` pagination
@@ -153,7 +153,7 @@ async def list_all(self, *filters) -> list[Post]:
     )
 ```
 
-See [`../../sqlspec/references/service-patterns.md#filters`](../../sqlspec/references/service-patterns.md#filters) *(TODO(Ch5))* for the envelope shape and tenant-scoped filter patterns.
+See [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md) for the envelope shape and tenant-scoped filter patterns.
 
 ## Branch C — raw SQLAlchemy pagination
 
