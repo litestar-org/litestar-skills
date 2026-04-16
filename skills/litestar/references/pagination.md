@@ -1,8 +1,16 @@
-# Pagination (`OffsetPagination` + `create_filter_dependencies`)
+# Pagination — Per-Stack Patterns
 
-Never hand-roll `limit` / `offset` query params. Use `create_filter_dependencies` from `advanced_alchemy.extensions.litestar` to declare the filter set on the Controller; pair `list_and_count` with `to_schema` for the response envelope.
+Never hand-roll `limit` / `offset` query params inside a handler. The canonical pagination pattern depends on your data-access stack — pick the branch that matches your project.
 
-## Pattern
+## Pick the branch for your stack
+
+- **`advanced-alchemy`** → `OffsetPagination[T]` + `create_filter_dependencies` (covered in full below). Controller declares the filter set declaratively; `list_and_count` + `to_schema` synthesize the response envelope.
+- **`sqlspec`** → `LimitOffsetFilter` + `OrderByFilter` applied to the driver call. See [`../../sqlspec/references/service-patterns.md#filters`](../../sqlspec/references/service-patterns.md#filters) *(TODO(Ch5) — stub link, lands in Ch5)*.
+- **raw SQLAlchemy** → apply `.limit()` / `.offset()` on a Core statement and return a hand-rolled pagination envelope (summary below).
+
+## Branch A — `advanced-alchemy` pagination
+
+Use `create_filter_dependencies` from `advanced_alchemy.extensions.litestar` to declare the filter set on the Controller; pair `list_and_count` with `to_schema` for the response envelope.
 
 ```python
 from __future__ import annotations
@@ -58,7 +66,7 @@ class UserController(Controller):
         return users_service.to_schema(db_user, schema_type=User)
 ```
 
-## `OffsetPagination[T]` Response Shape
+### `OffsetPagination[T]` response shape
 
 ```json
 {
@@ -71,7 +79,7 @@ class UserController(Controller):
 
 The DTO `T` is whatever you pass to `schema_type=`. Clients page by setting `?currentPage=2&pageSize=20` (camelCase, since DTOs rename) or the equivalent `limit` / `offset` query params depending on `pagination_type`.
 
-## Filter Field Catalog
+### Filter field catalog
 
 `create_filter_dependencies` accepts a dict mapping filter names to config:
 
@@ -88,7 +96,7 @@ The DTO `T` is whatever you pass to `schema_type=`. Clients page by setting `?cu
 | `created_at` | bool | Add `?createdBefore=` / `?createdAfter=` filters |
 | `updated_at` | bool | Add `?updatedBefore=` / `?updatedAfter=` filters |
 
-## `list_and_count` + `to_schema` Workflow
+### `list_and_count` + `to_schema` workflow
 
 ```python
 # 1. Service returns raw rows + total count
@@ -105,8 +113,81 @@ return users_service.to_schema(
 
 `to_schema` reads filter context to populate `limit`, `offset`, `total` — never compute them yourself.
 
+## Branch B — `sqlspec` pagination (`LimitOffsetFilter` + `OrderByFilter`)
+
+`sqlspec` exposes pagination as filter objects passed into driver calls. The Controller receives filters as a DI dependency, the service applies them to the SQL.
+
+```python
+from __future__ import annotations
+
+from litestar import Controller, get
+from litestar.params import Dependency
+
+from sqlspec.filters import LimitOffsetFilter, OrderByFilter
+
+from app.schemas import Post
+from app.services import PostService
+
+
+class PostController(Controller):
+    path = "/api/posts"
+
+    @get("/")
+    async def list_posts(
+        self,
+        posts_service: PostService,
+        limit_offset: LimitOffsetFilter,
+        order_by: OrderByFilter,
+    ) -> list[Post]:
+        return await posts_service.list_all(limit_offset, order_by)
+```
+
+The service passes filters straight through to the driver:
+
+```python
+async def list_all(self, *filters) -> list[Post]:
+    return await self.driver.select(
+        "SELECT * FROM posts",
+        filters=filters,
+        schema_type=Post,
+    )
+```
+
+See [`../../sqlspec/references/service-patterns.md#filters`](../../sqlspec/references/service-patterns.md#filters) *(TODO(Ch5))* for the envelope shape and tenant-scoped filter patterns.
+
+## Branch C — raw SQLAlchemy pagination
+
+If you're on raw SA without `advanced-alchemy`, apply `.limit()` / `.offset()` on a Core statement and return a hand-rolled pagination envelope. The caller is responsible for computing `total` via a separate `count()` query.
+
+```python
+from __future__ import annotations
+
+import msgspec
+from sqlalchemy import func, select
+
+from app.db.models import Post
+
+
+class PagePosts(msgspec.Struct, rename="camel"):
+    items: list[Post]
+    limit: int
+    offset: int
+    total: int
+
+
+async def list_posts(session: AsyncSession, limit: int = 20, offset: int = 0) -> PagePosts:
+    stmt = select(Post).limit(limit).offset(offset).order_by(Post.created_at.desc())
+    result = await session.execute(stmt)
+    items = list(result.scalars())
+    total = await session.scalar(select(func.count()).select_from(Post)) or 0
+    return PagePosts(items=items, limit=limit, offset=offset, total=total)
+```
+
+No free filter DI, no automatic envelope. Consider graduating to `advanced-alchemy` or `sqlspec` once the pagination surface grows beyond one or two Controllers.
+
 ## Cross-references
 
-- Repository service methods (`list_and_count`, `to_schema`): [services.md](services.md)
+- Repository service methods (advanced-alchemy `list_and_count`, `to_schema`): [services.md](services.md)
 - DTO definitions for `schema_type`: [dto.md](dto.md)
 - Controller class structure: [routing.md](routing.md)
+- Sibling skills: [`../../sqlspec/SKILL.md`](../../sqlspec/SKILL.md), [`../../advanced-alchemy/SKILL.md`](../../advanced-alchemy/SKILL.md)
