@@ -389,6 +389,6 @@ async def test_account_creation_queues_welcome_email(client, email_service):
 
 ## Shared Styleguide Baseline
 
-- [General Principles](../../../.agents/code-styleguides/general.md)
-- [Python](../../../.agents/code-styleguides/python.md)
-- [Litestar](../../../.agents/code-styleguides/litestar.md)
+- [General Principles](../litestar-styleguide/references/general.md)
+- [Python](../litestar-styleguide/references/python.md)
+- [Litestar](../litestar-styleguide/references/litestar.md)

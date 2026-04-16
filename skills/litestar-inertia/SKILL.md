@@ -332,9 +332,9 @@ The canonical Litestar + Inertia stack lives at [`litestar-fullstack-inertia`](h
 
 ## Shared Styleguide Baseline
 
-- [General Principles](../../.agents/code-styleguides/general.md)
-- [Python](../../.agents/code-styleguides/python.md)
-- [TypeScript](../../.agents/code-styleguides/typescript.md)
-- [Litestar](../../.agents/code-styleguides/litestar.md)
+- [General Principles](../litestar-styleguide/references/general.md)
+- [Python](../litestar-styleguide/references/python.md)
+- [TypeScript](../litestar-styleguide/references/typescript.md)
+- [Litestar](../litestar-styleguide/references/litestar.md)
 
 Keep this skill focused on the Litestar ↔ Vite ↔ Inertia integration surface. Framework-agnostic React/Vue/Svelte patterns belong in the respective framework skills (if we ever port them) or `inertiajs.com` docs.

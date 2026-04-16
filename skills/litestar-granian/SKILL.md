@@ -230,7 +230,7 @@ For Litestar apps, prefer the plugin path described above.
 ## Shared Styleguide Baseline
 
 - Use shared styleguides for generic language/framework rules to reduce duplication in this skill.
-- [General Principles](../../../.agents/code-styleguides/general.md)
-- [Python](../../../.agents/code-styleguides/python.md)
-- [Litestar](../../../.agents/code-styleguides/litestar.md)
+- [General Principles](../litestar-styleguide/references/general.md)
+- [Python](../litestar-styleguide/references/python.md)
+- [Litestar](../litestar-styleguide/references/litestar.md)
 - Keep this skill focused on tool-specific workflows, edge cases, and integration details.

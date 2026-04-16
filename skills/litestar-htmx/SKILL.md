@@ -416,5 +416,5 @@ async def test_create_item_triggers_event(client):
 
 ## Shared Styleguide Baseline
 
-- [General Principles](../../../.agents/code-styleguides/general.md)
-- [Litestar](../../../.agents/code-styleguides/litestar.md)
+- [General Principles](../litestar-styleguide/references/general.md)
+- [Litestar](../litestar-styleguide/references/litestar.md)

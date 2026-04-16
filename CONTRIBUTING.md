@@ -6,8 +6,8 @@
 2. Fill in `SKILL.md` frontmatter:
    - `name` — kebab-case, must match directory name, ≤64 chars
    - `description` — starts with auto-activation signal (file globs, imports), ends with `Not for X — why`
-3. Author the body following the XML-tagged section order defined in [`.agents/product-guidelines.md`](.agents/product-guidelines.md):
-   - Code Style Rules → Quick Reference → `<workflow>` → `<guardrails>` → `<validation>` → `<example>` → References Index → Official References → Shared Styleguide Baseline
+3. Author the body in this XML-tagged section order:
+   - Code Style Rules → Quick Reference → `<workflow>` → `<guardrails>` → `<validation>` → `<example>` → References Index → Official References → Shared Styleguide Baseline (link to the relevant files in [`skills/litestar-styleguide/references/`](skills/litestar-styleguide/SKILL.md))
 4. Apply the Litestar-first-party bias for all code samples.
 5. Run `make validate-skills` — must pass `skills-ref validate` and schema checks.
 6. Run `make check` — full CI parity locally.

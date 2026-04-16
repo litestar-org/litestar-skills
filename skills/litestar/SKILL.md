@@ -302,8 +302,8 @@ Deep-dive references under `references/`:
 
 Generic language / framework rules live in the repo's shared styleguides:
 
-- [`.agents/code-styleguides/general.md`](../../.agents/code-styleguides/general.md) — Cross-language baseline
-- [`.agents/code-styleguides/python.md`](../../.agents/code-styleguides/python.md) — Python conventions
-- [`.agents/code-styleguides/litestar.md`](../../.agents/code-styleguides/litestar.md) — Litestar-specific baseline
+- [`general.md`](../litestar-styleguide/references/general.md) — Cross-language baseline
+- [`python.md`](../litestar-styleguide/references/python.md) — Python conventions
+- [`litestar.md`](../litestar-styleguide/references/litestar.md) — Litestar-specific baseline
 
 This skill extends those — it does not duplicate them. When a convention is generic (type hints, naming, imports), it belongs in the shared styleguide.

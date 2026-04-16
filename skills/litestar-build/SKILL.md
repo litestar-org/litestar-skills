@@ -243,7 +243,7 @@ Everything in this skill is distilled from three production projects. Read these
 
 ## Shared Styleguide Baseline
 
-- [General Principles](../../.agents/code-styleguides/general.md)
-- [Python](../../.agents/code-styleguides/python.md)
-- [CI/CD](../../.agents/code-styleguides/ci-cd.md)
-- [Litestar](../../.agents/code-styleguides/litestar.md)
+- [General Principles](../litestar-styleguide/references/general.md)
+- [Python](../litestar-styleguide/references/python.md)
+- [CI/CD](../litestar-styleguide/references/ci-cd.md)
+- [Litestar](../litestar-styleguide/references/litestar.md)

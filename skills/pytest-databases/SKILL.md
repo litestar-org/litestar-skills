@@ -60,7 +60,7 @@ def test_database(postgres_service):
 ## Shared Styleguide Baseline
 
 - Use shared styleguides for generic language/framework rules to reduce duplication in this skill.
-- [General Principles](../../../.agents/code-styleguides/general.md)
-- [Testing](../../../.agents/code-styleguides/testing.md)
-- [Python](../../../.agents/code-styleguides/python.md)
+- [General Principles](../litestar-styleguide/references/general.md)
+- [Testing](../litestar-styleguide/references/testing.md)
+- [Python](../litestar-styleguide/references/python.md)
 - Keep this skill focused on tool-specific workflows, edge cases, and integration details.

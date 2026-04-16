@@ -440,7 +440,7 @@ For Vitest, Testing Library (React/Vue), and component testing, refer to upstrea
 
 ## Shared Styleguide Baseline
 
-- [General Principles](../../../.agents/code-styleguides/general.md)
-- [Testing](../../../.agents/code-styleguides/testing.md)
-- [Python](../../../.agents/code-styleguides/python.md)
-- [Litestar](../../../.agents/code-styleguides/litestar.md)
+- [General Principles](../litestar-styleguide/references/general.md)
+- [Testing](../litestar-styleguide/references/testing.md)
+- [Python](../litestar-styleguide/references/python.md)
+- [Litestar](../litestar-styleguide/references/litestar.md)
