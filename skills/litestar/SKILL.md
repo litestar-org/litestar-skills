@@ -17,13 +17,16 @@ Litestar is a high-performance Python ASGI web framework with built-in OpenAPI g
 - **Cluster Controllers by domain** (`/api/accounts`, `/api/teams`, `/api/admin`), not by HTTP method
 - **Guards at Controller class level** primarily; route-level guards only for exceptions to the controller's default policy
 - **DI**: `Provide()` for small-to-mid apps; **Dishka `FromDishka as Inject[T]`** for enterprise scope management (request / session / app scopes)
-- **Data access via `SQLAlchemyAsyncRepositoryService`** from `advanced-alchemy` — auto-conversion, filters, pagination come for free. Hand-written queries are an escape hatch, not a default.
+- **Data access — pick the path matching your project's stack.** If the project uses `advanced-alchemy`, use `SQLAlchemyAsyncRepositoryService` (auto-conversion, filters, pagination built in — the opinionated default). If the project uses `sqlspec`, use `SQLSpecAsyncService` + driver methods for direct SQL control and multi-adapter support. If the project uses raw SQLAlchemy only, use manual `async_sessionmaker` sessions. See `skills/advanced-alchemy` and `skills/sqlspec` for canonical patterns per stack. Hand-written queries inside a repository-service stack are an escape hatch; hand-written queries are the primary surface in a sqlspec stack — context decides.
 
 ## Quick Reference
 
 ### Controller (domain-clustered, Guards at class level)
 
 ```python
+# advanced-alchemy stack — create_filter_dependencies + OffsetPagination + to_schema
+# Using sqlspec instead? See skills/sqlspec/references/service-patterns.md for the
+# LimitOffsetFilter + SQLSpecAsyncService equivalent.
 class UserController(Controller):
     path = "/api/users"
     guards = [requires_active_user]
@@ -37,7 +40,7 @@ class UserController(Controller):
 
 → See [references/routing.md](references/routing.md), [references/domains.md](references/domains.md)
 
-### Repository Service (Advanced Alchemy)
+### Repository Service — advanced-alchemy
 
 ```python
 class UserRepository(SQLAlchemyAsyncRepository[User]):
@@ -48,6 +51,21 @@ class UserService(SQLAlchemyAsyncRepositoryService[User]):
 ```
 
 Get `get`, `get_one_or_none`, `list_and_count`, `create`, `update`, `delete`, `upsert`, `exists`, `count`, `to_schema` for free. → See [references/services.md](references/services.md)
+
+### Service — sqlspec
+
+```python
+# sqlspec stack — thin async service over driver methods + explicit SQL
+class UserService(SQLSpecAsyncService):
+    async def list_and_count(self, *filters) -> tuple[list[User], int]:
+        return await self.driver.select_and_count(
+            "SELECT * FROM users WHERE tenant_id = :tid",
+            filters=filters,
+            schema_type=User,
+        )
+```
+
+Pick `sqlspec` when you want direct SQL, multi-adapter support (15+ drivers), or Arrow integration for analytics. → See [`../sqlspec/references/service-patterns.md`](../sqlspec/references/service-patterns.md) *(landing in Ch5 — stub link TODO(Ch5))*.
 
 ### msgspec DTO with camelCase
 
@@ -94,9 +112,10 @@ app = Litestar(exception_handlers={ApplicationError: application_exception_handl
 
 Handlers never catch — exceptions bubble to app-level handler. → See [references/exceptions.md](references/exceptions.md)
 
-### Settings (`@dataclass` + `get_env()` + `@lru_cache`)
+### Settings — two supported paths
 
 ```python
+# Path A — @dataclass + get_env() + @lru_cache (no extra deps; canonical default)
 @dataclass(frozen=True)
 class AppSettings:
     name: str = field(default_factory=lambda: get_env("APP_NAME", "My App"))
@@ -106,22 +125,23 @@ class AppSettings:
 def get_settings() -> AppSettings: return AppSettings()
 ```
 
-Not Pydantic Settings — canonical apps use plain `@dataclass`. → See [references/settings.md](references/settings.md)
+Using Pydantic already in-stack? Use `pydantic_settings.BaseSettings` with the same env-loading pattern — it's fully supported and reads the same env vars. Pick `@dataclass` for a leaner dep graph on fresh projects; pick `BaseSettings` when Pydantic is already a transitive dep (e.g., shared DTOs with non-Litestar microservices). → See [references/settings.md](references/settings.md) for both options side-by-side.
 
-### Pagination (OffsetPagination + filter deps)
+### Pagination — pick the branch for your stack
 
 ```python
+# advanced-alchemy — OffsetPagination + create_filter_dependencies
 dependencies = create_filter_dependencies({
     "id_filter": "UUID", "pagination_type": "limit_offset",
     "search": "title,author", "created_at": True,
 })
 
-async def list_books(self, books_service, filters: list) -> OffsetPagination[Book]:
-    results, total = await books_service.list_and_count(*filters)
-    return books_service.to_schema(results, total, filters=filters, schema_type=Book)
+async def list_posts(self, posts_service, filters: list) -> OffsetPagination[Post]:
+    results, total = await posts_service.list_and_count(*filters)
+    return posts_service.to_schema(results, total, filters=filters, schema_type=Post)
 ```
 
-→ See [references/pagination.md](references/pagination.md)
+Using `sqlspec`? Use `LimitOffsetFilter` + `OrderByFilter` in the driver call. Using raw SQLAlchemy Core? Apply `.limit()` / `.offset()` manually on the statement. See [references/pagination.md](references/pagination.md) for all three branches side-by-side.
 
 ### WebSockets & Channels
 
@@ -190,16 +210,16 @@ Confirm `/schema/openapi.json` or the Swagger UI at `/schema` reflects the corre
 - **msgspec DTOs with `Meta(rename="camel")`** — Python side snake_case, API ships camelCase. Pydantic DTOs only when the project explicitly requires it.
 - **Guards at Controller class level primarily** (`guards = [requires_auth]` on the Controller), route-level only for exceptions to the class default. Never inline `if not connection.user: ...` in handler bodies.
 - **DI sizing**: `Provide()` for small/mid apps; **Dishka `FromDishka as Inject[T]`** for apps that need request / session / app scope management. Don't default to Dishka — it's a scaling choice, not a style choice.
-- **Data access via `SQLAlchemyAsyncRepositoryService`** from `advanced-alchemy`. Repository service subclasses get automatic DTO conversion, filtering, and pagination. Hand-rolled queries are an escape hatch, not a default.
-- **Pagination via `OffsetPagination[T]` + `create_filter_dependencies`** from `advanced-alchemy`. Never hand-roll `limit` / `offset` params.
+- **Data access — match your stack:** if on `advanced-alchemy`, subclass `SQLAlchemyAsyncRepositoryService` (auto DTO conversion, filtering, pagination); if on `sqlspec`, use `SQLSpecAsyncService` + driver methods; if on raw SQLAlchemy, use `async_sessionmaker` sessions. The anti-pattern is mixing: don't paste an `advanced-alchemy` repository into a `sqlspec` project (drags in ORM deps you rejected) or vice-versa.
+- **Pagination — match your stack:** `advanced-alchemy`'s `create_filter_dependencies` + `OffsetPagination[T]`; `sqlspec`'s `LimitOffsetFilter` + `OrderByFilter`; or raw `.limit()` / `.offset()` in plain-SA Core. Never hand-roll `limit` / `offset` *query params* in a handler — the filter dep / filter-object pattern owns that.
 - **Custom exception hierarchy**: extend `ApplicationError` in `lib/exceptions.py`, register handlers on the app via `app_config.exception_handlers = {ExceptionType: handler_func}`. Never inline `try` / `except` in handlers — let exceptions bubble to the app-level handler.
-- **Settings as `@dataclass` with `get_env()` helpers, cached with `@lru_cache`.** Not Pydantic Settings, not `msgspec.Struct` for config. Canonical apps use plain `@dataclass(frozen=True)` with env-driven defaults.
+- **Settings — match your stack:** `@dataclass(frozen=True)` + `get_env()` + `@lru_cache` for fresh projects (canonical default; no extra deps), OR `pydantic_settings.BaseSettings` when Pydantic is already a dep of the project. Don't use `msgspec.Struct` for config — it lacks env-loading affordances. Whichever path, the settings object is cached once per process.
 - **`from __future__ import annotations` is a LIBRARY-AUTHOR guardrail, not a consumer rule.** Litestar libraries (this repo, advanced-alchemy, sqlspec, msgspec, dishka, etc.) avoid it in modules that define runtime-introspected types. **Application code MAY use `from __future__ import annotations`** — canonical Litestar apps use it in 100+ files per repo.
 - **Async all I/O** — `async def` handlers with awaited DB / HTTP calls. Sync blocks the event loop.
 - **Cluster Controllers by domain** — `/api/accounts`, `/api/teams`, `/api/admin` — not by HTTP method. Each domain gets its own Controller class (or several) sharing a path prefix.
 - **Granian over uvicorn** — `litestar-granian` is the default ASGI server. Use uvicorn only when Granian's HTTP/2 behavior is incompatible with your deploy target.
 - **SAQ for background work**, never `asyncio.create_task()` in handlers. Fire-and-forget leaks request-scoped resources; SAQ gives durability, scheduling, and observability.
-- **WebSockets — choose the right pub/sub tool per scope:** plain `WebSocket` + Redis pub/sub for one-off streams (simpler, fewer deps); **Litestar Channels plugin** for dynamic channel names, backlog / history, broker abstraction, and cross-process publishing from SAQ workers or CLI. Both share a Redis backend; don't run both in parallel for the same channel namespace. WS auth always happens via query-param JWT (browsers can't set WS headers).
+- **WebSockets — choose the Channels backend per stack:** Memory backend for dev / single-process; Redis backend when Redis is already in the stack (cache, SAQ broker); `sqlspec` PG-LISTEN extension when the project is sqlspec + PostgreSQL; `advanced-alchemy` session-aware backend when the project is advanced-alchemy + PostgreSQL. Anti-pattern: forcing Redis into a PG-only project just for Channels, or forcing a PG-LISTEN backend when Redis is already present. WS auth always happens via query-param JWT (browsers can't set WS headers). Plain `WebSocket` + direct pub/sub is still fine for one-off streams; Channels plugin adds dynamic channel names, backlog / history, and cross-process publishing from SAQ workers or CLI.
 - **First-party plugins over hand-rolled glue** — `litestar-saq` before Celery, `litestar-vite` before hand-rolled static, `litestar-mcp` before raw JSON-RPC, `litestar-email` before raw SMTP, `litestar-asyncpg` / `litestar-oracledb` before raw driver lifespans.
 
 </guardrails>
@@ -212,10 +232,10 @@ Before delivering Litestar code, verify:
 
 - [ ] DTOs use `msgspec.Struct` + `MsgspecDTO` with `Meta(rename="camel")` unless the project explicitly uses Pydantic
 - [ ] Auth is enforced via Guards at Controller class level; no inline auth checks
-- [ ] Data-access services subclass `SQLAlchemyAsyncRepositoryService` (or equivalent advanced-alchemy service)
-- [ ] Pagination uses `OffsetPagination[T]` + `create_filter_dependencies`
+- [ ] Data-access services match the project's stack: `SQLAlchemyAsyncRepositoryService` for advanced-alchemy, `SQLSpecAsyncService` for sqlspec, or `async_sessionmaker` sessions for raw SQLAlchemy — never mixed within one project
+- [ ] Pagination matches the project's stack: `OffsetPagination[T]` + `create_filter_dependencies` for advanced-alchemy, `LimitOffsetFilter` + `OrderByFilter` for sqlspec, or `.limit()` / `.offset()` for raw SA
 - [ ] Exceptions extend the project's `ApplicationError` base; handlers registered on the app, not inline
-- [ ] Settings use `@dataclass` + `get_env()` + `@lru_cache` — not Pydantic Settings
+- [ ] Settings match the project's stack: `@dataclass` + `get_env()` + `@lru_cache` (fresh projects) OR `pydantic_settings.BaseSettings` (projects already on Pydantic)
 - [ ] All I/O handlers are `async def`; no `asyncio.create_task()` for background work — SAQ instead
 - [ ] Controllers cluster by domain (not HTTP method); shared `path` + `dependencies` + `guards`
 - [ ] OpenAPI schema at `/schema/openapi.json` reflects the intended request / response types
