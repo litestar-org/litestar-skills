@@ -50,7 +50,7 @@ ViteConfig(mode="htmx", ...)
 - Inertia.js — server routes return Inertia responses, client renders JS components
 - Pair `VitePlugin` with `litestar_vite.inertia.InertiaPlugin`
 - Page-prop type generation via `TypeGenConfig.generate_page_props=True`
-- See `../inertia/SKILL.md`
+- See `../litestar-inertia/SKILL.md`
 
 ```python
 from litestar_vite import VitePlugin, ViteConfig

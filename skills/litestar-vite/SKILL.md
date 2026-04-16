@@ -73,7 +73,7 @@ Decision tree:
 - Need full SPA with client-side routing → **spa**
 - Server-rendered HTML, sprinkle Vite-bundled JS → **template**
 - HTMX-driven hypermedia with Vite assets → **htmx**
-- Server-side routing + JS page components, shared data → **hybrid (Inertia)** (see `../inertia/SKILL.md`)
+- Server-side routing + JS page components, shared data → **hybrid (Inertia)** (see `../litestar-inertia/SKILL.md`)
 - Already using Nuxt / SvelteKit / a JS-side SSR framework → **framework**
 
 ### `VitePlugin` config (Python)
@@ -315,7 +315,7 @@ app = Litestar(plugins=[
 ])
 ```
 
-See `../inertia/SKILL.md` for client adapter setup.
+See `../litestar-inertia/SKILL.md` for client adapter setup.
 
 ### HTMX integration
 
@@ -493,7 +493,7 @@ For deep-dives on specific surfaces, see:
 ## Cross-References
 
 - **[litestar](../litestar/SKILL.md)** — Litestar app + plugin lifecycle.
-- **[inertia](../inertia/SKILL.md)** — Inertia-specific frontend setup (paired with `hybrid` mode).
+- **[inertia](../litestar-inertia/SKILL.md)** — Inertia-specific frontend setup (paired with `hybrid` mode).
 - **[litestar-htmx](../litestar-htmx/SKILL.md)** — HTMX integration with Vite-bundled assets.
 
 ## Official References
