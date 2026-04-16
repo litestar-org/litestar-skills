@@ -60,10 +60,24 @@ Follow these from the `litestar` skill's guardrails:
 - **`from __future__ import annotations`** at the top of every module
 - Domain-clustered Controllers (`/api/{domain}/`)
 
+## DI strategy
+
+Ask the user which DI approach:
+
+- **`provide`** — Litestar built-in `Provide()` (default for small/mid apps)
+- **`dishka`** — Dishka `FromDishka as Inject[T]` (enterprise scope management)
+
+If `dishka`: scaffold a `lib/di.py` with a `Provider` class + `setup_dishka()` call in `server/app.py`.
+If `provide`: wire services via the app `dependencies` dict.
+
 ## After generating
 
 1. Create each file with real, runnable content (not stubs)
-2. Run `make install` to install dependencies
-3. Run `make check` to verify the scaffold is clean
-4. Explain what was created and where to start coding
+2. Scaffold one example domain (e.g., `domain/accounts/` or the user's choice) using
+   the domain structure from `/litestar:new-domain`. This gives users a working
+   reference domain inside their new app from day one.
+3. Run `make install` to install dependencies
+4. Run `make check` to verify the scaffold is clean
+5. Explain what was created and where to start coding
+6. Tell the user: "Run `/litestar:new-domain` to add more domains to your app."
 """

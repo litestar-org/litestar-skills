@@ -1,0 +1,284 @@
+description = "Scaffold a new domain module in a Litestar app — controllers, schemas, services, guards, jobs, events — with proper wiring and route registration"
+prompt = """
+# Scaffold a new Litestar domain
+
+You are creating a new domain module following the canonical domain-driven structure
+used in `litestar-fullstack-spa` and `dma/accelerator`.
+
+## Gather requirements (one question at a time)
+
+1. **Domain name** — a noun (e.g., `projects`, `workspaces`, `orders`, `notifications`).
+   Becomes: directory `domain/{name}/`, Python package `app.domain.{name}`.
+
+2. **Primary resource** — the main entity this domain manages (e.g., `Project`, `Workspace`, `Order`).
+   This drives the initial model, service, schema, and controller.
+
+3. **CRUD operations** — which of Create / Read (list + detail) / Update / Delete?
+   Default: all four. User may exclude some (e.g., read-only domain).
+
+4. **Authentication** — does this domain need guards?
+   Options:
+   - `requires_active_user` (most common — any logged-in user)
+   - `requires_superuser` (admin-only)
+   - `requires_membership` (multi-tenant — user must be member of the resource's workspace/team)
+   - None (public endpoint)
+
+5. **Background jobs** — will this domain have SAQ tasks? (e.g., import jobs, notification dispatch)
+   Default: no. If yes, create `jobs/` subpackage.
+
+6. **Real-time events** — will this domain broadcast to WebSocket channels?
+   Default: no. If yes, create `channels.py` with channel name patterns.
+
+7. **DI strategy** — which dependency injection does the project use?
+   Options:
+   - `provide` — Litestar built-in `Provide()` (default for small/mid apps)
+   - `dishka` — Dishka `FromDishka as Inject[T]` (enterprise scope management)
+   This determines how the service is injected into controller handlers.
+   If `dishka`: handler params use `Inject[ResourceService]`.
+   If `provide`: service is registered in app `dependencies` dict.
+
+8. **Domain-specific eager-load configs** — any custom DI providers beyond the standard service injection?
+   Default: no. If yes, create `deps.py` with SQLAlchemy eager-load and selectin-load configs.
+
+## Generate the domain structure
+
+```
+domain/{name}/
+├── __init__.py               # Exports: controllers, schemas, services
+├── controllers/
+│   ├── __init__.py           # Re-exports all controller classes
+│   └── _{resource}.py        # Controller class with CRUD routes
+├── schemas/
+│   ├── __init__.py           # Re-exports all schema types
+│   └── _{resource}.py        # CamelizedBaseStruct DTOs (Read, Create, Update)
+├── services/
+│   ├── __init__.py           # Re-exports all service classes
+│   └── _{resource}.py        # SQLAlchemyAsyncRepositoryService + Repository
+├── guards.py                 # (if auth selected) Domain-specific guard functions
+├── deps.py                   # (if custom DI) Eager-load configs, DI providers
+├── listeners.py              # (if events) Event listener stubs
+├── channels.py               # (if real-time) Channel name patterns
+└── jobs/
+    ├── __init__.py           # (if background jobs) Job registry
+    └── _{task}.py            # (if background jobs) SAQ task functions
+```
+
+## File content — canonical patterns
+
+### `schemas/_{resource}.py`
+
+```python
+from __future__ import annotations
+
+from datetime import datetime
+from uuid import UUID
+
+from app.lib.schema import CamelizedBaseStruct
+
+
+class {Resource}(CamelizedBaseStruct):
+    id: UUID
+    # TODO: add domain-specific fields
+    created_at: datetime
+    updated_at: datetime
+
+
+class {Resource}Create(CamelizedBaseStruct):
+    # TODO: add required creation fields
+    pass
+
+
+class {Resource}Update(CamelizedBaseStruct):
+    # TODO: add optional update fields
+    pass
+```
+
+### `services/_{resource}.py`
+
+```python
+from __future__ import annotations
+
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
+
+from app.db.models import {Resource}
+
+
+class {Resource}Repository(SQLAlchemyAsyncRepository[{Resource}]):
+    model_type = {Resource}
+
+
+class {Resource}Service(SQLAlchemyAsyncRepositoryService[{Resource}]):
+    repository_type = {Resource}Repository
+```
+
+### `controllers/_{resource}.py`
+
+```python
+from __future__ import annotations
+
+from uuid import UUID
+
+from litestar import Controller, get, post, patch, delete
+from advanced_alchemy.extensions.litestar import create_filter_dependencies
+from advanced_alchemy.service import OffsetPagination
+
+from app.domain.{name}.schemas import {Resource}, {Resource}Create, {Resource}Update
+from app.domain.{name}.services import {Resource}Service
+from app.lib.exceptions import NotFoundError
+{guard_import}
+
+
+### Controller with Dishka DI (if `dishka` selected)
+
+If the user chose Dishka, the controller handler params use `Inject[T]` instead of
+positional DI via `Provide()`:
+
+```python
+from dishka.integrations.litestar import FromDishka as Inject
+
+class {Resource}Controller(Controller):
+    path = "/api/{name}"
+    {guards_line}
+
+    @get("/")
+    async def list_{resources}(
+        self, {resource}_service: Inject[{Resource}Service], filters: list,
+    ) -> OffsetPagination[{Resource}]:
+        results, total = await {resource}_service.list_and_count(*filters)
+        return {resource}_service.to_schema(results, total, filters=filters, schema_type={Resource})
+```
+
+With Dishka, service registration is via a `Provider` class in the Dishka container,
+not in the app `dependencies` dict. After scaffolding, remind the user to register
+the `{Resource}Service` in their Dishka `Provider`.
+
+### Controller with Provide() DI (if `provide` selected)
+class {Resource}Controller(Controller):
+    path = "/api/{name}"
+    {guards_line}
+    tags = ["{Resource}s"]
+    dependencies = create_filter_dependencies({{
+        "id_filter": "UUID",
+        "pagination_type": "limit_offset",
+        "pagination_size": 20,
+        {search_fields}
+    }})
+
+    @get("/")
+    async def list_{resources}(
+        self, {resource}_service: {Resource}Service, filters: list,
+    ) -> OffsetPagination[{Resource}]:
+        results, total = await {resource}_service.list_and_count(*filters)
+        return {resource}_service.to_schema(results, total, filters=filters, schema_type={Resource})
+
+    @get("/{{item_id:uuid}}")
+    async def get_{resource}(
+        self, item_id: UUID, {resource}_service: {Resource}Service,
+    ) -> {Resource}:
+        db_obj = await {resource}_service.get_one_or_none(id=item_id)
+        if db_obj is None:
+            raise NotFoundError(detail="{Resource} not found")
+        return {resource}_service.to_schema(db_obj, schema_type={Resource})
+
+    @post("/")
+    async def create_{resource}(
+        self, data: {Resource}Create, {resource}_service: {Resource}Service,
+    ) -> {Resource}:
+        db_obj = await {resource}_service.create(data.to_dict())
+        return {resource}_service.to_schema(db_obj, schema_type={Resource})
+
+    @patch("/{{item_id:uuid}}")
+    async def update_{resource}(
+        self, item_id: UUID, data: {Resource}Update, {resource}_service: {Resource}Service,
+    ) -> {Resource}:
+        db_obj = await {resource}_service.update({{**data.to_dict(), "id": item_id}})
+        return {resource}_service.to_schema(db_obj, schema_type={Resource})
+
+    @delete("/{{item_id:uuid}}")
+    async def delete_{resource}(
+        self, item_id: UUID, {resource}_service: {Resource}Service,
+    ) -> None:
+        await {resource}_service.delete(item_id)
+```
+
+### `__init__.py`
+
+```python
+\"\"\"{Resource}s domain.\"\"\"\n
+from app.domain.{name} import controllers, schemas, services
+
+__all__ = ("controllers", "schemas", "services")
+```
+
+### `guards.py` (if auth selected)
+
+Generate the appropriate guard function based on the user's auth choice.
+Use the patterns from `skills/litestar/references/guards.md`.
+
+### `jobs/__init__.py` (if background jobs)
+
+```python
+\"\"\"Background tasks for the {name} domain.\"\"\"
+```
+
+### `channels.py` (if real-time)
+
+```python
+\"\"\"WebSocket channel patterns for {name} domain.\"\"\"
+
+{NAME}_CHANNEL = "{name}:{{item_id}}"
+```
+
+## After generating
+
+1. **Register the domain's routes** — help the user add the controller to the app's
+   `route_handlers` list or Router composition. Show the exact import and registration:
+
+   ```python
+   from app.domain.{name}.controllers import {Resource}Controller
+
+   app = Litestar(route_handlers=[..., {Resource}Controller])
+   ```
+
+   Or if using a Router:
+
+   ```python
+   from litestar import Router
+   from app.domain.{name}.controllers import {Resource}Controller
+
+   {name}_router = Router(path="/api/{name}", route_handlers=[{Resource}Controller])
+   ```
+
+2. **Register DI providers** (if applicable) — add the service provider to the app's
+   `dependencies` dict or Dishka container.
+
+3. **Create the SQLAlchemy model** — remind the user to add the model to `app/db/models/`
+   (this is outside the domain dir — shared across domains):
+
+   ```python
+   # app/db/models/{resource}.py
+   from advanced_alchemy.base import UUIDAuditBase
+   from sqlalchemy.orm import Mapped, mapped_column
+
+   class {Resource}(UUIDAuditBase):
+       __tablename__ = "{resources}"
+       # TODO: add columns
+   ```
+
+4. **Generate an Alembic migration** — `alembic revision --autogenerate -m "add {resources} table"`
+
+5. **Register SAQ jobs** (if background tasks) — add to the SAQ queue config.
+
+6. **Run `make check`** — verify everything wires up clean.
+
+## Naming conventions
+
+- Directory: `domain/{name}/` (plural, kebab-case → snake_case in Python)
+- Controller class: `{Resource}Controller` (singular resource, PascalCase)
+- Service class: `{Resource}Service`
+- Repository class: `{Resource}Repository`
+- Schema classes: `{Resource}`, `{Resource}Create`, `{Resource}Update`
+- Route path: `/api/{name}` (plural)
+- Controller file: `_{resource}.py` (underscore-prefixed, singular, snake_case)
+"""
