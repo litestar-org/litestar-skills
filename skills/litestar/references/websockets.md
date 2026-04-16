@@ -60,6 +60,56 @@ async def handle_websocket(socket: WebSocket) -> None:
         pass
 ```
 
+### Dishka DI in WS handlers
+
+WebSocket connections live at SESSION scope in Dishka — the container is created once per
+connection and stored at `connection.state.dishka_container`. REQUEST-scoped services (e.g., a
+database session or unit-of-work) need a child container created per operation. Use a context
+manager to open a transient REQUEST-scope child for each receive/send cycle.
+
+Adapted from `dma/accelerator/src/py/dma/lib/di.py:L156–189` (`with_websocket_request` in the
+accelerator; shown here as `enter_request_scope` — a neutral alias for the same pattern).
+
+```python
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+
+from dishka import AsyncContainer
+from litestar import WebSocket
+
+
+@asynccontextmanager
+async def enter_request_scope(socket: WebSocket) -> AsyncIterator[AsyncContainer]:
+    """Open a REQUEST-scoped child container for one WS operation."""
+    session_container: AsyncContainer = socket.state.dishka_container
+    async with session_container() as request_container:
+        yield request_container
+
+
+@websocket("/ws/workspace/{workspace_id:uuid}/stream")
+async def workspace_stream(socket: WebSocket, workspace_id: UUID) -> None:
+    await socket.accept()
+    async for message in receive_messages(socket):
+        async with enter_request_scope(socket) as container:
+            svc = await container.get(OrderService)
+            await svc.process(message, workspace_id)
+```
+
+**Branch note — `Provide`-only stacks:** Litestar's built-in DI attaches services via `Provide`
+in the handler signature. The REQUEST-scope child container pattern is Dishka-specific — on
+`Provide`-only stacks, inject services directly at the handler signature as usual:
+
+```python
+@websocket("/ws/workspace/{workspace_id:uuid}/stream")
+async def workspace_stream(
+    socket: WebSocket,
+    workspace_id: UUID,
+    order_service: OrderService,  # injected via Provide() in app dependencies
+) -> None:
+    await socket.accept()
+    ...
+```
+
 ### Authentication in WebSocket Connections
 
 WebSocket connections cannot use HTTP `Authorization` headers during the initial handshake. Authenticate via a `token` query parameter instead.
@@ -327,94 +377,37 @@ Channel name convention: `{scope}:{id}:{topic}`
 
 ### Publishing to Channels from Route Handlers and Services
 
-Use a publisher abstraction backed by the `ChannelsBackend`:
+Subscription-side code uses the `RealtimePublisher` class to publish typed `RealtimeEvent`
+objects to named channels. The publisher wraps the `ChannelsBackend`, provides scope-specific
+helpers (`publish_workspace_event`, `publish_user_event`, `publish_global_event`), and handles
+the case where the backend is not yet initialized gracefully (no-op + debug log).
 
-```python
-from litestar.channels import ChannelsBackend
-
-from app.lib.serialization import to_json
-
-
-class RealtimePublisher:
-    """Publish typed events through the channels backend."""
-
-    def __init__(self, backend: ChannelsBackend) -> None:
-        self.backend = backend
-
-    async def publish_event(self, event: RealtimeEvent, channel: str) -> None:
-        try:
-            await self.backend.publish(
-                data=to_json(event, as_bytes=True),
-                channels=[channel],
-            )
-        except RuntimeError as exc:
-            if "backend not yet initialized" not in str(exc).lower():
-                raise
-            # Backend not ready during startup - skip silently
-
-    async def publish_workspace_event(
-        self,
-        workspace_id: UUID,
-        event_type: str,
-        payload: dict[str, Any],
-        *,
-        actor: RealtimeActor | None = None,
-        entity: RealtimeEntityRef | None = None,
-    ) -> RealtimeEvent:
-        event = RealtimeEvent(
-            event_type=event_type,
-            scope="workspace",
-            workspace_id=workspace_id,
-            actor=actor,
-            entity=entity,
-            payload=payload,
-        )
-        await self.publish_event(
-            event, channel=Channels.workspace(workspace_id),
-        )
-        return event
-```
-
-Publishing from background workers / services:
-
-```python
-async def _publish_etl_log_event(
-    self,
-    log_entry: JobLog,
-    workspace_id: UUID,
-) -> None:
-    """Publish ETL log event to workspace channel."""
-    payload = {
-        "log_id": str(log_entry.id),
-        "job_id": str(log_entry.job_id),
-        "stage": log_entry.stage,
-        "level": log_entry.level,
-        "message": log_entry.message,
-    }
-    event = RealtimeEvent(
-        event_type="workspace.etl.log.created",
-        scope="workspace",
-        workspace_id=workspace_id,
-        entity=RealtimeEntityRef(type="etl_log", id=str(log_entry.id)),
-        payload=payload,
-    )
-    channel = WorkspaceChannels.etl(workspace_id)
-    await realtime_publisher.publish_event(event, channel=channel)
-```
+> See [realtime-events.md](realtime-events.md) for the full `RealtimePublisher` abstraction,
+> scope-specific publish helpers, channel factory classes, and neutral-domain publishing examples.
 
 ### Subscribing from WebSocket Handlers
 
-The `stream_pubsub` helper manages subscription lifecycle, message decoding, deduplication, and error handling:
+The `stream_pubsub` helper manages subscription lifecycle, message decoding, bounded-LRU
+deduplication, per-session metrics, and error handling. Adapted from
+`dma/accelerator/src/py/dma/lib/websockets.py:L95–166` (bounded LRU + per-session metrics).
 
 ```python
 from litestar import WebSocket
 from litestar.exceptions import WebSocketDisconnect
+
+_MAX_DEDUP_KEYS = 1024
+
+
+def _extract_idempotency_key(payload: dict) -> str | None:
+    """Accept both snake_case and camelCase idempotency key."""
+    return payload.get("idempotency_key") or payload.get("idempotencyKey")
 
 
 async def stream_pubsub(
     socket: WebSocket,
     channels: list[str],
     history: int = 0,
+    metrics: RealtimeStreamMetrics | None = None,
 ) -> None:
     """Stream pub/sub messages to a WebSocket client.
 
@@ -422,41 +415,96 @@ async def stream_pubsub(
         socket: The WebSocket connection (must already be accepted).
         channels: List of channel names to subscribe to.
         history: Number of historical messages to replay.
+        metrics: Optional per-session metrics collector.
     """
-    try:
-        seen_keys: set[str] = set()
+    m = metrics or RealtimeStreamMetrics()
+    seen_keys: list[str] = []
+    seen_key_set: set[str] = set()
 
-        async with config.channels.start_subscription(
-            channels, history=history,
-        ) as subscriber:
+    try:
+        async with config.channels.start_subscription(channels, history=history) as subscriber:
             async for message in subscriber.iter_events():
+                m.messages_received += 1
                 payload = decode_message(message, channels)
                 if payload is None:
+                    m.messages_malformed += 1
                     continue
 
-                # Deduplicate by idempotency key
-                idem_key = extract_idempotency_key(payload)
-                if idem_key is not None and idem_key in seen_keys:
-                    continue
+                idem_key = _extract_idempotency_key(payload)
                 if idem_key is not None:
-                    seen_keys.add(idem_key)
+                    if idem_key in seen_key_set:
+                        m.messages_deduplicated += 1
+                        continue
+                    seen_keys.append(idem_key)
+                    seen_key_set.add(idem_key)
+                    if len(seen_keys) > _MAX_DEDUP_KEYS:
+                        evicted = seen_keys.pop(0)
+                        seen_key_set.discard(evicted)
 
                 await socket.send_json(payload)
+                m.messages_delivered += 1
+
     except WebSocketDisconnect:
-        pass  # Normal client disconnect
+        m.disconnects += 1
     except Exception:
-        logger.exception("WebSocket stream error", channels=channels)
+        m.stream_errors += 1
+        await logger.aexception("WebSocket stream error", channels=channels)
+    finally:
+        await logger.adebug(
+            "Realtime stream session summary",
+            **m.snapshot(),
+            channels=channels,
+        )
+```
+
+### Stream metrics
+
+`RealtimeStreamMetrics` tracks per-session counters for observability. Adapted from
+`dma/accelerator/src/py/dma/lib/websockets.py:L14–46`.
+
+```python
+from dataclasses import dataclass, field
+
+
+@dataclass
+class RealtimeStreamMetrics:
+    """Per-session counters for a stream_pubsub call."""
+
+    active_subscriptions: int = 0
+    messages_received: int = 0
+    messages_delivered: int = 0
+    messages_malformed: int = 0
+    messages_deduplicated: int = 0
+    disconnects: int = 0
+    stream_errors: int = 0
+
+    def snapshot(self) -> dict[str, int]:
+        """Return an immutable copy of all counters."""
+        return {
+            "active_subscriptions": self.active_subscriptions,
+            "messages_received": self.messages_received,
+            "messages_delivered": self.messages_delivered,
+            "messages_malformed": self.messages_malformed,
+            "messages_deduplicated": self.messages_deduplicated,
+            "disconnects": self.disconnects,
+            "stream_errors": self.stream_errors,
+        }
+
+    def reset(self) -> None:
+        """Zero all counters (e.g., between test runs)."""
+        for f in self.__dataclass_fields__:
+            setattr(self, f, 0)
 ```
 
 Usage in a handler:
 
 ```python
-@websocket(path="/{workspace_id:uuid}/etl/stream")
-async def stream_etl_logs(self, socket: WebSocket, workspace_id: UUID) -> None:
+@websocket(path="/{workspace_id:uuid}/stream")
+async def stream_workspace_events(self, socket: WebSocket, workspace_id: UUID) -> None:
     await socket.accept()
     await stream_pubsub(
         socket,
-        [WorkspaceChannels.etl(workspace_id)],
+        [RealtimeChannels.workspace(workspace_id)],
         history=10,
     )
 ```
@@ -494,34 +542,14 @@ async def workspace_stream(
 
 ### Realtime Event Contract
 
-Define a canonical event envelope for all realtime messages:
+`RealtimeEvent` is the canonical envelope for all realtime messages — a `CamelizedBaseStruct`
+with `scope`, `event_type`, optional `actor` / `entity` refs, and a `__post_init__` validator
+that enforces the required ID fields per scope.
 
-```python
-import msgspec
-from datetime import UTC, datetime
-from typing import Any, Literal
-from uuid import UUID
+> See [realtime-events.md](realtime-events.md) for the canonical `RealtimeEvent` contract,
+> `REALTIME_SCOPE_ACL`, `RealtimeActor`, `RealtimeEntityRef`, and full scope ACL details.
 
-RealtimeScope = Literal["workspace", "user", "global"]
-
-
-class RealtimeEvent(msgspec.Struct, kw_only=True):
-    """Canonical realtime event envelope."""
-
-    schema_version: str = "1.0"
-    event_type: str
-    scope: RealtimeScope
-    published_at: datetime = msgspec.field(
-        default_factory=lambda: datetime.now(UTC),
-    )
-    workspace_id: UUID | None = None
-    user_id: UUID | None = None
-    actor: RealtimeActor | None = None
-    entity: RealtimeEntityRef | None = None
-    payload: dict[str, Any] = msgspec.field(default_factory=dict)
-```
-
-Scope access control mapping:
+Quick-reference scope ACL:
 
 | Scope       | Access Rule                       |
 |-------------|-----------------------------------|

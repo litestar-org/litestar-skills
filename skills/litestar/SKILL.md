@@ -271,6 +271,7 @@ Deep-dive references under `references/`:
 ### Real-time
 
 - [websockets.md](references/websockets.md) — WebSocket handlers, Channels plugin, cross-process publishing, WS-vs-Channels matrix
+- **[Realtime Events](references/realtime-events.md)** — RealtimeEvent contract, scope ACL, channel factories, RealtimePublisher abstraction, scope-specific publish helpers.
 
 ### Deployment
 

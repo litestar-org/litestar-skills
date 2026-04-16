@@ -76,7 +76,10 @@ async def requires_workspace_membership(
 
 ## WebSocket Auth (query-param JWT)
 
-WS handshakes can't carry HTTP `Authorization` headers — pass the JWT as a query param:
+WS handshakes can't carry HTTP `Authorization` headers — pass the JWT as a query param.
+The guard chain below is adapted from the `dma/accelerator` WS auth module (`_websocket.py:L32–133`).
+
+### Auth guard (token + user load)
 
 ```python
 from litestar.exceptions import WebSocketException
@@ -98,23 +101,94 @@ async def requires_websocket_auth(
     connection.state.user = user
 ```
 
-WS error codes:
+### Membership guard (workspace-scoped)
 
-- `4001` — Auth failure (missing/invalid token, inactive user)
-- `4003` — Authorization failure (not a member, wrong subject)
+Verifies the authenticated user is a member of the workspace in the path. Superusers bypass the
+membership check. Adapted from `_websocket.py:L72–105`.
+
+```python
+async def requires_websocket_workspace_member(
+    connection: ASGIConnection, _: BaseRouteHandler,
+) -> None:
+    user = getattr(connection.state, "user", None)
+    if user is None:
+        raise WebSocketException(code=4001, detail="Unauthorized")
+    if has_full_access_role(user):
+        return
+    workspace_id = connection.path_params.get("workspace_id")
+    if workspace_id is None:
+        raise WebSocketException(code=4003, detail="Missing workspace_id")
+    is_member = await workspace_member_service.is_member(workspace_id, user.id)
+    if not is_member:
+        raise WebSocketException(code=4003, detail="Forbidden")
+```
+
+### Subject guard (user-scoped)
+
+Restricts a user stream subscription to the authenticated subject — the `user_id` path param must
+match the token user. Adapted from `_websocket.py:L108–121`.
+
+```python
+async def requires_websocket_user_subject(
+    connection: ASGIConnection, _: BaseRouteHandler,
+) -> None:
+    user = getattr(connection.state, "user", None)
+    if user is None:
+        raise WebSocketException(code=4001, detail="Unauthorized")
+    user_id = connection.path_params.get("user_id")
+    if str(user.id) != str(user_id):
+        raise WebSocketException(code=4003, detail="Forbidden")
+```
+
+### Global-access guard
+
+Allows only users with a full-access role (e.g., admin / superuser). Adapted from
+`_websocket.py:L124–133`.
+
+```python
+async def requires_websocket_global_access(
+    connection: ASGIConnection, _: BaseRouteHandler,
+) -> None:
+    user = getattr(connection.state, "user", None)
+    if user is None:
+        raise WebSocketException(code=4001, detail="Unauthorized")
+    if not has_full_access_role(user):
+        raise WebSocketException(code=4003, detail="Forbidden")
+```
+
+WS close-code convention — `requires_websocket_workspace_member`, `requires_websocket_user_subject`,
+and `requires_websocket_global_access` all raise `4003` on authz failure; all guards raise `4001`
+on missing/invalid auth state:
+
+| Code   | Meaning                                                              | Guards              |
+|--------|----------------------------------------------------------------------|---------------------|
+| `4001` | Auth failure — missing/invalid token or inactive user                | all guards          |
+| `4003` | Authz failure — not a member, wrong subject, or insufficient role    | workspace / subject / global |
 
 ## Layering Guards
 
-```python
-class WorkspaceController(Controller):
-    guards = [requires_active_user, requires_workspace_membership]  # shared
+Compose guards per scope — one controller (or handler) per stream type:
 
-    @get("/admin", guards=[requires_superuser])  # adds an extra check
-    async def admin_view(self) -> dict: ...
+```python
+class WorkspaceStreamController(Controller):
+    guards = [requires_websocket_auth, requires_websocket_workspace_member]
+
+
+class UserStreamController(Controller):
+    guards = [requires_websocket_auth, requires_websocket_user_subject]
+
+
+class GlobalStreamController(Controller):
+    guards = [requires_websocket_auth, requires_websocket_global_access]
 ```
+
+Contrast with HTTP-only controllers that use `requires_active_user` + `requires_workspace_membership`
+— WS controllers always start with `requires_websocket_auth` because the HTTP middleware auth
+stack is bypassed for WebSocket connections.
 
 ## Cross-references
 
 - WebSocket-specific guard composition: [websockets.md](websockets.md)
+- RealtimeEvent contract and publisher: [realtime-events.md](realtime-events.md)
 - Auto-loading users via middleware: [middleware.md](middleware.md)
 - Custom exceptions for permission denials: [exceptions.md](exceptions.md)
