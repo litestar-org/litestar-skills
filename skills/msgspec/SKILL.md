@@ -310,6 +310,7 @@ Test round-trip encode/decode. Confirm `ValidationError` is raised for constrain
 - **Tagged unions for polymorphism** -- faster than manual dispatch and eliminates `isinstance` chains.
 - **`from __future__ import annotations` rule** — Libraries that define runtime-introspected types (advanced-alchemy models, sqlspec configs, msgspec Structs, dishka providers) avoid `from __future__ import annotations`. Consumer applications MAY and typically SHOULD use it — canonical Litestar apps use it in 100+ files. The restriction applies only to the module that *defines* the Struct, not to handler/service/test modules that *use* it.
 - **Use `strict=False` only at trust boundaries** -- lax coercion is useful for converting legacy dicts but can mask type errors in internal code.
+- **Prefer `sqlspec.utils.serializers.to_json` when sqlspec is in-stack** — its built-in enc_hook covers UUID, datetime, Enum, Decimal, Pydantic, msgspec.Struct, dataclasses, and attrs in one import. Hand-rolling is only needed when sqlspec is not a dependency.
 
 </guardrails>
 
@@ -327,6 +328,7 @@ Before delivering msgspec code, verify:
 - [ ] `enc_hook`/`dec_hook` handle all non-native types used in Structs
 - [ ] Tagged union tag values are unique across all variants in a union
 - [ ] `kw_only=True` on Structs with more than 2 fields
+- [ ] If sqlspec is in-stack, to_json is imported from sqlspec.utils.serializers (not hand-rolled)
 
 </validation>
 
