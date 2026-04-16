@@ -327,80 +327,13 @@ Channel name convention: `{scope}:{id}:{topic}`
 
 ### Publishing to Channels from Route Handlers and Services
 
-Use a publisher abstraction backed by the `ChannelsBackend`:
+Subscription-side code uses the `RealtimePublisher` class to publish typed `RealtimeEvent`
+objects to named channels. The publisher wraps the `ChannelsBackend`, provides scope-specific
+helpers (`publish_workspace_event`, `publish_user_event`, `publish_global_event`), and handles
+the case where the backend is not yet initialized gracefully (no-op + debug log).
 
-```python
-from litestar.channels import ChannelsBackend
-
-from app.lib.serialization import to_json
-
-
-class RealtimePublisher:
-    """Publish typed events through the channels backend."""
-
-    def __init__(self, backend: ChannelsBackend) -> None:
-        self.backend = backend
-
-    async def publish_event(self, event: RealtimeEvent, channel: str) -> None:
-        try:
-            await self.backend.publish(
-                data=to_json(event, as_bytes=True),
-                channels=[channel],
-            )
-        except RuntimeError as exc:
-            if "backend not yet initialized" not in str(exc).lower():
-                raise
-            # Backend not ready during startup - skip silently
-
-    async def publish_workspace_event(
-        self,
-        workspace_id: UUID,
-        event_type: str,
-        payload: dict[str, Any],
-        *,
-        actor: RealtimeActor | None = None,
-        entity: RealtimeEntityRef | None = None,
-    ) -> RealtimeEvent:
-        event = RealtimeEvent(
-            event_type=event_type,
-            scope="workspace",
-            workspace_id=workspace_id,
-            actor=actor,
-            entity=entity,
-            payload=payload,
-        )
-        await self.publish_event(
-            event, channel=Channels.workspace(workspace_id),
-        )
-        return event
-```
-
-Publishing from background workers / services:
-
-```python
-async def _publish_etl_log_event(
-    self,
-    log_entry: JobLog,
-    workspace_id: UUID,
-) -> None:
-    """Publish ETL log event to workspace channel."""
-    payload = {
-        "log_id": str(log_entry.id),
-        "job_id": str(log_entry.job_id),
-        "stage": log_entry.stage,
-        "level": log_entry.level,
-        "message": log_entry.message,
-    }
-    event = RealtimeEvent(
-        event_type="workspace.etl.log.created",
-        scope="workspace",
-        workspace_id=workspace_id,
-        entity=RealtimeEntityRef(type="etl_log", id=str(log_entry.id)),
-        payload=payload,
-    )
-    channel = WorkspaceChannels.etl(workspace_id)
-    await realtime_publisher.publish_event(event, channel=channel)
-```
+> See [realtime-events.md](realtime-events.md) for the full `RealtimePublisher` abstraction,
+> scope-specific publish helpers, channel factory classes, and neutral-domain publishing examples.
 
 ### Subscribing from WebSocket Handlers
 
