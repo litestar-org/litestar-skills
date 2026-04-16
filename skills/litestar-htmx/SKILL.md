@@ -138,22 +138,81 @@ Use Litestar's CSRF middleware; expose the token to templates as a `<meta>` tag 
 
 ### Pairing with `litestar-vite` (HTMX mode)
 
-For HTMX projects with bundled JS/CSS and HMR, use `litestar-vite` in `template` or `htmx` mode. Vite bundles HTMX itself + extensions + CSS; Litestar returns partials. See `../litestar-vite/SKILL.md`.
+For HTMX projects with bundled JS/CSS and HMR, use `litestar-vite` in `template` mode. Vite bundles HTMX + extensions + CSS; Litestar returns partials. See `../litestar-vite/SKILL.md` and [`../litestar-vite/references/modes.md`](../litestar-vite/references/modes.md#htmx-mode).
 
 ```html
-<!-- base.html -->
+<!-- base.html.j2 -->
 <!DOCTYPE html>
 <html>
 <head>
-  {{ vite_hmr_client() }}
-  {{ vite_css('src/styles.css') }}
-  {{ vite_asset('src/htmx-bundle.ts') | safe }}
+  {{ vite_hmr() }}
+  {{ vite('resources/main.js') }}
 </head>
-<body>
+<body hx-ext="litestar">          <!-- enables the Litestar client extension -->
   {% block content %}{% endblock %}
 </body>
 </html>
 ```
+
+### The `hx-ext="litestar"` client-side templating extension
+
+Activating `hx-ext="litestar"` (on `<body>` or any enclosing element) unlocks **client-side JSON rendering** via `<template>` tags. When an HTMX swap uses `hx-swap="json"`, the response body is parsed as JSON and matched against `ls-*` attributes on descendant `<template>` tags.
+
+This lets you render JSON API responses as HTML **without** server-side templates — complementary to the partial-HTML pattern.
+
+| Attribute | Purpose |
+|---|---|
+| `ls-for="item in $data"` | Iterate over the JSON response array |
+| `ls-key="item.id"` | Stable key for list reconciliation |
+| `ls-if="condition"` | Render only when truthy |
+| `ls-else` | Fallback block for `ls-if` |
+| `${expression}` | Interpolate JS expression into text content |
+| `:attr="expression"` | Dynamic attribute binding |
+| `$data` | The raw JSON response body |
+
+Array rendering:
+
+```html
+<button hx-get="/api/books" hx-target="#books" hx-swap="json">Load</button>
+
+<div id="books">
+  <template ls-for="book in $data" ls-key="book.id">
+    <article :id="`book-${book.id}`">
+      <h3>${book.title}</h3>
+      <p>${book.author} • ${book.year}</p>
+    </article>
+  </template>
+</div>
+```
+
+Single-item rendering (properties on `$data` accessible directly via prototype inheritance):
+
+```html
+<div hx-get="/api/books/1" hx-target="#book" hx-swap="json">
+  <template ls-if="id">
+    <h3>${title}</h3>
+    <p>${author} • ${year}</p>
+    <div>
+      <template ls-for="tag in tags">
+        <span>${tag}</span>
+      </template>
+    </div>
+  </template>
+  <template ls-else>
+    <p>Click to load…</p>
+  </template>
+</div>
+```
+
+**When to use this vs server-side partials:**
+
+| Case | Approach |
+|---|---|
+| Data shape simple, rendering trivial, already have JSON endpoint | Client `ls-*` templating (no `HTMXTemplate`) |
+| Complex conditionals, auth-sensitive fields, heavy formatting | Server partials via `HTMXTemplate` |
+| Same endpoint serving both JSON (for JS clients) and HTML (for HTMX clients) | Branch on `request.htmx`; return JSON always and let `ls-*` render it for HTMX consumers |
+
+Both coexist in one page. The canonical `jinja-htmx` example in `litestar-vite/examples/jinja-htmx/` demonstrates both side by side.
 
 ### Common HTMX Attributes (quick refresher)
 
@@ -189,6 +248,7 @@ Pass `request_class=HTMXRequest` to `Litestar(...)`. All handlers can now type-a
 ### Step 2: Decide Page vs Partial Boundaries
 
 For each route, decide:
+
 - **Page route** — returns full layout (one `Template` rendering `base.html`)
 - **Partial route** — returns a fragment used by `hx-get`/`hx-post`
 
