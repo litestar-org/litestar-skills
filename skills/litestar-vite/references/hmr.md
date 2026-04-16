@@ -4,7 +4,7 @@ How Hot Module Replacement works between Litestar and Vite, and how to debug it.
 
 ## Architecture
 
-```
+```text
 Browser ──HTTP──▶ Litestar (port 8000)
    │
    └─WS────────▶ Vite dev server (port 5173)

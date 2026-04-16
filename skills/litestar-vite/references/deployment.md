@@ -10,7 +10,7 @@ litestar assets build
 
 Outputs (under `bundle_dir`):
 
-```
+```text
 manifest.json                    URL → hashed-asset map
 assets/main.<hash>.js            hashed JS bundles
 assets/main.<hash>.css           hashed CSS bundles

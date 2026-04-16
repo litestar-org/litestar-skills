@@ -56,7 +56,7 @@ Key lifecycle hooks: `to_model_on_create`, `to_model_on_update`, `to_model_on_up
 | `UUID6` / `UUID7` | Time-sortable UUID variants | UUID7 preferred — monotonic ordering with millisecond timestamp prefix |
 | `DateTimeUTC` | Timezone-aware UTC datetime | Stores as UTC; raises on naive datetimes |
 
-## Service Layer
+## Repository Service Layer
 
 `SQLAlchemyAsyncRepositoryService` is the primary service base class. Key behaviors:
 
