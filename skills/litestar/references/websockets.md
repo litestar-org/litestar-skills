@@ -60,6 +60,56 @@ async def handle_websocket(socket: WebSocket) -> None:
         pass
 ```
 
+### Dishka DI in WS handlers
+
+WebSocket connections live at SESSION scope in Dishka — the container is created once per
+connection and stored at `connection.state.dishka_container`. REQUEST-scoped services (e.g., a
+database session or unit-of-work) need a child container created per operation. Use a context
+manager to open a transient REQUEST-scope child for each receive/send cycle.
+
+Adapted from `dma/accelerator/src/py/dma/lib/di.py:L156–189` (`with_websocket_request` in the
+accelerator; shown here as `enter_request_scope` — a neutral alias for the same pattern).
+
+```python
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+
+from dishka import AsyncContainer
+from litestar import WebSocket
+
+
+@asynccontextmanager
+async def enter_request_scope(socket: WebSocket) -> AsyncIterator[AsyncContainer]:
+    """Open a REQUEST-scoped child container for one WS operation."""
+    session_container: AsyncContainer = socket.state.dishka_container
+    async with session_container() as request_container:
+        yield request_container
+
+
+@websocket("/ws/workspace/{workspace_id:uuid}/stream")
+async def workspace_stream(socket: WebSocket, workspace_id: UUID) -> None:
+    await socket.accept()
+    async for message in receive_messages(socket):
+        async with enter_request_scope(socket) as container:
+            svc = await container.get(OrderService)
+            await svc.process(message, workspace_id)
+```
+
+**Branch note — `Provide`-only stacks:** Litestar's built-in DI attaches services via `Provide`
+in the handler signature. The REQUEST-scope child container pattern is Dishka-specific — on
+`Provide`-only stacks, inject services directly at the handler signature as usual:
+
+```python
+@websocket("/ws/workspace/{workspace_id:uuid}/stream")
+async def workspace_stream(
+    socket: WebSocket,
+    workspace_id: UUID,
+    order_service: OrderService,  # injected via Provide() in app dependencies
+) -> None:
+    await socket.accept()
+    ...
+```
+
 ### Authentication in WebSocket Connections
 
 WebSocket connections cannot use HTTP `Authorization` headers during the initial handshake. Authenticate via a `token` query parameter instead.
