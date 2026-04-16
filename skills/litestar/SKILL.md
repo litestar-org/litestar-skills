@@ -273,6 +273,10 @@ Deep-dive references under `references/`:
 - [websockets.md](references/websockets.md) — WebSocket handlers, Channels plugin, cross-process publishing, WS-vs-Channels matrix
 - **[Realtime Events](references/realtime-events.md)** — RealtimeEvent contract, scope ACL, channel factories, RealtimePublisher abstraction, scope-specific publish helpers.
 
+### AI Serving
+
+- **[AI Serving](references/ai-serving.md)** — Google ADK LlmAgent + Runner wiring, SQLSpecSessionService multi-turn memory, persona-augmented prompts, tool-use-first instructions, synchronous JSON handler pattern, missing-credential handling.
+
 ### Deployment
 
 - [deployment.md](references/deployment.md) — Granian config, IAP auth, static asset serving, Docker patterns

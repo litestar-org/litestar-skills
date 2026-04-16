@@ -327,6 +327,7 @@ For detailed instructions, patterns, and API guides, refer to the following docu
 - **[Design Patterns](references/patterns.md)** -- Service layer, batch operations, upsert, AST tenant filters.
 - **[Service Patterns](references/service-patterns.md)** -- SQLSpecAsyncService base, named SQL templates via db_manager.get_sql, direct driver API (select_value / select_one / execute), variadic filter composition, create_filter_dependencies() wiring.
 - **[Dishka Integration](references/dishka-integration.md)** -- FromDishka as Inject alias, multi-provider pattern (REQUEST-scoped domain services, REQUEST-scoped driver, APP-scoped singletons), handler injection.
+- **[Vector Search](references/vector-search.md)** — Oracle VECTOR_DISTANCE cosine similarity, Vertex AI embedding generation, SHA256-keyed embedding cache, intent classification via exemplar similarity, pgvector cross-reference.
 
 ## Key Resources
 
