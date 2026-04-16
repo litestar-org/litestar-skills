@@ -15,7 +15,9 @@ Present this menu and let the user pick:
 5. **litestar-email** — Email sending (SMTP / SendGrid / Resend / Mailgun / InMemory)
 6. **litestar-htmx** — HTMX integration (HTMXRequest, HTMXResponse, hx-ext="litestar" templating)
 7. **advanced-alchemy** — SQLAlchemy ORM + Repository Service + OffsetPagination + Alembic
-8. **pytest-databases** — Container-based database test fixtures
+8. **sqlspec** — Low-level SQL adapter + query builder + Arrow integration + framework extensions
+9. **pytest-databases** — Container-based database test fixtures
+10. **litestar-deployment** — Docker (standard / distroless / worker), Railway, K8s, Cloud Run, systemd
 
 ## For each selected plugin
 
