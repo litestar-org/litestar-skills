@@ -1,6 +1,6 @@
 ---
 name: msgspec
-description: "Auto-activate for msgspec imports, msgspec.Struct definitions, msgspec.json/msgpack usage. High-performance Python serialization and validation library: Struct definitions, Meta constraints, tagged unions, enc_hook/dec_hook, convert(). Produces msgspec Structs, serialization codecs, validation schemas, and type-safe conversion patterns. Use when: defining data models with msgspec, serializing/deserializing JSON or MessagePack, validating data with Meta constraints, building discriminated unions, or converting dicts/objects with msgspec.convert(). Not for Pydantic models, dataclasses, or attrs -- msgspec has its own patterns."
+description: "Auto-activate for msgspec imports, msgspec.Struct definitions, msgspec.json/msgpack usage. High-performance Python serialization and validation library: Struct definitions, Meta constraints, tagged unions, enc_hook/dec_hook, convert(). Produces msgspec Structs, serialization codecs, validation schemas, and type-safe conversion patterns. Use when: defining data models with msgspec, serializing/deserializing JSON or MessagePack, validating data with Meta constraints, building discriminated unions, or converting dicts/objects with msgspec.convert(). In Litestar apps, sqlspec.utils.serializers.to_json is the canonical serializer; hand-roll Encoder(enc_hook=...) only when sqlspec is not in-stack. Not for Pydantic models, dataclasses, or attrs -- msgspec has its own patterns."
 ---
 
 # msgspec Skill
