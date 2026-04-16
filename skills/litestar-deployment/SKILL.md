@@ -9,6 +9,8 @@ Production deployment patterns for Litestar ASGI applications across Docker, Rai
 
 All deployment paths use **Granian** (via `litestar-granian`) as the ASGI server, **uv** for Python package management, and **Bun** for frontend asset builds.
 
+**Build vs. deploy split:** this skill is about **running** Litestar artifacts in production. For **producing** those artifacts — wheel bundling with embedded Vite assets, PyApp onefile binaries, GitHub Actions CI/release pipelines — see [litestar-build](../litestar-build/SKILL.md).
+
 ## Code Style Rules
 
 - `from __future__ import annotations` is allowed in consumer-app modules (Dockerfiles, deploy scripts, settings).
@@ -164,6 +166,7 @@ For Kubernetes production deployment with HPA, Ingress, and GKE Workload Identit
 
 ## Cross-References
 
+- [litestar-build](../litestar-build/SKILL.md) — how the wheel and PyApp onefile artifacts this skill deploys are produced (Hatchling config, Vite-in-package bundling, GitHub release pipelines)
 - [litestar-granian](../litestar-granian/SKILL.md) — ASGI server tuning (workers, threads, HTTP/2, backpressure)
 - [litestar-saq](../litestar-saq/SKILL.md) — SAQ worker configuration and task definitions
 - [litestar-vite](../litestar-vite/SKILL.md) — Vite asset build pipeline and TypeGen
