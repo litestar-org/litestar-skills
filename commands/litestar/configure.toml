@@ -77,16 +77,16 @@ def get_settings() -> AppSettings:
 
 Scaffold this at `lib/settings.py` with the `get_env` utility at `utils/env.py`.
 
-**Why this over Pydantic Settings:**
-- Zero dependency (no pydantic-settings install needed)
+**When `@dataclass` fits:**
+- Zero runtime dependency (no `pydantic-settings` install needed) — leaner startup, leaner wheel
 - Same `@lru_cache` pattern for singleton settings
 - Type coercion via `get_env()` is explicit and debuggable
 - Nested dataclasses compose naturally
-- The `get_env()` return type is a `Callable` (field `default_factory`) which means env vars are read at instantiation time, not import time — important for testing
+- `get_env` returns a `Callable` used as `default_factory`, so env vars are read at instantiation time, not import time — important for testing
 
-### B) Pydantic `BaseSettings` (popular alternative)
+### B) Pydantic `BaseSettings`
 
-For users who already use Pydantic or want automatic `.env` file loading and validation:
+For projects that already depend on Pydantic — shared DTOs with non-Litestar microservices, an existing SQLModel layer, a FastAPI migration, or any codebase where introducing a second validation stack would split the ecosystem:
 
 ```python
 from __future__ import annotations
@@ -118,7 +118,7 @@ def get_settings() -> AppSettings:
     return AppSettings()
 ```
 
-**Trade-off:** adds `pydantic-settings` dep but gives automatic `.env` loading, nested model validation, and JSON schema generation. Canonical Litestar apps don't use this — but it's a valid choice for teams already in the Pydantic ecosystem.
+**When `pydantic_settings` fits:** the project already depends on Pydantic (shared DTOs, SQLModel, FastAPI migration, JSON Schema-driven contracts). `BaseSettings` gives automatic `.env` loading, `env_nested_delimiter` for nested models, field-level validation, and CLI / secret-store integration. If you're starting fresh with no existing Pydantic dependency, `@dataclass` + `get_env()` keeps the dependency graph leaner. Both patterns are fully supported — pick based on what's already in your project, not on which is "canonical."
 
 ### C) Simple single-file config (tutorials / demos)
 
