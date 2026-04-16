@@ -281,6 +281,8 @@ For databases that support server-side pub/sub (e.g., PostgreSQL `LISTEN`/`NOTIF
 
 ## References Index
 
+> **Choosing between `sqlspec` and `advanced-alchemy`:** `advanced-alchemy` gives you an opinionated ORM service layer with `UUIDAuditBase`, lifecycle hooks, repository / service / Alembic integration, and `OffsetPagination[T]` out of the box — pick it when you want a complete CRUD surface with attribute-style row access and you're happy inside the SQLAlchemy ecosystem. `sqlspec` gives you direct SQL control, 15+ driver adapters (asyncpg, oracledb, DuckDB, BigQuery, SQLite, and more), Arrow-native result streams for analytics, and a builder API when you need it — pick it when you want explicit SQL, heterogeneous database backends, or Arrow integration. Both skills integrate with Litestar via first-party plugins; see [`../advanced-alchemy/SKILL.md`](../advanced-alchemy/SKILL.md) for the ORM path.
+
 For detailed instructions, patterns, and API guides, refer to the following documents:
 
 ### Standards & Style

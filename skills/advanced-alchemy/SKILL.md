@@ -199,6 +199,8 @@ class TagService(SQLAlchemyAsyncRepositoryService[Tag]):
 
 ## References Index
 
+> **Choosing between `advanced-alchemy` and `sqlspec`:** `advanced-alchemy` (this skill) gives you an opinionated ORM service layer with `UUIDAuditBase`, lifecycle hooks, repository / service / Alembic integration, and `OffsetPagination[T]` out of the box — pick it when you want a complete CRUD surface with attribute-style row access and you're happy inside the SQLAlchemy ecosystem. `sqlspec` gives you direct SQL control, 15+ driver adapters (asyncpg, oracledb, DuckDB, BigQuery, SQLite, and more), Arrow-native result streams for analytics, and a builder API when you need it — pick it when you want explicit SQL, heterogeneous database backends, or Arrow integration. Both skills integrate with Litestar via first-party plugins; see [`../sqlspec/SKILL.md`](../sqlspec/SKILL.md) for the raw-SQL / multi-adapter path.
+
 For detailed guides and code examples, refer to the following documents in `references/`:
 
 - **[Models](references/models.md)**
