@@ -404,17 +404,27 @@ async def _publish_etl_log_event(
 
 ### Subscribing from WebSocket Handlers
 
-The `stream_pubsub` helper manages subscription lifecycle, message decoding, deduplication, and error handling:
+The `stream_pubsub` helper manages subscription lifecycle, message decoding, bounded-LRU
+deduplication, per-session metrics, and error handling. Adapted from
+`dma/accelerator/src/py/dma/lib/websockets.py:L95–166` (bounded LRU + per-session metrics).
 
 ```python
 from litestar import WebSocket
 from litestar.exceptions import WebSocketDisconnect
+
+_MAX_DEDUP_KEYS = 1024
+
+
+def _extract_idempotency_key(payload: dict) -> str | None:
+    """Accept both snake_case and camelCase idempotency key."""
+    return payload.get("idempotency_key") or payload.get("idempotencyKey")
 
 
 async def stream_pubsub(
     socket: WebSocket,
     channels: list[str],
     history: int = 0,
+    metrics: RealtimeStreamMetrics | None = None,
 ) -> None:
     """Stream pub/sub messages to a WebSocket client.
 
@@ -422,41 +432,96 @@ async def stream_pubsub(
         socket: The WebSocket connection (must already be accepted).
         channels: List of channel names to subscribe to.
         history: Number of historical messages to replay.
+        metrics: Optional per-session metrics collector.
     """
-    try:
-        seen_keys: set[str] = set()
+    m = metrics or RealtimeStreamMetrics()
+    seen_keys: list[str] = []
+    seen_key_set: set[str] = set()
 
-        async with config.channels.start_subscription(
-            channels, history=history,
-        ) as subscriber:
+    try:
+        async with config.channels.start_subscription(channels, history=history) as subscriber:
             async for message in subscriber.iter_events():
+                m.messages_received += 1
                 payload = decode_message(message, channels)
                 if payload is None:
+                    m.messages_malformed += 1
                     continue
 
-                # Deduplicate by idempotency key
-                idem_key = extract_idempotency_key(payload)
-                if idem_key is not None and idem_key in seen_keys:
-                    continue
+                idem_key = _extract_idempotency_key(payload)
                 if idem_key is not None:
-                    seen_keys.add(idem_key)
+                    if idem_key in seen_key_set:
+                        m.messages_deduplicated += 1
+                        continue
+                    seen_keys.append(idem_key)
+                    seen_key_set.add(idem_key)
+                    if len(seen_keys) > _MAX_DEDUP_KEYS:
+                        evicted = seen_keys.pop(0)
+                        seen_key_set.discard(evicted)
 
                 await socket.send_json(payload)
+                m.messages_delivered += 1
+
     except WebSocketDisconnect:
-        pass  # Normal client disconnect
+        m.disconnects += 1
     except Exception:
-        logger.exception("WebSocket stream error", channels=channels)
+        m.stream_errors += 1
+        await logger.aexception("WebSocket stream error", channels=channels)
+    finally:
+        await logger.adebug(
+            "Realtime stream session summary",
+            **m.snapshot(),
+            channels=channels,
+        )
+```
+
+### Stream metrics
+
+`RealtimeStreamMetrics` tracks per-session counters for observability. Adapted from
+`dma/accelerator/src/py/dma/lib/websockets.py:L14–46`.
+
+```python
+from dataclasses import dataclass, field
+
+
+@dataclass
+class RealtimeStreamMetrics:
+    """Per-session counters for a stream_pubsub call."""
+
+    active_subscriptions: int = 0
+    messages_received: int = 0
+    messages_delivered: int = 0
+    messages_malformed: int = 0
+    messages_deduplicated: int = 0
+    disconnects: int = 0
+    stream_errors: int = 0
+
+    def snapshot(self) -> dict[str, int]:
+        """Return an immutable copy of all counters."""
+        return {
+            "active_subscriptions": self.active_subscriptions,
+            "messages_received": self.messages_received,
+            "messages_delivered": self.messages_delivered,
+            "messages_malformed": self.messages_malformed,
+            "messages_deduplicated": self.messages_deduplicated,
+            "disconnects": self.disconnects,
+            "stream_errors": self.stream_errors,
+        }
+
+    def reset(self) -> None:
+        """Zero all counters (e.g., between test runs)."""
+        for f in self.__dataclass_fields__:
+            setattr(self, f, 0)
 ```
 
 Usage in a handler:
 
 ```python
-@websocket(path="/{workspace_id:uuid}/etl/stream")
-async def stream_etl_logs(self, socket: WebSocket, workspace_id: UUID) -> None:
+@websocket(path="/{workspace_id:uuid}/stream")
+async def stream_workspace_events(self, socket: WebSocket, workspace_id: UUID) -> None:
     await socket.accept()
     await stream_pubsub(
         socket,
-        [WorkspaceChannels.etl(workspace_id)],
+        [RealtimeChannels.workspace(workspace_id)],
         history=10,
     )
 ```
