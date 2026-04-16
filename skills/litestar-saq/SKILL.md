@@ -1,6 +1,6 @@
 ---
 name: litestar-saq
-description: "Auto-activate for litestar_saq imports, SAQPlugin, SAQConfig, QueueConfig, TaskQueues. The first-party Litestar plugin around SAQ (Simple Async Queue): background tasks, cron jobs, queue web UI, `litestar workers run` CLI, DI of `TaskQueues`. Produces SAQPlugin configs, QueueConfig definitions, task functions, CronJobs, and DI-injected enqueue patterns. Use when: adding background jobs to a Litestar app, scheduling cron work, exposing the SAQ web UI, or running workers via the Litestar CLI. Not for Celery, RQ, or Dramatiq — Litestar's first-party choice is SAQ. For raw SAQ patterns outside Litestar, see standalone SAQ docs."
+description: "Auto-activate for litestar_saq imports, SAQPlugin, SAQConfig, QueueConfig, TaskQueues. The first-party Litestar plugin around SAQ (Simple Async Queue): background tasks, cron jobs, queue web UI, `litestar workers run` CLI, DI of `TaskQueues`. Produces SAQPlugin configs, QueueConfig definitions, task functions, CronJobs, and DI-injected enqueue patterns. Use when: adding background jobs to a Litestar app, scheduling cron work, exposing the SAQ web UI, or running workers via the Litestar CLI. Not for Celery, RQ, or Dramatiq — Litestar's first-party choice is SAQ. For raw SAQ patterns outside Litestar, see standalone SAQ docs. Or document the custom-PG-native alternative pattern when SAQ is explicitly rejected."
 ---
 
 # litestar-saq
@@ -82,11 +82,44 @@ def create_saq_plugin_pg() -> SAQPlugin:
     )
 ```
 
-**Pick Redis when:** already in-stack (cache, sessions, Channels), need multi-queue fanout across many workers, want the SAQ web UI, or have high throughput (>1k jobs/s per queue).
+**Pick Branch A (SAQ + Redis) when:** Redis is already in-stack (cache, sessions, Channels), you need multi-queue fanout across many workers, want the SAQ web UI and dead-letter dashboards, or have high throughput (>1k jobs/s per queue).
 
-**Pick PostgreSQL when:** PG-only deployment (Cloud SQL, AlloyDB, self-hosted single DB), avoiding extra infra, moderate throughput (<1k jobs/s), or you want jobs and business data in the same transactional boundary.
+**Pick Branch B (SAQ + PostgreSQL) when:** PG-only deployment (Cloud SQL, AlloyDB, self-hosted single DB), avoiding extra infra, moderate throughput (<1k jobs/s), or you want jobs and business data in the same transactional boundary.
+
+**Pick Branch C (custom PG-native, no SAQ) when:** you need `pg_notify` wake-ups with zero polling lag, `FOR UPDATE SKIP LOCKED` atomic task claim, or multi-target execution routing (`local` / `cloudrun` / `immediate`) — and you're willing to own a thin `TaskService + WorkerPlugin` pair. See below.
 
 **Anti-pattern:** hard-coding `dsn=settings.redis.url` in a PG-only project just because Redis is the "default" example. Match the broker to the stack.
+
+### Branch C — Custom PostgreSQL-native queue (no SAQ)
+
+Some projects reject SAQ entirely in favor of a thin `TaskService + WorkerPlugin` pair directly over PostgreSQL. This wins when you want `FOR UPDATE SKIP LOCKED` for atomic task claiming, `pg_notify` wake-ups (no polling lag), and multi-target execution routing (`local` / `cloudrun` / `immediate`) with zero extra dependencies beyond your existing Postgres connection.
+
+The canonical example is the `dma/accelerator` codebase, which implements this pattern throughout. The `WorkerPlugin` wires task discovery and the in-process worker into the Litestar app lifecycle; the `@task` decorator registers callables and optional cron schedules; `TaskService.create_task` persists tasks to a `job` table. Canonical references: `dma/accelerator/src/py/dma/utils/worker/plugin.py:L57–224` and `dma/accelerator/src/py/dma/lib/jobs.py:L792–903`.
+
+See [references/postgresql-native.md](references/postgresql-native.md) for the full pattern.
+
+```python
+# NOTE: do NOT use `from __future__ import annotations` in modules that define
+# @task-decorated functions — the decorator inspects signatures at registration time.
+
+from app.lib.worker.jobs import task
+
+
+@task(cron="0 2 * * *", timeout=120)
+async def nightly_cleanup() -> None:
+    """Purge soft-deleted records every night at 02:00 UTC."""
+    ...
+
+
+@task(priority=5, retries=1, timeout=300, execution_target="cloudrun")
+async def generate_report(*, report_id: int) -> None:
+    """Export report — runs on Cloud Run for isolation."""
+    ...
+
+
+# Enqueue imperatively (from a handler or service):
+await generate_report.enqueue(execution_target="cloudrun", report_id=42)
+```
 
 ### Wire into Litestar
 
@@ -228,6 +261,7 @@ For production: `litestar workers run --process` separately from `litestar run`.
 - **`use_server_lifespan=True`** for dev and small-to-mid apps (workers inside the web process). Switch to `--process` for high-throughput production.
 - **Publish to Litestar Channels from tasks** when the job result must update connected websocket clients. See `../litestar/references/websockets.md`.
 - **Pull shared resources from `ctx["state"]`**, not module-level globals — keeps tests deterministic and supports per-worker init.
+- **Reach for a custom PG-native queue instead of SAQ when** you need `pg_notify` wake-ups, `FOR UPDATE SKIP LOCKED` atomic claim, or execution-target routing across Cloud Run / local. For every other PG-only case, SAQ+PG is the simpler default. See [references/postgresql-native.md](references/postgresql-native.md).
 
 </guardrails>
 
@@ -367,6 +401,7 @@ litestar --app app:app workers run --process
 ## References Index
 
 - **[Advanced Patterns](references/patterns.md)** — Heartbeat tuning, dead-letter handling, job chaining, queue priorities, worker lifecycle hooks, Postgres backend.
+- **[PostgreSQL-Native Queue (no SAQ)](references/postgresql-native.md)** — TaskService + WorkerPlugin pattern from dma/accelerator: FOR UPDATE SKIP LOCKED claim, pg_notify wake-ups, @task decorator + ScheduleConfig cron registry, execution_target routing (local / cloudrun / immediate).
 
 ## Cross-References
 
