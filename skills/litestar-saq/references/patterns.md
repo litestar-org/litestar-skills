@@ -1,5 +1,7 @@
 # SAQ Advanced Patterns
 
+> **See also:** [PostgreSQL-Native Queue (no SAQ)](postgresql-native.md) — `TaskService + WorkerPlugin` pattern with `FOR UPDATE SKIP LOCKED`, `pg_notify`, and execution-target routing when SAQ is not wanted.
+
 ## Heartbeat Management
 
 SAQ uses heartbeats to detect stuck jobs. When a job is `active`, the worker periodically updates a heartbeat timestamp. If the timestamp goes stale (beyond the `heartbeat` interval), SAQ considers the job stuck and may re-queue it.
