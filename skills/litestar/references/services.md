@@ -1,8 +1,16 @@
-# Repository Services (Advanced Alchemy)
+# Service Layer — Per-Stack Patterns
 
-`SQLAlchemyAsyncRepositoryService` is THE data-access pattern for Litestar consumer apps. Subclassing gets you a complete async CRUD surface, automatic DTO conversion, filtering, and pagination — without writing a single SELECT.
+The service layer pattern in a Litestar app depends on your data-access stack. Pick the branch that matches your project and stay consistent — do not mix an `advanced-alchemy` repository service with a `sqlspec` driver call in the same Controller.
 
-## Pattern
+## Pick the branch for your stack
+
+- **`advanced-alchemy`** → `SQLAlchemyAsyncRepositoryService` — opinionated ORM service with audit fields, filters, and pagination built in. Start here when you want a complete CRUD surface without writing SELECTs.
+- **`sqlspec`** → `SQLSpecAsyncService` + driver methods — thin async service over explicit SQL. Start here for direct SQL control, 15+ adapter support, or Arrow / analytics integration. See [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md) *(TODO(Ch5) — stub link, lands in Ch5)*.
+- **raw SQLAlchemy** → `async_sessionmaker` + hand-rolled statements — start here only when you have an existing SA Core / ORM investment and explicitly do not want the repository abstraction.
+
+## Branch A — `advanced-alchemy` repository service
+
+`SQLAlchemyAsyncRepositoryService` is the opinionated default when `advanced-alchemy` is in the project. Subclassing gets you a complete async CRUD surface, automatic DTO conversion, filtering, and pagination — without writing a single SELECT.
 
 ```python
 from __future__ import annotations
@@ -29,7 +37,7 @@ class UserService(SQLAlchemyAsyncRepositoryService[User]):
         return db_user
 ```
 
-## Methods You Get for Free
+### Methods you get for free
 
 | Method | Use case |
 |---|---|
@@ -46,7 +54,7 @@ class UserService(SQLAlchemyAsyncRepositoryService[User]):
 | `count(*filters, **kwargs)` | Row count with filters applied |
 | `to_schema(rows, total=None, filters=None, schema_type=...)` | Convert ORM rows → msgspec DTO; auto-paginates when `total` provided |
 
-## `to_schema` Variants
+### `to_schema` variants
 
 ```python
 # Single object
@@ -62,7 +70,7 @@ return service.to_schema(results, schema_type=User)
 
 `to_schema` reads filter context (limit/offset, total) and synthesizes the right envelope. Never hand-roll pagination shapes.
 
-## When to Drop to Hand-Written Queries
+### When to drop to hand-written queries inside an advanced-alchemy service
 
 Repository services cover ~90% of the data-access surface. Drop to hand-written SQLAlchemy when:
 
@@ -85,9 +93,78 @@ class UserService(SQLAlchemyAsyncRepositoryService[User]):
         return list(result.scalars())
 ```
 
+## Branch B — `sqlspec` async service
+
+`SQLSpecAsyncService` wraps a `sqlspec` driver and gives you the same Controller-facing shape (`list_and_count`, `get_one_or_none`, etc.) while keeping SQL explicit and driver-adapter agnostic.
+
+```python
+from __future__ import annotations
+
+from sqlspec.service import SQLSpecAsyncService
+
+from app.schemas import Post
+
+
+class PostService(SQLSpecAsyncService):
+    async def list_and_count(self, *filters) -> tuple[list[Post], int]:
+        return await self.driver.select_and_count(
+            "SELECT * FROM posts WHERE tenant_id = :tid",
+            filters=filters,
+            schema_type=Post,
+        )
+
+    async def get_one_or_none(self, post_id: UUID) -> Post | None:
+        return await self.driver.select_one_or_none(
+            "SELECT * FROM posts WHERE id = :id",
+            parameters={"id": post_id},
+            schema_type=Post,
+        )
+```
+
+Pick `sqlspec` when: you want direct SQL, you're targeting multiple database backends (15+ adapters including DuckDB and BigQuery), or you need Arrow-native result streams for analytics. See [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md) *(TODO(Ch5))* for the full pattern including filters, pagination, and transaction boundaries.
+
+## Branch C — raw SQLAlchemy with manual sessions
+
+If the project predates `advanced-alchemy` (or intentionally avoids it), the canonical pattern is a thin service class over `async_sessionmaker`. Sessions are resolved via `Provide()` or Dishka — never instantiated inside a handler.
+
+```python
+from __future__ import annotations
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.models import Post
+
+
+class PostService:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_and_count(self, limit: int, offset: int) -> tuple[list[Post], int]:
+        stmt = select(Post).limit(limit).offset(offset)
+        result = await self._session.execute(stmt)
+        rows = list(result.scalars())
+        total = await self._session.scalar(select(func.count()).select_from(Post))
+        return rows, total or 0
+
+    async def get_one_or_none(self, post_id: UUID) -> Post | None:
+        return await self._session.scalar(select(Post).where(Post.id == post_id))
+```
+
+No automatic `to_schema` — convert to DTOs explicitly at the handler boundary, or via a msgspec `convert()` helper.
+
+## When to pick which
+
+| Stack choice | Pick this when | Avoid this when |
+|---|---|---|
+| `advanced-alchemy` service | You want an opinionated ORM service with audit fields, soft-delete, filters, and pagination built in | The project is explicitly raw-SA or sqlspec-only; you need multi-adapter support beyond what SQLAlchemy covers |
+| `sqlspec` service | You want direct SQL, 15+ driver adapters, Arrow streams for analytics, or you're operating across heterogeneous databases | You want ORM-style attribute access on rows; you want automatic schema migrations driven by model classes |
+| raw SQLAlchemy with `async_sessionmaker` | You have an existing SA Core / ORM codebase and explicitly do not want the `advanced-alchemy` repository abstraction | You're starting a new Litestar project — the other two give you more for free |
+
 ## Cross-references
 
 - Custom exceptions raised by `get` / `get_one`: [exceptions.md](exceptions.md)
-- Filter dependencies and pagination: [pagination.md](pagination.md)
+- Filter dependencies and pagination (per-stack): [pagination.md](pagination.md)
 - DTO conversion via `to_schema`: [dto.md](dto.md)
-- Sibling skill for deeper Advanced Alchemy patterns (audit bases, Alembic): `../../advanced-alchemy/SKILL.md`
+- Sibling skill for deeper advanced-alchemy patterns (audit bases, Alembic): [`../../advanced-alchemy/SKILL.md`](../../advanced-alchemy/SKILL.md)
+- Sibling skill for deeper sqlspec patterns (driver adapters, Arrow, query builder): [`../../sqlspec/SKILL.md`](../../sqlspec/SKILL.md)
