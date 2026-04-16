@@ -122,6 +122,59 @@ encoder = msgspec.json.Encoder(enc_hook=enc_hook)
 decoder = msgspec.json.Decoder(MyStruct, dec_hook=dec_hook)
 ```
 
+### Canonical Litestar serializers (match-your-stack)
+
+Litestar apps typically need `to_json(value, as_bytes=True)` that handles UUID / datetime / Enum / Decimal for Channels broadcasts, log contexts, and JSONB writes. Pick the branch that matches your project.
+
+**Branch A — sqlspec is in-stack.** Re-export sqlspec's serializer; it already installs an `enc_hook` covering UUID, datetime, Enum, Decimal, Pydantic, dataclasses, attrs, and msgspec.Struct.
+
+```python
+# myapp/utils/serialization.py
+from sqlspec.utils.serializers import from_json, to_json
+
+__all__ = ("from_json", "to_json")
+```
+
+Usage:
+
+```python
+from myapp.utils.serialization import to_json
+
+payload = to_json(order, as_bytes=True)
+await backend.publish(payload, channels=[f"orders:{order.id}:events"])
+```
+
+**Branch B — sqlspec is not in-stack.** Hand-roll an `Encoder` with an `enc_hook`.
+
+```python
+# myapp/utils/serialization.py
+import datetime as _dt
+import json
+from typing import Any
+from uuid import UUID
+
+import msgspec
+
+
+def _default(value: Any) -> str:
+    if isinstance(value, UUID):
+        return str(value)
+    if isinstance(value, _dt.datetime):
+        return value.astimezone(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if isinstance(value, _dt.date):
+        return value.isoformat()
+    return str(value)
+
+
+_encoder = msgspec.json.Encoder(enc_hook=_default)
+
+
+def to_json(value: Any) -> bytes:
+    if isinstance(value, bytes):
+        return value
+    return _encoder.encode(value)
+```
+
 ### Type Coercion with convert()
 
 ```python
