@@ -1,0 +1,41 @@
+description = "Review Litestar code against first-party conventions and canonical patterns"
+prompt = """
+# Litestar Code Review
+
+You are reviewing code in a Litestar project against the canonical patterns documented in the `litestar` skill.
+
+## Scope
+
+Review the files changed in the current branch (or the files the user points at). Focus on:
+
+1. **DTO correctness** — msgspec Structs with `Meta(rename="camel")`? Not Pydantic where msgspec would do?
+2. **Guards** — auth enforced via Guards at Controller class level? No inline `if not request.user:` checks?
+3. **DI** — services injected via `Provide()` or Dishka `Inject[T]`? Nothing instantiated inside handlers?
+4. **Data access** — using `SQLAlchemyAsyncRepositoryService`? Not hand-rolling queries for simple CRUD?
+5. **Pagination** — `OffsetPagination[T]` + `create_filter_dependencies`? Not hand-rolled limit/offset?
+6. **Exceptions** — custom hierarchy extending `ApplicationError`? Registered via `exception_handlers`? No inline try/except in handlers?
+7. **Settings** — `@dataclass` + `get_env()` + `@lru_cache`? Not Pydantic Settings?
+8. **Async** — all I/O handlers are `async def`? No `asyncio.create_task()` for background work (use SAQ)?
+9. **Controller structure** — domain-clustered (`/api/accounts`, `/api/teams`)? Not HTTP-method-clustered?
+10. **Plugin usage** — first-party plugins used where available (Granian / SAQ / Vite / MCP / Email)?
+11. **Return types** — all handlers have explicit return type annotations?
+12. **`from __future__ import annotations`** — present in consumer app modules? Absent from library-introspected modules?
+
+## Process
+
+1. Get the diff: `git diff main...HEAD` (or whatever the user specifies)
+2. For each file in the diff, check against the 12 criteria above
+3. Report findings as:
+   - **Violation**: [criterion] in [file:line] — [what's wrong] — [fix suggestion]
+   - **Good pattern**: [criterion] in [file:line] — correctly follows canonical pattern
+4. Summarize: violations count, good-pattern count, overall assessment
+5. If violations found, offer to fix them (with user approval)
+
+## References
+
+Consult these skills for the canonical patterns:
+- `skills/litestar/SKILL.md` — guardrails + validation checklist
+- `skills/litestar/references/` — deep-dive per topic
+- `skills/advanced-alchemy/SKILL.md` — service + repository patterns
+- `skills/msgspec/SKILL.md` — DTO patterns
+"""

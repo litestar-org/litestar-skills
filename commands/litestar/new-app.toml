@@ -1,0 +1,69 @@
+description = "Scaffold a new Litestar app with opinionated defaults (Granian + msgspec + Advanced Alchemy + SQLSpec + SAQ)"
+prompt = """
+# Scaffold a new Litestar application
+
+You are scaffolding a new Litestar application with the canonical first-party stack.
+
+## Gather requirements
+
+Ask the user (one question at a time):
+
+1. **Project name** — kebab-case slug (e.g., `my-api`)
+2. **Frontend approach** — one of: none (API-only), HTMX + Jinja, Inertia + React, Inertia + Vue, SPA + React, SPA + Vue, SPA + Svelte
+3. **Database** — PostgreSQL (default), MySQL, SQLite, Oracle, or none (in-memory only)
+4. **Background tasks** — include SAQ plugin? (default: yes)
+
+## Generate the project structure
+
+Use the canonical layered architecture from the `litestar` skill:
+
+```
+{project_name}/
+├── src/py/{project_slug}/
+│   ├── __init__.py
+│   ├── server/
+│   │   ├── app.py              # Litestar() with plugins
+│   │   ├── plugins.py          # GranianPlugin, SAQPlugin, VitePlugin, etc.
+│   │   └── core.py             # AppSettings, exception handlers
+│   ├── lib/
+│   │   ├── exceptions.py       # ApplicationError hierarchy
+│   │   ├── schema.py           # CamelizedBaseStruct base
+│   │   ├── settings.py         # @dataclass + get_env + @lru_cache
+│   │   └── deps.py             # Shared DI providers
+│   ├── db/
+│   │   ├── models/__init__.py  # SQLAlchemy models
+│   │   └── migrations/         # Alembic (via advanced-alchemy)
+│   └── domain/
+│       └── {example_domain}/   # controllers.py, services.py, schemas.py, guards.py
+├── src/js/                     # Frontend (if applicable)
+├── tests/
+│   ├── conftest.py             # pytest-databases + AsyncTestClient setup
+│   ├── unit/
+│   └── integration/
+├── pyproject.toml              # uv + hatchling + ruff + mypy + pyright + bump-my-version
+├── package.json                # bun (if frontend)
+├── vite.config.ts              # litestar-vite-plugin (if frontend)
+├── Makefile                    # Canonical targets
+└── README.md
+```
+
+## Apply canonical patterns
+
+Follow these from the `litestar` skill's guardrails:
+
+- **msgspec DTOs with `Meta(rename="camel")`** for all API schemas
+- **`SQLAlchemyAsyncRepositoryService`** for data access
+- **`ApplicationError` hierarchy** in `lib/exceptions.py`
+- **`@dataclass` + `get_env()` + `@lru_cache`** settings in `lib/settings.py`
+- **Guards at Controller class level** for auth
+- **`GranianPlugin()`** as the default ASGI server
+- **`from __future__ import annotations`** at the top of every module
+- Domain-clustered Controllers (`/api/{domain}/`)
+
+## After generating
+
+1. Create each file with real, runnable content (not stubs)
+2. Run `make install` to install dependencies
+3. Run `make check` to verify the scaffold is clean
+4. Explain what was created and where to start coding
+"""
