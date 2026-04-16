@@ -28,6 +28,8 @@ description: "Auto-activate for litestar_saq imports, SAQPlugin, SAQConfig, Queu
 The canonical pattern from `litestar-fullstack-spa/src/py/app/server/plugins.py` uses lazy initialization and `use_server_lifespan=True` so workers share the app's lifespan with the web process:
 
 ```python
+# Branch A — SAQ with Redis as the broker (pick when Redis is already in-stack
+# for cache / sessions, or when you want the SAQ web UI + multi-queue fanout).
 from litestar_saq import SAQConfig, SAQPlugin, QueueConfig, CronJob
 
 from app.lib.settings import get_settings
@@ -37,7 +39,7 @@ def create_saq_plugin() -> SAQPlugin:
     settings = get_settings()
     return SAQPlugin(
         config=SAQConfig(
-            dsn=settings.redis.url,
+            dsn=settings.redis.url,              # redis://... — Redis broker
             use_server_lifespan=True,            # workers run inside web process by default
             web_enabled=settings.saq.web_enabled,
             queue_configs=[
@@ -59,6 +61,32 @@ def create_saq_plugin() -> SAQPlugin:
 
 saq_plugin = create_saq_plugin()
 ```
+
+```python
+# Branch B — SAQ with PostgreSQL as the broker (pick when the project is
+# PG-only, you want one less piece of infra, or throughput is moderate).
+def create_saq_plugin_pg() -> SAQPlugin:
+    settings = get_settings()
+    return SAQPlugin(
+        config=SAQConfig(
+            dsn=settings.database.url,           # postgresql+asyncpg://... — PG broker
+            use_server_lifespan=True,
+            web_enabled=settings.saq.web_enabled,
+            queue_configs=[
+                QueueConfig(
+                    name="default",
+                    tasks=["app.domain.system.tasks.send_email"],
+                ),
+            ],
+        ),
+    )
+```
+
+**Pick Redis when:** already in-stack (cache, sessions, Channels), need multi-queue fanout across many workers, want the SAQ web UI, or have high throughput (>1k jobs/s per queue).
+
+**Pick PostgreSQL when:** PG-only deployment (Cloud SQL, AlloyDB, self-hosted single DB), avoiding extra infra, moderate throughput (<1k jobs/s), or you want jobs and business data in the same transactional boundary.
+
+**Anti-pattern:** hard-coding `dsn=settings.redis.url` in a PG-only project just because Redis is the "default" example. Match the broker to the stack.
 
 ### Wire into Litestar
 
@@ -162,7 +190,7 @@ Build `QueueConfig` instances for each logical queue (`"default"`, `"emails"`, `
 
 ### Step 3: Configure Plugin
 
-Wrap `QueueConfig`s in `SAQConfig` with the broker DSN (Redis or PostgreSQL). Set `use_server_lifespan=True` so workers run inside the web process by default. Toggle `web_enabled` for the introspection UI.
+Wrap `QueueConfig`s in `SAQConfig` with the broker DSN. Pick Redis (`redis://...`) when Redis is already in the stack; pick PostgreSQL (`postgresql+asyncpg://...`) when the project is PG-only. Both brokers are fully supported — see Plugin Setup above for both patterns. Set `use_server_lifespan=True` so workers run inside the web process by default. Toggle `web_enabled` for the introspection UI.
 
 ### Step 4: Define Tasks
 
