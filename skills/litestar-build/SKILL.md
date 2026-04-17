@@ -1,6 +1,6 @@
 ---
 name: litestar-build
-description: "Auto-activate for `uv build`, `hatch build`, `uv_build`, pyapp invocations, bundler scripts, Hatchling force-include/ignore-vcs config, wheel packaging with bundled frontend assets, PyApp onefile binaries, GitHub Actions matrix test workflows, release workflows building multi-platform binaries, .github/actions/setup-python composite action, PYAPP_* env vars, cargo-zigbuild, python-build-standalone. Produces Hatchling build configs that bundle Vite/Bun output into the wheel, Makefile build graphs (`build-assets` → `build-wheel` → `build-onefile`), PyApp hatch-binary targets, advanced PyApp pipelines with custom bundler and install-dir patching, GitHub Actions CI/release workflows with Python matrix + uv + Bun + composite actions. Use when: building a Litestar wheel with embedded frontend assets, packaging a Litestar app as a single-file PyApp binary (standard or offline/air-gapped), customizing PyApp install location, setting up `uv` + `bun` CI, writing release pipelines that produce wheels + onefiles + container images, upgrading bundled Python or PyApp versions. Not for runtime deployment (Dockerfiles, K8s, Cloud Run, systemd) — see litestar-deployment. Not for Vite plugin authoring — see litestar-vite."
+description: "Auto-activate for `uv build`, `hatch build`, pyapp invocations, bundler scripts, Hatchling force-include config, wheel packaging with bundled frontend assets, PyApp onefile binaries, GitHub Actions matrix workflows, `PYAPP_*` env vars, cargo-zigbuild, python-build-standalone. Produces Hatchling build configs that bundle Vite/Bun output into the wheel, Makefile build graphs (`build-assets` → `build-wheel` → `build-onefile`), PyApp hatch-binary targets, advanced PyApp pipelines with custom bundler and install-dir patching, GitHub Actions CI/release workflows with Python matrix + uv + Bun. Use when: building a Litestar wheel with embedded frontend assets, packaging an app as a single-file PyApp binary (standard or offline), customizing PyApp install location, setting up `uv` + `bun` CI, writing release pipelines that produce wheels + onefiles + container images. Not for runtime deployment — see litestar-deployment. Not for Vite plugin authoring — see litestar-vite."
 ---
 
 # litestar-build
@@ -37,7 +37,7 @@ All three paths assume the wheel is **already complete** — no `bun run build` 
 | Dev server startup | Instant (files on disk next to package) | Fine |
 | Frontend-only deploys | Rebuild + redeploy wheel | Push to CDN only |
 
-For **most Litestar apps that ship as a product** (CLIs, internal tools, enterprise installers), bundled-in-wheel is correct. Projects like [accelerator](#reference-projects), [litestar-fullstack-inertia](#reference-projects), and [litestar-fullstack-spa](#reference-projects) all bundle.
+For **most Litestar apps that ship as a product** (CLIs, internal tools, enterprise installers), bundled-in-wheel is correct. Projects like [accelerator](#example-projects), [litestar-fullstack-inertia](#example-projects), and [litestar-fullstack-spa](#example-projects) all bundle.
 
 ### Why litestar-vite configs look the way they do in reference apps
 
@@ -215,7 +215,7 @@ Before claiming "CI works":
 
 </validation>
 
-## Reference Projects
+## Example Projects
 
 Everything in this skill is distilled from three production projects. Read these for the full picture:
 

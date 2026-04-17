@@ -46,6 +46,51 @@ def test_database(postgres_service):
 
 </workflow>
 
+<guardrails>
+
+## Guardrails
+
+- **Keep fixtures container-based.** Do not monkey-patch or mock the database client — prefer the real service fixture so tests cover driver behavior.
+- **Use `xdist` isolation helpers.** For parallel runs, select the `database`-level or `server`-level isolation fixtures from `references/xdist.md` instead of sharing one schema across workers.
+- **Do not hand-roll container lifecycle.** Rely on the plugin's fixtures; they handle startup, readiness, and teardown.
+- **Scope fixtures to the smallest unit that works.** A session-scoped Docker container with function-scoped schemas is almost always the right trade-off.
+
+</guardrails>
+
+<validation>
+
+## Validation Checkpoint
+
+- [ ] `conftest.py` declares only the database plugins you actually use (`pytest_plugins = [...]`)
+- [ ] Tests pull the correct fixture (`postgres_service`, `mysql_service`, etc.) rather than opening raw connections
+- [ ] Parallel runs (`pytest -n auto`) produce isolated data — verified via `references/xdist.md`
+- [ ] CI runs Docker-in-Docker (or Podman) with enough resources for the requested fixtures
+
+</validation>
+
+<example>
+
+## Example: PostgreSQL integration test
+
+```python
+import pytest
+
+pytest_plugins = ["pytest_databases.docker.postgres"]
+
+
+@pytest.mark.asyncio
+async def test_user_insert(postgres_service, postgres_connection):
+    await postgres_connection.execute(
+        "INSERT INTO users (email) VALUES ($1)", "alice@example.com"
+    )
+    row = await postgres_connection.fetchrow(
+        "SELECT email FROM users WHERE email = $1", "alice@example.com"
+    )
+    assert row["email"] == "alice@example.com"
+```
+
+</example>
+
 ---
 
 ## Cross-References
