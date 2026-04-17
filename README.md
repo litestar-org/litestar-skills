@@ -100,6 +100,19 @@ Then in VS Code `settings.json`:
 }
 ```
 
+## Discovery topics
+
+This repo is tagged with GitHub topics so downstream registries and galleries auto-crawl it:
+
+| Topic | Downstream effect |
+|---|---|
+| `gemini-cli-extension` | Gemini CLI's [extension gallery](https://geminicli.com/extensions/) auto-indexes tagged repos. |
+| `litestar` | Framework discoverability — surfaces in Litestar-ecosystem GitHub searches. |
+| `agent-skills` | Generic agent-skills discoverability for Claude Code / Copilot CLI skill indexes. |
+| `claude-code-plugin` | Claude Code plugin discoverability (e.g., [claudeskills.info](https://claudeskills.info)). |
+
+Topics are re-applied on every tagged release via `.github/workflows/release.yml`. The operation is idempotent; `gh repo edit --add-topic` is additive and deduplicates.
+
 ## Uninstall
 
 ```bash
