@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         python: ["3.10", "3.11", "3.12", "3.13"]
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -35,6 +35,26 @@ jobs:
         run: |
           uv sync --extra dev
           bun install
+
+      - name: Install PSScriptAnalyzer (Windows only)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+
+      - name: Lint PowerShell scripts (Windows only)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path tools/install.ps1 -Severity Error,Warning
+          if ($results) {
+            $results | Format-Table -AutoSize
+            throw "PSScriptAnalyzer found $($results.Count) issue(s)"
+          }
+
+      - name: Verify install.ps1 dry-run (Windows only)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: pwsh -File tools/install.ps1 -DryRun
 
       - name: Run tests
         run: make test

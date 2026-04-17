@@ -39,6 +39,24 @@ cd litestar-skills
 ./tools/install.sh --help
 ```
 
+### Windows (PowerShell 7+ only)
+
+Native install without WSL. Requires PowerShell 7+ and Git for Windows (for hook dispatch).
+
+```powershell
+# From a Git for Windows or PowerShell 7 shell:
+pwsh -File tools/install.ps1
+
+# Preview:
+pwsh -File tools/install.ps1 -DryRun
+
+# Install for specific host(s):
+pwsh -File tools/install.ps1 -Only gemini,codex
+```
+
+If PowerShell 7+ is not installed: `winget install Microsoft.PowerShell`.
+If Git for Windows is not installed: download from <https://git-scm.com/download/win>.
+
 ### Per-host install
 
 #### Claude Code
