@@ -124,6 +124,43 @@ _AUTHORING_TREE_SUBPATHS = (
 _leak_targets = "|".join(re.escape(p) for p in _AUTHORING_TREE_SUBPATHS)
 AGENTS_LEAK_PATTERN = re.compile(rf"(?<![A-Za-z0-9_])\.agents/(?:{_leak_targets})")
 
+# Forbidden vocabulary in shipped content. These tokens leak internal Flow
+# workflow taxonomy, codenames from non-public canonical apps, or machine-
+# specific filesystem paths. Each tuple is ``(regex, human-readable label)``.
+# Keep the list narrow and high-confidence; generic English meanings of these
+# words rarely appear in this repo's prose, so default to forbidding the leak
+# form. Add allowlist exceptions in ``_FORBIDDEN_VOCAB_ALLOWLIST`` below if a
+# legitimate use is found.
+FORBIDDEN_VOCAB_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    # --- Internal Flow workflow vocabulary ----------------------------------
+    (re.compile(r"\bSaga(?:s|-\d+)?\b"), "Flow workflow vocabulary 'Saga'"),
+    (re.compile(r"\bEpics?\b"), "Flow workflow vocabulary 'Epic'"),
+    (re.compile(r"\bCh\d+\b(?!\w)"), "internal PRD chapter ID 'ChN'"),
+    (re.compile(r"TODO\(Ch\d+\)"), "internal PRD chapter TODO marker"),
+    (re.compile(r"\b(?:parent\s+)?PRD\b"), "Flow vocabulary 'PRD' / 'parent PRD'"),
+    (re.compile(r"\bls-[a-z]{3}\.\d+"), "Beads issue slug"),
+    (re.compile(r"\bFlow\s+framework\b", re.IGNORECASE), "Flow framework name"),
+    # --- Internal canonical-app codenames (non-public) ----------------------
+    (re.compile(r"dma/accelerator"), "internal canonical-app path 'dma/accelerator'"),
+    (re.compile(r"\bETLLogObserver\b"), "internal class name 'ETLLogObserver'"),
+    (re.compile(r"~/\.dma/"), "internal app install path '~/.dma/'"),
+    (re.compile(r"/opt/dma\b"), "internal app install path '/opt/dma'"),
+    (re.compile(r"\bsrc/py/dma/"), "internal package path 'src/py/dma/'"),
+    (re.compile(r"\bdma_(?:tasks|jobs|app|runtime)\b"), "internal app-derived identifier 'dma_*'"),
+    # --- Machine-specific paths --------------------------------------------
+    (re.compile(r"/home/cody/"), "machine-specific filesystem path '/home/cody/...'"),
+)
+
+# Files exempt from FORBIDDEN_VOCAB_PATTERNS. Tests legitimately reference the
+# literal patterns to verify the validator catches them; the validator itself
+# documents the patterns in code. Use repo-relative POSIX paths.
+_FORBIDDEN_VOCAB_ALLOWLIST: frozenset[str] = frozenset(
+    {
+        "tools/validate-skills.py",  # the validator defines the patterns
+        "tests/test_validate_skills.py",  # tests assert against the patterns
+    }
+)
+
 VALID_AGENT_MODES = frozenset({"subagent", "primary"})
 VALID_AGENT_TOOLS = frozenset({"read", "grep", "glob", "bash", "edit", "write", "todoWrite", "webFetch", "webSearch"})
 
@@ -403,6 +440,41 @@ def check_agents_leak(files: Iterable[Path]) -> list[Violation]:
     return violations
 
 
+def check_forbidden_vocab(files: Iterable[Path]) -> list[Violation]:
+    """Flag forbidden internal vocabulary or machine-specific paths in shipped
+    content.
+
+    Walks every file, line by line, and flags any match of
+    :data:`FORBIDDEN_VOCAB_PATTERNS`. Files in
+    :data:`_FORBIDDEN_VOCAB_ALLOWLIST` are skipped (the validator + its tests
+    legitimately reference the literal patterns).
+    """
+    violations: list[Violation] = []
+    for path in files:
+        rel = _rel(path)
+        if rel in _FORBIDDEN_VOCAB_ALLOWLIST:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            for pattern, label in FORBIDDEN_VOCAB_PATTERNS:
+                if pattern.search(line):
+                    snippet = line.strip()
+                    if len(snippet) > 80:
+                        snippet = snippet[:77] + "..."
+                    violations.append(
+                        Violation(
+                            path,
+                            lineno,
+                            f"forbidden vocabulary ({label}): {snippet}",
+                        )
+                    )
+                    break  # one violation per line is enough
+    return violations
+
+
 def iter_skills() -> Iterator[Path]:
     if SKILLS_DIR.is_dir():
         yield from sorted(SKILLS_DIR.glob("*/SKILL.md"))
@@ -443,6 +515,20 @@ def iter_all_shipped_files() -> Iterator[Path]:
         candidate = REPO_ROOT / name
         if candidate.is_file():
             yield candidate
+    # Public docs/ tree — user-facing release notes, roadmap, launch playbook.
+    docs_dir = REPO_ROOT / "docs"
+    if docs_dir.is_dir():
+        yield from sorted(docs_dir.rglob("*.md"))
+    # Host-specific install / config files that ship with the plugin.
+    for rel in (
+        ".opencode/INSTALL.md",
+        ".opencode/plugins/litestar-skills.js",
+        ".codex/INSTALL.md",
+        ".codex/config.toml",
+    ):
+        candidate = REPO_ROOT / rel
+        if candidate.is_file():
+            yield candidate
 
 
 def _print_violations(violations: list[Violation]) -> None:
@@ -468,7 +554,9 @@ def main() -> int:
         all_violations.extend(validate_opencode_agent(agent_path))
     for agent_path in claude_agents:
         all_violations.extend(validate_claude_agent(agent_path))
-    all_violations.extend(check_agents_leak(iter_all_shipped_files()))
+    shipped = list(iter_all_shipped_files())
+    all_violations.extend(check_agents_leak(shipped))
+    all_violations.extend(check_forbidden_vocab(shipped))
     if all_violations:
         _print_violations(all_violations)
         print(f"\n{len(all_violations)} violation(s)", file=sys.stderr)

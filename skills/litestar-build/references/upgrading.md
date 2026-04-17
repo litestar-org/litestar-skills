@@ -26,7 +26,7 @@ Done.
 
 ### Advanced flavor (custom bundler)
 
-Five files. The list below references accelerator paths — adapt to your layout.
+Five files. Adapt these paths to your layout.
 
 **1. `pyproject.toml`:**
 
@@ -225,8 +225,8 @@ The logic that generates the Rust expression from `--install-root` is in `bundle
 **Also consider updating your app's own runtime defaults** if they reference the old install location:
 
 ```python
-# src/py/dma/cli/commands/manage.py (accelerator)
-default="~/.dma"                          # ← update to match --install-root
+# src/py/<app>/cli/commands/manage.py
+default="~/.<app>"                        # ← update to match --install-root
 ```
 
 ## Add a new target platform

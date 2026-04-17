@@ -58,7 +58,7 @@ Get `get`, `get_one_or_none`, `list_and_count`, `create`, `update`, `delete`, `u
 # sqlspec stack — thin async service over driver methods + explicit SQL
 class UserService(SQLSpecAsyncService):
     async def list_and_count(self, *filters) -> tuple[list[User], int]:
-        return await self.driver.select_and_count(
+        return await self.driver.select_with_total(
             "SELECT * FROM users WHERE tenant_id = :tid",
             filters=filters,
             schema_type=User,

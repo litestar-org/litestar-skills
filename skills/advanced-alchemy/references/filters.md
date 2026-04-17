@@ -9,7 +9,6 @@ from advanced_alchemy.filters import (
     # Core filter type
     FilterTypes,
     # Filters
-    IDFilter,
     SearchFilter,
     CollectionFilter,
     BeforeAfter,
@@ -19,11 +18,8 @@ from advanced_alchemy.filters import (
     OrderBy,
     # Pagination
     LimitOffset,
-    # Timestamp shortcuts
-    CreatedFilter,
-    UpdatedFilter,
 )
-from advanced_alchemy.service.pagination import OffsetPagination, CursorPagination
+from advanced_alchemy.service.pagination import OffsetPagination
 ```
 
 ---
@@ -44,16 +40,16 @@ async def list_items(self, *filters: FilterTypes) -> list[Model]:
 
 ## Built-in Filters
 
-### IDFilter
+### Filtering by Primary Key
 
-Filter by a list of primary key values (generates an `IN` clause on the `id` column).
+To filter by a list of primary key values, use `CollectionFilter` with `field_name="id"` (generates an `IN` clause on the `id` column).
 
 ```python
-from advanced_alchemy.filters import IDFilter
+from advanced_alchemy.filters import CollectionFilter
 
 # Get specific records by ID
 results = await service.list(
-    IDFilter(values=[id1, id2, id3]),
+    CollectionFilter(field_name="id", values=[id1, id2, id3]),
 )
 ```
 
@@ -161,21 +157,21 @@ results = await service.list(
 )
 ```
 
-### CreatedFilter / UpdatedFilter
+### Filtering on Audit Columns
 
-Convenience shortcuts for filtering on `created_at` and `updated_at` audit columns. These are `BeforeAfter` filters with the field name pre-set.
+To filter on the `created_at` and `updated_at` audit columns provided by `*AuditBase` classes, use `BeforeAfter` (or `OnBeforeAfter`) with the appropriate `field_name`.
 
 ```python
-from advanced_alchemy.filters import CreatedFilter, UpdatedFilter
+from advanced_alchemy.filters import BeforeAfter
 
 # Records created after a date
 results = await service.list(
-    CreatedFilter(before=None, after=datetime(2025, 6, 1, tzinfo=timezone.utc)),
+    BeforeAfter(field_name="created_at", before=None, after=datetime(2025, 6, 1, tzinfo=timezone.utc)),
 )
 
 # Records updated before a date
 results = await service.list(
-    UpdatedFilter(before=datetime(2025, 1, 1, tzinfo=timezone.utc), after=None),
+    BeforeAfter(field_name="updated_at", before=datetime(2025, 1, 1, tzinfo=timezone.utc), after=None),
 )
 ```
 
@@ -260,7 +256,7 @@ Standard offset-based pagination response object for API endpoints.
 
 ```python
 from advanced_alchemy.filters import LimitOffset
-from advanced_alchemy.service.pagination import OffsetPagination
+from advanced_alchemy.service import OffsetPagination
 
 
 @get("/users")
@@ -283,17 +279,23 @@ async def list_users(
 - `limit`: page size
 - `offset`: current offset
 
-### CursorPagination
+### Cursor-Based Pagination
 
-Cursor-based pagination for large datasets or real-time feeds.
+Advanced Alchemy ships `OffsetPagination` out of the box. For cursor-style pagination over large datasets, build the response manually using a `BeforeAfter` (or comparison) filter on a sortable column such as `created_at` or a UUIDv7 `id`, plus a `LimitOffset(limit=page_size, offset=0)` to cap the page. The "next cursor" is the last item's sortable value:
 
 ```python
-from advanced_alchemy.service.pagination import CursorPagination
+from advanced_alchemy.filters import BeforeAfter, LimitOffset, OrderBy
+
+results = await service.list(
+    BeforeAfter(field_name="created_at", before=None, after=last_seen_created_at),
+    OrderBy(field_name="created_at", sort_order="asc"),
+    LimitOffset(limit=page_size, offset=0),
+)
+next_cursor = results[-1].created_at if results else None
 ```
 
-- Uses an opaque cursor (typically the last item's ID or timestamp) instead of offset
-- More efficient for large tables — avoids `OFFSET` performance degradation
-- Better for real-time data where rows may be inserted between pages
+- Avoids `OFFSET` performance degradation on large tables.
+- Works well for append-mostly tables (logs, events, feeds) where rows may be inserted between pages.
 
 ---
 
@@ -304,7 +306,7 @@ from advanced_alchemy.service.pagination import CursorPagination
 Automatically creates Litestar dependency providers that parse filter parameters from query strings.
 
 ```python
-from advanced_alchemy.extensions.litestar import create_filter_dependencies
+from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
 
 # Creates dependencies for common filter patterns
 filter_deps = create_filter_dependencies(
@@ -342,7 +344,7 @@ Apply filter dependencies at the controller level for all routes:
 
 ```python
 from litestar import Controller, get
-from advanced_alchemy.extensions.litestar import create_filter_dependencies
+from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
 
 
 class UserController(Controller):

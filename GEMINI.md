@@ -25,6 +25,6 @@ See [`AGENTS.md`](AGENTS.md) for:
 - Code style (PEP 604 unions, async all I/O; `from __future__ import annotations` is a library-author guardrail — application code MAY use it, only modules that define runtime-introspected types avoid it)
 - Skill authoring conventions (XML-tagged sections, frontmatter rules)
 
-## Flow Framework Compatibility
+## Project-local skill discovery
 
-If the target project has an `.agents/` directory, skills in this extension will cooperate with the [Flow framework](https://github.com/cofin/flow) — spec-first planning + TDD + Beads task tracking.
+If the target project has an `.agents/skills/` directory (the user-install convention path), Gemini CLI will load those skills alongside the ones bundled by this extension. The skills shipped here are independent of any specific planning workflow and work in any Litestar project.

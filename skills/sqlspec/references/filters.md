@@ -13,7 +13,7 @@ SQLSpec provides composable filter objects for common query patterns: pagination
 Standard offset-based pagination:
 
 ```python
-from sqlspec.filters import LimitOffsetFilter
+from sqlspec.core.filters import LimitOffsetFilter
 
 filter_ = LimitOffsetFilter(limit=20, offset=40)
 ```
@@ -23,9 +23,9 @@ filter_ = LimitOffsetFilter(limit=20, offset=40)
 Dynamic column ordering:
 
 ```python
-from sqlspec.filters import OrderByFilter
+from sqlspec.core.filters import OrderByFilter
 
-filter_ = OrderByFilter(order_by="created_at", sort_order="desc")
+filter_ = OrderByFilter(field_name="created_at", sort_order="desc")
 ```
 
 ### SearchFilter
@@ -33,7 +33,7 @@ filter_ = OrderByFilter(order_by="created_at", sort_order="desc")
 Text search across specified columns:
 
 ```python
-from sqlspec.filters import SearchFilter
+from sqlspec.core.filters import SearchFilter
 
 filter_ = SearchFilter(
     field_name="name",
@@ -47,7 +47,7 @@ filter_ = SearchFilter(
 Date/time range filtering:
 
 ```python
-from sqlspec.filters import BeforeAfterFilter
+from sqlspec.core.filters import BeforeAfterFilter
 from datetime import datetime
 
 filter_ = BeforeAfterFilter(
@@ -62,7 +62,7 @@ filter_ = BeforeAfterFilter(
 Filter rows where a column value is in a collection:
 
 ```python
-from sqlspec.filters import InCollectionFilter
+from sqlspec.core.filters import InCollectionFilter
 
 filter_ = InCollectionFilter(
     field_name="status",
@@ -77,7 +77,7 @@ filter_ = InCollectionFilter(
 The standard pagination result container:
 
 ```python
-from sqlspec.filters import OffsetPagination
+from sqlspec.core.filters import OffsetPagination
 
 # Returned by service.paginate() and select_with_total()
 result: OffsetPagination[User]
@@ -91,62 +91,80 @@ result.offset   # int - current offset
 
 ## apply_filter()
 
-Apply one or more filters to a SQL statement or query builder:
+Apply a filter to a SQL statement or query builder. The function takes a single filter; chain calls (or use a comprehension) to apply several:
 
 ```python
-from sqlspec.filters import apply_filter, LimitOffsetFilter, OrderByFilter
+from sqlspec.core.filters import apply_filter, LimitOffsetFilter, OrderByFilter
 
-stmt = "SELECT * FROM users WHERE active = true"
+stmt = sql.select("*").from_("users").where("active = true")
 
 pagination = LimitOffsetFilter(limit=20, offset=0)
-ordering = OrderByFilter(order_by="name", sort_order="asc")
+ordering = OrderByFilter(field_name="name", sort_order="asc")
 
 stmt = apply_filter(stmt, pagination)
 stmt = apply_filter(stmt, ordering)
 
-rows = await db_session.select_many(stmt)
+rows = await db_session.select(stmt)
 ```
 
 ### Composing Multiple Filters
 
 ```python
-from sqlspec.filters import apply_filters
+from sqlspec.core.filters import apply_filter
 
 filters = [
     SearchFilter(field_name="name", value="alice", ignore_case=True),
     BeforeAfterFilter(field_name="created_at", after=datetime(2025, 1, 1)),
-    OrderByFilter(order_by="created_at", sort_order="desc"),
+    OrderByFilter(field_name="created_at", sort_order="desc"),
     LimitOffsetFilter(limit=20, offset=0),
 ]
 
-stmt = apply_filters("SELECT * FROM users", filters)
-rows = await db_session.select_many(stmt, schema_type=User)
+stmt = sql.select("*").from_("users")
+for f in filters:
+    stmt = apply_filter(stmt, f)
+rows = await db_session.select(stmt, schema_type=User)
+```
+
+Drivers also accept filter objects positionally — pass them directly to `select`/`select_with_total` and the driver applies them in order:
+
+```python
+rows, total = await db_session.select_with_total(
+    sql.select("*").from_("users"),
+    *filters,
+    schema_type=User,
+)
 ```
 
 ---
 
 ## Litestar Filter Dependencies
 
-Use `create_filter_dependencies()` to generate Litestar dependency injection parameters from filter types:
+Use `create_filter_dependencies()` from `sqlspec.extensions.litestar.providers` to generate Litestar dependency injection parameters from a `FilterConfig` mapping:
 
 ```python
-from sqlspec.filters import create_filter_dependencies, LimitOffsetFilter, OrderByFilter, SearchFilter
+from sqlspec.extensions.litestar.providers import create_filter_dependencies
 
-filters = create_filter_dependencies(
-    LimitOffsetFilter,
-    OrderByFilter,
-    SearchFilter,
-)
+filter_deps = create_filter_dependencies({
+    "pagination_type": "limit_offset",
+    "pagination_size": 20,
+    "sort_field": "created_at",
+    "sort_order": "desc",
+    "search": "name,email",
+    "search_ignore_case": True,
+})
 
 # Use in a Litestar route handler
-@get("/users")
+@get("/users", dependencies=filter_deps)
 async def list_users(
     db_session: AsyncpgDriver,
     filters: list[StatementFilter] = Dependency(skip_validation=True),
 ) -> OffsetPagination[User]:
-    stmt = apply_filters("SELECT * FROM users", filters)
-    rows, total = await db_session.select_with_total(stmt, schema_type=User)
-    return OffsetPagination(items=rows, total=total, limit=filters[0].limit, offset=filters[0].offset)
+    rows, total = await db_session.select_with_total(
+        sql.select("*").from_("users"),
+        *filters,
+        schema_type=User,
+    )
+    return OffsetPagination(items=rows, total=total, limit=20, offset=0)
 ```
 
 Query parameters are automatically extracted from the request:

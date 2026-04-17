@@ -21,7 +21,7 @@ A Litestar wheel is the single source of truth for a release. It contains:
 Once produced, that wheel can be:
 
 1. `pip install`ed into a container (litestar-deployment).
-2. Wrapped in a **PyApp** binary (`dist/dma`, `dist/app-x86_64-linux-gnu`) for zero-dep distribution.
+2. Wrapped in a **PyApp** binary (`dist/<app>`, `dist/app-x86_64-linux-gnu`) for zero-dep distribution.
 3. Uploaded to PyPI or a private index.
 
 All three paths assume the wheel is **already complete** — no `bun run build` happens at deploy/install time.
@@ -37,13 +37,13 @@ All three paths assume the wheel is **already complete** — no `bun run build` 
 | Dev server startup | Instant (files on disk next to package) | Fine |
 | Frontend-only deploys | Rebuild + redeploy wheel | Push to CDN only |
 
-For **most Litestar apps that ship as a product** (CLIs, internal tools, enterprise installers), bundled-in-wheel is correct. Projects like [accelerator](#example-projects), [litestar-fullstack-inertia](#example-projects), and [litestar-fullstack-spa](#example-projects) all bundle.
+For **most Litestar apps that ship as a product** (CLIs, internal tools, enterprise installers), bundled-in-wheel is correct. Projects like [litestar-fullstack-inertia](#example-projects) and [litestar-fullstack](#example-projects) all bundle.
 
 ### Why litestar-vite configs look the way they do in reference apps
 
 This is the piece most developers miss. The Vite/litestar-vite configs in the reference apps are **deliberately set up so the Vite output lands inside the Python package directory** — because that's what makes the wheel pick them up automatically.
 
-**litestar-fullstack-spa** (`src/js/web/vite.config.ts`):
+**litestar-fullstack** (`src/js/web/vite.config.ts`):
 
 ```ts
 export default defineConfig({
@@ -73,7 +73,7 @@ return ViteConfig(
 )
 ```
 
-**accelerator** — same pattern: Vite and the offline-report build write to `src/py/dma/server/public/` and `src/py/dma/domain/web/static/reports/offline/`, both under the `dma` package root.
+**Advanced reference pattern** — same approach: Vite and the offline-report build write to `src/py/<app>/server/public/` and `src/py/<app>/domain/web/static/reports/offline/`, both under the package root.
 
 Contrast with a naïve `vite build` that writes to `./dist/` at the repo root: those files are **outside** the package directory listed in `[tool.hatch.build.targets.wheel] packages = [...]`, so Hatchling silently drops them. The wheel ships without a frontend.
 
@@ -119,12 +119,12 @@ The dependency chain is **load-bearing**: `build-onefile` depends on `build-whee
 Real projects have multiple JS build outputs that all need to land in the wheel:
 
 ```makefile
-js-build-all: js-build-web js-build-offline-report   # accelerator pattern
+js-build-all: js-build-web js-build-offline-report
 build-wheel: generate-licenses build-templates js-build-all
 	@uv build --wheel
 ```
 
-Each `js-build-*` target emits into a distinct subdirectory of the Python package (`src/py/dma/server/public`, `src/py/dma/domain/web/static/reports/offline`, etc.). Because they're all inside the package, a single `uv build --wheel` captures everything.
+Each `js-build-*` target emits into a distinct subdirectory of the Python package (`src/py/<app>/server/public`, `src/py/<app>/domain/web/static/reports/offline`, etc.). Because they're all inside the package, a single `uv build --wheel` captures everything.
 
 <workflow>
 
@@ -137,7 +137,7 @@ Open `vite.config.ts`. Set `build.outDir` to an absolute path inside your Python
 ### Step 2: Choose a Hatchling bundling strategy
 
 - **`force-include`** (inertia): List the built-asset directory explicitly under `[tool.hatch.build.targets.wheel.force-include]`. Built assets stay `.gitignore`d. Explicit, auditable.
-- **`ignore-vcs = true`** (SPA, accelerator): Tell Hatchling to ignore `.gitignore`. All package files ship. Simpler; requires discipline to keep dev junk out of package dirs.
+- **`ignore-vcs = true`** (SPA): Tell Hatchling to ignore `.gitignore`. All package files ship. Simpler; requires discipline to keep dev junk out of package dirs.
 
 See [references/wheel-assets.md](references/wheel-assets.md) for full config.
 
@@ -156,7 +156,7 @@ Decide which flavor:
 
 Start with a reusable `test.yml` that accepts `python-version` + `coverage` inputs. Call it from `ci.yml` across a matrix. Use `astral-sh/setup-uv@v7` and `oven-sh/setup-bun@v2`. See [github-ci.md](references/github-ci.md).
 
-For larger projects, factor `setup-python` and `setup-node` into `.github/actions/` composite actions (accelerator pattern).
+For larger projects, factor `setup-python` and `setup-node` into `.github/actions/` composite actions.
 
 ### Step 6: Add release workflow
 
@@ -175,11 +175,11 @@ Trigger on `v*` tags. Run the test matrix first. Then build the wheel once. Then
 - **PyApp version upgrades touch multiple files.** `pyproject.toml`, `build-onefile-package.sh`, `.github/workflows/release.yml`, `tools/bundler.py`. See [upgrading.md](references/upgrading.md).
 - **`cargo-zigbuild` for portable glibc.** Plain `cargo build` on a modern Linux runner produces binaries that fail on older distros (glibc too new). Use `cargo zigbuild --target x86_64-unknown-linux-gnu.2.17` to link against glibc 2.17 (CentOS 7-era). Required for broad compatibility.
 - **Static-link native deps in PyApp.** Set `BZIP2_SYS_STATIC=1` and `LZMA_API_STATIC=1` before `cargo zigbuild`, or patch `Cargo.toml` to add `features = ["static"]`. Otherwise the onefile fails to load on systems without matching `libbz2.so` / `liblzma.so`.
-- **Pin `uv` and `bun` versions in CI.** accelerator pins `UV_VERSION=0.11.6` and `BUN_INSTALL_VERSION=bun-v1.3.12`. Drift in either breaks reproducible builds.
+- **Pin `uv` and `bun` versions in CI.** Use exact pinned versions (e.g., `UV_VERSION=0.11.6` and `BUN_INSTALL_VERSION=bun-v1.3.12`). Drift in either breaks reproducible builds.
 - **Create placeholder asset dirs in CI.** Hatchling's wheel target fails if `app/domain/web/public` or `src/py/app/server/static/web` doesn't exist at wheel-build time. CI jobs that don't build the frontend (lint, mypy, pyright) still need `mkdir -p <asset-dir>` before `uv sync`.
 - **Never commit built frontend output.** Keep `bundle_dir` paths in `.gitignore`. CI rebuilds them on every run. Reason: JS builds are non-deterministic across machines and cause noisy diffs.
 - **Coverage on one Python version only.** Multiple versions uploading the same `coverage.xml` silently stomp each other. Pin it to one version in your matrix (`if: matrix.python-version == '3.12'`).
-- **Disk cleanup on self-hosted runners.** GitHub's `ubuntu-latest` has ~30GB free; building wheels + PyApp + Docker images can blow past that. Aggressive cleanup before the build job (see accelerator `ci.yml` lines 222-249) is routine.
+- **Disk cleanup on self-hosted runners.** GitHub's `ubuntu-latest` has ~30GB free; building wheels + PyApp + Docker images can blow past that. Aggressive cleanup before the build job is routine.
 
 </guardrails>
 
@@ -203,7 +203,7 @@ Before claiming "the PyApp binary works":
 - [ ] The binary is ≥ 50 MB (much smaller means it's not embedding Python)
 - [ ] On Linux, `ldd dist/<app>` shows ≤ libc / libm / libpthread (no `libbz2`, no `liblzma`)
 - [ ] A network-isolated `docker run --rm --network=none ghcr.io/.../distroless -- <app> --help` succeeds (proves no runtime PyPI fetches)
-- [ ] The install dir (`~/.dma/runtime/` or similar) is created on first run and re-used on second run
+- [ ] The install dir (`~/.<app>/runtime/` or similar) is created on first run and re-used on second run
 
 Before claiming "CI works":
 
@@ -219,9 +219,8 @@ Before claiming "CI works":
 
 Everything in this skill is distilled from three production projects. Read these for the full picture:
 
-- **[litestar-fullstack-inertia](https://github.com/litestar-org/litestar-fullstack)** (at `/home/cody/code/litestar/litestar-fullstack-inertia`) — monolithic `app/` layout, Inertia.js + React 19, `force-include` bundling, `hatch build --target binary` for 4-platform PyApp.
-- **[litestar-fullstack-spa](https://github.com/litestar-org/litestar-fullstack-spa)** (at `/home/cody/code/litestar/litestar-fullstack-spa`) — nested `src/py/app/` + `src/js/web/` layout, React + TanStack Router SPA, `ignore-vcs = true` bundling, React Email templates.
-- **accelerator (DMA)** (at `/home/cody/code/g/dma/accelerator`) — advanced PyApp pipeline: custom `bundler.py`, Rust-source patching for custom install dir, `cargo-zigbuild` for portable glibc, offline-capable onefile, multi-arch distroless containers.
+- **[litestar-fullstack-inertia](https://github.com/litestar-org/litestar-fullstack-inertia)** — monolithic `app/` layout, Inertia.js + React 19, `force-include` bundling, `hatch build --target binary` for 4-platform PyApp.
+- **[litestar-fullstack](https://github.com/litestar-org/litestar-fullstack)** — nested `src/py/app/` + `src/js/web/` layout, React + TanStack Router SPA, `ignore-vcs = true` bundling, React Email templates.
 
 ## Official References
 

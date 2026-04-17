@@ -58,7 +58,7 @@ config = SqliteConfig(
 ### Basic Subscribe
 
 ```python
-from sqlspec.events import AsyncEventChannel
+from sqlspec.extensions.events import AsyncEventChannel
 
 async with AsyncEventChannel(config) as channel:
     async for message in channel.subscribe("user_events"):
@@ -95,7 +95,7 @@ async with AsyncEventChannel(config) as channel:
 A common pattern is bridging database events to WebSocket clients:
 
 ```python
-from sqlspec.events import AsyncEventChannel
+from sqlspec.extensions.events import AsyncEventChannel
 
 async def websocket_bridge(websocket, channel: AsyncEventChannel):
     await websocket.accept()

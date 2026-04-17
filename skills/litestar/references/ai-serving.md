@@ -1,6 +1,6 @@
 # AI serving — Litestar + Google ADK
 
-This reference covers HTTP-facing AI endpoints built with Google Agent Development Kit (ADK) `LlmAgent` + `Runner`, backed by `SQLSpecSessionService` for multi-turn memory, and wired through Dishka for dependency injection. It documents the request/response (non-streaming) handler pattern found in `oracledb-vertexai-demo`. For vector search and embedding internals, see [`../../sqlspec/references/vector-search.md`](../../sqlspec/references/vector-search.md).
+This reference covers HTTP-facing AI endpoints built with Google Agent Development Kit (ADK) `LlmAgent` + `Runner`, backed by `SQLSpecSessionService` for multi-turn memory, and wired through Dishka for dependency injection. It documents the request/response (non-streaming) handler pattern found in [oracledb-vertexai-demo](https://github.com/cofin/oracledb-vertexai-demo). For vector search and embedding internals, see [`../../sqlspec/references/vector-search.md`](../../sqlspec/references/vector-search.md).
 
 ## ADK at a glance
 

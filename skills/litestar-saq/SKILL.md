@@ -25,7 +25,7 @@ description: "Auto-activate for litestar_saq imports, SAQPlugin, SAQConfig, Queu
 
 ### Plugin Setup (canonical pattern)
 
-The canonical pattern from `litestar-fullstack-spa/src/py/app/server/plugins.py` uses lazy initialization and `use_server_lifespan=True` so workers share the app's lifespan with the web process:
+The canonical pattern from [litestar-fullstack](https://github.com/litestar-org/litestar-fullstack) (`src/py/app/server/plugins.py`) uses lazy initialization and `use_server_lifespan=True` so workers share the app's lifespan with the web process:
 
 ```python
 # Branch A — SAQ with Redis as the broker (pick when Redis is already in-stack
@@ -94,7 +94,7 @@ def create_saq_plugin_pg() -> SAQPlugin:
 
 Some projects reject SAQ entirely in favor of a thin `TaskService + WorkerPlugin` pair directly over PostgreSQL. This wins when you want `FOR UPDATE SKIP LOCKED` for atomic task claiming, `pg_notify` wake-ups (no polling lag), and multi-target execution routing (`local` / `cloudrun` / `immediate`) with zero extra dependencies beyond your existing Postgres connection.
 
-The canonical example is the `dma/accelerator` codebase, which implements this pattern throughout. The `WorkerPlugin` wires task discovery and the in-process worker into the Litestar app lifecycle; the `@task` decorator registers callables and optional cron schedules; `TaskService.create_task` persists tasks to a `job` table. Canonical references: `dma/accelerator/src/py/dma/utils/worker/plugin.py:L57–224` and `dma/accelerator/src/py/dma/lib/jobs.py:L792–903`.
+In this pattern, the `WorkerPlugin` wires task discovery and the in-process worker into the Litestar app lifecycle; the `@task` decorator registers callables and optional cron schedules; `TaskService.create_task` persists tasks to a `job` table.
 
 See [references/postgresql-native.md](references/postgresql-native.md) for the full pattern.
 
@@ -401,7 +401,7 @@ litestar --app app:app workers run --process
 ## References Index
 
 - **[Advanced Patterns](references/patterns.md)** — Heartbeat tuning, dead-letter handling, job chaining, queue priorities, worker lifecycle hooks, Postgres backend.
-- **[PostgreSQL-Native Queue (no SAQ)](references/postgresql-native.md)** — TaskService + WorkerPlugin pattern from dma/accelerator: FOR UPDATE SKIP LOCKED claim, pg_notify wake-ups, @task decorator + ScheduleConfig cron registry, execution_target routing (local / cloudrun / immediate).
+- **[PostgreSQL-Native Queue (no SAQ)](references/postgresql-native.md)** — TaskService + WorkerPlugin pattern: FOR UPDATE SKIP LOCKED claim, pg_notify wake-ups, @task decorator + ScheduleConfig cron registry, execution_target routing (local / cloudrun / immediate).
 
 ## Cross-References
 

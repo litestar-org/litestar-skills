@@ -67,8 +67,8 @@ connection and stored at `connection.state.dishka_container`. REQUEST-scoped ser
 database session or unit-of-work) need a child container created per operation. Use a context
 manager to open a transient REQUEST-scope child for each receive/send cycle.
 
-Adapted from `dma/accelerator/src/py/dma/lib/di.py:L156–189` (`with_websocket_request` in the
-accelerator; shown here as `enter_request_scope` — a neutral alias for the same pattern).
+The helper below is shown as `enter_request_scope` — open a per-operation REQUEST-scoped child
+container, then close it when the operation completes.
 
 ```python
 from contextlib import asynccontextmanager
@@ -301,28 +301,16 @@ Auto-creates a WS handler at `/ws/{channel}` that relays published messages.
 Use when the project is `sqlspec` + PostgreSQL and you want Channels without introducing Redis. The sqlspec extension for Litestar Channels reuses the same Postgres connection pool. See [`../../sqlspec/SKILL.md`](../../sqlspec/SKILL.md) for the extension config.
 
 ```python
-# Shape (exact import path is in the sqlspec extension — see sibling skill)
-from sqlspec.extensions.litestar.channels import PostgresListenNotifyBackend
+from sqlspec.extensions.litestar.channels import SQLSpecChannelsBackend
 
 channels = ChannelsPlugin(
-    backend=PostgresListenNotifyBackend(config=sqlspec_config),
+    backend=SQLSpecChannelsBackend(config=sqlspec_config),
     arbitrary_channels_allowed=True,
     create_ws_route_handlers=True,
 )
 ```
 
-### Branch D — `advanced-alchemy` session-aware backend
-
-Use when the project is `advanced-alchemy` + PostgreSQL. The session-aware backend participates in the existing async session factory, so publishes from repository services share the request's transaction boundary when you want them to.
-
-```python
-from advanced_alchemy.extensions.litestar.channels import SessionAwareChannelsBackend
-
-channels = ChannelsPlugin(
-    backend=SessionAwareChannelsBackend(session_factory=settings.db.get_session),
-    arbitrary_channels_allowed=True,
-)
-```
+`SQLSpecChannelsBackend` accepts any sqlspec config that exposes a Postgres-compatible adapter; it sets up `LISTEN` / `NOTIFY` on the same connection pool used by your queries.
 
 ### Channel Naming Patterns
 
@@ -388,8 +376,7 @@ the case where the backend is not yet initialized gracefully (no-op + debug log)
 ### Subscribing from WebSocket Handlers
 
 The `stream_pubsub` helper manages subscription lifecycle, message decoding, bounded-LRU
-deduplication, per-session metrics, and error handling. Adapted from
-`dma/accelerator/src/py/dma/lib/websockets.py:L95–166` (bounded LRU + per-session metrics).
+deduplication, per-session metrics, and error handling.
 
 ```python
 from litestar import WebSocket
@@ -459,8 +446,7 @@ async def stream_pubsub(
 
 ### Stream metrics
 
-`RealtimeStreamMetrics` tracks per-session counters for observability. Adapted from
-`dma/accelerator/src/py/dma/lib/websockets.py:L14–46`.
+`RealtimeStreamMetrics` tracks per-session counters for observability.
 
 ```python
 from dataclasses import dataclass, field
@@ -612,7 +598,7 @@ asyncio.run(main())
 SQL statement observers can intercept writes and broadcast events directly to channels, providing low-latency real-time updates without modifying service code:
 
 ```python
-class ETLLogObserver:
+class SqlExecutionLogObserver:
     """Intercept ETL log inserts and broadcast to workspace channels."""
 
     def __init__(self, backend: ChannelsBackend) -> None:

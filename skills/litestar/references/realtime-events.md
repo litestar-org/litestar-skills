@@ -12,8 +12,6 @@ Litestar applications with multi-scope pub/sub.
 (workspace, user, global) share the same struct — the `scope` field drives routing, and
 `__post_init__` enforces that the matching ID field is present.
 
-Adapted from `dma/accelerator/src/py/dma/lib/realtime/_contract.py:L60–81`.
-
 ```python
 import msgspec
 from datetime import UTC, datetime
@@ -103,8 +101,8 @@ Use static factory methods for consistent, namespaced channel names. `RealtimeCh
 the canonical three-scope pattern; domain modules extend it with topic-specific factories.
 
 Adapted from `_contract.py:L27–43` (canonical factories) and
-`domain/workspaces/channels.py:L6–25` (domain-specific extension pattern — accelerator uses
-`WorkspaceChannels.etl/.files/.job_logs`; the neutral equivalent below uses `OrderChannels`).
+`domain/workspaces/channels.py:L6–25` (domain-specific extension pattern — the neutral
+equivalent below uses `OrderChannels`).
 
 ```python
 from uuid import UUID
@@ -152,10 +150,9 @@ scopes and the domain factory pattern above.
 
 `RealtimePublisher` wraps the `ChannelsBackend` with scope-specific publish helpers and a graceful
 no-op for the case where the backend is not yet initialized (e.g., a background worker that
-publishes during startup before the Litestar lifespan has run). Adapted from
-`dma/accelerator/src/py/dma/lib/realtime/_publisher.py:L17–116`.
+publishes during startup before the Litestar lifespan has run).
 
-The `to_json(event, as_bytes=True)` call uses the Ch2 `to_json` wrapper — see
+The `to_json(event, as_bytes=True)` call uses the project's serialization wrapper — see
 [`../../msgspec/references/litestar-patterns.md`](../../msgspec/references/litestar-patterns.md)
 for the import choice (`sqlspec.utils.serializers.to_json` vs a hand-rolled `msgspec.json.Encoder`).
 
@@ -268,9 +265,6 @@ class RealtimePublisher:
 
 Call `publish_workspace_event` from any service that has a `RealtimePublisher` injected. The
 publisher is lightweight — inject it via `Provide()` or Dishka and call it after the DB write.
-Call sites in the accelerator: `domain/notifications/services/_notification.py:L184–189`
-(per-user notification) and `domain/workspaces/services/_workspace_file.py:L255–260`
-(workspace file events).
 
 Order status change (workspace-scoped):
 

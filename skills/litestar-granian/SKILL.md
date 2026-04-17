@@ -39,39 +39,41 @@ litestar --app app:app run --reload
 
 ### Tuned plugin install
 
+`GranianPlugin` itself takes no configuration — it registers the `litestar run` CLI command and wires Granian's loggers into Litestar's logging config. All tuning (`workers`, `threads`, `http`, `backpressure`, SSL, structured access logs) happens on the `litestar run` command line or via environment variables at deploy time.
+
 ```python
-from litestar_granian import GranianPlugin, GranianConfig
+from litestar import Litestar
+from litestar_granian import GranianPlugin
 
 app = Litestar(
     route_handlers=[...],
-    plugins=[
-        GranianPlugin(
-            config=GranianConfig(
-                workers=8,
-                threads=2,
-                threading_mode="runtime",   # async-friendly
-                http="auto",                # HTTP/1.1 + HTTP/2
-                backpressure=2000,
-                log_access=True,
-                log_access_format="json",
-            ),
-        ),
-    ],
+    plugins=[GranianPlugin()],
 )
+```
+
+```bash
+# Production-tuned launch (8 cores, runtime threading mode, HTTP/2, bounded backpressure)
+litestar --app app:app run \
+    --workers 8 \
+    --threads 2 \
+    --threading-mode runtime \
+    --http auto \
+    --backpressure 2000 \
+    --log-access \
+    --log-access-format json
 ```
 
 ### Production with SSL
 
-```python
-GranianConfig(
-    workers=8,
-    threads=2,
-    threading_mode="runtime",
-    http="auto",
-    ssl_certificate="/etc/ssl/certs/app.crt",
-    ssl_key="/etc/ssl/private/app.key",
-    backpressure=2000,
-)
+```bash
+litestar --app app:app run \
+    --workers 8 \
+    --threads 2 \
+    --threading-mode runtime \
+    --http auto \
+    --backpressure 2000 \
+    --ssl-certificate /etc/ssl/certs/app.crt \
+    --ssl-keyfile /etc/ssl/private/app.key
 ```
 
 ### Granian vs Uvicorn for Litestar
@@ -102,11 +104,11 @@ Add `GranianPlugin()` to the `Litestar(plugins=[...])` list. No other code chang
 
 ### Step 3: Tune for Deployment
 
-Pass a `GranianConfig` to the plugin for production. Match `workers` to CPU cores, set `threading_mode="runtime"` for async workloads, enable `http="auto"`, set `backpressure` to bound queue depth.
+Pass tuning flags to the `litestar run` command for production. Match `--workers` to CPU cores, set `--threading-mode runtime` for async workloads, enable `--http auto`, set `--backpressure` to bound queue depth.
 
 ### Step 4: Add SSL or Reverse Proxy
 
-Either terminate TLS at Granian (`ssl_certificate` / `ssl_key`) or behind a load balancer. Inside a container without an external proxy, prefer Granian-native SSL.
+Either terminate TLS at Granian (`--ssl-certificate` / `--ssl-keyfile`) or behind a load balancer. Inside a container without an external proxy, prefer Granian-native SSL.
 
 ### Step 5: Verify
 
@@ -137,10 +139,10 @@ Before delivering a Litestar + Granian deployment, verify:
 
 - [ ] `GranianPlugin` is in `app.plugins`
 - [ ] No competing manual `granian app:app` invocations in scripts/Dockerfile
-- [ ] `GranianConfig.workers` matches CPU cores (or has a documented deviation)
-- [ ] `threading_mode="runtime"` is set
-- [ ] `http="auto"` is set
-- [ ] `backpressure` is set for production
+- [ ] `litestar run --workers` matches CPU cores (or has a documented deviation)
+- [ ] `--threading-mode runtime` is set on the launch command
+- [ ] `--http auto` is set on the launch command
+- [ ] `--backpressure` is set for production
 - [ ] SSL flags or a documented reverse proxy handle TLS for any public service
 - [ ] No `uvicorn` in production deps (or a justification is documented)
 
@@ -155,7 +157,7 @@ Before delivering a Litestar + Granian deployment, verify:
 ```python
 # app.py
 from litestar import Litestar, get
-from litestar_granian import GranianPlugin, GranianConfig
+from litestar_granian import GranianPlugin
 
 
 @get("/health")
@@ -165,21 +167,7 @@ async def health() -> dict[str, str]:
 
 app = Litestar(
     route_handlers=[health],
-    plugins=[
-        GranianPlugin(
-            config=GranianConfig(
-                workers=8,
-                threads=2,
-                threading_mode="runtime",
-                http="auto",
-                backpressure=2000,
-                ssl_certificate="/etc/ssl/certs/app.crt",
-                ssl_key="/etc/ssl/private/app.key",
-                log_access=True,
-                log_access_format="json",
-            ),
-        ),
-    ],
+    plugins=[GranianPlugin()],
 )
 ```
 
@@ -196,7 +184,7 @@ For Dockerfile / process manager invocations, prefer the same Litestar CLI comma
 
 ## Reference: Granian CLI (when not using the plugin)
 
-If you need to run Granian directly (e.g., for non-Litestar code paths), the standard CLI flags map 1:1 to `GranianConfig` fields:
+If you need to run Granian directly (e.g., for non-Litestar code paths), the standard `granian` CLI flags are the same ones the Litestar plugin forwards from `litestar run`:
 
 ```bash
 granian app:main \

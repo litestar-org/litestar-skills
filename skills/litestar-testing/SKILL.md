@@ -10,7 +10,7 @@ Litestar-specific testing patterns built on pytest + anyio. Covers:
 - `TestClient` vs `AsyncTestClient` — when to use each
 - `@pytest.mark.anyio` setup
 - App + lifespan in tests
-- Fixture patterns from canonical `litestar-fullstack-spa` tests
+- Fixture patterns from canonical [litestar-fullstack](https://github.com/litestar-org/litestar-fullstack) tests
 - Mocking Guards and DI dependencies
 - Integration with `pytest-databases` (see `../pytest-databases/SKILL.md`)
 - Request body / form / multipart / header / cookie testing

@@ -1,27 +1,27 @@
 # Roadmap
 
-Every item deferred from v0.1 has a documented **graduation trigger** — not a date. Items promoted to a release move to the `## Shipped in v<N>` section with the release tag so future maintainers can run archaeology on when and why a feature landed. This file is the durable home for everything the repo intentionally chose not to build yet; the `.agents/backlog/` directory is only a pre-PRD scratchpad and will be emptied before each tag.
+Every item deferred from v0.1 has a documented **graduation trigger** — not a date. Items promoted to a release move to the `## Shipped in v<N>` section with the release tag so future maintainers can run archaeology on when and why a feature landed. This file is the durable home for everything the repo intentionally chose not to build yet.
 
 ## Shipped in v0.1
 
-One entry per chapter across the two parent PRDs. Content-foundation (Ch1–Ch6) delivered the skill content; launch-readiness (Ch7–Ch11) produced the ship-able infrastructure around it.
+Each entry is a topic-area outcome. Items move here when they land; the bullet describes what shipped and what infrastructure it produced.
 
-### Content foundation
+### Skill content
 
-- **Ch1 — Stack-consistency audit.** Match-Your-Stack principle encoded across every skill; forced-path language removed from 9 files; audit methodology established for future convention sweeps.
-- **Ch2 — Serializers and msgspec.** Canonical msgspec patterns shipped; honest-scope section for MessagePack (available, not used in reference apps) set the precedent for "not yet canonical" callouts.
-- **Ch3 — Realtime event system.** Full realtime stack landed: `RealtimeEvent` + `RealtimePublisher` pattern names preserved verbatim in code samples, with neutral-domain data shapes.
-- **Ch4 — Worker patterns.** Worker 3-branch decision (SAQ, Celery, Dramatiq) documented; `WorkerPlugin` and `TaskService` canonical forms shipped.
-- **Ch5 — SQLSpec observability and settings.** PEP 562 lazy config, `StatementObserver`, and 3-provider Dishka integration shipped; 9 `TODO(Ch5)` stubs from earlier chapters cleared in the final task of the chapter.
-- **Ch6 — AI ADK patterns.** `ai-serving.md` + `vector-search.md` references shipped with `LlmAgent`, `Runner`, and `SQLSpecSessionService` patterns.
+- **Stack-consistency audit.** Match-Your-Stack principle encoded across every skill; forced-path language removed from 9 files; audit methodology established for future convention sweeps.
+- **Serializers and msgspec.** Canonical msgspec patterns shipped; honest-scope section for MessagePack (available, not used in reference apps) set the precedent for "not yet canonical" callouts.
+- **Realtime event system.** Full realtime stack landed: `RealtimeEvent` + `RealtimePublisher` pattern names preserved verbatim in code samples, with neutral-domain data shapes.
+- **Worker patterns.** Worker 3-branch decision (SAQ, Celery, Dramatiq) documented; `WorkerPlugin` and `TaskService` canonical forms shipped.
+- **SQLSpec observability and settings.** PEP 562 lazy config, `StatementObserver`, and 3-provider Dishka integration shipped; cross-skill TODO stubs cleared in the closing pass.
+- **AI ADK patterns.** `ai-serving.md` + `vector-search.md` references shipped with `LlmAgent`, `Runner`, and `SQLSpecSessionService` patterns.
 
-### Launch readiness
+### Launch infrastructure
 
-- **Ch7 — Saga-5 closeout.** `agents/litestar-reviewer.md` rewritten for Match-Your-Stack; frontmatter validator added; Makefile wired; verification runbook documented.
-- **Ch8 — Discovery topics (Saga-6 Phase 7).** Manual topic pre-apply on the repo, `release.yml` topic step, and README discovery documentation.
-- **Ch9 — Validation CI and smoke tests.** `tools/validate-skills.py` + `tools/sync-manifests.py`, Makefile wiring, `test.yml` smoke-test job, and local verify path.
-- **Ch10 — Windows-native support.** `tools/install.ps1` + `run-hook.cmd` rewrite, `.gitattributes` normalization, `test.yml` Windows matrix, bumpversion addition, and README Windows install section — Windows is now a tier-1 install target. (Shipped in Ch10 of the launch-readiness PRD.)
-- **Ch11 — Launch-day checklist and deferred-item docs.** This file plus `docs/launch-checklist.md`; graduated the `.agents/backlog/` tree into durable homes.
+- **Litestar reviewer subagent.** `agents/litestar-reviewer.md` rewritten for Match-Your-Stack; frontmatter validator added; Makefile wired; verification runbook documented.
+- **Discovery topics.** Manual GitHub topic pre-apply on the repo, `release.yml` topic-add step, and README discovery documentation.
+- **Validation CI and smoke tests.** `tools/validate-skills.py` + `tools/sync-manifests.py`, Makefile wiring, `test.yml` smoke-test job, and local verify path.
+- **Windows-native support.** `tools/install.ps1` + `run-hook.cmd` rewrite, `.gitattributes` normalization, `test.yml` Windows matrix, bumpversion addition, and README Windows install section — Windows is now a tier-1 install target.
+- **Launch-day checklist and deferred-item docs.** This file plus `docs/launch-checklist.md`; consolidated every deferred item into the durable §Deferred section below with an explicit graduation trigger.
 
 ## v0.2 candidates
 
@@ -81,7 +81,7 @@ Each item has a **Status**, a **Rationale**, a **Trigger**, and — where useful
 
 ## Windows-native support — shipped in v0.1
 
-Windows-native install was originally deferred from v0.1 on the grounds that real support (PowerShell installer, symlink-free plugin layout, `cmd.exe` compatibility) was a meaningful chunk of work and v0.1 users were projected to be overwhelmingly macOS/Linux. The deferral was revisited during launch-readiness Ch10 and the chapter instead **shipped** the full Windows-native path: `tools/install.ps1` mirrors `install.sh`, `hooks/run-hook.cmd` is a real `cmd.exe` dispatcher, symlinks are replaced with file copies for OpenCode's plugin directory, `.gitattributes` enforces `eol=lf` to prevent CRLF corruption of shell scripts, and CI adds a `windows-latest` matrix entry. Windows is a tier-1 install target as of v0.1.
+Windows-native install was originally deferred from v0.1 on the grounds that real support (PowerShell installer, symlink-free plugin layout, `cmd.exe` compatibility) was a meaningful chunk of work and v0.1 users were projected to be overwhelmingly macOS/Linux. The deferral was revisited late in the launch-readiness pass and **shipped** instead: `tools/install.ps1` mirrors `install.sh`, `hooks/run-hook.cmd` is a real `cmd.exe` dispatcher, symlinks are replaced with file copies for OpenCode's plugin directory, `.gitattributes` enforces `eol=lf` to prevent CRLF corruption of shell scripts, and CI adds a `windows-latest` matrix entry. Windows is a tier-1 install target as of v0.1.
 
 ## Curation principles
 
@@ -89,6 +89,6 @@ Rules for keeping this file honest as the project grows:
 
 - **Each deferred item has a trigger, not a date.** No promises about timeline — this repo is community-driven and triggers can take arbitrarily long or never fire at all. A dated roadmap lies to readers.
 - **Each shipped item moves to `## Shipped in v<N>` with the release tag.** Never delete entries from the deferred section silently; graduation into a Shipped section is the visible audit trail.
-- **No speculative sections.** If an item does not have a concrete trigger written down, it does not belong in `## Deferred` — it goes in `.agents/backlog/` (pre-PRD scratch) until a trigger can be articulated.
-- **Quarterly review recommended.** Re-read this file every quarter; confirm triggers are still relevant and statuses have not drifted. Add a line to the graduation log in `.agents/backlog/README.md` for any item that moves between sections.
+- **No speculative sections.** If an item does not have a concrete trigger written down, it does not belong in `## Deferred` — keep it out of this file until a trigger can be articulated.
+- **Quarterly review recommended.** Re-read this file every quarter; confirm triggers are still relevant and statuses have not drifted. Items that move between sections leave their audit trail in this file (deferred entries gain a "shipped in v<N>" line; shipped entries cite the chapter or PR that delivered them).
 - **Link, don't duplicate.** `docs/launch-checklist.md` owns the day-of playbook; this file owns forward-looking scope. Cross-link when sections overlap (e.g., §Passive-registry automation → checklist §Day-of submissions).

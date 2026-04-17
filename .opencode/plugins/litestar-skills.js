@@ -1,12 +1,12 @@
 /**
  * litestar-skills — OpenCode plugin entrypoint
  *
- * Registers the Litestar Skills collection with OpenCode.
- *
- * NOTE (v0.0.1 scaffold): this is an empty stub. Plugin wiring lands in Saga 3
- * (host-plugin-manifests). OpenCode also reads `.agents/skills/` and
- * `.claude/skills/` natively, so consumers can use this repo's skills tree
- * without needing this plugin to register them.
+ * Registers the Litestar Skills collection with OpenCode. This file is
+ * intentionally minimal: OpenCode reads `.agents/skills/` and `.claude/skills/`
+ * natively, so consumers can use this repo's skills tree without programmatic
+ * registration. Real `@opencode-ai/plugin` wiring will land here if and when
+ * programmatic registration is needed (graduation trigger and rationale in
+ * `docs/roadmap.md`).
  *
  * @see ../INSTALL.md for installation instructions.
  * @see ../../AGENTS.md for repo-wide agent context.

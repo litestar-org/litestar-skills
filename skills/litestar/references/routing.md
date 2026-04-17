@@ -57,7 +57,7 @@ src/app/domain/
     └── ...
 ```
 
-Canonical refs: `litestar-fullstack-spa/src/app/domain/`, `dma/accelerator/src/app/domain/`. Each domain folder is self-contained — schemas, services, controllers, guards, and jobs all live together.
+Canonical refs: [litestar-fullstack](https://github.com/litestar-org/litestar-fullstack) (`src/app/domain/`). Each domain folder is self-contained — schemas, services, controllers, guards, and jobs all live together.
 
 ## Router Composition
 

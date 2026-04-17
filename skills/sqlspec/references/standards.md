@@ -34,11 +34,11 @@ from typing import TYPE_CHECKING, Any
 from sqlglot import exp
 
 from sqlspec.core.result import SQLResult
-from sqlspec.protocols import SupportsWhere
+from sqlspec.protocols import HasWhereProtocol
 
 # Use TYPE_CHECKING for type-only imports
 if TYPE_CHECKING:
-    from sqlspec.statement.sql import SQL
+    from sqlspec.core.statement import SQL
 ```
 
 **Rules:**

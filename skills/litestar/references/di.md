@@ -51,8 +51,8 @@ Use Dishka when the app needs explicit request / session / app scope management 
 ```python
 from __future__ import annotations
 
-from dishka import Provider, Scope, provide
-from dishka.integrations.litestar import FromDishka as Inject, setup_dishka, make_async_container
+from dishka import Provider, Scope, provide, make_async_container
+from dishka.integrations.litestar import FromDishka as Inject, setup_dishka
 
 from app.domain.accounts.services import UserService
 
@@ -102,8 +102,6 @@ Dishka is not a standalone skill in this repo — Litestar is its primary surfac
 - **`make_async_container(*providers)`**: constructs the container at app boot
 - **`setup_dishka(container, app)`**: wires the container into Litestar so `Inject[T]` resolves on request
 - **`Inject[T]`** (= `FromDishka`): the parameter annotation that triggers DI resolution
-
-For CLI integration with `@async_inject`, see the canonical apps (`dma/accelerator`).
 
 ## Cross-references
 

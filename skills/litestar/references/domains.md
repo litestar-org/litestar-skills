@@ -35,7 +35,7 @@ src/app/
     └── routers.py             # Router composition
 ```
 
-Refs: `litestar-fullstack-spa/src/app/`, `litestar-fullstack-inertia/src/app/`, `dma/accelerator/src/app/`.
+Refs: [litestar-fullstack](https://github.com/litestar-org/litestar-fullstack) (`src/app/`), [litestar-fullstack-inertia](https://github.com/litestar-org/litestar-fullstack-inertia) (`src/app/`).
 
 ## Why Domain Clustering
 

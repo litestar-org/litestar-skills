@@ -7,9 +7,8 @@ parent [`SKILL.md`](../SKILL.md).
 ## CamelizedBaseStruct
 
 Canonical Litestar apps define a two-level base hierarchy. The pattern below is from
-`litestar-fullstack-spa/src/py/app/lib/schema.py:L9–15` (identical shape in
-`dma/accelerator/src/py/dma/lib/schemas.py:L14–15` and
-`litestar-sqlstack/src/sqlstack/lib/schema.py:L30–31`).
+[litestar-fullstack](https://github.com/litestar-org/litestar-fullstack) (`src/py/app/lib/schema.py:L9–15`, identical shape in
+[litestar-sqlstack](https://github.com/cofin/litestar-sqlstack) `src/sqlstack/lib/schema.py:L30–31`).
 
 ```python
 from typing import Any
@@ -27,7 +26,7 @@ class CamelizedBaseStruct(BaseStruct, rename="camel"):
 ```
 
 Example subclass using a neutral domain (pattern from
-`litestar-fullstack-spa/src/py/app/domain/tags/schemas/_tag.py:L8–13`):
+`litestar-fullstack/src/py/app/domain/tags/schemas/_tag.py:L8–13`):
 
 ```python
 from uuid import UUID
@@ -51,7 +50,7 @@ must not use it (runtime introspection breaks).
 
 Re-export sqlspec's built-in serializer. It installs an `enc_hook` that already handles UUID,
 datetime, Enum, Decimal, Pydantic models, dataclasses, attrs, and msgspec.Struct with zero
-additional code. Pattern from `dma/accelerator/src/py/dma/utils/serialization.py:L1–3`.
+additional code.
 
 ```python
 # myapp/utils/serialization.py
@@ -60,8 +59,7 @@ from sqlspec.utils.serializers import from_json, to_json
 __all__ = ("from_json", "to_json")
 ```
 
-Usage (pattern from `dma/accelerator/src/py/dma/lib/realtime/_publisher.py:L26–27` and
-`dma/accelerator/src/py/dma/db/hooks.py:L65–67`):
+Usage:
 
 ```python
 from myapp.utils.serialization import to_json
@@ -73,7 +71,7 @@ await backend.publish(payload, channels=[f"orders:{order.id}:events"])
 ### Branch B — sqlspec not in-stack
 
 Hand-roll an `Encoder` singleton with a custom `enc_hook`. Pattern from
-`litestar-fullstack-spa/src/py/app/utils/serialization.py:L1–47`.
+`litestar-fullstack/src/py/app/utils/serialization.py:L1–47`.
 
 ```python
 # myapp/utils/serialization.py
@@ -123,7 +121,7 @@ Both are canonical. Choose based on your existing dependencies, not preference.
 When a single app needs both msgspec Structs for high-throughput response shapes *and*
 Pydantic for request bodies that require `validate_assignment` or complex field validators,
 pair both base classes. Pattern from
-`litestar-fullstack-spa/src/py/app/lib/schema.py:L22–36`.
+`litestar-fullstack/src/py/app/lib/schema.py:L22–36`.
 
 ```python
 from advanced_alchemy.utils.text import camelize
@@ -158,7 +156,6 @@ msgspec's `rename="camel"`.
 ## \_\_post_init\_\_ validation
 
 `msgspec.Struct` supports `__post_init__` for cross-field validation after construction.
-Pattern adapted from `dma/accelerator/src/py/dma/lib/realtime/_contract.py:L60–80`.
 
 ```python
 from typing import Literal
@@ -201,9 +198,9 @@ required.
 ## MessagePack — honest scope
 
 msgspec supports MessagePack via `msgspec.msgpack`. None of the canonical Litestar reference
-apps surveyed (litestar-fullstack-spa, dma/accelerator, litestar-sqlstack, oracledb-vertexai-demo)
-use it. If your wire protocol already requires MessagePack, the API is symmetric with
-`msgspec.json` (encode/decode, Encoder/Decoder). Otherwise default to JSON.
+apps surveyed (litestar-fullstack, litestar-sqlstack, [oracledb-vertexai-demo](https://github.com/cofin/oracledb-vertexai-demo)) use it. If
+your wire protocol already requires MessagePack, the API is symmetric with `msgspec.json`
+(encode/decode, Encoder/Decoder). Otherwise default to JSON.
 
 ## Shared Styleguide Baseline
 

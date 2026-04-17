@@ -16,13 +16,14 @@ from advanced_alchemy.base import (
     UUIDv7Base, UUIDv7AuditBase,
     # BigInt auto-increment
     BigIntBase, BigIntAuditBase,
-    # Nanoid string
-    NanoidBase, NanoidAuditBase,
-    # Mixins
-    SlugKey, UniqueMixin, AuditColumns,
+    # NanoID string
+    NanoIDBase, NanoIDAuditBase,
+    # Audit columns mixin
+    AuditColumns,
     # Registry
     orm_registry, metadata_registry,
 )
+from advanced_alchemy.mixins import SlugKey, UniqueMixin
 ```
 
 ---
@@ -139,17 +140,17 @@ class PageView(BigIntAuditBase):
 
 ---
 
-## Nanoid Base Classes
+## NanoID Base Classes
 
-### NanoidBase / NanoidAuditBase
+### NanoIDBase / NanoIDAuditBase
 
-Nanoid string primary key — a URL-friendly, unique string ID. Useful when you need short, human-readable identifiers.
+NanoID string primary key — a URL-friendly, unique string ID. Useful when you need short, human-readable identifiers.
 
 ```python
-from advanced_alchemy.base import NanoidBase, NanoidAuditBase
+from advanced_alchemy.base import NanoIDBase, NanoIDAuditBase
 
 
-class ShortLink(NanoidAuditBase):
+class ShortLink(NanoIDAuditBase):
     __tablename__ = "short_link"
     target_url: Mapped[str] = mapped_column()
     clicks: Mapped[int] = mapped_column(default=0)
@@ -157,7 +158,7 @@ class ShortLink(NanoidAuditBase):
 
 | Column | Type | Behavior |
 | --- | --- | --- |
-| `id` | `String` | Auto-generated nanoid (e.g., `V1StGXR8_Z5jdHi6B-myT`) |
+| `id` | `String` | Auto-generated NanoID (e.g., `V1StGXR8_Z5jdHi6B-myT`) |
 | `created_at` | `DateTimeUTC` | Set on insert (audit bases only) |
 | `updated_at` | `DateTimeUTC` | Set on insert and update (audit bases only) |
 
@@ -192,7 +193,8 @@ class ExternalRecord(DeclarativeBase, AuditColumns):
 Adds a `slug: Mapped[str]` column (unique, indexed) for URL-friendly identifiers. Pair with `SQLAlchemyAsyncSlugRepository` for automatic slug generation.
 
 ```python
-from advanced_alchemy.base import SlugKey, UUIDAuditBase
+from advanced_alchemy.base import UUIDAuditBase
+from advanced_alchemy.mixins import SlugKey
 
 
 class Article(UUIDAuditBase, SlugKey):
@@ -210,7 +212,8 @@ class Article(UUIDAuditBase, SlugKey):
 Select-or-create pattern for deduplication. Ensures only one row exists for a given set of unique criteria.
 
 ```python
-from advanced_alchemy.base import UniqueMixin, UUIDAuditBase
+from advanced_alchemy.base import UUIDAuditBase
+from advanced_alchemy.mixins import UniqueMixin
 
 
 class Tag(UUIDAuditBase, UniqueMixin):
@@ -317,7 +320,8 @@ class AnalyticsEvent(UUIDAuditBase):
 Combine mixins to create project-specific bases:
 
 ```python
-from advanced_alchemy.base import UUIDv7Base, AuditColumns, SlugKey
+from advanced_alchemy.base import UUIDv7Base, AuditColumns
+from advanced_alchemy.mixins import SlugKey
 
 
 class ProjectBase(UUIDv7Base, AuditColumns):
@@ -361,5 +365,5 @@ class Setting(ProjectBase):
 | `UUIDv7AuditBase` | UUID v7 | `created_at`, `updated_at` | New projects (preferred) |
 | `BigIntBase` | BigInteger | None | High-volume, legacy systems |
 | `BigIntAuditBase` | BigInteger | `created_at`, `updated_at` | High-volume with audit |
-| `NanoidBase` | Nanoid string | None | Short URLs, human-readable IDs |
-| `NanoidAuditBase` | Nanoid string | `created_at`, `updated_at` | Short URLs with audit |
+| `NanoIDBase` | NanoID string | None | Short URLs, human-readable IDs |
+| `NanoIDAuditBase` | NanoID string | `created_at`, `updated_at` | Short URLs with audit |

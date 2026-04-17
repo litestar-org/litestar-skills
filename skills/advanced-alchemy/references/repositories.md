@@ -73,6 +73,74 @@ class ReportRepository(SQLAlchemyAsyncQueryRepository):
         return result.mappings().first()
 ```
 
+## In-Memory Test Repository
+
+For unit-testing services without spinning up a real database, Advanced Alchemy ships mock repositories under `advanced_alchemy.repository.memory`. They share the production repository protocols (`SQLAlchemyAsyncRepositoryProtocol` / `SQLAlchemySyncRepositoryProtocol`), so any service that accepts a `repository_type` accepts the mock.
+
+```python
+from advanced_alchemy.repository.memory import (
+    SQLAlchemyAsyncMockRepository,
+    SQLAlchemyAsyncMockSlugRepository,
+    SQLAlchemySyncMockRepository,
+    SQLAlchemySyncMockSlugRepository,
+)
+```
+
+Each class wraps a process-wide `SQLAlchemyMultiStore` keyed by model type, with `SQLAlchemyInMemoryStore` instances holding individual rows. Primary keys (including composite) are honored; foreign-key relationships are set via mapper introspection so that assigning a child populates `child.parent_id`.
+
+### Substitution pattern
+
+The idiomatic pattern is to subclass your service's inner `Repo` class, swap only the base, and set the same `model_type`:
+
+```python
+from advanced_alchemy.repository.memory import SQLAlchemyAsyncMockRepository
+from app.domain.orders.services import OrderService
+from app.db import models as m
+
+
+class OrderMockRepo(SQLAlchemyAsyncMockRepository[m.Order]):
+    model_type = m.Order
+
+
+class OrderServiceForTest(OrderService):
+    repository_type = OrderMockRepo
+```
+
+The session is still required (an `AsyncSession` instance) but the mock ignores it — a `create_autospec`-based `Dialect` placeholder is used internally, so passing any `AsyncSession` fixture works.
+
+### Supported filter subset
+
+`SQLAlchemyAsyncMockRepository._apply_filters` handles `LimitOffset`, `BeforeAfter`, `OnBeforeAfter`, `CollectionFilter`, `NotInCollectionFilter`, `SearchFilter`, `NotInSearchFilter`, and `OrderBy`. A raw SQLAlchemy `ColumnElement` is silently accepted (not evaluated); any other filter type raises `RepositoryError` with `"Unexpected filter"`. `load` / `loader_options` / `execution_options` are accepted but ignored — eager loading is implicit because rows are Python objects.
+
+### Fixture + test example
+
+```python
+import pytest
+from advanced_alchemy.repository.memory import SQLAlchemyAsyncMockRepository
+from app.db import models as m
+
+
+class TaskMockRepo(SQLAlchemyAsyncMockRepository[m.Task]):
+    model_type = m.Task
+
+
+@pytest.fixture(autouse=True)
+def _clear_mock_store() -> None:
+    SQLAlchemyAsyncMockRepository.__database_clear__()
+
+
+async def test_task_archive(async_session) -> None:
+    repo = TaskMockRepo(session=async_session)
+    task = await repo.add(m.Task(title="draft spec"))
+    task.is_archived = True
+    await repo.update(task)
+    assert (await repo.get(task.id)).is_archived is True
+```
+
+### When NOT to use
+
+The mock bypasses SQLAlchemy compilation entirely — dialect-specific SQL, `MergeStatement`, `OnConflictUpsert` (see [`operations.md`](operations.md)), and any `text(...)` query repository go unverified. Use the mock for service-layer logic (lifecycle hooks, validation, branching); switch to `pytest-databases` container fixtures for integration tests that must exercise real SQL, triggers, or Alembic migrations.
+
 ## Configuration Options
 
 ### model_type

@@ -2,7 +2,7 @@ description = "Scaffold a new domain module in a Litestar app — controllers, s
 prompt = """
 # Scaffold a new Litestar domain
 
-You are creating a new domain module following the canonical domain-driven structure used in first-party Litestar reference apps (`litestar-fullstack-spa`, `litestar-fullstack-inertia`, and others). Ask about the project's stack first — services and controllers branch on the data-access layer.
+You are creating a new domain module following the canonical domain-driven structure used in first-party Litestar reference apps ([litestar-fullstack](https://github.com/litestar-org/litestar-fullstack), [litestar-fullstack-inertia](https://github.com/litestar-org/litestar-fullstack-inertia), and others). Ask about the project's stack first — services and controllers branch on the data-access layer.
 
 ## Gather requirements (one question at a time)
 

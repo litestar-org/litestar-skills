@@ -6,9 +6,8 @@ Reference patterns for testing a Litestar app in CI. Covers uv + bun setup, Pyth
 
 | Project | Runners | Python matrix | Setup style | Notable |
 | --- | --- | --- | --- | --- |
-| litestar-fullstack-inertia | `ubuntu-latest` | 3.11, 3.12, 3.13 | Reusable workflow (`test.yml` w/ `workflow_call`) | Coverage only from 3.12 |
-| litestar-fullstack-spa | `ubuntu-latest` | 3.12, 3.13 | Inline, `setup-uv@v6` with `enable-cache: true` | No services; React Email built in CI |
-| accelerator (DMA) | `self-hosted` | 3.11, 3.12, 3.13 | Composite actions (`setup-python`, `setup-node`) | Pins uv=0.11.6, bun=v1.3.12; aggressive disk cleanup |
+| [litestar-fullstack-inertia](https://github.com/litestar-org/litestar-fullstack-inertia) | `ubuntu-latest` | 3.11, 3.12, 3.13 | Reusable workflow (`test.yml` w/ `workflow_call`) | Coverage only from 3.12 |
+| [litestar-fullstack](https://github.com/litestar-org/litestar-fullstack) | `ubuntu-latest` | 3.12, 3.13 | Inline, `setup-uv@v6` with `enable-cache: true` | No services; React Email built in CI |
 
 ## Pattern 1 — Reusable workflow (inertia)
 
@@ -168,7 +167,7 @@ jobs:
 
 **Why a reusable workflow:** the test matrix is parameterized, and matrix cells emit comparable artifacts. Also, `ci.yml` stays readable — no 80-line test job repeated per Python version.
 
-## Pattern 2 — Composite actions (accelerator)
+## Pattern 2 — Composite actions
 
 For repos with 10+ jobs that all need the same setup, extract it to composite actions.
 
@@ -215,8 +214,8 @@ runs:
     - name: Placeholder frontend directory
       shell: bash
       run: |
-        mkdir -p src/py/dma/server/public
-        touch src/py/dma/server/public/.gitkeep
+        mkdir -p src/py/<app>/server/public
+        touch src/py/<app>/server/public/.gitkeep
 
     - name: Install dependencies
       if: inputs.install-dependencies == 'true'
@@ -339,7 +338,7 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
 ```
 
-Both fullstack reference apps only put services in the **release** workflow (the CI workflow uses in-memory SQLite + no-op SAQ). accelerator doesn't use services at all — its tests start containers via `pytest-databases`, which is more portable across `self-hosted` runners.
+Both fullstack reference apps only put services in the **release** workflow (the CI workflow uses in-memory SQLite + no-op SAQ). An alternative pattern uses `pytest-databases` to start containers, which is more portable across `self-hosted` runners.
 
 ## The "placeholder asset directory" trick
 
@@ -388,7 +387,7 @@ Useful when your app has OS-specific dependencies (oracledb, pypika).
 
 ### Expensive tests only on one cell
 
-accelerator runs the full e2e + integration suite only on Python 3.12; 3.11 and 3.13 get unit-only for compatibility:
+An advanced reference pattern runs the full e2e + integration suite only on Python 3.12; 3.11 and 3.13 get unit-only for compatibility:
 
 ```yaml
 - name: Run full tests (3.12 only)
@@ -406,7 +405,7 @@ Pattern: heavy tests on the stable version, light tests everywhere else. Keeps C
 
 ## Disk cleanup for large builds
 
-GitHub's `ubuntu-latest` has ~30 GB free. Frontend + Python + Playwright + Docker layers blow past it. accelerator's cleanup block (run before heavy jobs):
+GitHub's `ubuntu-latest` has ~30 GB free. Frontend + Python + Playwright + Docker layers blow past it. A cleanup block (run before heavy jobs):
 
 ```yaml
 - name: Free additional space
@@ -438,7 +437,7 @@ Recovers ~15 GB. Alternative: `jlumbroso/free-disk-space@main` if you don't mind
 
 ## All-checks-complete sentinel
 
-accelerator has a merge gate that aggregates all jobs:
+An advanced reference pattern uses a merge gate that aggregates all jobs:
 
 ```yaml
 all-checks-complete:
