@@ -175,7 +175,7 @@ docker compose run --rm migrator
 ## Design decisions
 
 | Decision | Rationale |
-|---|---|
+| --- | --- |
 | Valkey over Redis | Drop-in Redis replacement, fully open-source (BSD license). |
 | Port offsets (15432, 16379) | Avoid conflicts with locally installed PostgreSQL/Redis. |
 | `condition: service_healthy` | App and worker wait for healthy database and cache before starting. |

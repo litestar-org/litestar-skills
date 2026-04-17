@@ -25,7 +25,7 @@ app = Litestar(
 ### Commit Modes
 
 | Mode | Behavior | When to Use |
-|------|----------|-------------|
+| --- | --- | --- |
 | `"manual"` | No automatic commit. You call `commit()` explicitly. | Complex multi-step transactions |
 | `"autocommit"` | Commits after successful response, rolls back on error. | Standard CRUD endpoints |
 | `"autocommit_include_redirect"` | Same as autocommit but also commits on 3xx responses. | POST-redirect-GET patterns |

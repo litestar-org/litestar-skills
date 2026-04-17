@@ -302,7 +302,7 @@ The deploy tool renders templates in dependency order: namespace, secrets, confi
 ## Environment-specific resource sizing
 
 | Resource | Dev | Prod |
-|---|---|---|
+| --- | --- | --- |
 | API replicas | 1 | 2-10 (HPA) |
 | Worker replicas | 1 | 2-10 (HPA) |
 | API CPU request/limit | 100m / 500m | 200m / 1000m |

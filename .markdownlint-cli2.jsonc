@@ -4,12 +4,13 @@
     "MD013": false,
     "MD033": false,
     "MD041": false,
-    "MD010": { "code_blocks": false }
+    "MD010": { "code_blocks": false },
+    "MD024": { "siblings_only": true }
   },
   "ignores": [
     ".agents/**",
     ".beads/**",
-    "node_modules/**",
+    "**/node_modules/**",
     "dist/**",
     "build/**",
     ".venv/**",

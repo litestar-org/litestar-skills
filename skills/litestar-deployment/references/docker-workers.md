@@ -5,7 +5,7 @@ Dedicated container for SAQ background task processing. Uses the same multi-stag
 ## Key differences from web container
 
 | Property | Web container | Worker container |
-|---|---|---|
+| --- | --- | --- |
 | CMD | `litestar run --host 0.0.0.0` | `app workers run` |
 | EXPOSE | 8000 | None |
 | Health probes | HTTP `/health` | Process restart only |

@@ -196,7 +196,7 @@ When `schema_type` is omitted, rows are returned as dicts.
 ## Method Summary
 
 | Method | Returns | Raises |
-|--------|---------|--------|
+| --- | --- | --- |
 | `select_value(sql, params)` | `Any` (scalar) | `NotFoundError` if no rows |
 | `select_one(sql, params, schema_type=)` | `T` or `dict` | `NotFoundError`, `MultipleResultsError` |
 | `select_one_or_none(sql, params, schema_type=)` | `T \| None` | `MultipleResultsError` |

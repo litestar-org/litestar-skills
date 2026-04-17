@@ -34,7 +34,7 @@ class TimingMiddleware(AbstractMiddleware):
 ## Scope Filtering
 
 | `scopes={...}` | Effect |
-|---|---|
+| --- | --- |
 | `{ScopeType.HTTP}` | HTTP requests only (skip WS) |
 | `{ScopeType.WEBSOCKET}` | WebSocket only |
 | `{ScopeType.HTTP, ScopeType.WEBSOCKET}` | Both (default) |

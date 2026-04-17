@@ -44,7 +44,7 @@ class UserService(SQLSpecAsyncService):
 ### Key Service Methods
 
 | Method | Returns | Description |
-|--------|---------|-------------|
+| --- | --- | --- |
 | `paginate()` | `OffsetPagination[T]` | Paginated query with total count |
 | `get_or_404()` | `T` | Single row or raise `NotFoundError` |
 | `exists()` | `bool` | Check if any row matches |

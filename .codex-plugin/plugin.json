@@ -1,13 +1,13 @@
 {
   "name": "litestar-skills",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Opinionated first-party agent skills for the Litestar framework ecosystem",
   "author": {
     "name": "Cody Fincher",
     "email": "cofin@litestar.dev"
   },
-  "homepage": "https://github.com/cofin/litestar-skills",
-  "repository": "https://github.com/cofin/litestar-skills",
+  "homepage": "https://github.com/litestar-org/litestar-skills",
+  "repository": "https://github.com/litestar-org/litestar-skills",
   "license": "MIT",
   "keywords": ["litestar", "skills", "agent", "ai", "sqlspec", "advanced-alchemy"],
   "skills": "./skills/",

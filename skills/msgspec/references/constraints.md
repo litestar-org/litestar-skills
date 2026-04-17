@@ -16,7 +16,7 @@ from msgspec import Meta
 Applies to `int`, `float`, `Decimal`.
 
 | Parameter | Description | Example |
-|-----------|-------------|---------|
+| --- | --- | --- |
 | `gt` | Greater than (exclusive) | `Meta(gt=0)` → value > 0 |
 | `ge` | Greater than or equal (inclusive) | `Meta(ge=0)` → value >= 0 |
 | `lt` | Less than (exclusive) | `Meta(lt=100)` → value < 100 |
@@ -48,7 +48,7 @@ class Product(msgspec.Struct, kw_only=True):
 ## String Constraints
 
 | Parameter | Description | Example |
-|-----------|-------------|---------|
+| --- | --- | --- |
 | `min_length` | Minimum char count | `Meta(min_length=1)` |
 | `max_length` | Maximum char count | `Meta(max_length=255)` |
 | `pattern` | Regex pattern | `Meta(pattern=r"^\d{4}$")` |
@@ -74,7 +74,7 @@ class Article(msgspec.Struct, kw_only=True):
 ## Bytes Constraints
 
 | Parameter | Description |
-|---|---|
+| --- | --- |
 | `min_length` | Minimum byte count |
 | `max_length` | Maximum byte count |
 
@@ -94,7 +94,7 @@ class SecurePayload(msgspec.Struct):
 Applies to `list`, `tuple`, `set`, `frozenset`, `dict`.
 
 | Parameter | Description |
-|---|---|
+| --- | --- |
 | `min_length` | Minimum elements |
 | `max_length` | Maximum elements |
 
@@ -109,7 +109,7 @@ NonEmptyDict = Annotated[dict[str, int], Meta(min_length=1)]
 ## OpenAPI / JSON Schema Metadata
 
 | Parameter | Description |
-|---|---|
+| --- | --- |
 | `title` | Human-readable field title |
 | `description` | Field description for docs |
 | `examples` | Example values |

@@ -25,7 +25,7 @@ print(arrow_table.schema)
 ### Performance Characteristics
 
 | Adapter | Path | Copy Overhead |
-|---------|------|---------------|
+| --- | --- | --- |
 | DuckDB | Native Arrow | Zero-copy |
 | ADBC | Native ADBC | Zero-copy |
 | BigQuery | Storage Read API | Zero-copy (streaming) |
@@ -57,7 +57,7 @@ await db_session.copy_from_arrow(arrow_table, target_table="users")
 ### Native Arrow Load Paths
 
 | Adapter | Method | Notes |
-|---------|--------|-------|
+| --- | --- | --- |
 | DuckDB | `INSERT INTO ... SELECT * FROM arrow_table` | In-process, zero-copy |
 | BigQuery | Load job with Arrow format | Streaming insert |
 | Spanner | Mutation-based insert | Batched |
@@ -113,7 +113,7 @@ await bq_session.copy_from_arrow(arrow_table, target_table="refined_analytics")
 SQLSpec maps database types to Arrow types automatically:
 
 | SQL Type | Arrow Type |
-|----------|-----------|
+| --- | --- |
 | INTEGER / BIGINT | `int64` |
 | REAL / DOUBLE | `float64` |
 | VARCHAR / TEXT | `utf8` |

@@ -163,7 +163,7 @@ CMD ["app", "run", "--host", "0.0.0.0"]
 ## Why distroless
 
 | Property | `python:slim` | `distroless/cc-debian12` |
-|---|---|---|
+| --- | --- | --- |
 | Shell | Yes (`/bin/sh`, `/bin/bash`) | **None** |
 | Package manager | Yes (apt) | **None** |
 | CVE surface | Moderate | **Minimal** |

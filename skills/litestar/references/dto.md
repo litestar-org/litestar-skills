@@ -96,7 +96,7 @@ async def get_user(user_id: int) -> User:
 ## `DTOConfig` Knobs
 
 | Knob | Purpose |
-|---|---|
+| --- | --- |
 | `exclude={"password_hash", ...}` | Drop fields from input/output |
 | `include={"id", "name"}` | Whitelist (mutually exclusive with `exclude`) |
 | `rename_fields={"name": "full_name"}` | Per-field rename |
@@ -107,7 +107,7 @@ async def get_user(user_id: int) -> User:
 ## msgspec vs DataclassDTO
 
 | Use | Pick |
-|---|---|
+| --- | --- |
 | API DTOs in greenfield code | `msgspec.Struct` + `CamelizedBaseStruct` |
 | Wrapping legacy dataclasses / SQLAlchemy models | `DataclassDTO` / `SQLAlchemyDTO` with `DTOConfig` |
 | Maximum performance (microservices, hot paths) | msgspec — Rust-backed encode/decode |

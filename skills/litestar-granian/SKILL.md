@@ -77,7 +77,7 @@ GranianConfig(
 ### Granian vs Uvicorn for Litestar
 
 | Feature | Granian (`litestar-granian`) | Uvicorn |
-|---|---|---|
+| --- | --- | --- |
 | Core | Rust (hyper + tokio) | Python |
 | HTTP/2 | Native | Requires `h2` |
 | Throughput | Higher | Moderate |

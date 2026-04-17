@@ -1,11 +1,12 @@
 ---
 name: litestar-reviewer
 description: "Reviews Litestar code against first-party conventions, adapting to the project's stack: msgspec or Pydantic DTOs, Guards, Provide or Dishka DI, advanced-alchemy or sqlspec services, first-party paginated responses, custom exception hierarchies, dataclass or pydantic-settings Settings, async-all-I/O, domain-clustered Controllers, Granian-first, SAQ or custom PG-native background workers, camelCase wire format. Use when reviewing PRs, code quality checks, or pre-merge validation in Litestar projects."
+mode: subagent
 tools:
-  - read_file
-  - grep_search
-  - glob
-  - run_shell_command
+  read: true
+  grep: true
+  glob: true
+  bash: true
 ---
 
 # Litestar Code Reviewer

@@ -309,7 +309,7 @@ plugin.init_app(app)
 Every plugin ensures one session per request with automatic cleanup:
 
 | Framework | Session Location | Cleanup Mechanism |
-|---|---|---|
+| --- | --- | --- |
 | Litestar | DI (`db_session` parameter) | `before_send_handler` |
 | FastAPI | `Depends(provide_session)` | ASGI middleware |
 | Flask | `provide_session()` / app context | `teardown_appcontext` |
@@ -349,7 +349,7 @@ plugin.init_app(app)
 ## Feature Comparison
 
 | Feature | Litestar | FastAPI | Flask | Starlette | Sanic |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | Async sessions | Yes | Yes | Yes (Flask 2.0+) | Yes | Yes |
 | Sync sessions | Yes | Yes | Yes | Yes | No |
 | Auto-commit handler | Yes | Yes | Yes | Yes | Yes |

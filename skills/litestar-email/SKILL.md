@@ -55,7 +55,7 @@ app = Litestar(plugins=[EmailPlugin(config=EmailConfig(
 ### EmailConfig
 
 | Option | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `backend` | `BackendConfig` | One of `SMTPConfig`, `ResendConfig`, `SendGridConfig`, `MailgunConfig`, `InMemoryConfig` |
 | `from_email` | `str` | Default sender address |
 | `from_name` | `str \| None` | Optional display name |
@@ -166,7 +166,7 @@ await email_service.send_message(msg)
 ### EmailService Methods
 
 | Method | Description |
-|---|---|
+| --- | --- |
 | `send_message(msg)` | Send a single `EmailMessage` |
 | `send_messages(msgs)` | Batch send |
 
@@ -226,7 +226,7 @@ async def send_welcome(
 ### Step 1: Install + Pick Backend
 
 | Need | Backend |
-|---|---|
+| --- | --- |
 | Generic SMTP / corporate mail | `SMTPConfig` |
 | Modern transactional API | `ResendConfig` (preferred for new projects) |
 | Existing SendGrid contract | `SendGridConfig` |

@@ -23,7 +23,7 @@ from advanced_alchemy.cache import CacheConfig
 ```
 
 | Field | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `backend` | `str` | `"dogpile.cache.null"` | Backend identifier (see below) |
 | `expiration_time` | `int` | `3600` | Default TTL in seconds (`-1` = no expiry) |
 | `arguments` | `dict[str, Any]` | `{}` | Backend-specific options |
@@ -36,7 +36,7 @@ from advanced_alchemy.cache import CacheConfig
 ### Common Backends
 
 | Backend String | Use Case |
-|---|---|
+| --- | --- |
 | `dogpile.cache.null` | No-op (development/testing) |
 | `dogpile.cache.memory` | In-process dictionary cache |
 | `dogpile.cache.redis` | Shared Redis cache |

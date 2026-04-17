@@ -62,14 +62,14 @@ def calculate_total(items: list[Item], tax_rate: float) -> Decimal:
 
 ## Naming Conventions
 
-| Concept     | Convention             | Example                 |
-| :---------- | :--------------------- | :---------------------- |
-| Modules     | `snake_case`           | `user_service.py`       |
-| Classes     | `PascalCase`           | `UserService`           |
-| Functions   | `snake_case`           | `get_user_by_id`        |
-| Variables   | `snake_case`           | `current_user`          |
-| Constants   | `SCREAMING_SNAKE_CASE` | `MAX_RETRIES`           |
-| Private     | `_leading_underscore`  | `_internal_cache`       |
+| Concept | Convention | Example |
+| :--- | :--- | :--- |
+| Modules | `snake_case` | `user_service.py` |
+| Classes | `PascalCase` | `UserService` |
+| Functions | `snake_case` | `get_user_by_id` |
+| Variables | `snake_case` | `current_user` |
+| Constants | `SCREAMING_SNAKE_CASE` | `MAX_RETRIES` |
+| Private | `_leading_underscore` | `_internal_cache` |
 
 ## Data Classes and Models
 

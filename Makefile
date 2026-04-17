@@ -10,6 +10,7 @@ SHELL := /bin/bash
 
 .DEFAULT_GOAL:=help
 .ONESHELL:
+.SHELLFLAGS := -ec
 .EXPORT_ALL_VARIABLES:
 MAKEFLAGS += --no-print-directory
 

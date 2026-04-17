@@ -39,7 +39,7 @@ CMD ["litestar", "run", "--host", "0.0.0.0", "--port", "8080"]
 Litestar supports multiple ASGI servers:
 
 | Server | Use Case | Notes |
-|--------|----------|-------|
+| --- | --- | --- |
 | **granian** | Default (via `litestar-granian`) | Rust-based, lower latency, HTTP/2 |
 | **uvicorn** | Fallback | Well-tested, broader middleware ecosystem |
 
@@ -75,7 +75,7 @@ Client -> Cloud IAP -> Load Balancer -> Litestar App
 ### Environment Variables
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| --- | --- | --- |
 | `AUTH_IAP_ENABLED` | `false` | Enable IAP JWT authentication |
 | `IAP_AUDIENCE` | `""` | Expected audience claim (required when IAP enabled) |
 | `AUTH_IAP_AUTO_PROVISION` | `false` | Auto-create users from IAP token claims |

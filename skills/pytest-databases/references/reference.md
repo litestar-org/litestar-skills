@@ -1,7 +1,7 @@
 # Complete Database Reference
 
 | Database | Plugin Module | Service Class | Key Fixtures |
-|----------|--------------|---------------|--------------|
+| --- | --- | --- | --- |
 | PostgreSQL | `postgres` | `PostgresService` | `postgres_service`, `postgres_{11-18}_service`, `postgres_connection` |
 | MySQL | `mysql` | `MySQLService` | `mysql_service`, `mysql_{56,57,8}_service`, `mysql_connection` |
 | MariaDB | `mariadb` | `MariaDBService` | `mariadb_service`, `mariadb_113_service`, `mariadb_connection` |

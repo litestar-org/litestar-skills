@@ -20,7 +20,7 @@ class SQLSpecAsyncService:
 ### Core methods
 
 | Method | Signature sketch | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `paginate` | `(stmt, /, *filters, schema_type=None, **kw) -> OffsetPagination[T]` | Runs `select_with_total`, extracts `LimitOffsetFilter` from `*filters` |
 | `get_or_404` | `(stmt, *, schema_type=..., error_message=...) -> T` | Single-row lookup; raises HTTP 404 if not found |
 | `exists` | `(stmt, *parameters) -> bool` | Returns `True` if any row matches |
@@ -92,7 +92,7 @@ Use the driver methods directly when the base class helpers don't fit:
 Decision table:
 
 | You want | Use |
-|---|---|
+| --- | --- |
 | A count or single cell | `select_value` |
 | One mapped object, must exist | `select_one` / `get_or_404` |
 | One mapped object, may be absent | `select_one_or_none` |

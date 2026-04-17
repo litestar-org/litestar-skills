@@ -40,7 +40,7 @@ class UserService(SQLAlchemyAsyncRepositoryService[User]):
 ### Methods you get for free
 
 | Method | Use case |
-|---|---|
+| --- | --- |
 | `get(id)` | Fetch by primary key; raises `NotFoundError` if missing |
 | `get_one(**kwargs)` | Fetch one by field filters; raises if missing |
 | `get_one_or_none(**kwargs)` | Fetch one or `None` |
@@ -156,7 +156,7 @@ No automatic `to_schema` — convert to DTOs explicitly at the handler boundary,
 ## When to pick which
 
 | Stack choice | Pick this when | Avoid this when |
-|---|---|---|
+| --- | --- | --- |
 | `advanced-alchemy` service | You want an opinionated ORM service with audit fields, soft-delete, filters, and pagination built in | The project is explicitly raw-SA or sqlspec-only; you need multi-adapter support beyond what SQLAlchemy covers |
 | `sqlspec` service | You want direct SQL, 15+ driver adapters, Arrow streams for analytics, or you're operating across heterogeneous databases | You want ORM-style attribute access on rows; you want automatic schema migrations driven by model classes |
 | raw SQLAlchemy with `async_sessionmaker` | You have an existing SA Core / ORM codebase and explicitly do not want the `advanced-alchemy` repository abstraction | You're starting a new Litestar project — the other two give you more for free |

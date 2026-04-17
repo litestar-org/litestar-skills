@@ -61,7 +61,7 @@ export default defineConfig({
 ### Mode Selection
 
 | Mode | Use For | Key Setup |
-|---|---|---|
+| --- | --- | --- |
 | `spa` | Standalone single-page app (React, Vue, Svelte) with Litestar JSON API backend | `dev_mode=True` proxies to Vite; manifest in prod |
 | `template` | Server-rendered pages (Jinja2/Mako) with Vite-bundled JS/CSS sprinkles | `vite_asset()` template helper resolves dev/prod URLs |
 | `htmx` | HTMX hypermedia with Vite-bundled assets and HMR | `template` mode + `htmx` extras; partial HTML responses |
@@ -176,7 +176,7 @@ TypeGenConfig(
 ```
 
 | Output | Path | Trigger | Frontend Use |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `openapi.json` | `output/openapi.json` | Whenever OpenAPI schema changes | Source of truth for SDK + schemas |
 | `routes.ts` | `output/routes.ts` | Route table changes | `route("name", { params })` typed URL builder |
 | `schemas.ts` | `output/schemas.ts` | Pydantic / msgspec DTO changes | `components["schemas"]["User"]` typed models |
@@ -207,7 +207,7 @@ type User = components["schemas"]["User"]
 Auto-registered Jinja2 globals when a template engine is configured:
 
 | Helper | Use |
-|---|---|
+| --- | --- |
 | `{{ vite_asset('src/main.ts') }}` | Resolve script URL (dev: proxied; prod: hashed manifest) |
 | `{{ vite_css('src/app.css') }}` | Render `<link rel="stylesheet">` tag |
 | `{{ vite_hmr_client() }}` | Inject HMR client `<script>` in dev mode (no-op in prod) |

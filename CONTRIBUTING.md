@@ -20,7 +20,7 @@ See [`docs/roadmap.md`](docs/roadmap.md) for shipped features, v0.2 candidates, 
 When adding a skill, command, subagent, or MCP server, update the relevant per-host manifest so consumers auto-discover the new content:
 
 | Addition | Manifests to update |
-|---|---|
+| --- | --- |
 | New skill | None — all host manifests point at `./skills/` root. Skills auto-discovered. |
 | New slash command | None — `./commands/` root is shared. |
 | New subagent | None — `./agents/` root is shared. |
@@ -60,4 +60,4 @@ git push --tags
 
 ## Reporting Issues
 
-Use GitHub Issues at <https://github.com/cofin/litestar-skills/issues>. For Litestar framework bugs (not skill-content bugs), file at <https://github.com/litestar-org/litestar/issues>.
+Use GitHub Issues at <https://github.com/litestar-org/litestar-skills/issues>. For Litestar framework bugs (not skill-content bugs), file at <https://github.com/litestar-org/litestar/issues>.

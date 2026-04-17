@@ -107,7 +107,7 @@ sudo journalctl -u litestar.service -f
 ## Key decisions
 
 | Decision | Rationale |
-|---|---|
+| --- | --- |
 | `KillSignal=SIGINT` | Granian handles SIGINT for graceful shutdown. Matches Dockerfile `STOPSIGNAL`. |
 | `TimeoutStopSec=30` (web) / `120` (worker) | Web: fast shutdown. Worker: allow in-flight tasks to complete. |
 | `ProtectSystem=strict` | Read-only filesystem except `ReadWritePaths`. Defense in depth. |

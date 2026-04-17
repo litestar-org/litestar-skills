@@ -249,7 +249,7 @@ The `BZIP2_SYS_STATIC=1` and `LZMA_API_STATIC=1` env vars + the `sed` patch are 
 Everything the advanced build sets:
 
 | Var | Value | When read | Why |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `PYAPP_VERSION` | `v0.29.0` | Shell (git clone) | PyApp release to compile |
 | `PYAPP_PROJECT_PATH` | `dist/*.whl` | cargo build | Wheel to embed in the binary |
 | `PYAPP_PROJECT_NAME` | `dma` | cargo build | Used by the patched `app.rs` |

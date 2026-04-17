@@ -49,7 +49,7 @@ Core principles that apply across all languages and frameworks.
 ### Naming Conventions
 
 | Concept | Convention |
-|---------|------------|
+| --- | --- |
 | Types/Classes | `PascalCase` |
 | Functions/Methods | `camelCase` (JS/TS), `snake_case` (Python/Rust) |
 | Variables | `camelCase` (JS/TS), `snake_case` (Python/Rust) |

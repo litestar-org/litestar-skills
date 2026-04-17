@@ -21,7 +21,7 @@ Advanced Alchemy is NOT a raw ORM — it is a **service/repository layer** built
 ### Base Classes
 
 | Base Class | PK Type | Audit Columns | When to Use |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `UUIDAuditBase` | UUID v4 | `created_at`, `updated_at` | Default choice for most models |
 | `UUIDBase` | UUID v4 | None | Lookup tables, tags, no audit needed |
 | `UUIDv7AuditBase` | UUID v7 | `created_at`, `updated_at` | Time-sortable IDs (preferred over v6) |
@@ -32,7 +32,7 @@ Advanced Alchemy is NOT a raw ORM — it is a **service/repository layer** built
 ### Repository Pattern
 
 | Repository | Purpose |
-|---|---|
+| --- | --- |
 | `SQLAlchemyAsyncRepository[Model]` | Standard async CRUD |
 | `SQLAlchemyAsyncSlugRepository[Model]` | CRUD + automatic slug generation |
 | `SQLAlchemyAsyncQueryRepository` | Complex read-only queries (no model_type) |
@@ -40,7 +40,7 @@ Advanced Alchemy is NOT a raw ORM — it is a **service/repository layer** built
 ### Service Layer
 
 | Service | Purpose |
-|---|---|
+| --- | --- |
 | `SQLAlchemyAsyncRepositoryService[Model]` | Full CRUD with lifecycle hooks |
 | `SQLAlchemyAsyncRepositoryReadService[Model]` | Read-only (list, get, count, exists) |
 
@@ -49,7 +49,7 @@ Key lifecycle hooks: `to_model_on_create`, `to_model_on_update`, `to_model_on_up
 ## Custom Types
 
 | Type | Purpose | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `FileObject` | Object storage with lifecycle hooks | Tracks file state across session; auto-deletes on row delete via `StoredObject` tracker |
 | `PasswordHash` | Hashed password storage | Supports Argon2, Passlib, and Pwdlib backends; hashes on assignment |
 | `EncryptedString` | Transparent AES encryption at rest | Requires `ENCRYPTION_KEY` in config |
@@ -67,7 +67,7 @@ Key lifecycle hooks: `to_model_on_create`, `to_model_on_update`, `to_model_on_up
 ## Mixins
 
 | Mixin | Fields Added | When to Use |
-|---|---|---|
+| --- | --- | --- |
 | `AuditMixin` | `created_at`, `updated_at`, `created_by`, `updated_by` | Any model needing a full audit trail (who + when) |
 | `SlugMixin` | `slug` (auto-generated) | URL-friendly identifiers derived from another field |
 | `UniqueMixin` | `get_or_create` class method | Idempotent inserts for lookup/reference tables |

@@ -248,7 +248,7 @@ Register the plugin in your application plugins list. The `ChannelsPlugin` insta
 There are four supported Channels backends. Pick based on what's already in the project's dependency graph — do not introduce Redis just for Channels if the stack is PostgreSQL-only, and do not use a PG-LISTEN backend if Redis is already present for cache / SAQ / sessions.
 
 | Backend | Pick when | Avoid when |
-|---|---|---|
+| --- | --- | --- |
 | `MemoryChannelsBackend` | Dev / tests / single-process CLIs; no persistence needed | Multi-process deploys (workers do not share state) |
 | `RedisChannelsPubSubBackend` | Redis is already in the stack (SAQ+Redis, cache, sessions) | The project is PostgreSQL-only and Redis would be purely for Channels |
 | `sqlspec` PG `LISTEN` / `NOTIFY` backend | Project is `sqlspec` + PostgreSQL; SAQ runs on PG; no Redis | Project uses `advanced-alchemy` (prefer its session-aware backend) or Redis is already present |
@@ -551,11 +551,11 @@ that enforces the required ID fields per scope.
 
 Quick-reference scope ACL:
 
-| Scope       | Access Rule                       |
-|-------------|-----------------------------------|
-| `workspace` | Workspace member or superuser     |
-| `user`      | Authenticated subject only        |
-| `global`    | Role/policy-authorized users only |
+| Scope | Access Rule |
+| --- | --- |
+| `workspace` | Workspace member or superuser |
+| `user` | Authenticated subject only |
+| `global` | Role/policy-authorized users only |
 
 ---
 
@@ -641,7 +641,7 @@ class ETLLogObserver:
 "Broker" below means whatever pub/sub backend the project is on: Redis, PostgreSQL LISTEN/NOTIFY via sqlspec, advanced-alchemy session-aware, or in-memory for dev.
 
 | Use case | Plain WS + hand-rolled broker | Channels plugin |
-|---|---|---|
+| --- | --- | --- |
 | One-off streaming, few channel names | ✓ — simpler, fewer moving parts | — |
 | Typed channels, automatic history / backlog | — | ✓ |
 | Publishing from SAQ / CLI to WS clients | Works but you own the broker client | ✓ — shared backend across app + workers |

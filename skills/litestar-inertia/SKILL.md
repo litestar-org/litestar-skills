@@ -8,7 +8,7 @@ description: "Auto-activate for `@inertiajs/react`, `@inertiajs/vue3`, `@inertia
 `litestar-inertia` is the four-library story:
 
 | Layer | Library | Role |
-|---|---|---|
+| --- | --- | --- |
 | Client SPA | [`@inertiajs/react`](https://inertiajs.com) / `@inertiajs/vue3` / `@inertiajs/svelte` | Page resolution, forms, navigation, shared data access |
 | Frontend build | [`vite`](https://vitejs.dev) | Bundling, HMR, dev server, production build |
 | Python bridge | [`litestar-vite`](../litestar-vite/SKILL.md) | `InertiaPlugin`, asset manifest, type generation, page-props codec |

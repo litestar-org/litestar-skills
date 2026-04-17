@@ -43,7 +43,7 @@ The MCP endpoint is mounted at `POST /mcp/` by default.
 ### MCPConfig
 
 | Option | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `name` | `str` | `"litestar"` | Server name reported in `initialize` response |
 | `base_path` | `str` | `"/mcp"` | URL prefix for the MCP controller |
 | `guards` | `list[Guard]` | `[]` | Litestar guards applied to the MCP controller |
@@ -57,7 +57,7 @@ The MCP endpoint is mounted at `POST /mcp/` by default.
 ### Default Route Discovery
 
 | HTTP Method | Default MCP Type |
-|---|---|
+| --- | --- |
 | `GET` | resource |
 | `POST` / `PUT` / `PATCH` / `DELETE` | tool |
 
@@ -98,7 +98,7 @@ async def create_order(data: OrderCreate) -> Order: ...
 ```
 
 | `opt` key | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `mcp_exclude` | `bool` | Exclude this route from MCP entirely |
 | `mcp_tool_name` | `str` | Override MCP tool name |
 | `mcp_resource_name` | `str` | Override MCP resource name; implies resource type |
@@ -106,7 +106,7 @@ async def create_order(data: OrderCreate) -> Order: ...
 ### JSON-RPC Methods
 
 | Method | Description |
-|---|---|
+| --- | --- |
 | `initialize` | Handshake; returns server name, version, capabilities |
 | `ping` | Health check; returns `pong` |
 | `resources/list` | List all discoverable MCP resources |

@@ -3,7 +3,7 @@
 ## Full Adapter Registry
 
 | Adapter | Registry Key | Dialect | Parameter Style | JSON Strategy | Async | Type Converter |
-|---------|-------------|---------|-----------------|---------------|-------|----------------|
+| --- | --- | --- | --- | --- | --- | --- |
 | ADBC | `"adbc"` | dynamic | varies by driver | `helper` | No | Arrow-native |
 | AioSQLite | `"aiosqlite"` | `sqlite` | QMARK (`?`) | `helper` | Yes | Python stdlib |
 | AsyncMy | `"asyncmy"` | `mysql` | PYFORMAT (`%s`) | `helper` | Yes | MySQL native |
@@ -33,7 +33,7 @@
 Each adapter MUST override `_connection_in_transaction()`. The detection method varies by driver:
 
 | Adapter | Detection Pattern |
-|---------|------------------|
+| --- | --- |
 | AsyncPG / CockroachDB Asyncpg | `self.connection.is_in_transaction()` |
 | Psycopg / CockroachDB Psycopg | `self.connection.info.transaction_status != IDLE` |
 | SQLite / AioSQLite | `self.connection.in_transaction` |
@@ -60,7 +60,7 @@ class MyAdapterDriver(SyncDriverAdapterBase):
 ## Type Converter Behavior
 
 | Adapter | UUID | datetime | Decimal | JSON | bytes |
-|---------|------|----------|---------|------|-------|
+| --- | --- | --- | --- | --- | --- |
 | AsyncPG | native UUID | native | text | native jsonb | native bytea |
 | Psycopg | text adapt | text adapt | numeric adapt | jsonb adapt | bytea adapt |
 | DuckDB | string cast | native | native | string | native blob |
@@ -75,7 +75,7 @@ class MyAdapterDriver(SyncDriverAdapterBase):
 Each adapter's `core.py` module exports these helpers:
 
 | Function | Purpose | Signature |
-|----------|---------|-----------|
+| --- | --- | --- |
 | `collect_rows` | Extract rows from cursor | `(data, description) -> tuple[list[dict], list[str]]` |
 | `resolve_rowcount` | Get affected row count | `(cursor) -> int` |
 | `normalize_execute_parameters` | Prepare single params | `(params) -> Any` |

@@ -29,7 +29,7 @@ All three paths assume the wheel is **already complete** — no `bun run build` 
 ### Why bundle assets into the wheel (and not serve from a CDN)
 
 | Property | Bundled wheel | External CDN |
-|---|---|---|
+| --- | --- | --- |
 | Deploy artifacts | 1 (`.whl` or binary) | 2+ (wheel + CDN upload) |
 | Version alignment | Atomic — API and UI lock-step | Easy to skew; rollback is painful |
 | PyApp onefile | Required — the binary embeds the wheel | Not possible — binary can't fetch CDN URLs at install time |
@@ -82,7 +82,7 @@ Rule: **Vite's `outDir` and litestar-vite's `bundle_dir` must point inside one o
 ## Quick Reference
 
 | Topic | Reference | Key Commands |
-|---|---|---|
+| --- | --- | --- |
 | Wheel build + asset bundling | [references/wheel-assets.md](references/wheel-assets.md) | `uv build --wheel`, `[tool.hatch.build.targets.wheel.force-include]`, `ignore-vcs = true` |
 | PyApp — simple (hatch-binary) | [references/pyapp-simple.md](references/pyapp-simple.md) | `uv run hatch build --target binary` |
 | PyApp — advanced (offline + custom install dir) | [references/pyapp-advanced.md](references/pyapp-advanced.md) | `tools/bundler.py build`, `cargo zigbuild` |
