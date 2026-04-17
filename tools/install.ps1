@@ -295,7 +295,7 @@ function Install-CodexCli {
             }
         }
     }
-    Write-Success "Codex CLI: installed at $target"
+    Write-Success "Codex CLI: installed at $target (includes .codex/agents/litestar-reviewer.toml)"
     $script:Statuses.Add('codex:installed')
 }
 

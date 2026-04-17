@@ -264,7 +264,7 @@ os.makedirs(os.path.dirname(path), exist_ok=True)
 with open(path, "w") as f: json.dump(data, f, indent=2)
 PYEOF
     fi
-    log_ok "Codex CLI: installed at ${target}"
+    log_ok "Codex CLI: installed at ${target} (includes .codex/agents/litestar-reviewer.toml)"
     STATUSES+=("codex:installed")
 }
 

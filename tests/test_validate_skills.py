@@ -69,10 +69,14 @@ def _patch_roots(mod: Any, tmp_root: Path) -> None:
     mod.COMMANDS_DIR = tmp_root / "commands"
     mod.AGENTS_DIR = tmp_root / "agents"
     mod.OPENCODE_AGENTS_DIR = tmp_root / ".opencode" / "agents"
+    mod.CLAUDE_AGENTS_DIR = tmp_root / ".claude-plugin" / "agents"
+    mod.CODEX_AGENTS_DIR = tmp_root / ".codex" / "agents"
     # Ensure dirs exist so glob returns empty rather than raising.
     for sub in ("skills", "commands", "agents"):
         (tmp_root / sub).mkdir(exist_ok=True)
     (tmp_root / ".opencode" / "agents").mkdir(parents=True, exist_ok=True)
+    (tmp_root / ".claude-plugin" / "agents").mkdir(parents=True, exist_ok=True)
+    (tmp_root / ".codex" / "agents").mkdir(parents=True, exist_ok=True)
 
 
 class TestValidateSkill:
@@ -364,6 +368,95 @@ class TestValidateGeminiAgent:
         path = self._write_agent(tmp_path, description="x" * 1025)
         violations = mod.validate_gemini_agent(path)
         assert any("1025" in v.message for v in violations)
+
+
+class TestValidateCodexAgent:
+    def _write_agent(
+        self,
+        root: Path,
+        name: str = "my-agent",
+        description: str = "A Codex agent.",
+        developer_instructions: str = "Review code.",
+        extra: str = "",
+        frontmatter_name: str | None = None,
+    ) -> Path:
+        agents_dir = root / ".codex" / "agents"
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        fm_name = frontmatter_name if frontmatter_name is not None else name
+        path = agents_dir / f"{name}.toml"
+        body = (
+            f'name = "{fm_name}"\n'
+            f'description = "{description}"\n'
+            f'developer_instructions = """{developer_instructions}"""\n'
+            f"{extra}"
+        )
+        path.write_text(body)
+        return path
+
+    def test_valid_agent_returns_no_violations(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        path = self._write_agent(tmp_path)
+        violations = mod.validate_codex_agent(path)
+        assert violations == []
+
+    def test_top_level_tools_rejected(self, tmp_path: Path) -> None:
+        """Codex inherits tools from session config.toml — per-agent tools is a
+        Claude/Gemini/OpenCode dialect leak and must fail."""
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        path = self._write_agent(tmp_path, extra='tools = ["Read"]\n')
+        violations = mod.validate_codex_agent(path)
+        assert any("tools" in v.message.lower() and "inherit" in v.message.lower() for v in violations)
+
+    def test_top_level_mode_rejected(self, tmp_path: Path) -> None:
+        """`mode` is an OpenCode dialect leak; Codex has no mode concept."""
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        path = self._write_agent(tmp_path, extra='mode = "subagent"\n')
+        violations = mod.validate_codex_agent(path)
+        assert any("mode" in v.message.lower() and "codex" in v.message.lower() for v in violations)
+
+    def test_malformed_toml_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        agents_dir = tmp_path / ".codex" / "agents"
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        path = agents_dir / "bad.toml"
+        path.write_text('name = "bad"\ndescription = unterminated\n')
+        violations = mod.validate_codex_agent(path)
+        assert any("parse error" in v.message.lower() for v in violations)
+
+    def test_name_mismatch_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        path = self._write_agent(tmp_path, name="file-stem", frontmatter_name="other-name")
+        violations = mod.validate_codex_agent(path)
+        assert any("name" in v.message.lower() for v in violations)
+
+    def test_missing_developer_instructions_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        agents_dir = tmp_path / ".codex" / "agents"
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        path = agents_dir / "noinst.toml"
+        path.write_text('name = "noinst"\ndescription = "An agent."\n')
+        violations = mod.validate_codex_agent(path)
+        assert any("developer_instructions" in v.message.lower() for v in violations)
+
+    def test_description_too_long_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        path = self._write_agent(tmp_path, description="x" * 1025)
+        violations = mod.validate_codex_agent(path)
+        assert any("1025" in v.message for v in violations)
+
+    def test_invalid_nickname_candidates_rejected(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        path = self._write_agent(tmp_path, extra='nickname_candidates = ["valid", "has!bang"]\n')
+        violations = mod.validate_codex_agent(path)
+        assert any("nickname" in v.message.lower() for v in violations)
 
 
 class TestAgentsLeakGuard:

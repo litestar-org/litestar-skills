@@ -66,6 +66,7 @@ COMMANDS_DIR = REPO_ROOT / "commands"
 AGENTS_DIR = REPO_ROOT / "agents"
 OPENCODE_AGENTS_DIR = REPO_ROOT / ".opencode" / "agents"
 CLAUDE_AGENTS_DIR = REPO_ROOT / ".claude-plugin" / "agents"
+CODEX_AGENTS_DIR = REPO_ROOT / ".codex" / "agents"
 SHIPPED_ROOT_FILES = ("AGENTS.md", "CONTRIBUTING.md", "README.md", "GEMINI.md")
 
 MAX_DESCRIPTION_CHARS = 1024
@@ -198,6 +199,10 @@ VALID_GEMINI_TOOLS = frozenset(
     }
 )
 _GEMINI_WILDCARD_PATTERN = re.compile(r"^(?:\*|mcp_[A-Za-z0-9_-]*\*?)$")
+
+# Codex nickname_candidates entries: ASCII letters, digits, spaces, hyphens,
+# underscores only. Per https://developers.openai.com/codex/subagents.
+_CODEX_NICKNAME_PATTERN = re.compile(r"^[A-Za-z0-9 _-]+$")
 
 
 class Violation(NamedTuple):
@@ -418,6 +423,72 @@ def validate_claude_agent(path: Path) -> list[Violation]:
     return violations
 
 
+def validate_codex_agent(path: Path) -> list[Violation]:
+    """Validate a Codex CLI subagent file under ``.codex/agents/``.
+
+    Codex schema (per https://developers.openai.com/codex/subagents) is pure
+    TOML: the prompt body lives in ``developer_instructions`` (string), and
+    tools are inherited from the session's ``config.toml`` — Codex does NOT
+    accept a per-agent ``tools`` allowlist. ``mode`` is an OpenCode dialect
+    and is also rejected.
+    """
+    violations: list[Violation] = []
+    try:
+        data = _toml_loads(path.read_text(encoding="utf-8"))
+    except _TOMLDecodeError as exc:
+        return [Violation(path, 1, f"TOML parse error: {exc}")]
+    expected_name = path.stem
+    fm_name = data.get("name")
+    if fm_name != expected_name:
+        violations.append(Violation(path, 1, f"name {fm_name!r} != filename stem {expected_name!r}"))
+    violations.extend(_check_description(data.get("description"), path, 1))
+    instructions = data.get("developer_instructions")
+    if not isinstance(instructions, str) or not instructions.strip():
+        violations.append(Violation(path, 1, "developer_instructions missing or empty"))
+    if "tools" in data:
+        violations.append(
+            Violation(
+                path,
+                1,
+                "tools key not allowed (Codex inherits tools from session config.toml)",
+            )
+        )
+    if "mode" in data:
+        violations.append(
+            Violation(
+                path,
+                1,
+                "mode key not allowed (Codex has no mode concept; OpenCode dialect leak)",
+            )
+        )
+    nicknames = data.get("nickname_candidates")
+    if nicknames is not None:
+        if not isinstance(nicknames, list) or not nicknames:
+            violations.append(Violation(path, 1, "nickname_candidates must be a non-empty list"))
+        else:
+            nicknames_typed = cast("list[Any]", nicknames)
+            seen: set[str] = set()
+            for entry in nicknames_typed:
+                if not isinstance(entry, str):
+                    type_name = type(entry).__name__
+                    violations.append(
+                        Violation(path, 1, f"nickname_candidates entry must be a string, got {type_name}")
+                    )
+                    continue
+                if entry in seen:
+                    violations.append(Violation(path, 1, f"nickname_candidates entry {entry!r} is duplicated"))
+                seen.add(entry)
+                if not _CODEX_NICKNAME_PATTERN.match(entry):
+                    violations.append(
+                        Violation(
+                            path,
+                            1,
+                            f"nickname_candidates entry {entry!r} must match [A-Za-z0-9 _-]+",
+                        )
+                    )
+    return violations
+
+
 def check_agents_leak(files: Iterable[Path]) -> list[Violation]:
     violations: list[Violation] = []
     for path in files:
@@ -500,6 +571,11 @@ def iter_claude_agents() -> Iterator[Path]:
         yield from sorted(CLAUDE_AGENTS_DIR.glob("*.md"))
 
 
+def iter_codex_agents() -> Iterator[Path]:
+    if CODEX_AGENTS_DIR.is_dir():
+        yield from sorted(CODEX_AGENTS_DIR.glob("*.toml"))
+
+
 def iter_all_shipped_files() -> Iterator[Path]:
     if SKILLS_DIR.is_dir():
         yield from sorted(SKILLS_DIR.rglob("*.md"))
@@ -511,6 +587,8 @@ def iter_all_shipped_files() -> Iterator[Path]:
         yield from sorted(OPENCODE_AGENTS_DIR.rglob("*.md"))
     if CLAUDE_AGENTS_DIR.is_dir():
         yield from sorted(CLAUDE_AGENTS_DIR.rglob("*.md"))
+    if CODEX_AGENTS_DIR.is_dir():
+        yield from sorted(CODEX_AGENTS_DIR.rglob("*.toml"))
     for name in SHIPPED_ROOT_FILES:
         candidate = REPO_ROOT / name
         if candidate.is_file():
@@ -544,6 +622,7 @@ def main() -> int:
     gemini_agents = list(iter_gemini_agents())
     opencode_agents = list(iter_opencode_agents())
     claude_agents = list(iter_claude_agents())
+    codex_agents = list(iter_codex_agents())
     for skill_path in skills:
         all_violations.extend(validate_skill(skill_path))
     for cmd_path in commands:
@@ -554,6 +633,8 @@ def main() -> int:
         all_violations.extend(validate_opencode_agent(agent_path))
     for agent_path in claude_agents:
         all_violations.extend(validate_claude_agent(agent_path))
+    for agent_path in codex_agents:
+        all_violations.extend(validate_codex_agent(agent_path))
     shipped = list(iter_all_shipped_files())
     all_violations.extend(check_agents_leak(shipped))
     all_violations.extend(check_forbidden_vocab(shipped))
@@ -561,7 +642,7 @@ def main() -> int:
         _print_violations(all_violations)
         print(f"\n{len(all_violations)} violation(s)", file=sys.stderr)
         return 1
-    agent_total = len(gemini_agents) + len(opencode_agents) + len(claude_agents)
+    agent_total = len(gemini_agents) + len(opencode_agents) + len(claude_agents) + len(codex_agents)
     print(f"[ OK ] validated {len(skills)} skills, {len(commands)} commands, {agent_total} agents — no violations")
     return 0
 
