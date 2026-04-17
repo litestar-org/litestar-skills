@@ -1,5 +1,7 @@
 # Contributing to `litestar-skills`
 
+See [`docs/roadmap.md`](docs/roadmap.md) for shipped features, v0.2 candidates, and deferred items with graduation triggers.
+
 ## Adding a Skill
 
 1. Copy `templates/skill-template/` to `skills/<your-skill-name>/`.
