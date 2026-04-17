@@ -1,0 +1,10 @@
+# litestar-skills — Codex CLI configuration
+#
+# v0.0.1 scaffold: no MCP servers shipped yet. Populated when MCP servers
+# land in v0.2+.
+#
+# Example (commented out):
+# [mcp_servers.litestar_docs]
+# command = "uvx"
+# args = ["litestar-skills-mcp-docs"]
+# startup_timeout_sec = 30

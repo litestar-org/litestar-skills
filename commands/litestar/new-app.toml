@@ -1,0 +1,174 @@
+description = "Scaffold a new Litestar app — asks stack questions (data access, DI, settings, frontend, deploy) before generating so every decision matches the user's chosen path"
+prompt = """
+# Scaffold a new Litestar application
+
+You are scaffolding a new Litestar application. The first-party ecosystem supports several valid paths for each concern — ask the user about their stack *before* generating code so the scaffold matches their project, not a hard-coded default.
+
+## Step 1 — Gather stack decisions (one question at a time)
+
+Ask the user each of these, one at a time. Record the answers as variables to drive downstream generation.
+
+1. **Project name** — kebab-case slug (e.g., `my-api`). Stored as `{project_name}` / `{project_slug}`.
+
+2. **Data access layer** — one of:
+   - `advanced-alchemy` (default — opinionated ORM, repository services, audit bases, Alembic integration)
+   - `sqlspec` (direct SQL, 15+ driver adapters, Arrow support, multi-backend)
+   - `raw-sqlalchemy` (existing SA Core / ORM codebase, no repository abstraction)
+   - `none` (no database — API-only scaffolds stop here for DB wiring)
+   Store as `{data_access}`.
+
+3. **Dependency injection** — one of:
+   - `provide` (default — Litestar built-in `Provide()`, best for small/mid apps)
+   - `dishka` (request/session/app scope management, best for enterprise-scale)
+   Store as `{di}`.
+
+4. **Settings pattern** — one of:
+   - `dataclass` (default — `@dataclass(frozen=True)` + `get_env()` + `@lru_cache`; no extra deps)
+   - `pydantic-settings` (pick when Pydantic is already a project dep)
+   Store as `{settings}`.
+
+5. **Serialization / DTO layer** — one of:
+   - `msgspec` (default — high-perf, canonical for Litestar)
+   - `pydantic` (pick when Pydantic is already a project dep or DTOs are shared with non-Litestar services)
+   Store as `{serialization}`.
+
+6. **Database engine** — PostgreSQL (default), MySQL, SQLite, Oracle, DuckDB, or `none`. Store as `{db_engine}`.
+
+7. **Background tasks** — include `litestar-saq`? (default: yes). If yes, ask broker:
+   - `redis` (default when Redis is already in the stack — also required if the frontend needs sessions / cache via Redis)
+   - `postgresql` (PG-only deploy; use the same Postgres as the app DB)
+   Store as `{saq_broker}`.
+
+8. **Realtime / WebSockets — Channels backend** (skip if not needed):
+   - `memory` (dev / single-process)
+   - `redis` (Redis already in-stack)
+   - `sqlspec-pg-listen` (sqlspec + PG stack, no Redis)
+   - `advanced-alchemy-session` (AA + PG stack)
+   Store as `{channels_backend}`.
+
+9. **Frontend approach** — one of: `none` (API-only), `htmx-jinja`, `inertia-react`, `inertia-vue`, `spa-react`, `spa-vue`, `spa-svelte`, `spa-angular`. Store as `{frontend}`.
+
+10. **ASGI server** — `granian` (default) or `uvicorn`. Store as `{asgi_server}`.
+
+11. **Deployment target** — one of: `docker`, `railway`, `cloud-run`, `gke`, `systemd`, `pyapp` (single binary), `none`. Store as `{deploy}`.
+
+12. **Testing database fixtures** — `pytest-databases` (default — real containers) or `manual-fixtures` (mocks / SQLite in-memory). Store as `{testing}`.
+
+After collecting answers, confirm the full stack choice back to the user in a short summary (e.g., `advanced-alchemy + provide + dataclass + msgspec + postgres + saq-redis + granian + docker`) and ask for final confirmation before generating.
+
+## Step 2 — Generate the project structure
+
+Base layout (universal, independent of stack choices):
+
+```
+{project_name}/
+├── src/py/{project_slug}/
+│   ├── __init__.py
+│   ├── server/
+│   │   ├── app.py              # Litestar() with plugins
+│   │   ├── plugins.py          # {asgi_server} plugin, SAQ (if enabled), Vite (if frontend), etc.
+│   │   └── core.py             # AppSettings composition, exception handlers, ApplicationCore
+│   ├── lib/
+│   │   ├── exceptions.py       # ApplicationError hierarchy
+│   │   ├── schema.py           # CamelizedBaseStruct (msgspec) or BaseModel (pydantic)
+│   │   ├── settings.py         # @dataclass OR pydantic_settings.BaseSettings — per {settings}
+│   │   └── deps.py             # Shared DI providers (Provide or Dishka per {di})
+│   ├── db/                     # Present only if {data_access} != "none"
+│   │   ├── models/__init__.py  # SA models (advanced-alchemy / raw-sa) OR schema pack (sqlspec)
+│   │   └── migrations/         # Alembic (advanced-alchemy / raw-sa) OR sqlspec migrations
+│   └── domain/
+│       └── {example_domain}/   # controllers.py, services.py, schemas.py, guards.py — branched per {data_access}
+├── src/js/                     # Only if {frontend} != "none"
+├── tests/
+│   ├── conftest.py             # pytest-databases or manual fixtures per {testing}
+│   ├── unit/
+│   └── integration/
+├── pyproject.toml              # uv + hatchling + ruff + mypy + pyright + bump-my-version
+├── package.json                # bun — only if {frontend} != "none"
+├── vite.config.ts              # litestar-vite-plugin — only if {frontend} != "none"
+├── Makefile                    # Canonical make install / make check / make test / make lint targets
+├── Dockerfile / railway.toml / service.yaml  # Per {deploy}
+└── README.md
+```
+
+## Step 3 — Apply branch-specific patterns
+
+Each branch below is driven by the answers from Step 1. Do NOT generate patterns from a branch the user didn't pick.
+
+### Data access ({data_access})
+
+- `advanced-alchemy`: subclass `SQLAlchemyAsyncRepositoryService` for the example domain. Wire `SQLAlchemyPlugin` + `SQLAlchemyAsyncConfig` in `server/plugins.py`.
+- `sqlspec`: subclass `SQLSpecAsyncService` and use driver methods with explicit SQL. Wire the `sqlspec` config in `server/plugins.py`.
+- `raw-sqlalchemy`: thin service class taking `AsyncSession` via DI; use `async_sessionmaker` in `server/plugins.py`.
+- `none`: skip `db/`, skip example domain DB wiring.
+
+### DI ({di})
+
+- `provide`: register providers in `server/app.py` `dependencies={...}`.
+- `dishka`: scaffold a `lib/di.py` with a `Provider` class + `setup_dishka(app, container)` call in `server/app.py`.
+
+### Settings ({settings})
+
+- `dataclass`: `@dataclass(frozen=True)` hierarchies + `get_env()` + `@lru_cache` in `lib/settings.py`.
+- `pydantic-settings`: `BaseSettings` subclasses with `SettingsConfigDict(env_prefix=...)` + `@lru_cache`.
+
+### Serialization ({serialization})
+
+- `msgspec`: `CamelizedBaseStruct` base with `Meta(rename="camel")` in `lib/schema.py`; all DTOs extend it.
+- `pydantic`: `BaseModel` with `alias_generator=to_camel` + `ConfigDict(populate_by_name=True)` in `lib/schema.py`.
+
+### Background tasks ({saq_broker})
+
+- `redis`: `SAQConfig(dsn=settings.redis.url, ...)` — also adds `RedisSettings` to `lib/settings.py`.
+- `postgresql`: `SAQConfig(dsn=settings.database.url, ...)` — single Postgres covers app data + job queue.
+- Skip SAQ entirely if the user answered "no" to Q7.
+
+### Channels backend ({channels_backend})
+
+Only wire a `ChannelsPlugin` if the user picked a backend. Import path is per-branch — see `skills/litestar/references/websockets.md` for exact symbols.
+
+### Frontend ({frontend})
+
+- `none`: no `src/js/`, no Vite plugin.
+- `htmx-jinja`: add `TemplatesPlugin` with Jinja; add `hx-` attributes to scaffold pages.
+- `inertia-*` / `spa-*`: add `VitePlugin` + frontend framework scaffold under `src/js/`.
+
+### ASGI server ({asgi_server})
+
+- `granian`: `GranianPlugin()` in `server/plugins.py`; dev command `litestar run`.
+- `uvicorn`: no plugin; dev command `uvicorn app:app --reload`.
+
+### Deployment ({deploy})
+
+- `docker`: Dockerfile with multi-stage build (uv → granian).
+- `railway`: `railway.toml` + Procfile-style start.
+- `cloud-run`: Dockerfile + `service.yaml` for Cloud Run.
+- `gke`: `k8s/` directory with Deployment + Service + HPA.
+- `systemd`: `deploy/systemd/{slug}.service` unit file.
+- `pyapp`: `pyapp.toml` config for single-binary packaging (see `skills/pyapp`).
+- `none`: no deployment artifacts.
+
+### Testing ({testing})
+
+- `pytest-databases`: `conftest.py` with the `pytest-databases` fixtures matching `{db_engine}`.
+- `manual-fixtures`: lightweight in-memory SQLite or mock setup.
+
+## Step 4 — Universal patterns (independent of stack)
+
+Apply these regardless of answers:
+
+- **Guards at Controller class level** for auth.
+- **Domain-clustered Controllers** — `/api/{domain}/` — not HTTP-method clustering.
+- **`ApplicationError` hierarchy** in `lib/exceptions.py`; handlers registered on the app.
+- **Canonical make targets** — `make install`, `make lint`, `make test`, `make check`.
+- **`from __future__ import annotations`** at the top of every application module (app code; NOT library code that exposes runtime-introspected types).
+
+## Step 5 — After generating
+
+1. Create each file with real, runnable content (not stubs).
+2. Scaffold one example domain (e.g., `posts`, `tasks`, `orders` — let the user pick or default to `posts`) using the domain structure from `/litestar:new-domain`. Pass the same stack answers so the domain scaffold matches.
+3. Run `make install` to install dependencies.
+4. Run `make check` to verify the scaffold is clean.
+5. Explain what was created and where to start coding, citing the chosen stack.
+6. Tell the user: "Run `/litestar:new-domain` to add more domains to your app — it will ask for a stack too, keep answers consistent."
+"""

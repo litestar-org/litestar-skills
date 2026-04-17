@@ -1,0 +1,190 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "litestar-skills"
+version = "0.1.0"
+description = "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Cody Fincher", email = "cofin@litestar.dev" },
+]
+keywords = ["litestar", "skills", "agent", "ai", "claude", "gemini", "codex", "opencode", "cursor", "mcp"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.7",
+  "mypy>=1.11",
+  "pyright>=1.1.380",
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  "bump-my-version>=0.28",
+  "pyyaml>=6.0",
+  "types-pyyaml>=6.0",
+  "tomli>=2.0 ; python_version < '3.11'",
+]
+
+[project.urls]
+Homepage = "https://github.com/cofin/litestar-skills"
+Repository = "https://github.com/cofin/litestar-skills"
+Issues = "https://github.com/cofin/litestar-skills/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tools"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "tools",
+  "skills",
+  "commands",
+  "agents",
+  "mcp-servers",
+  "templates",
+  "hooks",
+  ".claude-plugin",
+  ".codex-plugin",
+  ".cursor-plugin",
+  "gemini-extension.json",
+  "GEMINI.md",
+  "AGENTS.md",
+  "README.md",
+  "LICENSE",
+]
+
+# ============================================================
+# Ruff — linting + formatting
+# ============================================================
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+extend-exclude = [".agents", ".beads", "node_modules"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "A", "S", "C4", "T20", "RET", "SIM", "ARG"]
+ignore = [
+  "S101",  # allow assert in tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "ARG", "T201"]
+"tools/**" = ["T201"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ============================================================
+# mypy — strict type checking
+# ============================================================
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+exclude = ["\\.agents/", "\\.beads/", "node_modules/"]
+
+# ============================================================
+# pyright — secondary strict type checking
+# ============================================================
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "strict"
+include = ["tools", "tests"]
+exclude = [".agents", ".beads", "node_modules", "**/__pycache__"]
+
+# ============================================================
+# pytest
+# ============================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+  "integration: marks tests as integration tests",
+]
+
+# ============================================================
+# Coverage
+# ============================================================
+[tool.coverage.run]
+source = ["tools"]
+branch = true
+omit = ["*/tests/*", "*/.agents/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+]
+
+# ============================================================
+# bump-my-version — atomic multi-manifest version sync
+# ============================================================
+[tool.bumpversion]
+current_version = "0.1.0"
+commit = true
+tag = true
+tag_name = "v{new_version}"
+allow_dirty = false
+message = "chore: bump version {current_version} → {new_version}"
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "package.json"
+search = '"version": "{current_version}"'
+replace = '"version": "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = ".claude-plugin/plugin.json"
+search = '"version": "{current_version}"'
+replace = '"version": "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = ".claude-plugin/marketplace.json"
+search = '"version": "{current_version}"'
+replace = '"version": "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = ".codex-plugin/plugin.json"
+search = '"version": "{current_version}"'
+replace = '"version": "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = ".cursor-plugin/plugin.json"
+search = '"version": "{current_version}"'
+replace = '"version": "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "gemini-extension.json"
+search = '"version": "{current_version}"'
+replace = '"version": "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "tools/install.sh"
+search = 'VERSION="{current_version}"'
+replace = 'VERSION="{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "tools/install.ps1"
+search = "$script:Version = '{current_version}'"
+replace = "$script:Version = '{new_version}'"
