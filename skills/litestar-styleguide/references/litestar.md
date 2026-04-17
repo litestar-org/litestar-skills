@@ -258,7 +258,7 @@ litestar assets status         # Check integration status
 ## Code Style Rules
 
 - Use PEP 604 for unions: `T | None` (not `Optional[T]`)
-- **Never** use `from __future__ import annotations`
+- `from __future__ import annotations` is a **library-author guardrail, not a consumer rule**. Application code (handlers, services, tests — the Litestar apps you're building) MAY and typically SHOULD use it. Avoid it only in modules that define runtime-introspected types: `msgspec.Struct` subclasses, SQLAlchemy 2.0 `Mapped[...]` models, Dishka `@provide` providers, SAQ `@task` / `CronJob` registrations, Google ADK tool definitions.
 - Use Google-style docstrings
 - All I/O operations should be async
 

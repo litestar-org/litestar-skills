@@ -22,7 +22,7 @@ Skills auto-activate on Litestar-relevant signals in the workspace:
 See [`AGENTS.md`](AGENTS.md) for:
 
 - Litestar-first-party bias (use `litestar-granian` / `litestar-saq` / `sqlspec` / `advanced-alchemy` / `msgspec` / `dishka` by default)
-- Code style (PEP 604 unions, no `from __future__ import annotations`, async all I/O)
+- Code style (PEP 604 unions, async all I/O; `from __future__ import annotations` is a library-author guardrail — application code MAY use it, only modules that define runtime-introspected types avoid it)
 - Skill authoring conventions (XML-tagged sections, frontmatter rules)
 
 ## Flow Framework Compatibility

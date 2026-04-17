@@ -214,7 +214,7 @@ Confirm `/schema/openapi.json` or the Swagger UI at `/schema` reflects the corre
 - **Pagination — match your stack:** `advanced-alchemy`'s `create_filter_dependencies` + `OffsetPagination[T]`; `sqlspec`'s `LimitOffsetFilter` + `OrderByFilter`; or raw `.limit()` / `.offset()` in plain-SA Core. Never hand-roll `limit` / `offset` *query params* in a handler — the filter dep / filter-object pattern owns that.
 - **Custom exception hierarchy**: extend `ApplicationError` in `lib/exceptions.py`, register handlers on the app via `app_config.exception_handlers = {ExceptionType: handler_func}`. Never inline `try` / `except` in handlers — let exceptions bubble to the app-level handler.
 - **Settings — match your stack:** `@dataclass(frozen=True)` + `get_env()` + `@lru_cache` for fresh projects (canonical default; no extra deps), OR `pydantic_settings.BaseSettings` when Pydantic is already a dep of the project. Don't use `msgspec.Struct` for config — it lacks env-loading affordances. Whichever path, the settings object is cached once per process.
-- **`from __future__ import annotations` is a LIBRARY-AUTHOR guardrail, not a consumer rule.** Litestar libraries (this repo, advanced-alchemy, sqlspec, msgspec, dishka, etc.) avoid it in modules that define runtime-introspected types. **Application code MAY use `from __future__ import annotations`** — canonical Litestar apps use it in 100+ files per repo.
+- **`from __future__ import annotations` is a LIBRARY-AUTHOR guardrail, not a consumer rule.** Application code — **including Litestar handler modules, service modules, and test modules** — MAY and typically SHOULD use it; canonical Litestar apps use it in 100+ files. The narrow exception is modules that **define** runtime-introspected types whose decorators/metaclasses read annotations at class-creation time: `msgspec.Struct` subclasses (DTO definitions), SQLAlchemy 2.0 `Mapped[...]` models (advanced-alchemy), `SQLSpec` adapter configs, Dishka `@provide` providers, SAQ `@task` / `CronJob` registrations, ADK tool registries. Handler modules that *use* a DTO or *inject* a provider are consumer code — unrestricted.
 - **Async all I/O** — `async def` handlers with awaited DB / HTTP calls. Sync blocks the event loop.
 - **Cluster Controllers by domain** — `/api/accounts`, `/api/teams`, `/api/admin` — not by HTTP method. Each domain gets its own Controller class (or several) sharing a path prefix.
 - **Granian over uvicorn** — `litestar-granian` is the default ASGI server. Use uvicorn only when Granian's HTTP/2 behavior is incompatible with your deploy target.
@@ -240,7 +240,7 @@ Before delivering Litestar code, verify:
 - [ ] Controllers cluster by domain (not HTTP method); shared `path` + `dependencies` + `guards`
 - [ ] OpenAPI schema at `/schema/openapi.json` reflects the intended request / response types
 - [ ] First-party plugins used where available (Granian / SAQ / Vite / MCP / Email / AsyncPG / OracleDB)
-- [ ] For library-author changes: no `from __future__ import annotations` in modules that define Litestar handlers, DTOs, DI providers, or any runtime-introspected types
+- [ ] `from __future__ import annotations` is absent ONLY in modules that **define** runtime-introspected types (`msgspec.Struct` subclasses, SQLAlchemy `Mapped[...]` models, Dishka `@provide` providers, SAQ `@task` / `CronJob`, ADK tools). Handler / service / test / settings modules MAY use it freely.
 
 </validation>
 

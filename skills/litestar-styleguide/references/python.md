@@ -11,9 +11,15 @@ Modern Python development standards with async-first patterns.
 def get_user(id: int) -> User | None:
     ...
 
-# Never use Optional or TYPE_CHECKING imports
+# Avoid typing.Optional — prefer PEP 604
 # Bad: from typing import Optional
-# Bad: from __future__ import annotations
+
+# `from __future__ import annotations` is a library-author guardrail, NOT a
+# consumer rule. Application code MAY use it — canonical Litestar apps use it
+# in 100+ files. Avoid it only in modules that define runtime-introspected
+# types (msgspec.Struct, SQLAlchemy 2.0 `Mapped[...]`, Dishka `@provide`,
+# SAQ `@task`, ADK tool registries) — those decorators/metaclasses read
+# annotations at class-creation time and need the real types, not strings.
 
 # Use generic syntax for collections
 items: list[str] = []

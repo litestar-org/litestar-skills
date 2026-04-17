@@ -52,7 +52,7 @@ git push --tags
 
 ## Code Style
 
-- **Python 3.10+**, PEP 604 unions (`T | None`), never `from __future__ import annotations`
+- **Python 3.10+**, PEP 604 unions (`T | None`). `from __future__ import annotations` is a library-author guardrail, not a consumer rule — application code MAY use it. Avoid it only in modules that define runtime-introspected types (msgspec.Struct, SQLAlchemy 2.0 `Mapped[...]`, Dishka `@provide`, SAQ `@task`, ADK tool registries).
 - **Linting:** `ruff` + `oxlint` + `markdownlint-cli2`
 - **Type-checking:** `mypy` + `pyright` (both strict)
 - **Pre-commit:** `prek install` (runs on every commit)
