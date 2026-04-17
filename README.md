@@ -15,7 +15,7 @@ Pick your host and run the one command below. If you use several agents, skip to
 ### Claude Code
 
 ```text
-/plugin marketplace add cofin/litestar-skills
+/plugin marketplace add litestar-org/litestar-skills
 /plugin install litestar-skills@litestar-marketplace
 ```
 
@@ -24,7 +24,7 @@ The `/plugin` commands run **inside** a Claude Code session — the installer ca
 ### Gemini CLI
 
 ```bash
-gemini extensions install https://github.com/cofin/litestar-skills --auto-update
+gemini extensions install https://github.com/litestar-org/litestar-skills --auto-update
 ```
 
 Gemini auto-indexes this repo into its [extension gallery](https://geminicli.com/extensions/) via the `gemini-cli-extension` GitHub topic.
@@ -32,7 +32,7 @@ Gemini auto-indexes this repo into its [extension gallery](https://geminicli.com
 ### Codex CLI
 
 ```bash
-git clone https://github.com/cofin/litestar-skills ~/.codex/plugins/litestar-skills
+git clone https://github.com/litestar-org/litestar-skills ~/.codex/plugins/litestar-skills
 ```
 
 Then inside Codex: `$skill list | grep litestar`. See [`.codex/INSTALL.md`](.codex/INSTALL.md) for project-scoped install.
@@ -40,7 +40,7 @@ Then inside Codex: `$skill list | grep litestar`. See [`.codex/INSTALL.md`](.cod
 ### OpenCode
 
 ```bash
-git clone https://github.com/cofin/litestar-skills ~/.config/opencode/litestar-skills
+git clone https://github.com/litestar-org/litestar-skills ~/.config/opencode/litestar-skills
 ln -sf ~/.config/opencode/litestar-skills/.opencode/plugins/litestar-skills.js \
        ~/.config/opencode/plugins/litestar-skills.js
 ```
@@ -50,13 +50,13 @@ OpenCode also reads `.claude/skills/` and `.agents/skills/` natively — for a p
 ### Cursor
 
 ```text
-Cursor → Settings → Rules → Add Remote Rule → https://github.com/cofin/litestar-skills
+Cursor → Settings → Rules → Add Remote Rule → https://github.com/litestar-org/litestar-skills
 ```
 
 ### VS Code / GitHub Copilot
 
 ```bash
-git clone https://github.com/cofin/litestar-skills ~/.copilot/litestar-skills
+git clone https://github.com/litestar-org/litestar-skills ~/.copilot/litestar-skills
 ```
 
 Then in VS Code `settings.json`:
@@ -74,7 +74,7 @@ Then in VS Code `settings.json`:
 Installs for every supported CLI detected on your system. Auto-installs for Gemini CLI, Codex CLI, and OpenCode; prints instructions for Claude Code, Cursor, and VS Code.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cofin/litestar-skills/main/tools/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/main/tools/install.sh | bash
 ```
 
 <!-- markdownlint-disable -->
@@ -86,19 +86,19 @@ curl -fsSL https://raw.githubusercontent.com/cofin/litestar-skills/main/tools/in
 
 ```bash
 # Preview without executing
-curl -fsSL https://raw.githubusercontent.com/cofin/litestar-skills/main/tools/install.sh | bash -s -- --dry-run
+curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/main/tools/install.sh | bash -s -- --dry-run
 
 # Install for specific hosts only
-curl -fsSL https://raw.githubusercontent.com/cofin/litestar-skills/main/tools/install.sh | bash -s -- --only gemini --only codex
+curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/main/tools/install.sh | bash -s -- --only gemini --only codex
 
 # Also whitelist the Claude Code marketplace in ~/.claude/settings.json
-curl -fsSL https://raw.githubusercontent.com/cofin/litestar-skills/main/tools/install.sh | bash -s -- --claude-settings
+curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/main/tools/install.sh | bash -s -- --claude-settings
 ```
 
 **If you'd rather not pipe to `bash`, clone first:**
 
 ```bash
-git clone https://github.com/cofin/litestar-skills
+git clone https://github.com/litestar-org/litestar-skills
 cd litestar-skills
 ./tools/install.sh --help
 ```
@@ -135,7 +135,7 @@ Topics are re-applied on every tagged release via `.github/workflows/release.yml
 ## Uninstall
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cofin/litestar-skills/main/tools/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/main/tools/uninstall.sh | bash
 ```
 
 Or from a clone: `./tools/uninstall.sh --help`. Same `--only`, `--skip`, `--dry-run`, `--force`, `--claude-settings` flags as the installer.
@@ -153,13 +153,13 @@ Per-host uninstall:
 
 **"No supported CLIs detected"** — none of `claude`, `gemini`, `codex`, `opencode`, `cursor`, or `code` are on `$PATH`. Install at least one and re-run.
 
-**Symlink fails on Windows** — run the installer under WSL or Git Bash. Native Windows support is [backlog](https://github.com/cofin/litestar-skills).
+**Symlink fails on Windows** — run the installer under WSL or Git Bash. Native Windows support is [backlog](https://github.com/litestar-org/litestar-skills).
 
 **Permission denied on `~/.codex/plugins/`** — do NOT run with `sudo`; the installer refuses root. Ensure your user owns `~/.codex/` and `~/.config/`.
 
 **Gemini says extension already exists** — the installer upgrades automatically. Use `--force` to re-install from scratch.
 
-**Claude Code can't find the marketplace** — re-run with `--claude-settings` to whitelist, or inside Claude Code manually: `/plugin marketplace add cofin/litestar-skills`.
+**Claude Code can't find the marketplace** — re-run with `--claude-settings` to whitelist, or inside Claude Code manually: `/plugin marketplace add litestar-org/litestar-skills`.
 
 ## What's In This Repo
 

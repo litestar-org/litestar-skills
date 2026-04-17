@@ -3,8 +3,8 @@
   "description": "The Litestar Marketplace — opinionated first-party skills, plugins, subagents, commands, and MCP servers for Litestar and its ecosystem",
   "version": "0.1.1",
   "owner": {
-    "name": "cofin",
-    "url": "https://github.com/cofin"
+    "name": "litestar-org",
+    "url": "https://github.com/litestar-org"
   },
   "plugins": [
     {
@@ -16,7 +16,7 @@
         "name": "Cody Fincher",
         "email": "cofin@litestar.dev"
       },
-      "homepage": "https://github.com/cofin/litestar-skills",
+      "homepage": "https://github.com/litestar-org/litestar-skills",
       "license": "MIT",
       "keywords": ["litestar", "skills", "sqlspec", "advanced-alchemy", "msgspec", "dishka", "granian", "saq", "vite", "mcp"],
       "category": "Development"

@@ -6,13 +6,13 @@
   "type": "module",
   "license": "MIT",
   "author": "Cody Fincher <cofin@litestar.dev>",
-  "homepage": "https://github.com/cofin/litestar-skills",
+  "homepage": "https://github.com/litestar-org/litestar-skills",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cofin/litestar-skills.git"
+    "url": "git+https://github.com/litestar-org/litestar-skills.git"
   },
   "bugs": {
-    "url": "https://github.com/cofin/litestar-skills/issues"
+    "url": "https://github.com/litestar-org/litestar-skills/issues"
   },
   "keywords": [
     "litestar",

@@ -39,9 +39,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/cofin/litestar-skills"
-Repository = "https://github.com/cofin/litestar-skills"
-Issues = "https://github.com/cofin/litestar-skills/issues"
+Homepage = "https://github.com/litestar-org/litestar-skills"
+Repository = "https://github.com/litestar-org/litestar-skills"
+Issues = "https://github.com/litestar-org/litestar-skills/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["tools"]

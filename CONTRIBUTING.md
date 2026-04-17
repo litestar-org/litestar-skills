@@ -60,4 +60,4 @@ git push --tags
 
 ## Reporting Issues
 
-Use GitHub Issues at <https://github.com/cofin/litestar-skills/issues>. For Litestar framework bugs (not skill-content bugs), file at <https://github.com/litestar-org/litestar/issues>.
+Use GitHub Issues at <https://github.com/litestar-org/litestar-skills/issues>. For Litestar framework bugs (not skill-content bugs), file at <https://github.com/litestar-org/litestar/issues>.

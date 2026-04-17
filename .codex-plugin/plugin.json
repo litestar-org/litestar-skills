@@ -6,8 +6,8 @@
     "name": "Cody Fincher",
     "email": "cofin@litestar.dev"
   },
-  "homepage": "https://github.com/cofin/litestar-skills",
-  "repository": "https://github.com/cofin/litestar-skills",
+  "homepage": "https://github.com/litestar-org/litestar-skills",
+  "repository": "https://github.com/litestar-org/litestar-skills",
   "license": "MIT",
   "keywords": ["litestar", "skills", "agent", "ai", "sqlspec", "advanced-alchemy"],
   "skills": "./skills/",

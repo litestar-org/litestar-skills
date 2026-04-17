@@ -9,7 +9,7 @@ Before running `make release`, every box below must be checked:
 - [ ] `make check` is green on `main` (ruff, mypy, pyright, markdownlint, oxlint, shellcheck).
 - [ ] Every closed PRD chapter is marked `[x]` in its `spec.md`, and every open chapter is flagged `[~]` (in-flight) or removed from the launch blocker list.
 - [ ] GitHub Actions has **no failing runs** on `main` in the last 10 pushes (`gh run list --branch main --limit 10`).
-- [ ] No open issues labeled `launch-blocker` on `github.com/cofin/litestar-skills/issues`.
+- [ ] No open issues labeled `launch-blocker` on `github.com/litestar-org/litestar-skills/issues`.
 
 ## Tag-day playbook
 
@@ -38,9 +38,9 @@ Within 48 hours of tag push, reproduce a cold install on a fresh environment. Th
 
 ```bash
 # On a clean VM (GitHub Codespace, fresh Docker container, or spare laptop):
-curl -fsSL https://raw.githubusercontent.com/cofin/litestar-skills/main/tools/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/main/tools/install.sh | bash
 
-# Open Claude Code, run:  /plugin marketplace add cofin/litestar-skills
+# Open Claude Code, run:  /plugin marketplace add litestar-org/litestar-skills
 # Then:                    /plugin install litestar-skills@litestar-marketplace
 # Confirm the plugin appears in /plugin list.
 
@@ -63,7 +63,7 @@ Light-touch monitoring. Check once per weekday; log findings in the graduation l
 - [ ] Repo topics still applied: `gh repo view --json repositoryTopics` — someone with write access could have removed them inadvertently.
 - [ ] Gemini extensions gallery still lists the repo: <https://geminicli.com/extensions/>.
 - [ ] At least **one external user reports a successful install** — this is the trigger that unlocks the v0.2 curated-catalog PR wave (see `docs/roadmap.md` §v0.2 candidates).
-- [ ] `gh api repos/cofin/litestar-skills/traffic/clones` shows non-zero clones from sources outside the maintainer's machines.
+- [ ] `gh api repos/litestar-org/litestar-skills/traffic/clones` shows non-zero clones from sources outside the maintainer's machines.
 
 ## Rollback plan
 

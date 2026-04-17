@@ -9,7 +9,7 @@ set -euo pipefail
 
 VERSION="0.1.1"
 PLUGIN_NAME="litestar-skills"
-REPO_SLUG="cofin/litestar-skills"
+REPO_SLUG="litestar-org/litestar-skills"
 
 # =============================================================================
 # Formatting (same as install.sh)

@@ -13,7 +13,7 @@
     for OpenCode (Windows symlinks require admin or developer-mode, so the
     installer deliberately copies the plugin entrypoint).
 
-    Repo: https://github.com/cofin/litestar-skills
+    Repo: https://github.com/litestar-org/litestar-skills
 
 .PARAMETER Only
     Install for specific host(s) only. Accepts a comma-separated list or
@@ -68,8 +68,8 @@ Set-StrictMode -Version Latest
 # Constants
 # =============================================================================
 $script:Version = '0.1.1'
-$script:RepoUrl = 'https://github.com/cofin/litestar-skills'
-$script:RepoSlug = 'cofin/litestar-skills'
+$script:RepoUrl = 'https://github.com/litestar-org/litestar-skills'
+$script:RepoSlug = 'litestar-org/litestar-skills'
 $script:MarketplaceName = 'litestar-marketplace'
 $script:PluginName = 'litestar-skills'
 $script:ScriptDir = Split-Path -Parent $PSCommandPath
