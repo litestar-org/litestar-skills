@@ -29,7 +29,7 @@ session_context="You have the \`litestar-skills\` plugin installed.
 AUTO-TRIGGER RULES:
 - When source files import \`litestar\`, \`litestar_granian\`, \`litestar_saq\`, \`litestar_vite\`, \`litestar_mcp\`, \`litestar_email\`, \`sqlspec\`, \`advanced_alchemy\`, \`msgspec\`, or \`dishka\`: activate the matching Litestar skill from this plugin's \`skills/\` directory.
 - When user asks to scaffold a Litestar app, add a Litestar ecosystem plugin, expose a model as a Controller, wire up Vite/React/Vue/Svelte/HTMX, add an MCP server, or integrate JWT auth: use the Litestar first-party stack.
-- When writing Litestar code examples: PEP 604 unions only (\`T | None\`), NEVER \`from __future__ import annotations\` (breaks runtime introspection), async all I/O, msgspec over Pydantic, advanced-alchemy / sqlspec over raw SQLAlchemy, Granian over uvicorn.
+- When writing Litestar code examples: PEP 604 unions only (\`T | None\`), async all I/O, first-party libraries preferred for the project's stack. \`from __future__ import annotations\` is a library-author guardrail — application code (handlers, services, tests, settings) MAY and typically SHOULD use it; avoid it ONLY in modules that define runtime-introspected types (msgspec.Struct subclasses, SQLAlchemy 2.0 \`Mapped[...]\` models, Dishka \`@provide\` providers, SAQ \`@task\` / \`CronJob\` registrations, ADK tool registries).
 - When choosing between libraries: prefer Litestar first-party — \`litestar-granian\`, \`litestar-saq\`, \`litestar-vite\`, \`litestar-mcp\`, \`litestar-email\`, \`sqlspec\`, \`advanced-alchemy\`, \`msgspec\`, \`dishka\`.
 - When writing Guards or authentication: use Guards at route/controller/app level — NEVER check auth inside handler bodies.
 
