@@ -1,29 +1,36 @@
-#!/usr/bin/env bash
-# Cross-platform hook runner for litestar-skills plugin.
-# Invoked by hooks.json with the hook name as argument.
-#
-# Usage: run-hook.cmd <hook-name>
-# Example: run-hook.cmd session-start
+@echo off
+REM Cross-platform hook runner for litestar-skills plugin (Windows dispatch).
+REM Delegates to Git Bash to run the hook, since hooks are bash scripts.
+REM
+REM Usage: run-hook.cmd <hook-name>
 
-set -euo pipefail
+setlocal enableextensions
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-HOOK_NAME="${1:-}"
+set "SCRIPT_DIR=%~dp0"
+set "HOOK_NAME=%~1"
 
-if [ -z "$HOOK_NAME" ]; then
-    echo '{"error": "No hook name provided"}' >&2
-    exit 1
-fi
+if "%HOOK_NAME%"=="" (
+    echo {"error": "No hook name provided"} >&2
+    exit /b 1
+)
 
-HOOK_SCRIPT="${SCRIPT_DIR}/${HOOK_NAME}"
+set "HOOK_SCRIPT=%SCRIPT_DIR%%HOOK_NAME%"
 
-if [ ! -f "$HOOK_SCRIPT" ]; then
-    echo "{\"error\": \"Hook script not found: ${HOOK_NAME}\"}" >&2
-    exit 1
-fi
+if not exist "%HOOK_SCRIPT%" (
+    echo {"error": "Hook script not found: %HOOK_NAME%"} >&2
+    exit /b 1
+)
 
-if [ ! -x "$HOOK_SCRIPT" ]; then
-    chmod +x "$HOOK_SCRIPT"
-fi
+REM Detect Git Bash (Git for Windows) - common install paths
+set "BASH_EXE="
+if exist "%ProgramFiles%\Git\bin\bash.exe" set "BASH_EXE=%ProgramFiles%\Git\bin\bash.exe"
+if exist "%ProgramFiles(x86)%\Git\bin\bash.exe" set "BASH_EXE=%ProgramFiles(x86)%\Git\bin\bash.exe"
+where bash.exe >nul 2>&1 && if not defined BASH_EXE for /f "delims=" %%i in ('where bash.exe') do set "BASH_EXE=%%i"
 
-exec "$HOOK_SCRIPT"
+if not defined BASH_EXE (
+    echo {"error": "Git Bash not found. Install Git for Windows from https://git-scm.com/download/win or use WSL."} >&2
+    exit /b 1
+)
+
+"%BASH_EXE%" "%HOOK_SCRIPT%"
+exit /b %ERRORLEVEL%
