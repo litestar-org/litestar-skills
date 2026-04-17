@@ -20,7 +20,7 @@
 
 set -euo pipefail
 
-VERSION="0.0.1"
+VERSION="0.1.0"
 REPO_URL="https://github.com/cofin/litestar-skills"
 REPO_SLUG="cofin/litestar-skills"
 MARKETPLACE_NAME="litestar-marketplace"

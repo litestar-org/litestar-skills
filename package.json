@@ -1,6 +1,6 @@
 {
   "name": "litestar-skills",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
   "main": ".opencode/plugins/litestar-skills.js",
   "type": "module",
