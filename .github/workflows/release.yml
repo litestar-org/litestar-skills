@@ -40,6 +40,17 @@ jobs:
       - name: Run check
         run: make check
 
+      - name: Apply discovery topics
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh repo edit "$REPO" \
+            --add-topic gemini-cli-extension \
+            --add-topic litestar \
+            --add-topic agent-skills \
+            --add-topic claude-code-plugin
+
       - name: Determine release type
         id: release_type
         env:
