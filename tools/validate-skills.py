@@ -57,7 +57,12 @@ _TOMLDecodeError: type[Exception] = cast(
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILLS_DIR = REPO_ROOT / "skills"
 COMMANDS_DIR = REPO_ROOT / "commands"
+# `agents/` at repo root is Gemini CLI's extension subagents directory.
+# `.opencode/agents/` is OpenCode's project-scoped subagents directory.
+# The two hosts use incompatible frontmatter schemas, so each location is
+# validated by its own rules (see `validate_gemini_agent` / `validate_opencode_agent`).
 AGENTS_DIR = REPO_ROOT / "agents"
+OPENCODE_AGENTS_DIR = REPO_ROOT / ".opencode" / "agents"
 SHIPPED_ROOT_FILES = ("AGENTS.md", "CONTRIBUTING.md", "README.md", "GEMINI.md")
 
 MAX_DESCRIPTION_CHARS = 1024
@@ -118,6 +123,24 @@ AGENTS_LEAK_PATTERN = re.compile(rf"(?<![A-Za-z0-9_])\.agents/(?:{_leak_targets}
 
 VALID_AGENT_MODES = frozenset({"subagent", "primary"})
 VALID_AGENT_TOOLS = frozenset({"read", "grep", "glob", "bash", "edit", "write", "todoWrite", "webFetch", "webSearch"})
+
+# Gemini CLI subagent tool registry (see docs/core/subagents.md in google-gemini/gemini-cli).
+# Wildcards `*`, `mcp_*`, and `mcp_<server>_*` are also accepted at runtime.
+VALID_GEMINI_TOOLS = frozenset(
+    {
+        "read_file",
+        "grep_search",
+        "glob",
+        "run_shell_command",
+        "list_directory",
+        "web_fetch",
+        "google_web_search",
+        "write_file",
+        "edit",
+        "save_memory",
+    }
+)
+_GEMINI_WILDCARD_PATTERN = re.compile(r"^(?:\*|mcp_[A-Za-z0-9_-]*\*?)$")
 
 
 class Violation(NamedTuple):
@@ -221,7 +244,12 @@ def validate_command(path: Path) -> list[Violation]:
     return violations
 
 
-def validate_agent(path: Path) -> list[Violation]:
+def validate_opencode_agent(path: Path) -> list[Violation]:
+    """Validate an OpenCode subagent file under ``.opencode/agents/``.
+
+    OpenCode schema: ``mode`` in {primary, subagent}, ``tools`` as a dict
+    mapping whitelisted tool keys to bool values.
+    """
     violations: list[Violation] = []
     text = path.read_text(encoding="utf-8")
     try:
@@ -253,6 +281,47 @@ def validate_agent(path: Path) -> list[Violation]:
                         f"tool {key_s!r} value must be bool, got {type_name}",
                     )
                 )
+    return violations
+
+
+def validate_gemini_agent(path: Path) -> list[Violation]:
+    """Validate a Gemini CLI subagent file under ``agents/``.
+
+    Gemini schema: no ``mode`` key (rejected by Gemini's loader), ``tools`` as
+    a list of tool-name strings. Each string must be a known Gemini tool or a
+    wildcard pattern (``*``, ``mcp_*``, ``mcp_<server>_*``).
+    """
+    violations: list[Violation] = []
+    text = path.read_text(encoding="utf-8")
+    try:
+        fm, _body_start, _body = extract_frontmatter(text)
+    except ValueError as exc:
+        return [Violation(path, 1, str(exc))]
+    expected_name = path.stem
+    if fm.get("name") != expected_name:
+        violations.append(Violation(path, 1, f"name {fm.get('name')!r} != filename stem {expected_name!r}"))
+    violations.extend(_check_description(fm.get("description"), path, 1))
+    if "mode" in fm:
+        violations.append(Violation(path, 1, "mode key not allowed (Gemini subagents reject it)"))
+    tools = fm.get("tools")
+    if tools is None:
+        return violations
+    if not isinstance(tools, list):
+        violations.append(Violation(path, 1, "tools must be a list of strings"))
+        return violations
+    # pyright strict requires an explicit cast here even though mypy's
+    # narrowing already gives us list[Any]; silence the redundant-cast warning.
+    tools_list = cast("list[Any]", tools)  # type: ignore[redundant-cast]
+    for entry in tools_list:
+        if not isinstance(entry, str):
+            type_name = type(entry).__name__
+            violations.append(Violation(path, 1, f"tools entry must be a string, got {type_name}"))
+            continue
+        if entry in VALID_GEMINI_TOOLS:
+            continue
+        if _GEMINI_WILDCARD_PATTERN.match(entry):
+            continue
+        violations.append(Violation(path, 1, f"tool {entry!r} not in Gemini tool registry"))
     return violations
 
 
@@ -288,9 +357,14 @@ def iter_commands() -> Iterator[Path]:
         yield from sorted(COMMANDS_DIR.rglob("*.toml"))
 
 
-def iter_agents() -> Iterator[Path]:
+def iter_gemini_agents() -> Iterator[Path]:
     if AGENTS_DIR.is_dir():
         yield from sorted(AGENTS_DIR.glob("*.md"))
+
+
+def iter_opencode_agents() -> Iterator[Path]:
+    if OPENCODE_AGENTS_DIR.is_dir():
+        yield from sorted(OPENCODE_AGENTS_DIR.glob("*.md"))
 
 
 def iter_all_shipped_files() -> Iterator[Path]:
@@ -300,6 +374,8 @@ def iter_all_shipped_files() -> Iterator[Path]:
         yield from sorted(COMMANDS_DIR.rglob("*.toml"))
     if AGENTS_DIR.is_dir():
         yield from sorted(AGENTS_DIR.rglob("*.md"))
+    if OPENCODE_AGENTS_DIR.is_dir():
+        yield from sorted(OPENCODE_AGENTS_DIR.rglob("*.md"))
     for name in SHIPPED_ROOT_FILES:
         candidate = REPO_ROOT / name
         if candidate.is_file():
@@ -316,19 +392,23 @@ def main() -> int:
     all_violations: list[Violation] = []
     skills = list(iter_skills())
     commands = list(iter_commands())
-    agents = list(iter_agents())
+    gemini_agents = list(iter_gemini_agents())
+    opencode_agents = list(iter_opencode_agents())
     for skill_path in skills:
         all_violations.extend(validate_skill(skill_path))
     for cmd_path in commands:
         all_violations.extend(validate_command(cmd_path))
-    for agent_path in agents:
-        all_violations.extend(validate_agent(agent_path))
+    for agent_path in gemini_agents:
+        all_violations.extend(validate_gemini_agent(agent_path))
+    for agent_path in opencode_agents:
+        all_violations.extend(validate_opencode_agent(agent_path))
     all_violations.extend(check_agents_leak(iter_all_shipped_files()))
     if all_violations:
         _print_violations(all_violations)
         print(f"\n{len(all_violations)} violation(s)", file=sys.stderr)
         return 1
-    print(f"[ OK ] validated {len(skills)} skills, {len(commands)} commands, {len(agents)} agents — no violations")
+    agent_total = len(gemini_agents) + len(opencode_agents)
+    print(f"[ OK ] validated {len(skills)} skills, {len(commands)} commands, {agent_total} agents — no violations")
     return 0
 
 
