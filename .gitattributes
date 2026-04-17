@@ -1,0 +1,17 @@
+# Default: all text files use LF regardless of checkout OS
+* text=auto eol=lf
+
+# Windows-only scripts — must keep CRLF for correct execution
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary files (explicit for safety)
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+
+# Generated / lock files — keep as-is, never convert
+*.lock binary
+uv.lock binary
