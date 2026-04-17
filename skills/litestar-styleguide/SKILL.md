@@ -40,6 +40,60 @@ The sibling skill extends the baseline with its own tool-specific Code Style Rul
 - Every "never do X" rule has a one-line *why* (perf, runtime introspection, OpenAPI alignment, etc.). No folklore.
 - Examples are copy-pasteable and minimal. No pseudo-code.
 
+<workflow>
+
+## Workflow — consuming this baseline
+
+1. Open the sibling skill you are editing (`skills/<name>/SKILL.md`).
+2. Look at its `## Shared Styleguide Baseline` section — it already lists a subset of the references here.
+3. When adding a rule to the sibling, ask: is it generic (language/tooling) or framework-specific? Generic → land it in the right file under `references/` here. Specific → keep it in the sibling.
+4. Cross-link bidirectionally if a rule here is amplified in the sibling.
+
+</workflow>
+
+<guardrails>
+
+## Guardrails
+
+- **No duplication across skills.** A rule lives in exactly one file; sibling skills link to it.
+- **No folklore.** Every rule has a one-line justification (perf, runtime introspection, OpenAPI alignment, etc.). Delete rules you cannot justify.
+- **Terse and imperative.** Bullets are ≤ 2 sentences. If a topic needs more, split it into its own reference file.
+- **Examples are minimal and copy-pasteable.** No pseudo-code; no multi-hundred-line fixtures.
+
+</guardrails>
+
+<validation>
+
+## Validation Checkpoint
+
+- [ ] Every sibling skill's `## Shared Styleguide Baseline` section resolves to files that exist under `references/`
+- [ ] No rule is duplicated between two reference files (check via grep when editing)
+- [ ] Each "never do X" rule has a one-line `Reason:` explanation
+- [ ] New language support lands as a single new `references/<lang>.md` — not scattered into sibling skills
+
+</validation>
+
+<example>
+
+## Example — adding a new rule
+
+A reviewer finds that two sibling skills independently wrote "use `ruff format` not `black`". Instead of leaving duplicates, pull the rule into `references/python.md`:
+
+```markdown
+- **Use `ruff format`, never `black`.** Reason: ruff is the single toolchain for
+  lint + format; running two formatters produces style drift.
+```
+
+Then in each sibling's `SKILL.md`, replace the duplicate with a pointer:
+
+```markdown
+## Shared Styleguide Baseline
+
+- [Python](../litestar-styleguide/references/python.md)
+```
+
+</example>
+
 ## Official References
 
 - <https://peps.python.org/pep-0604/> — PEP 604 union syntax

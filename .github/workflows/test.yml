@@ -38,3 +38,60 @@ jobs:
 
       - name: Run tests
         run: make test
+
+  # Pragmatic smoke test: the upstream Claude Code / Gemini CLI container
+  # images are not yet stable enough to run a full plugin-load step. For now
+  # we exercise install.sh --dry-run (catches host-detection and path-layout
+  # bugs), parse the host-specific manifest JSON (catches schema drift), and
+  # re-run validate-skills (catches frontmatter drift). Full container-based
+  # plugin-load tests can be added later when upstream images ship.
+  smoke-test:
+    name: Smoke test (${{ matrix.host }})
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [claude-code, gemini-cli]
+        include:
+          - host: claude-code
+            install_name: claude
+          - host: gemini-cli
+            install_name: gemini
+    env:
+      HOST: ${{ matrix.host }}
+      INSTALL_NAME: ${{ matrix.install_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Setup Python
+        run: uv python install 3.12
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Install plugin (dry run)
+        run: bash tools/install.sh --dry-run --only "$INSTALL_NAME"
+
+      - name: Verify plugin manifest parses
+        run: |
+          case "$HOST" in
+            claude-code)
+              uv run python -c "import json; json.load(open('.claude-plugin/plugin.json'))"
+              uv run python -c "import json; json.load(open('.claude-plugin/marketplace.json'))"
+              ;;
+            gemini-cli)
+              uv run python -c "import json; json.load(open('gemini-extension.json'))"
+              ;;
+          esac
+
+      - name: Validate shipped skills / commands / agents
+        run: uv run python tools/validate-skills.py
