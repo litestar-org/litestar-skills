@@ -6,7 +6,8 @@
     ".beads/",
     "node_modules/",
     "dist/",
-    "build/"
+    "build/",
+    ".venv/"
   ],
   "rules": {}
 }
