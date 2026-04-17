@@ -193,3 +193,13 @@ replace = 'VERSION="{new_version}"'
 filename = "tools/install.ps1"
 search = "$script:Version = '{current_version}'"
 replace = "$script:Version = '{new_version}'"
+
+[[tool.bumpversion.files]]
+filename = "tools/install.sh"
+search = "litestar-skills/v{current_version}/"
+replace = "litestar-skills/v{new_version}/"
+
+[[tool.bumpversion.files]]
+filename = "README.md"
+search = "**v{current_version} — early access.**"
+replace = "**v{new_version} — early access.**"

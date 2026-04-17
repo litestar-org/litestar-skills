@@ -59,10 +59,13 @@ SKILLS_DIR = REPO_ROOT / "skills"
 COMMANDS_DIR = REPO_ROOT / "commands"
 # `agents/` at repo root is Gemini CLI's extension subagents directory.
 # `.opencode/agents/` is OpenCode's project-scoped subagents directory.
-# The two hosts use incompatible frontmatter schemas, so each location is
-# validated by its own rules (see `validate_gemini_agent` / `validate_opencode_agent`).
+# `.claude-plugin/agents/` is Claude Code's plugin subagents directory.
+# All three hosts use incompatible frontmatter schemas, so each location is
+# validated by its own rules (see `validate_gemini_agent` /
+# `validate_opencode_agent` / `validate_claude_agent`).
 AGENTS_DIR = REPO_ROOT / "agents"
 OPENCODE_AGENTS_DIR = REPO_ROOT / ".opencode" / "agents"
+CLAUDE_AGENTS_DIR = REPO_ROOT / ".claude-plugin" / "agents"
 SHIPPED_ROOT_FILES = ("AGENTS.md", "CONTRIBUTING.md", "README.md", "GEMINI.md")
 
 MAX_DESCRIPTION_CHARS = 1024
@@ -123,6 +126,23 @@ AGENTS_LEAK_PATTERN = re.compile(rf"(?<![A-Za-z0-9_])\.agents/(?:{_leak_targets}
 
 VALID_AGENT_MODES = frozenset({"subagent", "primary"})
 VALID_AGENT_TOOLS = frozenset({"read", "grep", "glob", "bash", "edit", "write", "todoWrite", "webFetch", "webSearch"})
+
+# Claude Code subagent tool registry (canonical Claude tool names exposed to
+# subagents — see https://code.claude.com/docs/en/sub-agents).
+VALID_CLAUDE_TOOLS = frozenset(
+    {
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Edit",
+        "Write",
+        "WebFetch",
+        "WebSearch",
+        "TodoWrite",
+        "NotebookEdit",
+    }
+)
 
 # Gemini CLI subagent tool registry (see docs/core/subagents.md in google-gemini/gemini-cli).
 # Wildcards `*`, `mcp_*`, and `mcp_<server>_*` are also accepted at runtime.
@@ -325,6 +345,42 @@ def validate_gemini_agent(path: Path) -> list[Violation]:
     return violations
 
 
+def validate_claude_agent(path: Path) -> list[Violation]:
+    """Validate a Claude Code subagent file under ``.claude-plugin/agents/``.
+
+    Claude schema: ``tools`` as a comma-separated string of canonical Claude
+    tool names (e.g. ``Read, Grep, Glob, Bash``). YAML lists and dict mappings
+    are rejected by Claude's plugin manifest validator. ``mode`` is not part
+    of Claude's subagent schema.
+    """
+    violations: list[Violation] = []
+    text = path.read_text(encoding="utf-8")
+    try:
+        fm, _body_start, _body = extract_frontmatter(text)
+    except ValueError as exc:
+        return [Violation(path, 1, str(exc))]
+    expected_name = path.stem
+    if fm.get("name") != expected_name:
+        violations.append(Violation(path, 1, f"name {fm.get('name')!r} != filename stem {expected_name!r}"))
+    violations.extend(_check_description(fm.get("description"), path, 1))
+    if "mode" in fm:
+        violations.append(Violation(path, 1, "mode key not allowed (Claude subagents reject it)"))
+    tools = fm.get("tools")
+    if tools is None:
+        return violations
+    if not isinstance(tools, str):
+        violations.append(
+            Violation(path, 1, "tools must be a comma-separated string (Claude rejects YAML lists/dicts)")
+        )
+        return violations
+    for entry in (t.strip() for t in tools.split(",")):
+        if not entry:
+            continue
+        if entry not in VALID_CLAUDE_TOOLS:
+            violations.append(Violation(path, 1, f"tool {entry!r} not in Claude tool registry"))
+    return violations
+
+
 def check_agents_leak(files: Iterable[Path]) -> list[Violation]:
     violations: list[Violation] = []
     for path in files:
@@ -367,6 +423,11 @@ def iter_opencode_agents() -> Iterator[Path]:
         yield from sorted(OPENCODE_AGENTS_DIR.glob("*.md"))
 
 
+def iter_claude_agents() -> Iterator[Path]:
+    if CLAUDE_AGENTS_DIR.is_dir():
+        yield from sorted(CLAUDE_AGENTS_DIR.glob("*.md"))
+
+
 def iter_all_shipped_files() -> Iterator[Path]:
     if SKILLS_DIR.is_dir():
         yield from sorted(SKILLS_DIR.rglob("*.md"))
@@ -376,6 +437,8 @@ def iter_all_shipped_files() -> Iterator[Path]:
         yield from sorted(AGENTS_DIR.rglob("*.md"))
     if OPENCODE_AGENTS_DIR.is_dir():
         yield from sorted(OPENCODE_AGENTS_DIR.rglob("*.md"))
+    if CLAUDE_AGENTS_DIR.is_dir():
+        yield from sorted(CLAUDE_AGENTS_DIR.rglob("*.md"))
     for name in SHIPPED_ROOT_FILES:
         candidate = REPO_ROOT / name
         if candidate.is_file():
@@ -394,6 +457,7 @@ def main() -> int:
     commands = list(iter_commands())
     gemini_agents = list(iter_gemini_agents())
     opencode_agents = list(iter_opencode_agents())
+    claude_agents = list(iter_claude_agents())
     for skill_path in skills:
         all_violations.extend(validate_skill(skill_path))
     for cmd_path in commands:
@@ -402,12 +466,14 @@ def main() -> int:
         all_violations.extend(validate_gemini_agent(agent_path))
     for agent_path in opencode_agents:
         all_violations.extend(validate_opencode_agent(agent_path))
+    for agent_path in claude_agents:
+        all_violations.extend(validate_claude_agent(agent_path))
     all_violations.extend(check_agents_leak(iter_all_shipped_files()))
     if all_violations:
         _print_violations(all_violations)
         print(f"\n{len(all_violations)} violation(s)", file=sys.stderr)
         return 1
-    agent_total = len(gemini_agents) + len(opencode_agents)
+    agent_total = len(gemini_agents) + len(opencode_agents) + len(claude_agents)
     print(f"[ OK ] validated {len(skills)} skills, {len(commands)} commands, {agent_total} agents — no violations")
     return 0
 

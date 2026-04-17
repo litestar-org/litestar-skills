@@ -48,7 +48,9 @@ Every `SKILL.md` MUST follow these conventions:
 | --- | --- |
 | Skills | `skills/<skill-name>/SKILL.md` |
 | Slash commands | `commands/<prefix>/<command>.toml` |
-| Subagents | `agents/<agent-name>.md` |
+| Subagents (Gemini CLI) | `agents/<agent-name>.md` (`tools` as YAML list of Gemini tool names) |
+| Subagents (Claude Code) | `.claude-plugin/agents/<agent-name>.md` (`tools` as comma-separated string of Claude tool names) |
+| Subagents (OpenCode) | `.opencode/agents/<agent-name>.md` (`tools` as dict mapping + `mode: subagent`) |
 | MCP servers | `mcp-servers/<server-name>/` |
 | Hooks | `hooks/*.json` + `hooks/session-start` |
 | Templates | `templates/skill-template/` |
