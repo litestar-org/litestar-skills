@@ -57,6 +57,39 @@ cp -r /tmp/litestar-skills/skills/* .agents/skills/
 
 A global-plugin variant exists for users who want cross-project coverage, but the JS plugin entrypoint is a no-op stub today — skill discovery happens through the paths above either way. See [`.opencode/INSTALL.md`](.opencode/INSTALL.md).
 
+### Google Antigravity
+
+Antigravity reads Agent Skills from `.agent/skills/` (**singular** `.agent`, note the naming collision with the plural `.agents/skills/` used by Claude Code / OpenCode / VS Code) or from `~/.gemini/antigravity/skills/` globally. Since this repo ships the plural form, the recommended workspace-scope install is a symlink:
+
+```bash
+cd your-project
+git clone --depth 1 https://github.com/litestar-org/litestar-skills /tmp/litestar-skills
+mkdir -p .agents/skills
+cp -r /tmp/litestar-skills/skills/* .agents/skills/
+ln -s .agents .agent       # community workaround — not a Google-blessed integration
+```
+
+For global installs across all workspaces:
+
+```bash
+mkdir -p ~/.gemini/antigravity/skills
+cp -r /tmp/litestar-skills/skills/* ~/.gemini/antigravity/skills/
+```
+
+See [Antigravity Skills docs](https://antigravity.google/docs/skills). The installer's `--antigravity-symlink` flag (below) automates the workspace symlink when you already have `.agents/skills/` present.
+
+### OpenClaw
+
+OpenClaw reads the generic Agent Skills tree; no OpenClaw-specific manifest is needed:
+
+```bash
+git clone --depth 1 https://github.com/litestar-org/litestar-skills /tmp/litestar-skills
+mkdir -p .agents/skills
+cp -r /tmp/litestar-skills/skills/* .agents/skills/
+```
+
+Compatible-bundle tier — the repo does not promise dedicated OpenClaw wrapper support, but the generic skills work unmodified.
+
 ### Cursor
 
 ```text
