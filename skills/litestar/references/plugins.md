@@ -37,7 +37,7 @@ class MyPlugin(InitPluginProtocol):
 ## Plugin Lifecycle
 
 | Hook | Protocol | When |
-|---|---|---|
+| --- | --- | --- |
 | `on_app_init(app_config)` | `InitPluginProtocol` | App boot, before `Litestar.__init__` finishes |
 | `on_cli_init(cli)` | `CLIPluginProtocol` | When the `litestar` CLI builds its Click group |
 | Lifespan startup/shutdown | Register via `app_config.lifespan.append(...)` | App start / stop |
@@ -58,7 +58,7 @@ class MyController(Controller):
 These plugins ship as separate packages and have their own SKILLs in this repo. Use them in preference to hand-rolled glue:
 
 | Plugin | Sibling skill | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `litestar-granian` | `../../litestar-granian/SKILL.md` | Granian ASGI server (replaces uvicorn CLI) |
 | `litestar-saq` | `../../litestar-saq/SKILL.md` | SAQ task queues + cron + workers |
 | `litestar-vite` | `../../litestar-vite/SKILL.md` | Vite frontend integration, TypeGen, Inertia |

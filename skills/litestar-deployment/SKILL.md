@@ -22,7 +22,7 @@ All deployment paths use **Granian** (via `litestar-granian`) as the ASGI server
 ## Quick Reference
 
 | Target | Reference | Key File |
-|---|---|---|
+| --- | --- | --- |
 | Docker (standard multi-stage) | [references/docker-standard.md](references/docker-standard.md) | `Dockerfile` |
 | Docker (distroless production) | [references/docker-distroless.md](references/docker-distroless.md) | `Dockerfile.distroless` |
 | SAQ worker container | [references/docker-workers.md](references/docker-workers.md) | `Dockerfile.worker` |

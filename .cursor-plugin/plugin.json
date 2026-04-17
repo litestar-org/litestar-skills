@@ -2,7 +2,7 @@
   "name": "litestar-skills",
   "displayName": "Litestar Skills",
   "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "Cody Fincher",
     "email": "cofin@litestar.dev"

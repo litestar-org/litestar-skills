@@ -75,15 +75,15 @@ const good = user?.name ?? 'Anonymous';  // Handle null
 
 ## Naming Conventions
 
-| Concept          | Convention                     | Example                 |
-| :--------------- | :----------------------------- | :---------------------- |
-| Interfaces/Types | `PascalCase`                   | `UserProfile`           |
-| Classes          | `PascalCase`                   | `UserService`           |
-| Functions        | `camelCase`                    | `getUserById`           |
-| Variables        | `camelCase`                    | `currentUser`           |
-| Constants        | `SCREAMING_SNAKE_CASE`         | `MAX_RETRIES`           |
-| Enums            | `PascalCase`                   | `UserStatus`            |
-| Generics         | Single uppercase or `T` prefix | `T`, `TValue`, `TKey`   |
+| Concept | Convention | Example |
+| :--- | :--- | :--- |
+| Interfaces/Types | `PascalCase` | `UserProfile` |
+| Classes | `PascalCase` | `UserService` |
+| Functions | `camelCase` | `getUserById` |
+| Variables | `camelCase` | `currentUser` |
+| Constants | `SCREAMING_SNAKE_CASE` | `MAX_RETRIES` |
+| Enums | `PascalCase` | `UserStatus` |
+| Generics | Single uppercase or `T` prefix | `T`, `TValue`, `TKey` |
 
 ## Functions
 

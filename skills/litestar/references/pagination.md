@@ -84,7 +84,7 @@ The DTO `T` is whatever you pass to `schema_type=`. Clients page by setting `?cu
 `create_filter_dependencies` accepts a dict mapping filter names to config:
 
 | Key | Type | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `id_filter` | type (`UUID`, `int`) | Add `?ids=<uuid>,<uuid>` filter |
 | `id_field` | str | Column name to filter (default `"id"`) |
 | `pagination_type` | `"limit_offset"` / `"cursor"` | Pagination mode |

@@ -3,7 +3,7 @@
 ## Service Types
 
 | Service | Use Case |
-|---|---|
+| --- | --- |
 | `SQLAlchemyAsyncRepositoryService` | Full CRUD service with lifecycle hooks |
 | `SQLAlchemyAsyncRepositoryReadService` | Read-only variant (list, get, count, exists) |
 

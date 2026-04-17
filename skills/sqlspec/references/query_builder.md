@@ -91,7 +91,7 @@ query = (
 ### Full Method Reference
 
 | Method | Description | Example |
-|--------|-------------|---------|
+| --- | --- | --- |
 | `.select(*cols)` | Columns to select | `sql.select("id", "name")` |
 | `.from_(table)` | Source table | `.from_("users")` |
 | `.join(table, on=)` | INNER JOIN | `.join("orders", on="users.id = orders.user_id")` |

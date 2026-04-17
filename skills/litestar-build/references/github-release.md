@@ -5,7 +5,7 @@ Release pipelines that produce wheels, multi-platform PyApp onefiles, multi-arch
 ## Two topologies
 
 | Project | Targets | Flavor |
-|---|---|---|
+| --- | --- | --- |
 | litestar-fullstack-inertia | 4 platforms (Linux x86_64/arm64, macOS x86_64/arm64) | Simple PyApp via `hatch build --target binary` |
 | accelerator (DMA) | 2 Linux platforms (x86_64, arm64) + 2 distroless container images | Advanced: custom bundler, `cargo zigbuild`, offline onefiles |
 
@@ -415,7 +415,7 @@ For CI, use `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}` — can
 ## Release assets checklist
 
 | Asset | Purpose |
-|---|---|
+| --- | --- |
 | `app-X.Y.Z-py3-none-any.whl` | For PyPI upload / container image / hatch-binary rebuild |
 | `app-x86_64-unknown-linux-gnu` | Onefile for x86_64 Linux (glibc 2.17+) |
 | `app-aarch64-unknown-linux-gnu` | Onefile for ARM64 Linux (glibc 2.17+) |
@@ -430,7 +430,7 @@ Minimum recipe for most projects: wheel + 2 Linux onefiles. Add macOS/Windows wh
 ## Common mistakes
 
 | Mistake | Symptom | Fix |
-|---|---|---|
+| --- | --- | --- |
 | Missing `fetch-depth: 0` | `git log <prev>..` fails in changelog step | `with: fetch-depth: 0` on checkout |
 | `cancel-in-progress: true` on release | Interrupted releases corrupt artifacts | Use `false` for release concurrency |
 | Building wheel per-matrix-cell | Multiple non-identical wheels uploaded | Separate `build-wheel` job, download via artifact |

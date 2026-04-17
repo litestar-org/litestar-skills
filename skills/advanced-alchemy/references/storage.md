@@ -196,7 +196,7 @@ You cannot provide both `content` and `source_path` -- pick one.
 ### Properties
 
 | Property | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `filename` / `path` | `str` | The storage path (uses `to_filename` if set) |
 | `backend` | `StorageBackend` | Resolved backend instance |
 | `content_type` | `str` | MIME type (auto-guessed from filename if not set) |
@@ -421,7 +421,7 @@ Pydantic validates `FileObject` from either an existing instance or a dict with 
 All backends implement `StorageBackend`:
 
 | Method | Signature | Description |
-|---|---|---|
+| --- | --- | --- |
 | `get_content` | `(path) -> bytes` | Read file content |
 | `get_content_async` | `(path) -> bytes` | Read file content (async) |
 | `save_object` | `(file_object, data) -> FileObject` | Write file, update metadata |

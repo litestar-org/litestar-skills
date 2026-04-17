@@ -45,7 +45,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $results = Invoke-ScriptAnalyzer -Path tools/install.ps1 -Severity Error,Warning
+          $results = Invoke-ScriptAnalyzer -Path tools/install.ps1 -Settings tools/PSScriptAnalyzerSettings.psd1
           if ($results) {
             $results | Format-Table -AutoSize
             throw "PSScriptAnalyzer found $($results.Count) issue(s)"

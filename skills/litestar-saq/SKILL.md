@@ -199,7 +199,7 @@ When `web_enabled=True`, the SAQ web UI is mounted under the Litestar app for qu
 ### Job Options
 
 | Option | Default | Use |
-|---|---|---|
+| --- | --- | --- |
 | `timeout` | `None` | **Always set** — bound how long a job can run |
 | `retries` | `0` | Retry count on exception |
 | `ttl` | `600` | Seconds to retain result after completion |

@@ -52,7 +52,7 @@ config = AsyncpgConfig(
 ### Backend Selection by Adapter
 
 | Adapter | Recommended Backend | Notes |
-|---------|-------------------|-------|
+| --- | --- | --- |
 | AsyncPG / Psycopg / CockroachDB | `listen_notify` | Native PostgreSQL LISTEN/NOTIFY |
 | OracleDB | `advanced_queue` | Oracle Advanced Queuing |
 | All others | `table_queue` | Universal polling fallback |
@@ -82,7 +82,7 @@ config = AsyncpgConfig(
 ### Available Session Stores
 
 | Adapter | Store Class | Notes |
-|---------|------------|-------|
+| --- | --- | --- |
 | AsyncPG | `AsyncpgStore` | JSONB session data |
 | Psycopg | `PsycopgStore` | JSONB session data |
 | AioSQLite | `AiosqliteStore` | JSON text column |

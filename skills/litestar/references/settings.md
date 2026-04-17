@@ -134,7 +134,7 @@ Same call-site shape — `settings = get_settings(); settings.database.url`. `Ba
 ## Decision guide
 
 | If your project… | Pick |
-|---|---|
+| --- | --- |
 | Is a fresh Litestar app with no existing Pydantic dep | Pattern A (`@dataclass`) |
 | Already imports Pydantic for DTOs, ORM, or shared schemas | Pattern B (`pydantic_settings`) |
 | Needs dotenv file loading, CLI arg parsing, or secret-store integration out-of-the-box | Pattern B |

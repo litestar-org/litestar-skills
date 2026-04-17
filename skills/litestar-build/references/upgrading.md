@@ -277,7 +277,7 @@ matrix:
 For an advanced setup, here's the full map. Any version bump touches the marked files:
 
 | File | Python ver | PyApp ver | PBS URL | Install dir |
-|---|:-:|:-:|:-:|:-:|
+| --- | :---: | :---: | :---: | :---: |
 | `pyproject.toml` | ✓ | ✓ | — | — |
 | `tools/scripts/build-onefile-package.sh` | ✓ | ✓ | — | ✓ |
 | `tools/bundler.py` | ✓ | — | ✓ | — |

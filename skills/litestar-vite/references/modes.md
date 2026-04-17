@@ -5,7 +5,7 @@
 ## Decision Matrix
 
 | Question | Answer ⇒ Mode |
-|---|---|
+| --- | --- |
 | Full client-side routing + SPA (JSON API backend) | **spa** |
 | Server-rendered HTML with Vite-bundled JS/CSS sprinkles | **template** |
 | HTMX hypermedia with Vite-bundled assets | **htmx** (template mode + HTMX patterns) |
@@ -19,7 +19,7 @@
 Each row is a **tested, shipping example** in the canonical [`litestar-vite/examples/`](https://github.com/litestar-org/litestar-vite/tree/main/examples) directory. Copy one of these as your starting scaffold.
 
 | Framework | Mode | Example dir | Vite plugin(s) | Notes |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | **React** | spa | [`react/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/react) | `@vitejs/plugin-react` | Standard React SPA. |
 | **React + TanStack Router** | spa | [`react-tanstack/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/react-tanstack) | `@vitejs/plugin-react`, `@tanstack/router-plugin/vite` | Auto code-splitting, file-based routing, end-to-end typed. |
 | **Vue 3** | spa | [`vue/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/vue) | `@vitejs/plugin-vue` | Composition API + `<script setup>`. |
@@ -79,7 +79,7 @@ TypeGen output path convention: **`./src/generated`** for SPAs.
 Template helpers (available when `template_config` is set + `VitePlugin` is registered):
 
 | Helper | Purpose |
-|---|---|
+| --- | --- |
 | `{{ vite('resources/main.js') }}` | Emit `<script type="module" src="...">` for the input file; handles dev vs manifest |
 | `{{ vite_hmr() }}` | Inject Vite HMR client `<script>` during `dev_mode=True`; no-op in prod |
 | `{{ vite_react_refresh() }}` | Inject React Fast Refresh preamble — must come **before** React app code |
@@ -144,7 +144,7 @@ This activates the `ls-*` attributes on `<template>` tags below.
 When an HTMX swap returns JSON (`hx-swap="json"`), the `litestar` extension renders `<template>` blocks against the JSON payload:
 
 | Attribute | Purpose |
-|---|---|
+| --- | --- |
 | `ls-for="item in $data"` | Iterate over the JSON response array |
 | `ls-key="item.id"` | Stable key for list reconciliation |
 | `ls-if="condition"` | Render only when truthy |
@@ -342,7 +342,7 @@ export default defineConfig({
 ## Reference Apps
 
 | App | Stack | Link |
-|---|---|---|
+| --- | --- | --- |
 | `litestar-fullstack-spa` | React + TanStack + advanced-alchemy + SAQ | <https://github.com/litestar-org/litestar-fullstack-spa> |
 | `litestar-fullstack-inertia` | Inertia + React + advanced-alchemy | <https://github.com/litestar-org/litestar-fullstack-inertia> |
 

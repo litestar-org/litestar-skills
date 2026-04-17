@@ -105,7 +105,7 @@ async def get_connection():
 ## Key Cloud Run settings
 
 | Setting | Recommended | Rationale |
-|---|---|---|
+| --- | --- | --- |
 | `min-instances` | 1+ | Avoids cold start on first request. Set to 0 for cost savings in dev. |
 | `max-instances` | 10-100 | Prevents runaway scaling. |
 | `concurrency` | 80 | Granian handles concurrent requests well. Match to worker count. |

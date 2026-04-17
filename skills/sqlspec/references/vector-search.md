@@ -5,7 +5,7 @@ This reference covers similarity search for semantic retrieval and intent classi
 ## Backend support matrix
 
 | Backend | Distance operator | Similarity expression | Row limit |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Oracle | `VECTOR_DISTANCE(:a, :b, COSINE)` | `1 - VECTOR_DISTANCE(...)` | `FETCH FIRST :n ROWS ONLY` |
 | PostgreSQL + pgvector | `:a <=> :b` | `1 - (:a <=> :b)` | `LIMIT :n` |
 | SQLite + sqlite-vec | `vec_distance_cosine(:a, :b)` | `1 - vec_distance_cosine(...)` | `LIMIT :n` |
@@ -133,7 +133,7 @@ async def search_similar_intents(
 Example result set:
 
 | intent | phrase | similarity | confidence_threshold |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `SEARCH` | "find me something to …" | 0.92 | 0.80 |
 | `HELP` | "how does this work?" | 0.87 | 0.75 |
 | `CONVERSATION` | "thanks for your help" | 0.61 | 0.70 |

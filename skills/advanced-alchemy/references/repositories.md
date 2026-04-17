@@ -5,7 +5,7 @@
 Advanced Alchemy provides three async repository variants:
 
 | Repository | Use Case |
-|---|---|
+| --- | --- |
 | `SQLAlchemyAsyncRepository` | Standard async CRUD operations |
 | `SQLAlchemyAsyncSlugRepository` | CRUD + automatic slug generation via `get_available_slug()` |
 | `SQLAlchemyAsyncQueryRepository` | Complex read-only queries (no model_type required) |

@@ -81,7 +81,7 @@ class UserController(Controller):
 ## When to Scale Up
 
 | Symptom | Stay on `Provide()` | Move to Dishka |
-|---|---|---|
+| --- | --- | --- |
 | <10 dependencies | ✓ | — |
 | Flat dependency graph | ✓ | — |
 | Resource lifetimes match request | ✓ | — |

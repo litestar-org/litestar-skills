@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "litestar-skills"
-version = "0.1.0"
+version = "0.1.1"
 description = "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -137,11 +137,11 @@ exclude_lines = [
 # bump-my-version — atomic multi-manifest version sync
 # ============================================================
 [tool.bumpversion]
-current_version = "0.1.0"
-commit = true
-tag = true
+current_version = "0.1.1"
+commit = false
+tag = false
 tag_name = "v{new_version}"
-allow_dirty = false
+allow_dirty = true
 message = "chore: bump version {current_version} → {new_version}"
 
 [[tool.bumpversion.files]]
@@ -181,6 +181,11 @@ replace = '"version": "{new_version}"'
 
 [[tool.bumpversion.files]]
 filename = "tools/install.sh"
+search = 'VERSION="{current_version}"'
+replace = 'VERSION="{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "tools/uninstall.sh"
 search = 'VERSION="{current_version}"'
 replace = 'VERSION="{new_version}"'
 

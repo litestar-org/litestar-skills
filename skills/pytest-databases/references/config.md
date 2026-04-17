@@ -26,7 +26,7 @@ export MINIO_ACCESS_KEY=custom-key
 ## Core Config Fixtures
 
 | Database | Fixtures |
-|----------|----------|
+| --- | --- |
 | PostgreSQL | `postgres_host`, `postgres_password`, `postgres_image` |
 | MySQL | `platform` (for ARM) |
 | Oracle | `oracle_23ai_image`, `oracle_18c_image` |

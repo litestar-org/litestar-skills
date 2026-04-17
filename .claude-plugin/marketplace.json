@@ -1,7 +1,7 @@
 {
   "name": "litestar-marketplace",
   "description": "The Litestar Marketplace — opinionated first-party skills, plugins, subagents, commands, and MCP servers for Litestar and its ecosystem",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "owner": {
     "name": "cofin",
     "url": "https://github.com/cofin"
@@ -11,7 +11,7 @@
       "name": "litestar-skills",
       "source": "./",
       "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {
         "name": "Cody Fincher",
         "email": "cofin@litestar.dev"

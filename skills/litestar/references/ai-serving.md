@@ -138,7 +138,7 @@ def get_system_prompt(cls, persona_key: str, base_prompt: str) -> str:
 Example persona set (neutral-domain variant; the demo uses 4 personas named `novice`, `enthusiast`, `expert`, and a domain-specific role):
 
 | Key | Description |
-|---|---|
+| --- | --- |
 | `novice` | Plain language, step-by-step guidance |
 | `user` | Default; balanced tone and depth |
 | `expert` | Terse, technical; assume deep knowledge |

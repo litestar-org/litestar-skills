@@ -76,7 +76,7 @@ from advanced_alchemy.config.routing import RoutingConfig, RoutingStrategy
 ```
 
 | Field | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `primary_connection_string` | `str \| None` | `None` | Legacy shorthand for default group primary |
 | `read_replicas` | `list[str \| EngineConfig]` | `[]` | Legacy shorthand for read group engines |
 | `engines` | `dict[str, list[str \| EngineConfig]]` | `{}` | Named engine groups |
@@ -96,7 +96,7 @@ from advanced_alchemy.config.routing import EngineConfig
 ```
 
 | Field | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `connection_string` | `str` | required | Database connection URL |
 | `weight` | `int` | `1` | Relative weight for load balancing |
 | `name` | `str` | `""` | Human-readable label |
@@ -134,7 +134,7 @@ from advanced_alchemy.routing import RoundRobinSelector, RandomSelector
 ```
 
 | Strategy | Enum | Behavior |
-|---|---|---|
+| --- | --- | --- |
 | `RoundRobinSelector` | `RoutingStrategy.ROUND_ROBIN` | Cycles through replicas in order (thread-safe) |
 | `RandomSelector` | `RoutingStrategy.RANDOM` | Picks a random replica each time |
 

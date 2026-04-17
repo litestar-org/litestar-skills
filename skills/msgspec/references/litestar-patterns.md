@@ -112,7 +112,7 @@ Drop the `BaseModel` branch if your project has no Pydantic dependency.
 ### Decision guide
 
 | Situation | Pick |
-|---|---|
+| --- | --- |
 | sqlspec is in-stack | Branch A — one-line re-export, zero maintenance |
 | sqlspec not available | Branch B — hand-rolled enc_hook |
 

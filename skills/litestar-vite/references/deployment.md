@@ -72,7 +72,7 @@ Set `ASSET_URL=https://cdn.example.com/assets/v123/` at deploy time.
 ## Cache Strategy
 
 | Asset | Cache TTL | Why |
-|---|---|---|
+| --- | --- | --- |
 | `assets/*.js`, `assets/*.css` (hashed) | `max-age=31536000, immutable` | Hashed names → safe to cache forever |
 | `manifest.json` | `no-cache` | Must reflect latest deploy |
 | `index.html` (template mode) | `no-cache` | References hashed assets via manifest |

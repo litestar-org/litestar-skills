@@ -4,7 +4,7 @@ Build a project-local exception hierarchy that rolls up to a single `Application
 
 ## Hierarchy
 
-```
+```text
 HTTPException                          (litestar.exceptions)
 └── ApplicationError                   (your base; project-wide)
     ├── ApplicationClientError         (4xx parent)

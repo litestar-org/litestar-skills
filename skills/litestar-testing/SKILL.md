@@ -32,7 +32,7 @@ For JS-side testing (Vitest, Testing Library, Playwright), use the upstream Vite
 ### TestClient vs AsyncTestClient
 
 | Client | When to Use | Lifespan | Internals |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `TestClient` | Sync test bodies, simple smoke tests | Triggered via context manager | Runs ASGI in a thread pool |
 | `AsyncTestClient` | **Default for new tests** — async test bodies, lifespan-aware fixtures | Native async lifespan | Runs ASGI in the test event loop |
 
@@ -177,7 +177,7 @@ The `postgres_service` fixture starts a Postgres container. Inject its connectio
 ### Request Bodies
 
 | Body Type | Pass via |
-|---|---|
+| --- | --- |
 | JSON | `client.post("/", json={...})` |
 | Form | `client.post("/", data={...})` |
 | Multipart (file upload) | `client.post("/", files={"file": ("name.txt", b"content", "text/plain")})` |

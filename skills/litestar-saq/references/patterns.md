@@ -196,7 +196,7 @@ queue = Queue.from_url("postgresql+asyncpg://user:pass@localhost/mydb")
 ```
 
 | Aspect | Redis | Postgres |
-|---|---|---|
+| --- | --- | --- |
 | Persistence | In-memory (AOF/RDB optional) | Durable by default |
 | Job history | Limited | Full SQL access |
 | Throughput | Higher | Lower (row locking) |

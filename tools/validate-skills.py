@@ -33,7 +33,7 @@ from typing import Any, NamedTuple, cast
 if sys.version_info >= (3, 11):
     import tomllib as _tomllib
 else:  # pragma: no cover - py310 fallback path
-    import tomli as _tomllib  # type: ignore[import-not-found]
+    import tomli as _tomllib  # type: ignore[import-not-found,unused-ignore]
 
 import yaml
 

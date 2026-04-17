@@ -36,7 +36,7 @@ WHERE id = $1
 ### Supported Directives
 
 | Directive | Required | Description |
-|-----------|----------|-------------|
+| --- | --- | --- |
 | `-- name:` | Yes | Unique identifier for the query |
 | `-- dialect:` | No | Source dialect for sqlglot parsing |
 | `-- description:` | No | Human-readable description |

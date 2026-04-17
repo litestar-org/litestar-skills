@@ -131,7 +131,7 @@ CMD ["litestar", "run", "--host", "0.0.0.0", "--port", "8000"]
 ## Key decisions
 
 | Decision | Rationale |
-|---|---|
+| --- | --- |
 | `--mount=type=cache` on apt + uv | Faster rebuilds. Not available on Railway (use distroless variant). |
 | `uv build` creates a wheel | Runner installs a wheel, not an editable install. Smaller image, faster startup. |
 | `UV_COMPILE_BYTECODE=1` | Pre-compiles .pyc. Saves 200-500ms on cold start. |
@@ -143,7 +143,7 @@ CMD ["litestar", "run", "--host", "0.0.0.0", "--port", "8000"]
 ## When to use standard vs distroless
 
 | Need | Standard | Distroless |
-|---|---|---|
+| --- | --- | --- |
 | Shell access (`docker exec bash`) | Yes | No |
 | exec-based health probes | Yes | No |
 | Minimal CVE surface | Good | Best |

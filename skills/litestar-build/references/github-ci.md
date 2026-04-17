@@ -5,7 +5,7 @@ Reference patterns for testing a Litestar app in CI. Covers uv + bun setup, Pyth
 ## Three real topologies
 
 | Project | Runners | Python matrix | Setup style | Notable |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | litestar-fullstack-inertia | `ubuntu-latest` | 3.11, 3.12, 3.13 | Reusable workflow (`test.yml` w/ `workflow_call`) | Coverage only from 3.12 |
 | litestar-fullstack-spa | `ubuntu-latest` | 3.12, 3.13 | Inline, `setup-uv@v6` with `enable-cache: true` | No services; React Email built in CI |
 | accelerator (DMA) | `self-hosted` | 3.11, 3.12, 3.13 | Composite actions (`setup-python`, `setup-node`) | Pins uv=0.11.6, bun=v1.3.12; aggressive disk cleanup |
@@ -474,7 +474,7 @@ Configure as a **required status check** in branch protection. One box to tick, 
 ## Common mistakes
 
 | Mistake | Symptom | Fix |
-|---|---|---|
+| --- | --- | --- |
 | `uv sync` before placeholder dir | Hatchling errors in lint/typecheck jobs | `mkdir -p <bundle_dir>` before `uv sync` |
 | `uv` version floats | Reproducibility issues across runs | Pin in composite action: `UV_VERSION: "0.11.6"` |
 | Coverage from every Python version | Last-writer-wins in codecov | Conditional: `coverage: ${{ matrix.python-version == '3.12' }}` |

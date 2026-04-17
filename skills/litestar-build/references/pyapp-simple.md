@@ -21,7 +21,7 @@ scripts = ["app"]
 Three knobs:
 
 | Key | Meaning | Example |
-|---|---|---|
+| --- | --- | --- |
 | `pyapp-version` | Git tag of PyApp to compile | `"0.29.0"` |
 | `python-version` | Python major.minor bundled into the binary | `"3.12"` |
 | `scripts` | Names of console scripts (from `[project.scripts]`) that become binary entry-points | `["app"]` |
@@ -62,7 +62,7 @@ PYAPP_ALLOW_UPDATES = "1"
 ```
 
 | Env var | Effect |
-|---|---|
+| --- | --- |
 | `PYAPP_DISTRIBUTION_EMBED=1` | Embed the Python distribution tarball *inside* the binary. No download on first run. Binary is larger (~50-100 MB) but offline-capable. |
 | `PYAPP_FULL_ISOLATION=1` | Create an isolated venv per version; ignore user site-packages. Required for reliable behavior. |
 | `PYAPP_UV_ENABLED=1` | Use `uv pip` for the install step (fast). |

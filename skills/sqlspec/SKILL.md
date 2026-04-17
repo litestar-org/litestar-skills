@@ -220,7 +220,7 @@ async def get_user_count() -> int:
 The `sql` factory provides a fluent builder API with full method chaining. All builders terminate with `.to_statement()` and pass through sqlglot for validation and dialect conversion.
 
 | Builder | Entry Point | Key Methods |
-|---|---|---|
+| --- | --- | --- |
 | SELECT | `sql.select(*cols)` | `.from_()`, `.where()`, `.where_eq()`, `.join()`, `.order_by()`, `.limit()`, `.offset()` |
 | INSERT | `sql.insert_into(table)` | `.columns()`, `.values()`, `.returning()` |
 | UPDATE | `sql.update(table)` | `.set_()`, `.where()`, `.returning()` |
@@ -243,7 +243,7 @@ The `sql` factory provides a fluent builder API with full method chaining. All b
 SQLSpec filter objects are passed directly to driver methods alongside the SQL string. They modify the statement before execution.
 
 | Filter | Purpose | Example Use |
-|---|---|---|
+| --- | --- | --- |
 | `BeforeAfterFilter` | Date range bounds (`before`, `after`) | Audit log queries, time-range pagination |
 | `InCollectionFilter` | SQL `IN (...)` clause | Filter by a set of IDs or enum values |
 | `LimitOffsetFilter` | Page-based pagination | `limit=25, offset=50` |
@@ -255,7 +255,7 @@ Filters are composable — pass multiple to a single `select_many()` call and th
 ## Framework Integrations
 
 | Framework | Integration | Key Feature |
-|---|---|---|
+| --- | --- | --- |
 | Litestar | `SQLSpecPlugin` | Dependency injection of typed driver; auto session lifecycle |
 | FastAPI / Starlette | Middleware | Request-scoped connection; injects driver into route dependencies |
 | Flask | Extension | `init_app()` pattern; driver available via `g` or `current_app` |

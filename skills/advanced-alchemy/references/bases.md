@@ -73,7 +73,7 @@ class User(UUIDAuditBase):
 ```
 
 | Column | Type | Behavior |
-|---|---|---|
+| --- | --- | --- |
 | `id` | `UUID` (v4) | Auto-generated random UUID |
 | `created_at` | `DateTimeUTC` | Set on insert (audit bases only) |
 | `updated_at` | `DateTimeUTC` | Set on insert and update (audit bases only) |
@@ -132,7 +132,7 @@ class PageView(BigIntAuditBase):
 ```
 
 | Column | Type | Behavior |
-|---|---|---|
+| --- | --- | --- |
 | `id` | `BigInteger` | Auto-incrementing (`BIGSERIAL` on PostgreSQL) |
 | `created_at` | `DateTimeUTC` | Set on insert (audit bases only) |
 | `updated_at` | `DateTimeUTC` | Set on insert and update (audit bases only) |
@@ -156,7 +156,7 @@ class ShortLink(NanoidAuditBase):
 ```
 
 | Column | Type | Behavior |
-|---|---|---|
+| --- | --- | --- |
 | `id` | `String` | Auto-generated nanoid (e.g., `V1StGXR8_Z5jdHi6B-myT`) |
 | `created_at` | `DateTimeUTC` | Set on insert (audit bases only) |
 | `updated_at` | `DateTimeUTC` | Set on insert and update (audit bases only) |
@@ -351,7 +351,7 @@ class Setting(ProjectBase):
 ## Quick Reference Table
 
 | Base Class | PK Type | Audit Fields | Best For |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `DeclarativeBase` | None (define your own) | None | Full control, custom schemas |
 | `UUIDBase` | UUID v4 | None | Simple lookup tables |
 | `UUIDAuditBase` | UUID v4 | `created_at`, `updated_at` | General-purpose models |

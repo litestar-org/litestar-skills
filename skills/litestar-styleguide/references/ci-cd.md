@@ -35,7 +35,7 @@ jobs:
 Standard jobs for Python projects:
 
 | Job | Command | Purpose |
-|-----|---------|---------|
+| --- | --- | --- |
 | validate | `uv run pre-commit run --all-files` | Formatting, linting hooks |
 | mypy | `uv run mypy` | Type checking (gradual) |
 | pyright | `uv run pyright` | Type checking (strict) |

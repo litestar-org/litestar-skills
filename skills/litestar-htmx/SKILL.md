@@ -81,7 +81,7 @@ For HTMX-targeted endpoints, the template is a fragment (no `<html>` / `<body>`)
 ### Server-driven HTMX Responses
 
 | Response Object | Purpose |
-|---|---|
+| --- | --- |
 | `TriggerEvent(name, after="receive", params={...})` | Sets `HX-Trigger` / `HX-Trigger-After-Swap` / `HX-Trigger-After-Settle` |
 | `Refresh()` | Sets `HX-Refresh: true` — full page refresh |
 | `ClientRedirect(redirect_to=...)` | Sets `HX-Redirect` — client-side hard redirect |
@@ -161,7 +161,7 @@ Activating `hx-ext="litestar"` (on `<body>` or any enclosing element) unlocks **
 This lets you render JSON API responses as HTML **without** server-side templates — complementary to the partial-HTML pattern.
 
 | Attribute | Purpose |
-|---|---|
+| --- | --- |
 | `ls-for="item in $data"` | Iterate over the JSON response array |
 | `ls-key="item.id"` | Stable key for list reconciliation |
 | `ls-if="condition"` | Render only when truthy |
@@ -207,7 +207,7 @@ Single-item rendering (properties on `$data` accessible directly via prototype i
 **When to use this vs server-side partials:**
 
 | Case | Approach |
-|---|---|
+| --- | --- |
 | Data shape simple, rendering trivial, already have JSON endpoint | Client `ls-*` templating (no `HTMXTemplate`) |
 | Complex conditionals, auth-sensitive fields, heavy formatting | Server partials via `HTMXTemplate` |
 | Same endpoint serving both JSON (for JS clients) and HTML (for HTMX clients) | Branch on `request.htmx`; return JSON always and let `ls-*` render it for HTMX consumers |

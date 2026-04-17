@@ -34,7 +34,7 @@ Every `SKILL.md` MUST follow these conventions:
 ## Supported Hosts
 
 | Host | Entry Point | Notes |
-|---|---|---|
+| --- | --- | --- |
 | **Claude Code** | `.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` | Primary target. Full plugin with skills, commands, agents, hooks. |
 | **Gemini CLI** | `gemini-extension.json`, context via `GEMINI.md` | Auto-indexed gallery (topic `gemini-cli-extension`). |
 | **Codex CLI** | `.codex-plugin/plugin.json` | Includes `interface` metadata block. |
@@ -45,7 +45,7 @@ Every `SKILL.md` MUST follow these conventions:
 ## File Resolution
 
 | Resource | Location |
-|---|---|
+| --- | --- |
 | Skills | `skills/<skill-name>/SKILL.md` |
 | Slash commands | `commands/<prefix>/<command>.toml` |
 | Subagents | `agents/<agent-name>.md` |

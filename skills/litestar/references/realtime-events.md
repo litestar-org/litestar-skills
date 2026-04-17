@@ -57,11 +57,11 @@ stays snake_case. Do NOT add `from __future__ import annotations` in modules tha
 `REALTIME_SCOPE_ACL` maps each scope to the access-control policy enforced by the corresponding
 WS guard. Adapted from `_contract.py:L20–24`.
 
-| Scope       | Access policy                     | Guard                               |
-|-------------|-----------------------------------|-------------------------------------|
-| `workspace` | Workspace member or superuser     | `requires_websocket_workspace_member` |
-| `user`      | Authenticated subject only        | `requires_websocket_user_subject`   |
-| `global`    | Role/policy-authorized users only | `requires_websocket_global_access`  |
+| Scope | Access policy | Guard |
+| --- | --- | --- |
+| `workspace` | Workspace member or superuser | `requires_websocket_workspace_member` |
+| `user` | Authenticated subject only | `requires_websocket_user_subject` |
+| `global` | Role/policy-authorized users only | `requires_websocket_global_access` |
 
 ```python
 REALTIME_SCOPE_ACL: dict[RealtimeScope, str] = {

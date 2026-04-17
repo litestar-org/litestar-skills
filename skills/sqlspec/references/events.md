@@ -9,7 +9,7 @@ SQLSpec provides `AsyncEventChannel` for real-time messaging between application
 ## Backends
 
 | Backend | Description | When to Use |
-|---------|-------------|-------------|
+| --- | --- | --- |
 | `listen_notify` | Native PostgreSQL LISTEN/NOTIFY | Real-time, fire-and-forget messaging |
 | `listen_notify_durable` | Hybrid: queue table + NOTIFY trigger | Real-time with message durability |
 | `advanced_queue` | Oracle Advanced Queuing | Enterprise Oracle deployments |
@@ -135,7 +135,7 @@ async def event_stream(websocket: WebSocket):
 Each message received from a channel contains:
 
 | Field | Type | Description |
-|-------|------|-------------|
+| --- | --- | --- |
 | `channel` | `str` | Channel name |
 | `payload` | `dict[str, Any]` | Message body (JSON-serializable) |
 | `timestamp` | `datetime` | Server-side timestamp |

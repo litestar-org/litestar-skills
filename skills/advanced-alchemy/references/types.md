@@ -125,7 +125,7 @@ from advanced_alchemy.types.encrypted_string import FernetBackend, AESGCMBackend
 ### Backends
 
 | Backend | Import | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `FernetBackend` | `advanced_alchemy.types.encrypted_string` | Fernet symmetric encryption (recommended default) |
 | `AESGCMBackend` | `advanced_alchemy.types.encrypted_string` | AES-256-GCM authenticated encryption |
 | `PGCryptoBackend` | `advanced_alchemy.types.encrypted_string` | PostgreSQL pgcrypto extension (server-side) |
@@ -189,7 +189,7 @@ from advanced_alchemy.types.password_hash import Argon2Hasher, BcryptHasher, Pwd
 ### Backends
 
 | Backend | Library | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `Argon2Hasher` | `argon2-cffi` | Recommended — memory-hard, resistant to GPU attacks |
 | `BcryptHasher` | `bcrypt` | Widely used, good default |
 | `PwdlibHasher` | `pwdlib` | Pure-Python option |
@@ -347,7 +347,7 @@ if document.file:
 ## Type Compatibility Matrix
 
 | Type | PostgreSQL | SQLite | MySQL | Oracle |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `DateTimeUTC` | `TIMESTAMP WITH TIME ZONE` | `DATETIME` | `DATETIME` | `TIMESTAMP WITH TIME ZONE` |
 | `GUID` | `UUID` (native) | `CHAR(32)` | `CHAR(32)` | `CHAR(32)` |
 | `JsonB` | `JSONB` (native) | `JSON` | `JSON` | `JSON` |

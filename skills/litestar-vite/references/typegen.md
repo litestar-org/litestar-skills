@@ -5,7 +5,7 @@ End-to-end type generation from the Litestar backend to TypeScript.
 ## What Gets Generated
 
 | Output | Source | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `openapi.json` | Litestar OpenAPI schema | Source of truth for SDK + schemas |
 | `routes.ts` | Route registry | Typed URL builder: `route("name", { params })` |
 | `schemas.ts` | Pydantic / msgspec DTOs | Typed models: `components["schemas"]["User"]` |
@@ -78,7 +78,7 @@ Pattern (1) is preferred — diffs surface in PR review.
 ## Triggers
 
 | Change | Re-trigger needed |
-|---|---|
+| --- | --- |
 | Add/change a route handler | yes (`routes.ts`) |
 | Add/change a Pydantic / msgspec DTO | yes (`schemas.ts`) |
 | Change Inertia handler / page name | yes (`inertia-pages.json`) |

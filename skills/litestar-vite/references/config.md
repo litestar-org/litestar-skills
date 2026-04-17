@@ -22,7 +22,7 @@ ViteConfig(
 ## PathConfig
 
 | Option | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `root` | `Path.cwd()` | Project root (parent of `vite.config.*`) |
 | `resource_dir` | `"resources"` | Frontend source root |
 | `bundle_dir` | `"public"` | Production build output |
@@ -32,7 +32,7 @@ ViteConfig(
 ## RuntimeConfig
 
 | Option | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `port` | `5173` | Vite dev server port |
 | `host` | `"localhost"` | Vite dev server host |
 | `protocol` | `"http"` | `"http"` or `"https"` |
@@ -41,7 +41,7 @@ ViteConfig(
 ## TypeGenConfig
 
 | Option | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `enabled` | `False` | Master switch |
 | `generate_sdk` | `False` | TypeScript API client |
 | `generate_routes` | `False` | `routes.ts` typed URL builder |
@@ -67,7 +67,7 @@ litestar({
 Also configure Vite top-level:
 
 | Field | Why |
-|---|---|
+| --- | --- |
 | `base` | Asset URL base; CDN URL in prod |
 | `publicDir` | Static files copied verbatim |
 | `server.port` | Pin to match `RuntimeConfig.port` |
@@ -78,7 +78,7 @@ Also configure Vite top-level:
 ## Env Toggles
 
 | Env Var | Purpose |
-|---|---|
+| --- | --- |
 | `ENV` / `LITESTAR_ENV` | Drives `dev_mode` |
 | `ASSET_URL` | CDN base URL in prod |
 | `VITE_PORT` | Override dev port |

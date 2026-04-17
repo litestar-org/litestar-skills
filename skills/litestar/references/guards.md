@@ -160,10 +160,10 @@ WS close-code convention — `requires_websocket_workspace_member`, `requires_we
 and `requires_websocket_global_access` all raise `4003` on authz failure; all guards raise `4001`
 on missing/invalid auth state:
 
-| Code   | Meaning                                                              | Guards              |
-|--------|----------------------------------------------------------------------|---------------------|
-| `4001` | Auth failure — missing/invalid token or inactive user                | all guards          |
-| `4003` | Authz failure — not a member, wrong subject, or insufficient role    | workspace / subject / global |
+| Code | Meaning | Guards |
+| --- | --- | --- |
+| `4001` | Auth failure — missing/invalid token or inactive user | all guards |
+| `4003` | Authz failure — not a member, wrong subject, or insufficient role | workspace / subject / global |
 
 ## Layering Guards
 

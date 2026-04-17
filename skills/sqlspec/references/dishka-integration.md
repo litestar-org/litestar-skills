@@ -100,7 +100,7 @@ __all__ = ["Inject", "inject"]
 ## Scope discipline
 
 | Scope | Use this for | Lifetime |
-|---|---|---|
+| --- | --- | --- |
 | `Scope.REQUEST` | DB sessions, domain services, anything tied to one HTTP request | Created at request start, released at response end |
 | `Scope.APP` | `ChannelsBackend`, long-lived clients, config objects, caches | Created at app startup, lives until process exit |
 | `Scope.SESSION` | WebSocket connections — Dishka manages a child container per WS session | Created at `ws.accept()`, released at `ws.close()` |

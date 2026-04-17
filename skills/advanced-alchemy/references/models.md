@@ -9,7 +9,7 @@ from advanced_alchemy.base import UUIDAuditBase, UUIDv7AuditBase, BigIntAuditBas
 ```
 
 | Base Class | PK Type | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `UUIDAuditBase` | UUID v4 | Most common — random UUID primary key |
 | `UUIDv7AuditBase` | UUID v7 | Time-sortable UUID (better index locality) |
 | `BigIntAuditBase` | BigInt | Auto-incrementing integer PK |
