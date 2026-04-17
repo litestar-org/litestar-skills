@@ -466,7 +466,7 @@ def validate_codex_agent(path: Path) -> list[Violation]:
         if not isinstance(nicknames, list) or not nicknames:
             violations.append(Violation(path, 1, "nickname_candidates must be a non-empty list"))
         else:
-            nicknames_typed = cast("list[Any]", nicknames)
+            nicknames_typed = cast("list[Any]", nicknames)  # type: ignore[redundant-cast]
             seen: set[str] = set()
             for entry in nicknames_typed:
                 if not isinstance(entry, str):
