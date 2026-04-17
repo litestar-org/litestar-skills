@@ -162,6 +162,24 @@ If PowerShell 7+ is not installed: `winget install Microsoft.PowerShell`. If Git
 
 </details>
 
+## Optional: Google Developer Knowledge MCP
+
+Google publishes an MCP server that returns fresh Firebase / Google Cloud / Android / Maps docs at `developerknowledge.googleapis.com`. Useful when a Litestar project depends on a Google-managed service. No manifest is shipped; users opt in per host.
+
+```bash
+# Claude Code
+claude mcp add google-dev-knowledge --transport http \
+  https://developerknowledge.googleapis.com/mcp \
+  --header "X-Goog-Api-Key: YOUR_API_KEY"
+
+# Gemini CLI
+gemini mcp add -t http -H "X-Goog-Api-Key: YOUR_API_KEY" \
+  google-developer-knowledge \
+  https://developerknowledge.googleapis.com/mcp --scope user
+```
+
+Generate the API key at `https://console.cloud.google.com/apis/credentials` and restrict it to the Developer Knowledge API. Full reference: [`skills/litestar-styleguide/references/google-developer-knowledge-mcp.md`](skills/litestar-styleguide/references/google-developer-knowledge-mcp.md).
+
 ## Discovery topics
 
 This repo is tagged with GitHub topics so downstream registries and galleries auto-crawl it:

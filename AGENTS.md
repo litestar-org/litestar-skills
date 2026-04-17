@@ -78,6 +78,12 @@ make check           # lint + typecheck + test + validate-skills (CI parity)
 make release bump=patch   # atomic bump of all 8 manifests via bump-my-version
 ```
 
+## External Integrations
+
+Optional, opt-in only. No manifests shipped — users add them per host.
+
+- **Google Developer Knowledge MCP** — fresh Firebase / Google Cloud / Android / Maps docs. See [`skills/litestar-styleguide/references/google-developer-knowledge-mcp.md`](skills/litestar-styleguide/references/google-developer-knowledge-mcp.md) for auth, install one-liners, and the Codex/OpenCode gap note.
+
 ## Version Sync Rule
 
 Any file with a `version` string is listed under `[[tool.bumpversion.files]]` in `pyproject.toml`. Adding a new manifest requires adding it to bumpversion in the **same commit**.
