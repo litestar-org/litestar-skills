@@ -187,21 +187,27 @@ lint: ruff oxlint markdownlint                      ## Run all linters
 # -----------------------------------------------------------------------------
 
 .PHONY: validate-skills
-validate-skills:                                    ## Validate SKILL.md frontmatter and cross-links
+validate-skills:                                    ## Validate SKILL.md + commands + agents frontmatter, XML tags, cross-links
 	@echo "${INFO} Validating skills... 🔍"
-	@if [ -f tools/validate-skills.py ]; then \
-		uv run python tools/validate-skills.py; \
-		echo "${OK} Skills validation complete ✨"; \
-	else \
-		echo "${WARN} tools/validate-skills.py not yet built (Saga 7)"; \
-	fi
+	@uv run python tools/validate-skills.py
+	@echo "${OK} Skills validation complete ✨"
+
+.PHONY: sync-manifests
+sync-manifests:                                     ## Verify all bump-my-version tracked files are in sync
+	@echo "${INFO} Checking manifest version sync... 🔍"
+	@uv run python tools/sync-manifests.py
+	@echo "${OK} Manifests in sync ✨"
+
+.PHONY: validate
+validate: validate-skills sync-manifests            ## Run all repo-integrity validators
+	@echo "${OK} All validators passed ✨"
 
 # -----------------------------------------------------------------------------
 # Aggregate Targets
 # -----------------------------------------------------------------------------
 
 .PHONY: check
-check: lint type-check test validate-skills         ## Run all checks (lint, type-check, test, validate-skills) — CI parity
+check: lint type-check test validate                ## Run all checks (lint, type-check, test, validate) — CI parity
 	@echo "${OK} All checks passed successfully ✨"
 
 # =============================================================================
