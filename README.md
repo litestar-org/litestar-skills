@@ -8,6 +8,14 @@
 
 **v0.1.1 — early access.** Multi-host plumbing, 16 skills, ~22,800 lines of canonical content. Full launch-skill catalog growing.
 
+## Support Tiers
+
+Each host falls into one of three tiers:
+
+- **First-class** — the repo ships maintained host-specific artifacts and install guidance. Currently: Claude Code, Gemini CLI, Codex CLI, OpenCode.
+- **Compatible bundle** — the host consumes standard manifests or generic skill-discovery paths. Currently: Cursor, VS Code/Copilot, OpenClaw.
+- **Free ride** — the host discovers generic Agent Skills without a dedicated integration. Currently: Google Antigravity.
+
 ## Install
 
 Pick your host and run the one command below. If you use several agents, skip to the [multi-host installer](#one-shot-multi-host-installer).
@@ -35,17 +43,19 @@ Gemini auto-indexes this repo into its [extension gallery](https://geminicli.com
 git clone https://github.com/litestar-org/litestar-skills ~/.codex/plugins/litestar-skills
 ```
 
-Then inside Codex: `$skill list | grep litestar`. See [`.codex/INSTALL.md`](.codex/INSTALL.md) for project-scoped install.
+Codex auto-discovers plugins under `~/.codex/plugins/`. Ships `.codex/agents/litestar-reviewer.toml` (pure TOML, tools inherited from session `config.toml`). Verify with `$skill list | grep litestar`. See [`.codex/INSTALL.md`](.codex/INSTALL.md) for project-scoped marketplace install.
 
 ### OpenCode
 
+OpenCode reads `.opencode/skills/`, `.claude/skills/`, and `.agents/skills/` natively — the recommended install is project-local:
+
 ```bash
-git clone https://github.com/litestar-org/litestar-skills ~/.config/opencode/litestar-skills
-ln -sf ~/.config/opencode/litestar-skills/.opencode/plugins/litestar-skills.js \
-       ~/.config/opencode/plugins/litestar-skills.js
+git clone --depth 1 https://github.com/litestar-org/litestar-skills /tmp/litestar-skills
+mkdir -p .agents/skills
+cp -r /tmp/litestar-skills/skills/* .agents/skills/
 ```
 
-OpenCode also reads `.claude/skills/` and `.agents/skills/` natively — for a project-local install, copy the `skills/` tree there. See [`.opencode/INSTALL.md`](.opencode/INSTALL.md).
+A global-plugin variant exists for users who want cross-project coverage, but the JS plugin entrypoint is a no-op stub today — skill discovery happens through the paths above either way. See [`.opencode/INSTALL.md`](.opencode/INSTALL.md).
 
 ### Cursor
 

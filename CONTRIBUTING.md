@@ -15,6 +15,16 @@ See [`docs/roadmap.md`](docs/roadmap.md) for shipped features, v0.2 candidates, 
 6. Run `make check` — full CI parity locally.
 7. Open a PR. Maintainer review verifies tone, first-party bias, and technical accuracy.
 
+## Support Tiers
+
+When adding or changing host support, classify the host into one of three tiers:
+
+- **First-class** — the repo ships maintained host-specific artifacts (manifest, subagents, hooks) and install guidance. Adding a new first-class host requires per-host validator coverage in `tools/validate-skills.py`.
+- **Compatible bundle** — the host consumes standard manifests or generic skill-discovery paths. No native wrapper is promised; no per-host validator is required.
+- **Free ride** — the host discovers generic Agent Skills / `AGENTS.md` content. The repo ships no dedicated integration; docs only.
+
+Do not promote a host to a higher tier without shipping the corresponding artifacts and validator coverage in the same PR.
+
 ## Updating Host Manifests
 
 When adding a skill, command, subagent, or MCP server, update the relevant per-host manifest so consumers auto-discover the new content:

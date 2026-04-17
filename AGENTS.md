@@ -33,14 +33,22 @@ Every `SKILL.md` MUST follow these conventions:
 
 ## Supported Hosts
 
-| Host | Entry Point | Notes |
-| --- | --- | --- |
-| **Claude Code** | `.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` | Primary target. Full plugin with skills, commands, agents, hooks. |
-| **Gemini CLI** | `gemini-extension.json`, context via `GEMINI.md` | Auto-indexed gallery (topic `gemini-cli-extension`). |
-| **Codex CLI** | `.codex-plugin/plugin.json` | Includes `interface` metadata block. |
-| **Cursor** | `.cursor-plugin/plugin.json` | Hooks via `hooks/hooks-cursor.json`. |
-| **OpenCode** | `.opencode/plugins/litestar-skills.js` + native `.claude/skills/` + `.agents/skills/` reads | JS plugin wrapper. |
-| **VS Code/Copilot** | User adds path to `chat.skillsLocations` | Raw SKILL.md tree (no wrapper extension in v0.1). |
+Every host falls into one of three tiers:
+
+- **First-class** — the repo ships maintained host-specific manifests, agents, and install guidance; changes to the shared skills tree are verified against the host.
+- **Compatible bundle** — the host consumes the repo through standard manifests or generic skill-discovery paths; no native wrapper is promised.
+- **Free ride** — the host discovers generic Agent Skills / `AGENTS.md` content; the repo ships no dedicated integration.
+
+| Host | Tier | Entry Point | Notes |
+| --- | --- | --- | --- |
+| **Claude Code** | first-class | `.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` + `.claude-plugin/agents/*.md` | Full plugin with skills, commands, agents, hooks. |
+| **Gemini CLI** | first-class | `gemini-extension.json` + `agents/*.md`, context via `GEMINI.md` | Auto-indexed gallery (topic `gemini-cli-extension`). |
+| **Codex CLI** | first-class | `.codex-plugin/plugin.json` + `.codex/agents/*.toml` + `.codex/config.toml` | Custom agents ship as pure TOML (tools inherited from session). |
+| **OpenCode** | first-class | `.opencode/plugins/litestar-skills.js` + `.opencode/agents/*.md` + native `.claude/skills/` / `.agents/skills/` reads | JS plugin wrapper + dict-schema agents. |
+| **Cursor** | compatible bundle | `.cursor-plugin/plugin.json` | Hooks via `hooks/hooks-cursor.json`. |
+| **VS Code / Copilot** | compatible bundle | User adds path to `chat.skillsLocations` | Raw SKILL.md tree (no wrapper extension in v0.1). |
+| **Google Antigravity** | free ride | `.agent/skills/` (workspace, note **singular**) or `~/.gemini/antigravity/skills/` (global) | Symlink `.agent → .agents` in your workspace; see README install. |
+| **OpenClaw** | compatible bundle | `.agents/skills/` + `AGENTS.md` | Consumes generic Agent Skills tree without extra config. |
 
 ## File Resolution
 
@@ -48,8 +56,9 @@ Every `SKILL.md` MUST follow these conventions:
 | --- | --- |
 | Skills | `skills/<skill-name>/SKILL.md` |
 | Slash commands | `commands/<prefix>/<command>.toml` |
-| Subagents (Gemini CLI) | `agents/<agent-name>.md` (`tools` as YAML list of Gemini tool names) |
 | Subagents (Claude Code) | `.claude-plugin/agents/<agent-name>.md` (`tools` as comma-separated string of Claude tool names) |
+| Subagents (Codex CLI) | `.codex/agents/<agent-name>.toml` (pure TOML; `developer_instructions` holds the prompt; no top-level `tools` — inherited from session `config.toml`) |
+| Subagents (Gemini CLI) | `agents/<agent-name>.md` (`tools` as YAML list of Gemini tool names) |
 | Subagents (OpenCode) | `.opencode/agents/<agent-name>.md` (`tools` as dict mapping + `mode: subagent`) |
 | MCP servers | `mcp-servers/<server-name>/` |
 | Hooks | `hooks/*.json` + `hooks/session-start` |
