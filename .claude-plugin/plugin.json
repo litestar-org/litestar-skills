@@ -11,8 +11,8 @@
   "repository": "https://github.com/litestar-org/litestar-skills",
   "license": "MIT",
   "keywords": ["litestar", "skills", "agent", "ai", "sqlspec", "advanced-alchemy", "granian", "msgspec", "dishka", "mcp"],
-  "skills": "./skills/",
-  "commands": "./commands/",
-  "agents": "./.claude-plugin/agents/",
+  "skills": ["./skills/"],
+  "commands": ["./commands/"],
+  "agents": ["./.claude-plugin/agents/litestar-reviewer.md"],
   "hooks": "./hooks/hooks.json"
 }

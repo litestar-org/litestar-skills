@@ -11,6 +11,8 @@
   "license": "MIT",
   "keywords": ["litestar", "skills", "agent", "ai", "sqlspec", "advanced-alchemy"],
   "skills": "./skills/",
+  "commands": "./commands/",
+  "agents": "./.codex/agents/",
   "hooks": "./hooks/hooks-codex.json",
   "interface": {
     "displayName": "Litestar Skills",
