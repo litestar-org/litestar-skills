@@ -37,7 +37,7 @@
 .PARAMETER AntigravitySymlink
     Create .agent -> .agents symbolic link in $PWD so Google Antigravity
     (singular .agent) discovers skills installed under .agents/skills/.
-    Opt-in — community workaround, not a Google-blessed integration.
+    Opt-in - community workaround, not a Google-blessed integration.
     Requires Developer Mode or admin rights on Windows for symlink
     creation. Skipped if .agent already exists.
 
