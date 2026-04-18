@@ -6,7 +6,7 @@
 
 ## Status
 
-**v0.1.1 — early access.** Multi-host plumbing, 16 skills, ~22,800 lines of canonical content. Full launch-skill catalog growing.
+**v0.1.2 — early access.** Multi-host plumbing, 16 skills, ~22,800 lines of canonical content. Full launch-skill catalog growing.
 
 ## Support Tiers
 
