@@ -24,6 +24,7 @@ enforces:
 Exit 0 on clean; exit 1 with a per-file violation list otherwise.
 """
 
+import json
 import re
 import sys
 from collections.abc import Iterable, Iterator
@@ -423,6 +424,38 @@ def validate_claude_agent(path: Path) -> list[Violation]:
     return violations
 
 
+def validate_manifest(path: Path) -> list[Violation]:
+    """Validate a host-specific plugin.json manifest.
+
+    Enforces host-specific schema requirements (e.g. Claude Code requiring arrays
+    for file lists).
+    """
+    violations: list[Violation] = []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        return [Violation(path, 1, f"JSON parse error: {exc}")]
+
+    # Identify host by parent directory name
+    host_dir = path.parent.name
+    is_claude = host_dir == ".claude-plugin"
+
+    # Claude Code specific rules
+    if is_claude:
+        for field in ("agents", "skills", "commands"):
+            val = data.get(field)
+            if val is not None and not isinstance(val, list):
+                violations.append(
+                    Violation(
+                        path,
+                        1,
+                        f"Claude manifest {field!r} field must be an array for maximum reliability",
+                    )
+                )
+
+    return violations
+
+
 def validate_codex_agent(path: Path) -> list[Violation]:
     """Validate a Codex CLI subagent file under ``.codex/agents/``.
 
@@ -576,7 +609,15 @@ def iter_codex_agents() -> Iterator[Path]:
         yield from sorted(CODEX_AGENTS_DIR.glob("*.toml"))
 
 
+def iter_manifests() -> Iterator[Path]:
+    for host in (".claude-plugin", ".codex-plugin", ".cursor-plugin"):
+        candidate = REPO_ROOT / host / "plugin.json"
+        if candidate.is_file():
+            yield candidate
+
+
 def iter_all_shipped_files() -> Iterator[Path]:
+    yield from iter_manifests()
     if SKILLS_DIR.is_dir():
         yield from sorted(SKILLS_DIR.rglob("*.md"))
     if COMMANDS_DIR.is_dir():
@@ -623,6 +664,9 @@ def main() -> int:
     opencode_agents = list(iter_opencode_agents())
     claude_agents = list(iter_claude_agents())
     codex_agents = list(iter_codex_agents())
+    manifests = list(iter_manifests())
+    for manifest_path in manifests:
+        all_violations.extend(validate_manifest(manifest_path))
     for skill_path in skills:
         all_violations.extend(validate_skill(skill_path))
     for cmd_path in commands:
