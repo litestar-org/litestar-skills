@@ -6,10 +6,12 @@ This file is the deep reference for building service classes on top of SQLSpec i
 
 `SQLSpecAsyncService` is a thin driver wrapper that provides a consistent set of service-layer primitives. The base class holds a reference to an `AsyncDriverAdapterBase` instance injected by the DI container and exposes methods for pagination, single-row lookups, existence checks, and transaction control.
 
+`SQLSpecAsyncService` is *not* shipped by `sqlspec` — it is a project-defined base class introduced by the canonical reference apps. Copy the implementation from [`litestar-sqlstack/src/sqlstack/lib/service.py`](https://github.com/cofin/litestar-sqlstack) (also used by [`oracledb-vertexai-demo`](https://github.com/cofin/oracledb-vertexai-demo)) into your project's `lib/service.py`.
+
 Class header (adapted from `litestar-sqlstack/src/sqlstack/lib/service.py:L71`):
 
 ```python
-from sqlspec.adapters.base import AsyncDriverAdapterBase
+from sqlspec.driver import AsyncDriverAdapterBase
 
 
 class SQLSpecAsyncService:
@@ -33,11 +35,10 @@ class SQLSpecAsyncService:
 
 Extend `SQLSpecAsyncService` for each domain entity:
 
-```python
-from sqlspec.service import SQLSpecAsyncService
-from sqlspec.adapters.base import AsyncDriverAdapterBase
+```python  # pragma: legacy-example
+from app.lib.service import SQLSpecAsyncService
+from sqlspec.driver import AsyncDriverAdapterBase
 
-from app.lib.db import db_manager
 from app.schemas import Order
 
 
@@ -52,11 +53,11 @@ SQLSpec supports loading SQL files from a directory tree with `dbm.load_sql_file
 
 Canonical usage pattern (adapted from `litestar-sqlstack/src/sqlstack/domain/accounts/services/_user.py:L33, L45–46, L65–66`):
 
-```python
+```python  # pragma: legacy-example
 from app.lib.db import db_manager
+from app.lib.service import SQLSpecAsyncService
 from app.schemas import Order
-from sqlspec.service import SQLSpecAsyncService
-from sqlspec.adapters.base import AsyncDriverAdapterBase
+from sqlspec.driver import AsyncDriverAdapterBase
 
 
 class OrderService(SQLSpecAsyncService):

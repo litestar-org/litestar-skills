@@ -6,8 +6,8 @@ Release pipelines that produce wheels, multi-platform PyApp onefiles, multi-arch
 
 | Project | Targets | Flavor |
 | --- | --- | --- |
-| litestar-fullstack-inertia | 4 platforms (Linux x86_64/arm64, macOS x86_64/arm64) | Simple PyApp via `hatch build --target binary` |
-| accelerator (DMA) | 2 Linux platforms (x86_64, arm64) + 2 distroless container images | Advanced: custom bundler, `cargo zigbuild`, offline onefiles |
+| [litestar-fullstack-inertia](https://github.com/litestar-org/litestar-fullstack-inertia) | 4 platforms (Linux x86_64/arm64, macOS x86_64/arm64) | Simple PyApp via `hatch build --target binary` |
+| Advanced reference | 2 Linux platforms (x86_64, arm64) + 2 distroless container images | Advanced: custom bundler, `cargo zigbuild`, offline onefiles |
 
 ## Shape of a release
 
@@ -170,7 +170,7 @@ jobs:
             release-files/*
 ```
 
-## Advanced (accelerator) — key differences
+## Advanced — key differences
 
 ### Target-specific onefile job
 
@@ -183,16 +183,16 @@ build-onefiles:
       job:
         - target: x86_64-unknown-linux-gnu
           os: self-hosted
-          artifact: dma-x86_64-linux-gnu
+          artifact: app-x86_64-linux-gnu
         - target: aarch64-unknown-linux-gnu
           os: self-hosted
-          artifact: dma-aarch64-linux-gnu
+          artifact: app-aarch64-linux-gnu
   runs-on: ${{ matrix.job.os }}
   env:
     PYAPP_REPO: pyapp
     PYAPP_VERSION: v0.29.0
     PYAPP_PYTHON_VERSION: "3.13"
-    PYAPP_PROJECT_NAME: "dma"
+    PYAPP_PROJECT_NAME: "app"
     PYAPP_FULL_ISOLATION: "true"
     PYAPP_PROJECT_FEATURES: "cloudrun"
     BZIP2_SYS_STATIC: "1"
@@ -235,8 +235,8 @@ build-onefiles:
     - name: Export requirements.txt
       run: |
         uv export --frozen --no-dev --no-editable --no-hashes --no-header --no-emit-project --extra cloudrun > dist/requirements.txt
-        VERSION=$(uv run python -c "from dma.__metadata__ import __version__; print(__version__)")
-        echo "$(realpath dist/dma-${VERSION}-py3-none-any.whl)" >> dist/requirements.txt
+        VERSION=$(uv run python -c "from app.__metadata__ import __version__; print(__version__)")
+        echo "$(realpath dist/app-${VERSION}-py3-none-any.whl)" >> dist/requirements.txt
         echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
       id: version
 
@@ -247,14 +247,14 @@ build-onefiles:
           --requirements dist/requirements.txt \
           --output dist/python-dist-${{ matrix.job.target }}.tar.gz \
           --pyapp-dir ${{ env.PYAPP_REPO }} \
-          --install-root "~/.dma" \
+          --install-root "~/.<app>" \
           --project-name "runtime"
 
     - name: Build PyApp onefile (Linux GNU, glibc 2.17 baseline)
       if: contains(matrix.job.target, 'linux-gnu')
       working-directory: ${{ env.PYAPP_REPO }}
       env:
-        PYAPP_PROJECT_PATH: ${{ github.workspace }}/dist/dma-${{ steps.version.outputs.VERSION }}-py3-none-any.whl
+        PYAPP_PROJECT_PATH: ${{ github.workspace }}/dist/app-${{ steps.version.outputs.VERSION }}-py3-none-any.whl
         PYAPP_DISTRIBUTION_PATH: ${{ github.workspace }}/dist/python-dist-${{ matrix.job.target }}.tar.gz
         PYAPP_DISTRIBUTION_EMBED: "true"
         PYAPP_DISTRIBUTION_PYTHON_PATH: python/bin/python3
@@ -296,9 +296,9 @@ build-images:
     - name: Prepare dist directory
       run: |
         mkdir -p dist
-        cp artifacts/dma-x86_64-linux-gnu/dma-x86_64-linux-gnu  dist/dma-amd64-linux-gnu
-        cp artifacts/dma-aarch64-linux-gnu/dma-aarch64-linux-gnu dist/dma-arm64-linux-gnu
-        chmod +x dist/dma-amd64-linux-gnu dist/dma-arm64-linux-gnu
+        cp artifacts/app-x86_64-linux-gnu/app-x86_64-linux-gnu  dist/app-amd64-linux-gnu
+        cp artifacts/app-aarch64-linux-gnu/app-aarch64-linux-gnu dist/app-arm64-linux-gnu
+        chmod +x dist/app-amd64-linux-gnu dist/app-arm64-linux-gnu
 
     - uses: docker/setup-qemu-action@v4
     - uses: docker/setup-buildx-action@v4
@@ -310,15 +310,15 @@ build-images:
         file: tools/deploy/docker/run/Dockerfile.canonical
         platforms: linux/amd64
         load: true
-        tags: dma:latest-amd64
+        tags: app:latest-amd64
 
     - name: Smoketest AMD64 image
       run: |
-        docker run --rm dma:latest-amd64 --help
-        docker run --rm dma:latest-amd64 manage --help
+        docker run --rm app:latest-amd64 --help
+        docker run --rm app:latest-amd64 manage --help
 
     - name: Export AMD64 image tar
-      run: docker save dma:latest-amd64 -o dist/dma-image-amd64.tar
+      run: docker save app:latest-amd64 -o dist/app-image-amd64.tar
 
     - name: Build & export ARM64 image
       uses: docker/build-push-action@v7
@@ -326,13 +326,13 @@ build-images:
         context: .
         file: tools/deploy/docker/run/Dockerfile.canonical
         platforms: linux/arm64
-        outputs: type=docker,dest=dist/dma-image-arm64.tar
-        tags: dma:latest-arm64
+        outputs: type=docker,dest=dist/app-image-arm64.tar
+        tags: app:latest-arm64
 
     - uses: actions/upload-artifact@v3
       with:
         name: container-images
-        path: dist/dma-image-*.tar
+        path: dist/app-image-*.tar
 ```
 
 ### Publish job (with changelog generation)
@@ -392,7 +392,7 @@ publish:
 [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
 ```
 
-### Semver + pre-release (accelerator)
+### Semver + pre-release
 
 ```bash
 [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(([ab]|rc)[0-9]+)?$ ]]

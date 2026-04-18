@@ -6,7 +6,7 @@ How to produce a single `.whl` that contains Python code **and** a compiled fron
 
 ### Pattern A — `force-include` (explicit)
 
-Used by **litestar-fullstack-inertia**. The built asset directory is `.gitignore`d; Hatchling would normally exclude it. `[tool.hatch.build.targets.wheel.force-include]` overrides that per-directory.
+Used by **[litestar-fullstack-inertia](https://github.com/litestar-org/litestar-fullstack-inertia)**. The built asset directory is `.gitignore`d; Hatchling would normally exclude it. `[tool.hatch.build.targets.wheel.force-include]` overrides that per-directory.
 
 ```toml
 # pyproject.toml (litestar-fullstack-inertia)
@@ -54,10 +54,10 @@ scripts = ["app"]
 
 ### Pattern B — `ignore-vcs = true` (implicit)
 
-Used by **litestar-fullstack-spa** and **accelerator**. Hatchling ignores `.gitignore`; every file under the `packages = [...]` trees ships.
+Used by **[litestar-fullstack](https://github.com/litestar-org/litestar-fullstack)**. Hatchling ignores `.gitignore`; every file under the `packages = [...]` trees ships.
 
 ```toml
-# pyproject.toml (litestar-fullstack-spa)
+# pyproject.toml (litestar-fullstack)
 [build-system]
 build-backend = "hatchling.build"
 requires = ["hatchling", "setuptools"]
@@ -80,10 +80,10 @@ packages = ["src/py/app"]
 # ignore-vcs is inherited from [tool.hatch.build]
 ```
 
-And accelerator's more elaborate take, which still uses the same core idea but spells out artifact patterns:
+A more elaborate variant uses the same core idea but spells out artifact patterns:
 
 ```toml
-# pyproject.toml (accelerator)
+# pyproject.toml
 [build-system]
 build-backend = "hatchling.build"
 requires = ["hatchling", "setuptools"]
@@ -96,7 +96,7 @@ dev-mode-dirs = ["src/py", "."]
 ignore-vcs = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/py/dma"]
+packages = ["src/py/<app>"]
 artifacts = [
   "**/*.j2", "**/*.sql", "**/*.ini",
   "**/*.ico", "**/*.png", "**/*.svg",
@@ -108,7 +108,7 @@ artifacts = [
 "src/py" = ""
 
 [tool.hatch.build.targets.binary]
-scripts = ["dma"]
+scripts = ["<app>"]
 pyapp-version = "0.29.0"
 python-version = "3.13"
 
@@ -130,7 +130,7 @@ PYAPP_ALLOW_UPDATES = "1"
 The wheel config above only works because **the frontend build writes INTO the Python package directory**. This is a deliberate choice, encoded in `vite.config.ts`:
 
 ```ts
-// litestar-fullstack-spa/src/js/web/vite.config.ts
+// litestar-fullstack/src/js/web/vite.config.ts
 import path from "node:path"
 import litestar from "litestar-vite-plugin"
 import { defineConfig } from "vite"
@@ -175,7 +175,7 @@ return ViteConfig(
 ### Minimal (inertia-style)
 
 ```makefile
-# /home/cody/code/litestar/litestar-fullstack-inertia/Makefile
+# https://github.com/litestar-org/litestar-fullstack-inertia — Makefile
 
 .PHONY: install
 install:
@@ -195,10 +195,10 @@ build-binary: build-wheel
 	@uv run hatch build --target binary
 ```
 
-### Multi-asset (accelerator-style)
+### Multi-asset
 
 ```makefile
-# /home/cody/code/g/dma/accelerator/Makefile
+# Makefile
 
 .PHONY: js-install
 js-install:
@@ -207,18 +207,18 @@ js-install:
 
 .PHONY: js-build-web
 js-build-web: js-install
-	@uv run python manage.py assets build          # writes to src/py/dma/server/public/
+	@uv run python manage.py assets build          # writes to src/py/<app>/server/public/
 
 .PHONY: js-build-offline-report
 js-build-offline-report: js-install
-	@cd src/js/offline && bun run build            # writes to src/py/dma/domain/web/static/reports/offline/
+	@cd src/js/offline && bun run build            # writes to src/py/<app>/domain/web/static/reports/offline/
 
 .PHONY: js-build-all
 js-build-all: js-build-web js-build-offline-report
 
 .PHONY: build-templates
 build-templates:
-	@cd src/js/templates && bun run build          # writes to src/py/dma/domain/notifications/email/templates/
+	@cd src/js/templates && bun run build          # writes to src/py/<app>/domain/notifications/email/templates/
 
 .PHONY: generate-licenses
 generate-licenses:
@@ -298,7 +298,7 @@ build: {
   run: mkdir -p app/domain/web/public   # or src/py/app/server/static/web
 ```
 
-Or factor this into a composite action (accelerator pattern — see `github-ci.md`).
+Or factor this into a composite action (see `github-ci.md`).
 
 ### Mistake 5: Tracking built assets in git
 
@@ -307,7 +307,7 @@ Or factor this into a composite action (accelerator pattern — see `github-ci.m
 **Fix:** Add the bundle dir to `.gitignore`:
 
 ```gitignore
-# /home/cody/code/litestar/litestar-fullstack-inertia/.gitignore
+# https://github.com/litestar-org/litestar-fullstack-inertia — .gitignore
 app/domain/web/public/*
 app/domain/web/public/hot
 !app/domain/web/public/.gitkeep

@@ -15,7 +15,7 @@ Provides domain service instances. Each `@provide` method declares a service tha
 
 ```python
 from dishka import Provider, Scope, provide
-from sqlspec.adapters.base import AsyncDriverAdapterBase
+from sqlspec.driver import AsyncDriverAdapterBase
 
 from app.domains.orders.services import OrderService
 from app.domains.posts.services import PostService
@@ -44,13 +44,13 @@ Note: no `from __future__ import annotations` — Dishka inspects `@provide` met
 
 ### `LitestarPersistenceProvider` — `Scope.REQUEST`
 
-Yields an `AsyncDriverAdapterBase` from the SQLSpec connection pool. The `async with db_manager.provide_session(db)` context manager opens a connection at the start of the request and releases it on exit (commit or rollback). Adapted from `litestar-sqlstack/src/sqlstack/ioc.py:L107–125`.
+Yields an `AsyncDriverAdapterBase` from the SQLSpec connection pool. The `async with db_manager.provide_session(db)` context manager opens a connection at the start of the request and releases it on exit (commit or rollback). Adapted from [litestar-sqlstack](https://github.com/cofin/litestar-sqlstack) (`src/sqlstack/ioc.py:L107–125`).
 
 ```python
 from collections.abc import AsyncIterator
 
 from dishka import Provider, Scope, provide
-from sqlspec.adapters.base import AsyncDriverAdapterBase
+from sqlspec.driver import AsyncDriverAdapterBase
 
 from app.lib.db import db, db_manager
 
@@ -86,7 +86,7 @@ The standard alias for injecting Dishka-managed dependencies into Litestar handl
 from dishka.integrations.litestar import FromDishka as Inject
 ```
 
-Cited from `dma/accelerator/src/py/dma/lib/di.py:L30` and `litestar-sqlstack/src/sqlstack/lib/di.py:L42`.
+Cited from `litestar-sqlstack/src/sqlstack/lib/di.py:L42`.
 
 Import this alias once in a `app/lib/di.py` re-export module and use `Inject[SomeService]` in all handler signatures:
 
@@ -118,7 +118,7 @@ from dishka import Provider, Scope, make_async_container, provide
 from dishka.integrations.litestar import FromDishka as Inject, setup_dishka
 from litestar import Litestar
 from litestar_channels.backends.base import ChannelsBackend
-from sqlspec.adapters.base import AsyncDriverAdapterBase
+from sqlspec.driver import AsyncDriverAdapterBase
 
 from app.domains.orders.services import OrderService
 from app.domains.posts.services import PostService

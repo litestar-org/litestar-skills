@@ -95,19 +95,19 @@ class UserService(SQLAlchemyAsyncRepositoryService[User]):
 
 ## Branch B — `sqlspec` async service
 
-`SQLSpecAsyncService` wraps a `sqlspec` driver and gives you the same Controller-facing shape (`list_and_count`, `get_one_or_none`, etc.) while keeping SQL explicit and driver-adapter agnostic.
+`SQLSpecAsyncService` wraps a `sqlspec` driver and gives you the same Controller-facing shape (`list_and_count`, `get_one_or_none`, etc.) while keeping SQL explicit and driver-adapter agnostic. The base class itself is a **project-defined** pattern adapted from [`litestar-sqlstack`](https://github.com/cofin/litestar-sqlstack) — copy it into your project's `app/lib/service.py` (it's ~40 lines). See [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md) for the reference implementation.
 
-```python
+```python  # pragma: legacy-example
 from __future__ import annotations
 
-from sqlspec.service import SQLSpecAsyncService
+from sqlspec.service import SQLSpecAsyncService  # project-defined — see callout above
 
 from app.schemas import Post
 
 
 class PostService(SQLSpecAsyncService):
     async def list_and_count(self, *filters) -> tuple[list[Post], int]:
-        return await self.driver.select_and_count(
+        return await self.driver.select_with_total(
             "SELECT * FROM posts WHERE tenant_id = :tid",
             filters=filters,
             schema_type=Post,

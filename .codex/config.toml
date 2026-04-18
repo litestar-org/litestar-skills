@@ -1,7 +1,8 @@
 # litestar-skills — Codex CLI configuration
 #
-# v0.0.1 scaffold: no MCP servers shipped yet. Populated when MCP servers
-# land in v0.2+.
+# No MCP servers shipped yet. Populated when MCP servers land
+# (tracked in docs/roadmap.md §PyPI / npm publishing — concrete candidates
+# include `litestar-skills-mcp-docs`).
 #
 # Example (commented out):
 # [mcp_servers.litestar_docs]

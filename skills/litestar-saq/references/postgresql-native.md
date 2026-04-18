@@ -1,6 +1,6 @@
 # PostgreSQL-native worker queue (no SAQ)
 
-Some projects reject SAQ entirely and implement a thin `TaskService + WorkerPlugin` pair directly over PostgreSQL. If your project uses SAQ (Redis or PG broker), see [`../SKILL.md`](../SKILL.md) for those paths. This reference documents the **zero-extra-deps alternative**: one `job` table, `FOR UPDATE SKIP LOCKED` for atomic claiming, `pg_notify` for wake-ups, and a `@task` decorator that registers callables with optional cron schedules and execution-target routing. The canonical example is the `dma/accelerator` codebase.
+Some projects reject SAQ entirely and implement a thin `TaskService + WorkerPlugin` pair directly over PostgreSQL. If your project uses SAQ (Redis or PG broker), see [`../SKILL.md`](../SKILL.md) for those paths. This reference documents the **zero-extra-deps alternative**: one `job` table, `FOR UPDATE SKIP LOCKED` for atomic claiming, `pg_notify` for wake-ups, and a `@task` decorator that registers callables with optional cron schedules and execution-target routing.
 
 <!-- NOTE: do NOT use `from __future__ import annotations` in modules that define
 @task-decorated functions — the decorator inspects signatures at registration time. -->
@@ -23,7 +23,7 @@ Some projects reject SAQ entirely and implement a thin `TaskService + WorkerPlug
 
 ## Schema
 
-The pattern uses a single `job` table. Column list inferred from the raw SQL in `get_pending_tasks` (`dma/accelerator/src/py/dma/domain/system/services/_task.py:L101–130`) and the `fail_task` CTE (`L224–273`):
+The pattern uses a single `job` table:
 
 ```sql
 CREATE TABLE job (
@@ -49,8 +49,6 @@ CREATE TABLE job (
 
 ## Status + execution target literals
 
-From `dma/accelerator/src/py/dma/domain/system/schemas/_job.py:L25–26`:
-
 ```python
 from typing import Literal
 
@@ -60,9 +58,9 @@ ExecutionTarget = Literal["local", "cloudrun", "immediate"]
 
 ## `TaskService` — core CRUD
 
-The service inherits from `SQLSpecAsyncService` (see [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md)). Each method below is cited from `dma/accelerator/src/py/dma/domain/system/services/_task.py`.
+The service inherits from `SQLSpecAsyncService` (see [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md)).
 
-### `create_task` (L29–99)
+### `create_task`
 
 Persists a new task and returns its UUID. Accepts a `key` for deduplication (skips insert if the key is already in a non-terminal state).
 
@@ -82,11 +80,11 @@ async def create_task(
     ...
 ```
 
-### `get_pending_tasks` (L101–130)
+### `get_pending_tasks`
 
 Fetches up to `limit` tasks ready for execution. Does **not** lock rows here — locking happens in `claim_task`. Raw SQL: `SELECT ... FROM job WHERE status IN ('pending','scheduled') AND execution_target = :execution_target AND (scheduled_at IS NULL OR scheduled_at <= :now) ORDER BY priority DESC, created_at ASC LIMIT :limit`.
 
-### `claim_task` (L177–204)
+### `claim_task`
 
 Atomically transitions `pending|scheduled → running` using `FOR UPDATE SKIP LOCKED` inside a transaction. Returns `False` on a race loss (another worker already claimed the task).
 
@@ -99,7 +97,7 @@ async def claim_task(self, task_id: "UUID") -> bool:
     ...
 ```
 
-### `complete_task` (L206–222)
+### `complete_task`
 
 ```python
 async def complete_task(self, task_id: "UUID", result: dict | None = None) -> None:
@@ -108,7 +106,7 @@ async def complete_task(self, task_id: "UUID", result: dict | None = None) -> No
     ...
 ```
 
-### `fail_task` (L224–273)
+### `fail_task`
 
 Uses a CTE-based update: if `retry_count < max_retries` and `retry=True`, resets to `pending` with `retry_count += 1` and `started_at = NULL`; otherwise marks `failed` with `completed_at = NOW()`.
 
@@ -128,13 +126,13 @@ async def fail_task(
     ...
 ```
 
-### `reschedule_job` (L275–306)
+### `reschedule_job`
 
 Used by the scheduler loop. Calls `ScheduleConfig.get_next_run(after=completed_at)` to compute the next fire time, nulls the `key` on the old terminal job (so the key can be reclaimed), then creates the successor task.
 
 ## `pg_notify` integration
 
-`_notify_worker` (from `dma/accelerator/src/py/dma/domain/system/services/_task.py:L798–810`) fires a Postgres NOTIFY after each `create_task` call so the in-process worker wakes immediately instead of polling. The accelerator uses channel name `"dma_tasks"` — pick a neutral name for your app (e.g., `"tasks"` or `"{app_name}_tasks"`). Payload format: `"{event}:{task_id}"`.
+`_notify_worker` fires a Postgres NOTIFY after each `create_task` call so the in-process worker wakes immediately instead of polling. Pick a channel name for your app (e.g., `"tasks"` or `"{app_name}_tasks"`). Payload format: `"{event}:{task_id}"`.
 
 ```python
 async def _notify_worker(self, event: str, data: str) -> None:
@@ -147,7 +145,7 @@ async def _notify_worker(self, event: str, data: str) -> None:
 
 ## `WorkerPlugin` (Litestar integration)
 
-`WorkerPlugin` implements `InitPluginProtocol`. Canonical reference: `dma/accelerator/src/py/dma/utils/worker/plugin.py:L57–224`.
+`WorkerPlugin` implements `InitPluginProtocol`.
 
 ```python
 from litestar.plugins import InitPluginProtocol
@@ -191,13 +189,7 @@ class WorkerPlugin(InitPluginProtocol):
 
 ## `@task` decorator + registry
 
-The `@task` decorator (from `dma/accelerator/src/py/dma/lib/jobs.py:L792–903`) registers async callables into `_job_registry` and, when `cron` or `interval` is specified, into `_schedule_registry`. Wraps the callable in a `Task` object that exposes `.enqueue()`.
-
-Canonical examples from the accelerator (adapt to your domain):
-
-- Daily cron cleanup — `domain/system/jobs/_maintenance.py:L19–34`
-- Export with priority — `domain/workspaces/jobs/_export.py:L18–63`
-- File processor — `domain/workspaces/jobs/_files.py:L65–87`
+The `@task` decorator registers async callables into `_job_registry` and, when `cron` or `interval` is specified, into `_schedule_registry`. Wraps the callable in a `Task` object that exposes `.enqueue()`.
 
 ```python
 # app/jobs/tasks.py
@@ -223,7 +215,7 @@ async def process_uploaded_file(*, file_id: int) -> None:
     ...
 ```
 
-Decorator signature (from `lib/jobs.py:L792–903`):
+Decorator signature:
 
 ```python
 def task(
@@ -245,7 +237,7 @@ def task(
 
 ## Schedule config
 
-`ScheduleConfig` (from `dma/accelerator/src/py/dma/lib/jobs.py:L292–332`) is a dataclass that drives cron and interval-based scheduling:
+`ScheduleConfig` is a dataclass that drives cron and interval-based scheduling:
 
 ```python
 from dataclasses import dataclass
@@ -272,7 +264,7 @@ class ScheduleConfig:
 
 ## Execution target routing
 
-Three modes (from `dma/accelerator/src/py/dma/lib/jobs.py:L715–788`):
+Three modes:
 
 | Target | Behavior | Best for |
 | --- | --- | --- |
@@ -288,7 +280,7 @@ await generate_report.enqueue(report_id=42)                          # uses deco
 await process_uploaded_file.enqueue(execution_target="cloudrun", file_id=99)
 ```
 
-`CloudRunJobDispatcher.dispatch` (from `dma/accelerator/src/py/dma/utils/worker/cloudrun.py:L110–160`) stores the job in Postgres (always) then triggers a Cloud Run Job with env vars `JOB_ID`, `FUNCTION`, `KWARGS`, `DATABASE_URL`:
+`CloudRunJobDispatcher.dispatch` stores the job in Postgres (always) then triggers a Cloud Run Job with env vars `JOB_ID`, `FUNCTION`, `KWARGS`, `DATABASE_URL`:
 
 ```python
 def dispatch(
@@ -305,7 +297,7 @@ def dispatch(
 
 ## Wiring into Litestar
 
-From `dma/accelerator/src/py/dma/server/plugins.py:L40–50`. The `start_worker=False` default prevents web replicas from accidentally running the worker loop — flip to `True` only on dedicated worker replicas:
+The `start_worker=False` default prevents web replicas from accidentally running the worker loop — flip to `True` only on dedicated worker replicas:
 
 ```python
 from app.lib.worker import WorkerPlugin

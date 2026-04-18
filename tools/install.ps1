@@ -34,6 +34,13 @@
     Also whitelist the repo in $env:APPDATA\Claude\settings.json under
     extraKnownMarketplaces. Opt-in because it edits a host-owned file.
 
+.PARAMETER AntigravitySymlink
+    Create .agent -> .agents symbolic link in $PWD so Google Antigravity
+    (singular .agent) discovers skills installed under .agents/skills/.
+    Opt-in - community workaround, not a Google-blessed integration.
+    Requires Developer Mode or admin rights on Windows for symlink
+    creation. Skipped if .agent already exists.
+
 .EXAMPLE
     pwsh -File tools/install.ps1
     Install for every detected host.
@@ -58,7 +65,8 @@ param(
     [string[]]$Skip,
     [switch]$DryRun,
     [switch]$Force,
-    [switch]$ClaudeSettings
+    [switch]$ClaudeSettings,
+    [switch]$AntigravitySymlink
 )
 
 $ErrorActionPreference = 'Stop'
@@ -295,7 +303,7 @@ function Install-CodexCli {
             }
         }
     }
-    Write-Success "Codex CLI: installed at $target"
+    Write-Success "Codex CLI: installed at $target (includes .codex/agents/litestar-reviewer.toml)"
     $script:Statuses.Add('codex:installed')
 }
 
@@ -344,6 +352,44 @@ drop the skills/ tree from this repo into either path for local install.
 
 "@
     $script:Statuses.Add('cursor:instructions-printed')
+}
+
+# ------ Google Antigravity (opt-in workspace symlink) -----------------------
+function Install-AntigravitySymlink {
+    # Opt-in workaround: Antigravity reads `.agent\skills\` (singular) while
+    # this repo + Claude/OpenCode/VS Code all use `.agents\skills\` (plural).
+    # Windows symlinks require Developer Mode or admin rights; Copy-Item is
+    # offered as a fallback when New-Item -ItemType SymbolicLink fails.
+    if (-not $AntigravitySymlink) { return }
+
+    Write-Info 'Antigravity workspace symlink'
+    $skillsDir = Join-Path $PWD '.agents\skills'
+    $target = Join-Path $PWD '.agent'
+
+    if (-not (Test-Path $skillsDir)) {
+        Write-Warn "No .agents\skills\ in $PWD - install skills there first, then re-run with -AntigravitySymlink"
+        $script:Statuses.Add('antigravity:no-skills-dir')
+        return
+    }
+    if (Test-Path $target) {
+        Write-Warn ".agent already exists in $PWD - refusing to overwrite (remove it manually if intentional)"
+        $script:Statuses.Add('antigravity:path-conflict')
+        return
+    }
+
+    Invoke-Step "New-Item -ItemType SymbolicLink -Path $target -Target .agents" {
+        try {
+            New-Item -ItemType SymbolicLink -Path $target -Target '.agents' | Out-Null
+        } catch {
+            Write-Warn "Symlink failed: $($_.Exception.Message). Enable Developer Mode or run as admin, or copy .agents to .agent manually."
+            $script:Statuses.Add('antigravity:symlink-failed')
+            return
+        }
+    }
+    if (Test-Path $target) {
+        Write-Warn 'Created .agent -> .agents symlink (community workaround; not a Google-blessed integration)'
+        $script:Statuses.Add('antigravity:symlinked')
+    }
 }
 
 # ------ VS Code / Copilot (instructions) -------------------------------------
@@ -409,14 +455,16 @@ function Write-Summary {
         $hostName = $parts[0]
         $status = $parts[1]
         switch -Wildcard ($status) {
-            'installed'              { Write-Success ("{0,-10} {1}" -f $hostName, $status) }
-            'instructions-printed'   { Write-Success ("{0,-10} {1}" -f $hostName, $status) }
-            'already-installed'      { Write-Info    ("{0,-10} {1}" -f $hostName, $status) }
-            'not-installed'          { Write-Info    ("{0,-10} CLI not present; skipped" -f $hostName) }
-            'source-missing'         { Write-Warn    ("{0,-10} {1}" -f $hostName, $status) }
-            '*-failed'               { Write-Err     ("{0,-10} {1}" -f $hostName, $status) }
-            '*-conflict'             { Write-Err     ("{0,-10} {1}" -f $hostName, $status) }
-            default                  { Write-Info    ("{0,-10} {1}" -f $hostName, $status) }
+            'installed'              { Write-Success ("{0,-12} {1}" -f $hostName, $status) }
+            'symlinked'              { Write-Success ("{0,-12} {1}" -f $hostName, $status) }
+            'instructions-printed'   { Write-Success ("{0,-12} {1}" -f $hostName, $status) }
+            'already-installed'      { Write-Info    ("{0,-12} {1}" -f $hostName, $status) }
+            'not-installed'          { Write-Info    ("{0,-12} CLI not present; skipped" -f $hostName) }
+            'no-skills-dir'          { Write-Info    ("{0,-12} no .agents/skills/ in PWD; skipped" -f $hostName) }
+            'source-missing'         { Write-Warn    ("{0,-12} {1}" -f $hostName, $status) }
+            '*-failed'               { Write-Err     ("{0,-12} {1}" -f $hostName, $status) }
+            '*-conflict'             { Write-Err     ("{0,-12} {1}" -f $hostName, $status) }
+            default                  { Write-Info    ("{0,-12} {1}" -f $hostName, $status) }
         }
     }
     Write-Host ''
@@ -451,11 +499,13 @@ function Invoke-Main {
         & $spec.Install
     }
 
+    Install-AntigravitySymlink
+
     Write-Summary
 
     # Exit non-zero if any failure / conflict was recorded
     foreach ($entry in $script:Statuses) {
-        if ($entry -match ':(failed|path-conflict|update-failed)$') {
+        if ($entry -match ':(failed|path-conflict|update-failed|symlink-failed)$') {
             exit 1
         }
     }

@@ -37,6 +37,21 @@ dev = [
   "types-pyyaml>=6.0",
   "tomli>=2.0 ; python_version < '3.11'",
 ]
+# Libraries shipped guidance for. Install via `uv pip install -e '.[validation]'`
+# so `tools/check-upstream-imports.py` can verify every `from X import Y` in
+# skill code samples actually resolves against the installed version.
+# CI installs this group on every run; local dev opts in.
+validation = [
+  "advanced-alchemy>=1.0",
+  "argon2-cffi>=23.1",  # advanced_alchemy.types.password_hash.argon2 imports argon2 at module load
+  "dishka>=1.4",
+  "flask>=3.0",        # advanced_alchemy.extensions.flask imports flask at module load
+  "litestar-granian>=0.10",
+  "litestar-saq>=0.5",
+  "sanic[ext]>=24.6",  # advanced_alchemy.extensions.sanic imports sanic_ext at module load
+  "sqlspec[adk,asyncpg,performance,psycopg]>=0.13",
+  "pytest-databases"
+]
 
 [project.urls]
 Homepage = "https://github.com/litestar-org/litestar-skills"
@@ -193,3 +208,13 @@ replace = 'VERSION="{new_version}"'
 filename = "tools/install.ps1"
 search = "$script:Version = '{current_version}'"
 replace = "$script:Version = '{new_version}'"
+
+[[tool.bumpversion.files]]
+filename = "tools/install.sh"
+search = "litestar-skills/v{current_version}/"
+replace = "litestar-skills/v{new_version}/"
+
+[[tool.bumpversion.files]]
+filename = "README.md"
+search = "**v{current_version} — early access.**"
+replace = "**v{new_version} — early access.**"

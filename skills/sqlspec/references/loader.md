@@ -11,10 +11,11 @@
 ```python
 from sqlspec.loader import SQLFileLoader
 
-loader = SQLFileLoader(search_paths=["./sql", "./sql/queries"])
+loader = SQLFileLoader()
+loader.load_sql("./sql", "./sql/queries")
 
 # Load a named query
-stmt = loader.get("get-user-by-id")
+stmt = loader.get_sql("get-user-by-id")
 result = await db_session.select_one(stmt, [user_id], schema_type=User)
 ```
 
@@ -62,15 +63,14 @@ SELECT * FROM users WHERE email = $1
 
 ## Search Paths
 
-The loader searches directories in order. The first match wins:
+Pass any number of file or directory paths to `load_sql()`. Directories are walked recursively for `*.sql` files; later loads override earlier ones for the same query name:
 
 ```python
-loader = SQLFileLoader(
-    search_paths=[
-        "./sql/overrides",     # Project-specific overrides
-        "./sql/queries",       # Standard queries
-        "./sql/shared",        # Shared across projects
-    ]
+loader = SQLFileLoader()
+loader.load_sql(
+    "./sql/shared",        # Shared across projects (loaded first)
+    "./sql/queries",       # Standard queries
+    "./sql/overrides",     # Project-specific overrides (win on conflict)
 )
 ```
 
@@ -95,33 +95,31 @@ loader.invalidate_all()
 
 ## Storage Backends
 
-SQL files can be loaded from multiple storage backends:
+SQL files can be loaded from any URI supported by sqlspec's storage registry — local files, S3, GCS, Azure, in-memory. Pass URIs (or aliases registered with the storage registry) directly to `load_sql()`:
 
 ### Local Filesystem (Default)
 
 ```python
-loader = SQLFileLoader(search_paths=["./sql"])
+loader = SQLFileLoader()
+loader.load_sql("./sql")
 ```
 
-### S3
+### S3 / GCS / Azure (via obstore)
 
 ```python
-from sqlspec.loader import SQLFileLoader, S3Backend
+from sqlspec.loader import default_storage_registry
 
-loader = SQLFileLoader(
-    backend=S3Backend(bucket="my-sql-queries", prefix="v2/"),
+# Register an alias for S3-hosted queries
+default_storage_registry.register_alias(
+    "queries",
+    uri="s3://my-sql-queries/v2/",
 )
+
+loader = SQLFileLoader()
+loader.load_sql("queries://list-users.sql")
 ```
 
-### GCS
-
-```python
-from sqlspec.loader import SQLFileLoader, GCSBackend
-
-loader = SQLFileLoader(
-    backend=GCSBackend(bucket="my-sql-queries", prefix="v2/"),
-)
-```
+The storage registry uses `sqlspec.storage.backends.obstore.ObStoreBackend` under the hood for `s3://`, `gs://`, and `az://` URIs. For pure-Python fsspec adapters use `sqlspec.storage.backends.fsspec.FSSpecBackend`. Local filesystem URIs (`file://`) and bare paths are handled by `sqlspec.storage.backends.local.LocalStore`.
 
 ---
 
@@ -130,13 +128,14 @@ loader = SQLFileLoader(
 ```python
 from sqlspec.loader import SQLFileLoader
 
-loader = SQLFileLoader(search_paths=["./sql"])
+loader = SQLFileLoader()
+loader.load_sql("./sql")
 
 # Load and execute
-stmt = loader.get("list-active-users")
+stmt = loader.get_sql("list-active-users")
 users = await db_session.select_many(stmt, schema_type=User)
 
 # Load with parameter override
-stmt = loader.get("get-user-by-id")
+stmt = loader.get_sql("get-user-by-id")
 user = await db_session.select_one(stmt, [user_id], schema_type=User)
 ```

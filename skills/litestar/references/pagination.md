@@ -10,7 +10,7 @@ Never hand-roll `limit` / `offset` query params inside a handler. The canonical 
 
 ## Branch A — `advanced-alchemy` pagination
 
-Use `create_filter_dependencies` from `advanced_alchemy.extensions.litestar` to declare the filter set on the Controller; pair `list_and_count` with `to_schema` for the response envelope.
+Use `create_filter_dependencies` from `advanced_alchemy.extensions.litestar.providers` to declare the filter set on the Controller; pair `list_and_count` with `to_schema` for the response envelope.
 
 ```python
 from __future__ import annotations
@@ -21,7 +21,7 @@ from uuid import UUID
 from litestar import Controller, get
 from litestar.params import Dependency, Parameter
 
-from advanced_alchemy.extensions.litestar import create_filter_dependencies
+from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
 from advanced_alchemy.filters import FilterTypes
 from advanced_alchemy.service import OffsetPagination
 
@@ -123,7 +123,7 @@ from __future__ import annotations
 from litestar import Controller, get
 from litestar.params import Dependency
 
-from sqlspec.filters import LimitOffsetFilter, OrderByFilter
+from sqlspec.core.filters import LimitOffsetFilter, OrderByFilter
 
 from app.schemas import Post
 from app.services import PostService

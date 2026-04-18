@@ -1,9 +1,23 @@
 ---
 name: advanced-alchemy
-description: "Auto-activate for alembic/, alembic.ini, advanced_alchemy imports. Expert knowledge for Advanced Alchemy / SQLAlchemy ORM patterns. Produces ORM models with audit trails, repository/service patterns, and Alembic migrations. Use when: defining models with UUIDAuditBase, building repositories and services, configuring SQLAlchemy plugins for Litestar/FastAPI/Flask/Sanic, creating DTOs, running Alembic migrations, using custom types (EncryptedString, FileObject, PasswordHash, DateTimeUTC), composing filters and pagination, choosing base classes and mixins, configuring dogpile.cache query caching, setting up read/write replica routing, or managing file storage with obstore/fsspec backends. Not for raw SQLAlchemy without Advanced Alchemy abstractions."
+description: "Auto-activate for alembic/, alembic.ini, advanced_alchemy imports, and for web frameworks advanced-alchemy ships an extension for: litestar, fastapi, flask, sanic, starlette. Expert knowledge for Advanced Alchemy / SQLAlchemy ORM patterns with deep per-framework session wiring. Produces ORM models with audit trails, repository/service patterns, Alembic migrations, and framework-idiomatic session injection. Use when: defining models with UUIDAuditBase, building repositories and services, configuring the AdvancedAlchemy extension for Litestar/FastAPI/Flask/Sanic/Starlette, creating DTOs, running Alembic migrations, using custom types (EncryptedString, FileObject, PasswordHash, DateTimeUTC), composing filters and pagination, choosing base classes and mixins, configuring dogpile.cache query caching, setting up read/write replica routing, or managing file storage with obstore/fsspec backends. Not for raw SQLAlchemy without Advanced Alchemy abstractions."
 ---
 
 # Advanced Alchemy
+
+## Match-Your-Framework — read first
+
+advanced-alchemy ships first-party extensions for five web frameworks. If your project uses one of these, **jump directly to the matching integration guide and skip the others**:
+
+- **Litestar** — `SQLAlchemyPlugin` with full DI, session store, CLI. The rest of this SKILL.md covers Litestar by default; also see [`references/litestar_plugin.md`](references/litestar_plugin.md).
+- **FastAPI** → [`references/fastapi-integration.md`](references/fastapi-integration.md) — `AdvancedAlchemy(config=..., app=app)`, `Depends(alchemy.provide_session())` DI, `provide_service()`/`provide_filters()`, Alembic CLI via `assign_cli_group`.
+- **Flask** → [`references/flask-integration.md`](references/flask-integration.md) — `AdvancedAlchemy(config=..., app=app)` or `init_app()` factory, pull-based `alchemy.get_sync_session()`, async-via-portal.
+- **Sanic** → [`references/sanic-integration.md`](references/sanic-integration.md) — `AdvancedAlchemy(sqlalchemy_config=..., sanic_app=app)` (note: `sqlalchemy_config=` kwarg, not `config=`), sanic-ext DI, `request.ctx` sessions.
+- **Starlette** → [`references/starlette-integration.md`](references/starlette-integration.md) — `AdvancedAlchemy(config=..., app=app)`, `request.state` session access, lifespan wrapping.
+
+Shared topics that apply to every framework live in [`references/commit-modes.md`](references/commit-modes.md) (`commit_mode="manual"` / `"autocommit"` / `"autocommit_include_redirect"`) and [`references/multi-database.md`](references/multi-database.md) (bind-key pattern). Read the framework guide first, then those for depth.
+
+The rest of this SKILL.md covers framework-agnostic topics: base classes, repositories, services, filters, custom types, caching, replicas, operations, and Alembic migrations.
 
 ## Overview
 
@@ -227,6 +241,8 @@ For detailed guides and code examples, refer to the following documents in `refe
   Read/write routing, RoutingConfig, engine groups, RoundRobinSelector/RandomSelector, sticky-after-write consistency, context managers for explicit routing, and RoutingAsyncSessionMaker.
 - **[Storage (obstore)](references/storage.md)**
   FileObject and StoredObject types, ObstoreBackend and FSSpecBackend configuration (S3, GCS, Azure, local), StorageRegistry, presigned URL generation, automatic file lifecycle via session tracker, and Pydantic integration.
+- **[Operations, Listeners, Serialization](references/operations.md)**
+  `OnConflictUpsert` / `MergeStatement` dialect-aware upsert building blocks, session event listeners (FileObject, cache invalidation, `touch_updated_timestamp`), and the msgspec-first `encode_json` / `decode_json` used across the library.
 
 ---
 

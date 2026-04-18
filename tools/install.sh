@@ -58,6 +58,7 @@ FORCE=0
 ONLY_HOSTS=()
 SKIP_HOSTS=()
 UPDATE_CLAUDE_SETTINGS=0
+ANTIGRAVITY_SYMLINK=0
 
 usage() {
     cat <<USAGE
@@ -72,6 +73,11 @@ Options:
   --skip <host>         Skip the named host (repeatable).
   --claude-settings     Also update ~/.claude/settings.json to whitelist
                         this repo in extraKnownMarketplaces (opt-in).
+  --antigravity-symlink Create .agent -> .agents symlink in \$PWD so Google
+                        Antigravity (singular .agent) discovers skills
+                        installed under .agents/skills/. Opt-in only —
+                        community workaround, not a Google-blessed
+                        integration. Skipped if .agent already exists.
   --version             Print version and exit.
   --help                Print this message.
 
@@ -94,6 +100,7 @@ while [ $# -gt 0 ]; do
         --only)             ONLY_HOSTS+=("$2"); shift 2 ;;
         --skip)             SKIP_HOSTS+=("$2"); shift 2 ;;
         --claude-settings)  UPDATE_CLAUDE_SETTINGS=1; shift ;;
+        --antigravity-symlink) ANTIGRAVITY_SYMLINK=1; shift ;;
         --version)          echo "$VERSION"; exit 0 ;;
         --help|-h)          usage; exit 0 ;;
         *)                  log_error "Unknown argument: $1"; usage; exit 2 ;;
@@ -264,7 +271,7 @@ os.makedirs(os.path.dirname(path), exist_ok=True)
 with open(path, "w") as f: json.dump(data, f, indent=2)
 PYEOF
     fi
-    log_ok "Codex CLI: installed at ${target}"
+    log_ok "Codex CLI: installed at ${target} (includes .codex/agents/litestar-reviewer.toml)"
     STATUSES+=("codex:installed")
 }
 
@@ -387,6 +394,32 @@ VSCODE_INSTRUCTIONS
     STATUSES+=("vscode:instructions-printed")
 }
 
+# ------ Google Antigravity (opt-in workspace symlink) -----------------------
+install_antigravity_symlink() {
+    # Opt-in workaround: Antigravity reads `.agent/skills/` (singular) while
+    # this repo + Claude/OpenCode/VS Code all use `.agents/skills/` (plural).
+    # When the user passes --antigravity-symlink and `$PWD/.agents/skills`
+    # exists, point `.agent` at `.agents`. This is a user-side workaround,
+    # not a Google-blessed integration; the warning below labels it as such.
+    if [ "$ANTIGRAVITY_SYMLINK" -eq 0 ]; then
+        return 0
+    fi
+    log_info "${BOLD}Antigravity workspace symlink...${NC}"
+    if [ ! -d "${PWD}/.agents/skills" ]; then
+        log_warn "No .agents/skills/ in $PWD — install skills there first, then re-run with --antigravity-symlink"
+        STATUSES+=("antigravity:no-skills-dir")
+        return 0
+    fi
+    if [ -e "${PWD}/.agent" ] || [ -L "${PWD}/.agent" ]; then
+        log_warn ".agent already exists in $PWD — refusing to overwrite (remove it manually if intentional)"
+        STATUSES+=("antigravity:path-conflict")
+        return 0
+    fi
+    run ln -s .agents "${PWD}/.agent"
+    log_warn "Created .agent -> .agents symlink (community workaround; not a Google-blessed integration)"
+    STATUSES+=("antigravity:symlinked")
+}
+
 # =============================================================================
 # Summary
 # =============================================================================
@@ -397,14 +430,16 @@ print_summary() {
         host="${entry%%:*}"
         status="${entry#*:}"
         case "$status" in
-            installed|instructions-printed)
-                printf "  %s %-10s %s\n" "$OK" "$host" "$status" ;;
+            installed|instructions-printed|symlinked)
+                printf "  %s %-12s %s\n" "$OK" "$host" "$status" ;;
             not-installed)
-                printf "  %s %-10s %s\n" "$INFO" "$host" "CLI not present; skipped" ;;
+                printf "  %s %-12s %s\n" "$INFO" "$host" "CLI not present; skipped" ;;
+            no-skills-dir)
+                printf "  %s %-12s %s\n" "$INFO" "$host" "no .agents/skills/ in PWD; skipped" ;;
             *-failed|*-conflict)
-                printf "  %s %-10s %s\n" "$ERROR" "$host" "$status" ;;
+                printf "  %s %-12s %s\n" "$ERROR" "$host" "$status" ;;
             *)
-                printf "  %s %-10s %s\n" "$INFO" "$host" "$status" ;;
+                printf "  %s %-12s %s\n" "$INFO" "$host" "$status" ;;
         esac
     done
     echo ""
@@ -434,6 +469,7 @@ main() {
     install_claude
     install_cursor
     install_vscode
+    install_antigravity_symlink
 
     print_summary
 

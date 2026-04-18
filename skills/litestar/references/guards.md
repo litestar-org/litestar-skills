@@ -77,7 +77,6 @@ async def requires_workspace_membership(
 ## WebSocket Auth (query-param JWT)
 
 WS handshakes can't carry HTTP `Authorization` headers — pass the JWT as a query param.
-The guard chain below is adapted from the `dma/accelerator` WS auth module (`_websocket.py:L32–133`).
 
 ### Auth guard (token + user load)
 

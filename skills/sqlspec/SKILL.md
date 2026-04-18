@@ -1,11 +1,26 @@
 ---
 name: sqlspec
-description: "Auto-activate for sqlspec imports. Produces database adapter configurations, SQL query mappings, and framework extensions using SQLSpec. Use when working with database adapters, SQL execution, query building, Arrow integration, parameter handling, framework extensions, filters, pagination, event channels, SQL file loading, or storage integrations. Not for raw SQL or ORM-specific patterns (see sqlalchemy, advanced-alchemy)."
+description: "Auto-activate for sqlspec imports and for web frameworks sqlspec ships an extension for: litestar, fastapi, flask, starlette. Produces database adapter configurations, SQL query mappings, per-framework integration wiring, and observability plumbing. Use when working with database adapters, SQL execution, query building, Arrow integration, parameter handling, framework extensions (Litestar/FastAPI/Flask/Starlette), filters, pagination, event channels, SQL file loading, migrations, the ADK session/memory/artifact stores, data-dictionary introspection, OTEL/Prometheus observability, or cloud log formatters. Not for raw SQL or ORM-specific patterns (see sqlalchemy, advanced-alchemy)."
 ---
 
 # SQLSpec Skill
 
 SQLSpec is a **type-safe SQL query mapper for Python** -- NOT an ORM. It provides flexible connectivity with consistent interfaces across 15+ database adapters. Write raw SQL, use the builder API, or load SQL from files. All statements pass through a sqlglot-powered AST pipeline for validation and dialect conversion.
+
+## Match-Your-Framework — read first
+
+sqlspec ships first-party extensions for four web frameworks. If your project uses one of these, **jump directly to the matching integration guide and skip the others**:
+
+- **Litestar** — `SQLSpecPlugin` with full DI, CLI, observability. The rest of this SKILL.md covers Litestar by default; also see [`references/extensions.md`](references/extensions.md).
+- **FastAPI** → [`references/fastapi-integration.md`](references/fastapi-integration.md) — `Depends(plugin.provide_session())` DI, `Annotated[...]` handlers, filter providers.
+- **Flask** → [`references/flask-integration.md`](references/flask-integration.md) — `plugin.init_app(app)`, pull-based `plugin.get_session()`, async-via-portal.
+- **Starlette** → [`references/starlette-integration.md`](references/starlette-integration.md) — `request.state`-based session access, lifespan wrapping, middleware variants.
+
+sqlspec has **no first-party Sanic integration** — other frameworks are not supported out-of-the-box.
+
+Shared topics that apply to every framework live in [`references/commit-modes.md`](references/commit-modes.md) (autocommit / manual middleware) and [`references/multi-database.md`](references/multi-database.md) (multi-config registry). Read the framework guide first, then those for depth.
+
+The rest of this SKILL.md covers framework-agnostic topics: adapter setup, query builder, driver methods, filters, observability, migrations, the ADK extension, and data-dictionary introspection.
 
 ## Code Style Rules
 
@@ -16,13 +31,15 @@ SQLSpec is a **type-safe SQL query mapper for Python** -- NOT an ORM. It provide
 ### Adapter Pattern
 
 ```python
-from sqlspec.adapters.asyncpg import AsyncPGConfig, AsyncPGDriver
+from sqlspec.adapters.asyncpg import AsyncpgConfig, AsyncpgDriver
 
 # Configure the adapter with connection details
-config = AsyncPGConfig(
-    dsn="postgresql://user:pass@localhost:5432/mydb",
-    pool_min_size=2,
-    pool_max_size=10,
+config = AsyncpgConfig(
+    connection_config={
+        "dsn": "postgresql://user:pass@localhost:5432/mydb",
+        "min_size": 2,
+        "max_size": 10,
+    },
 )
 
 # Use the driver as a context manager for connection lifecycle
@@ -60,7 +77,7 @@ stmt = (
 
 # MERGE / upsert
 stmt = (
-    sql.merge_into("inventory")
+    sql.merge_("inventory")
     .using("updates", on="inventory.product_id = updates.product_id")
     .when_matched().do_update(qty="updates.qty")
     .when_not_matched().do_insert(product_id="updates.product_id", qty="updates.qty")
@@ -164,7 +181,7 @@ Before delivering SQLSpec code, verify:
 
 ```python
 from dataclasses import dataclass
-from sqlspec.adapters.asyncpg import AsyncPGConfig
+from sqlspec.adapters.asyncpg import AsyncpgConfig
 from sqlspec.core.filters import LimitOffsetFilter, OrderByFilter
 
 
@@ -180,10 +197,12 @@ class User:
 
 # --- Adapter setup ---
 
-config = AsyncPGConfig(
-    dsn="postgresql://user:pass@localhost:5432/mydb",
-    pool_min_size=2,
-    pool_max_size=10,
+config = AsyncpgConfig(
+    connection_config={
+        "dsn": "postgresql://user:pass@localhost:5432/mydb",
+        "min_size": 2,
+        "max_size": 10,
+    },
 )
 
 
@@ -225,7 +244,7 @@ The `sql` factory provides a fluent builder API with full method chaining. All b
 | INSERT | `sql.insert_into(table)` | `.columns()`, `.values()`, `.returning()` |
 | UPDATE | `sql.update(table)` | `.set_()`, `.where()`, `.returning()` |
 | DELETE | `sql.delete_from(table)` | `.where()`, `.returning()` |
-| MERGE | `sql.merge_into(target)` | `.using()`, `.when_matched()`, `.when_not_matched()` |
+| MERGE | `sql.merge_(target)` | `.using()`, `.when_matched()`, `.when_not_matched()` |
 | CREATE TABLE | `sql.create_table(name)` | `.column()`, `.primary_key()`, `.if_not_exists()` |
 | DROP TABLE | `sql.drop_table(name)` | `.if_exists()`, `.cascade()` |
 
@@ -296,6 +315,7 @@ For detailed instructions, patterns, and API guides, refer to the following docu
 ### Architecture & Performance
 
 - **[Architecture & Caching](references/architecture.md)** -- Core data flow, NamespacedCache system, Mypyc compilation.
+- **[Data Dictionary](references/data-dictionary.md)** -- Dialect feature flags, runtime introspection (`get_tables`, `get_columns`, `get_indexes`), driver-side metadata API.
 
 ### Query Building & Execution
 
@@ -317,6 +337,11 @@ For detailed instructions, patterns, and API guides, refer to the following docu
 - **[Framework Extensions](references/extensions.md)** -- Litestar plugin, FastAPI/Starlette integration.
 - **[Storage Integration](references/storage.md)** -- ADK store, Litestar session stores, event channel backends.
 - **[Event Channels (Pub/Sub)](references/events.md)** -- `AsyncEventChannel`, subscribe/publish patterns.
+- **[ADK Extension](references/adk.md)** -- `SQLSpecSessionService`, `SQLSpecMemoryService`, `SQLSpecArtifactService`, per-adapter ADK stores.
+
+### Migrations & Schema
+
+- **[Native Migration Runner](references/migrations.md)** -- `sqlspec database` CLI, timestamp versioning, `ddl_migrations` tracker, extension migrations, Litestar `litestar db` integration.
 
 ### Observability
 

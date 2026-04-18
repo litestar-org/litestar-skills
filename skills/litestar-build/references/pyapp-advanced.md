@@ -1,10 +1,8 @@
 # PyApp — Advanced (offline, custom install dir, portable glibc)
 
-The DMA accelerator pattern: a custom bundler that pre-installs all dependencies into a `python-build-standalone` archive, patches PyApp's Rust source to override the default install directory, and uses `cargo-zigbuild` for glibc 2.17 compatibility.
+An advanced PyApp pattern: a custom bundler that pre-installs all dependencies into a `python-build-standalone` archive, patches PyApp's Rust source to override the default install directory, and uses `cargo-zigbuild` for glibc 2.17 compatibility.
 
-Result: a ~500 MB onefile that runs on CentOS 7, with no PyPI calls on first launch, installing to `~/.dma/runtime/` by default.
-
-Reference: `/home/cody/code/g/dma/accelerator/tools/bundler.py` + `/home/cody/code/g/dma/accelerator/tools/scripts/build-onefile-package.sh`.
+Result: a ~500 MB onefile that runs on CentOS 7, with no PyPI calls on first launch, installing to `~/.<app>/runtime/` by default.
 
 ## Architecture
 
@@ -43,7 +41,7 @@ Three things make this different from simple hatch-binary:
 `tools/bundler.py` is a single-file script (runs with `uv run`, has its own deps pinned in the shebang header):
 
 ```python
-# /home/cody/code/g/dma/accelerator/tools/bundler.py:1-8
+# tools/bundler.py:1-8
 #!/usr/bin/env python3
 # /// script
 # dependencies = [
@@ -122,7 +120,7 @@ PyApp's default install dir at runtime is `platform_dirs().data_local_dir().join
 - Linux: `~/.local/share/<app>/<hash>/<version>/`
 - macOS: `~/Library/Application Support/<app>/<hash>/<version>/`
 
-accelerator wants `~/.dma/runtime/` instead. It patches `src/app.rs` **before** `cargo build`:
+An advanced reference pattern wants `~/.<app>/runtime/` instead. It patches `src/app.rs` **before** `cargo build`:
 
 ```python
 # tools/bundler.py:431-453
@@ -157,19 +155,19 @@ def render_install_dir_expression(install_dir: Path) -> str:
     return f"std::path::PathBuf::from({rust_string_literal(str(install_dir))})"
 ```
 
-For `--install-root ~/.dma --project-name runtime`, the rendered Rust becomes:
+For `--install-root ~/.<app> --project-name runtime`, the rendered Rust becomes:
 
 ```rust
-directories::BaseDirs::new().expect("could not find base directories").home_dir().join(".dma").join("runtime")
+directories::BaseDirs::new().expect("could not find base directories").home_dir().join(".<app>").join("runtime")
 ```
 
 That means:
 
-- `/home/alice/<app>` binary → installs to `/home/alice/.dma/runtime/`
-- `/home/bob/<app>` binary → installs to `/home/bob/.dma/runtime/`
+- `/path/to/alice/<app>` binary → installs to `/path/to/alice/.<app>/runtime/`
+- `/path/to/bob/<app>` binary → installs to `/path/to/bob/.<app>/runtime/`
 - Same binary, different user — works.
 
-For absolute paths (e.g. `--install-root /opt/dma`), the expression is a hardcoded `PathBuf::from("/opt/dma/runtime")` — not relocatable, but that's what the operator asked for.
+For absolute paths (e.g. `--install-root /opt/<app>`), the expression is a hardcoded `PathBuf::from("/opt/<app>/runtime")` — not relocatable, but that's what the operator asked for.
 
 ## The build script
 
@@ -180,7 +178,7 @@ For absolute paths (e.g. `--install-root /opt/dma`), the expression is a hardcod
 # tools/scripts/build-onefile-package.sh (abbreviated)
 set -euo pipefail
 
-current_version=$(uv run python -c "from dma.__metadata__ import __version__; print(__version__)")
+current_version=$(uv run python -c "from app.__metadata__ import __version__; print(__version__)")
 
 # Static linking for libc extras (no libbz2/liblzma on target systems)
 export BZIP2_SYS_STATIC="1"
@@ -189,8 +187,8 @@ export LZMA_API_STATIC="1"
 # PyApp build-time env
 export PYAPP_VERSION="v0.29.0"
 export PYAPP_DIR="dist/.scratch"
-export PYAPP_PROJECT_PATH="$(realpath dist/dma-${current_version}-py3-none-any.whl)"
-export PYAPP_PROJECT_NAME="dma"
+export PYAPP_PROJECT_PATH="$(realpath dist/app-${current_version}-py3-none-any.whl)"
+export PYAPP_PROJECT_NAME="app"
 export PYAPP_PROJECT_VERSION="${current_version}"
 export PYAPP_PYTHON_VERSION="3.13"
 export PYAPP_PROJECT_FEATURES="cloudrun"
@@ -211,14 +209,14 @@ uv build --wheel
 
 # 4. Export requirements so bundler.py knows what to install
 uv export --frozen --no-dev --no-editable --no-hashes --no-header --no-emit-project --extra cloudrun > dist/requirements.txt
-echo "$(realpath dist/dma-${current_version}-py3-none-any.whl)" >> dist/requirements.txt
+echo "$(realpath dist/app-${current_version}-py3-none-any.whl)" >> dist/requirements.txt
 
 # 5. Bundle Python + deps → dist/python-dist.tar.gz, and patch PyApp src/app.rs
 uv run tools/bundler.py build \
   --requirements dist/requirements.txt \
   --output dist/python-dist.tar.gz \
   --pyapp-dir ${PYAPP_DIR} \
-  --install-root "~/.dma" \
+  --install-root "~/.<app>" \
   --project-name "runtime"
 
 # 6. Post-bundler env: point PyApp at the pre-built tarball, skip install
@@ -234,12 +232,12 @@ cd ${PYAPP_DIR}
 if command -v cargo-zigbuild &> /dev/null && [ "$(uname -s)" = "Linux" ]; then
     BASE_TARGET="x86_64-unknown-linux-gnu"
     cargo zigbuild --release --target ${BASE_TARGET}.2.17
-    cp target/${BASE_TARGET}.2.17/release/pyapp ../../dist/dma
+    cp target/${BASE_TARGET}.2.17/release/pyapp ../../dist/app
 else
     cargo build --release
-    cp target/release/pyapp ../../dist/dma
+    cp target/release/pyapp ../../dist/app
 fi
-chmod +x ../../dist/dma
+chmod +x ../../dist/app
 ```
 
 The `BZIP2_SYS_STATIC=1` and `LZMA_API_STATIC=1` env vars + the `sed` patch are belt-and-suspenders. Either alone would work, but together they guarantee a fully static build even if PyApp changes its Cargo.toml defaults.
@@ -252,7 +250,7 @@ Everything the advanced build sets:
 | --- | --- | --- | --- |
 | `PYAPP_VERSION` | `v0.29.0` | Shell (git clone) | PyApp release to compile |
 | `PYAPP_PROJECT_PATH` | `dist/*.whl` | cargo build | Wheel to embed in the binary |
-| `PYAPP_PROJECT_NAME` | `dma` | cargo build | Used by the patched `app.rs` |
+| `PYAPP_PROJECT_NAME` | `app` | cargo build | Used by the patched `app.rs` |
 | `PYAPP_PROJECT_VERSION` | `1.2.3` | cargo build | Stamped into binary metadata |
 | `PYAPP_PYTHON_VERSION` | `3.13` | cargo build | Which PBS archive to match |
 | `PYAPP_PROJECT_FEATURES` | `cloudrun` | cargo build | Pass extras to `uv pip install` at first run (ignored when `PYAPP_SKIP_INSTALL=true`) |
@@ -274,7 +272,7 @@ Everything the advanced build sets:
 Plain `cargo build --release` on ubuntu-latest links against whatever glibc the runner has (~2.35 on ubuntu-24.04). The resulting binary fails to start on older distros:
 
 ```text
-./dma: /lib64/libc.so.6: version `GLIBC_2.28' not found
+./app: /lib64/libc.so.6: version `GLIBC_2.28' not found
 ```
 
 `cargo-zigbuild` wraps Zig's cross-compiler and lets you specify a glibc floor:
@@ -322,22 +320,22 @@ Options:
 
 ```bash
 # 1. Binary is self-contained (no libbz2, no liblzma, no Python runtime deps)
-ldd dist/dma
+ldd dist/app
 # Expected: libc.so.6, libm.so.6, libpthread.so.0, ld-linux-*.so.2, (none)
 
 # 2. First launch creates the install dir, extracts, runs
-./dist/dma --help
-ls -la ~/.dma/runtime/
+./dist/app --help
+ls -la ~/.<app>/runtime/
 # Expected: lib/, bin/, include/, share/
 
 # 3. Second launch is fast (skips extraction)
-time ./dist/dma --help                 # should be < 200ms
+time ./dist/app --help                 # should be < 200ms
 
 # 4. Network isolation test
 docker run --rm --network=none \
   -v $PWD/dist:/opt/dist:ro \
   gcr.io/distroless/cc-debian12:nonroot \
-  /opt/dist/dma --help
+  /opt/dist/app --help
 # If this succeeds, the binary is fully offline
 ```
 

@@ -71,7 +71,8 @@ class User(UUIDAuditBase):
 ### SlugKey — URL-friendly Identifiers
 
 ```python
-from advanced_alchemy.base import SlugKey, UUIDAuditBase
+from advanced_alchemy.base import UUIDAuditBase
+from advanced_alchemy.mixins import SlugKey
 
 
 class Article(UUIDAuditBase, SlugKey):
@@ -88,7 +89,8 @@ class Article(UUIDAuditBase, SlugKey):
 ### UniqueMixin — Select-or-Create
 
 ```python
-from advanced_alchemy.base import UniqueMixin, UUIDAuditBase
+from advanced_alchemy.base import UUIDAuditBase
+from advanced_alchemy.mixins import UniqueMixin
 
 
 class Tag(UUIDAuditBase, UniqueMixin):
@@ -266,7 +268,7 @@ class Role(UUIDAuditBase):
 
 ```python
 from advanced_alchemy.types import PasswordHash
-from advanced_alchemy.types.password_hash import Argon2Hasher
+from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
 
 
 class Account(UUIDAuditBase):
@@ -278,4 +280,8 @@ class Account(UUIDAuditBase):
     )
 ```
 
-Available hashers: `Argon2Hasher`, `PwdlibHasher`, `PasslibHasher`.
+Available hashers (each in its own submodule under `advanced_alchemy.types.password_hash`):
+
+- `argon2.Argon2Hasher` — requires the `argon2-cffi` extra.
+- `pwdlib.PwdlibHasher` — requires the `pwdlib` extra.
+- `passlib.PasslibHasher` — requires the `passlib` extra.

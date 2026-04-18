@@ -199,8 +199,14 @@ sync-manifests:                                     ## Verify all bump-my-versio
 	@uv run python tools/sync-manifests.py
 	@echo "${OK} Manifests in sync ✨"
 
+.PHONY: check-upstream-imports
+check-upstream-imports:                             ## Verify every Python import in skill code samples resolves against installed upstream library versions (requires .[validation] extras)
+	@echo "${INFO} Checking upstream API imports in skill code samples... 🔍"
+	@uv run python tools/check-upstream-imports.py
+	@echo "${OK} Upstream imports verified ✨"
+
 .PHONY: validate
-validate: validate-skills sync-manifests            ## Run all repo-integrity validators
+validate: validate-skills sync-manifests check-upstream-imports  ## Run all repo-integrity validators
 	@echo "${OK} All validators passed ✨"
 
 # -----------------------------------------------------------------------------

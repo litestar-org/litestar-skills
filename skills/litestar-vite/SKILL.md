@@ -115,7 +115,7 @@ vite_config = ViteConfig(
 
 ### Canonical fullstack-spa pattern
 
-`litestar-fullstack-spa/src/js/web/vite.config.ts`:
+From [litestar-fullstack](https://github.com/litestar-org/litestar-fullstack) — `src/js/web/vite.config.ts`:
 
 ```ts
 import path from "node:path"
@@ -151,7 +151,7 @@ export default defineConfig({
 })
 ```
 
-`litestar-fullstack-spa/src/py/app/server/plugins.py`:
+`litestar-fullstack/src/py/app/server/plugins.py`:
 
 ```python
 from litestar_vite import VitePlugin

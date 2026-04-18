@@ -2,7 +2,7 @@
 
 The path of least resistance: let the `hatch` build backend call PyApp for you. Good when end-users have network access to PyPI and you just want a single-file binary.
 
-Used by **litestar-fullstack-inertia**.
+Used by **[litestar-fullstack-inertia](https://github.com/litestar-org/litestar-fullstack-inertia)**.
 
 ## Full config
 
@@ -51,7 +51,7 @@ Hatch:
 4. Runs `cargo build --release`.
 5. Copies the resulting binary to `dist/binary/<script>`.
 
-The `[tool.hatch.build.targets.binary.env]` table in pyproject.toml lets you set any `PYAPP_*` env var statically. accelerator uses it for the embed/isolation/uv flags:
+The `[tool.hatch.build.targets.binary.env]` table in pyproject.toml lets you set any `PYAPP_*` env var statically. An advanced reference uses it for the embed/isolation/uv flags:
 
 ```toml
 [tool.hatch.build.targets.binary.env]

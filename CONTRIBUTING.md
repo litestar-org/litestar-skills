@@ -15,6 +15,16 @@ See [`docs/roadmap.md`](docs/roadmap.md) for shipped features, v0.2 candidates, 
 6. Run `make check` — full CI parity locally.
 7. Open a PR. Maintainer review verifies tone, first-party bias, and technical accuracy.
 
+## Support Tiers
+
+When adding or changing host support, classify the host into one of three tiers:
+
+- **First-class** — the repo ships maintained host-specific artifacts (manifest, subagents, hooks) and install guidance. Adding a new first-class host requires per-host validator coverage in `tools/validate-skills.py`.
+- **Compatible bundle** — the host consumes standard manifests or generic skill-discovery paths. No native wrapper is promised; no per-host validator is required.
+- **Free ride** — the host discovers generic Agent Skills / `AGENTS.md` content. The repo ships no dedicated integration; docs only.
+
+Do not promote a host to a higher tier without shipping the corresponding artifacts and validator coverage in the same PR.
+
 ## Updating Host Manifests
 
 When adding a skill, command, subagent, or MCP server, update the relevant per-host manifest so consumers auto-discover the new content:
@@ -23,9 +33,26 @@ When adding a skill, command, subagent, or MCP server, update the relevant per-h
 | --- | --- |
 | New skill | None — all host manifests point at `./skills/` root. Skills auto-discovered. |
 | New slash command | None — `./commands/` root is shared. |
-| New subagent | None — `./agents/` root is shared. |
+| New subagent | Four host-specific projections — see [Multi-Projection Subagent Maintenance](#multi-projection-subagent-maintenance) below. |
 | New MCP server | `.codex-plugin/plugin.json` `dependencies.tools`, `gemini-extension.json` `mcpServers`, and `.codex/config.toml` |
 | New host support | New `.<host>-plugin/plugin.json` + entry in `[[tool.bumpversion.files]]` |
+
+### Multi-Projection Subagent Maintenance
+
+Every subagent ships in four host-specific dialects. When changing a reviewer prompt or adding a new subagent, update **all four** projections in the same PR — otherwise hosts drift:
+
+| Host | Path | Dialect |
+| --- | --- | --- |
+| Claude Code | `.claude-plugin/agents/<name>.md` | Markdown body; `tools` is a comma-separated string (`Read, Grep, Glob, Bash`) of PascalCase Claude tool names. |
+| Codex CLI | `.codex/agents/<name>.toml` | Pure TOML; prompt lives in `developer_instructions` (triple-quoted string). No top-level `tools` — tools inherit from session `config.toml`. |
+| Gemini CLI | `agents/<name>.md` | Markdown body; `tools` is a YAML list (`- read_file`) of snake_case Gemini tool names. |
+| OpenCode | `.opencode/agents/<name>.md` | Markdown body; `tools` is a dict (`read: true`) plus `mode: subagent`. |
+
+The four `description` fields must match verbatim so agent-selection heuristics route to the same subagent regardless of host. Each dialect is enforced by a dedicated validator in `tools/validate-skills.py` (`validate_claude_agent`, `validate_codex_agent`, `validate_gemini_agent`, `validate_opencode_agent`) — mutual rejection catches drift (e.g., a Codex file with a top-level `tools = [...]` array fails CI).
+
+### Skill Path Portability
+
+Do not hard-code `.agents/` or `.agent/` inside a skill body. Hosts resolve Agent Skills through different directory names — Claude Code, OpenCode, VS Code/Copilot read `.agents/skills/`; Google Antigravity reads `.agent/skills/` (singular). Refer to skills by name, not path.
 
 ## Manifest Expansion Plans (v0.2+)
 

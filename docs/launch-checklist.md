@@ -7,7 +7,7 @@ Day-of playbook for cutting `v0.1.0` of `litestar-skills`. Walks a maintainer fr
 Before running `make release`, every box below must be checked:
 
 - [ ] `make check` is green on `main` (ruff, mypy, pyright, markdownlint, oxlint, shellcheck).
-- [ ] Every closed PRD chapter is marked `[x]` in its `spec.md`, and every open chapter is flagged `[~]` (in-flight) or removed from the launch blocker list.
+- [ ] Every shipped roadmap item is reflected in `docs/roadmap.md` §Shipped, and every in-flight item is either flagged in-progress or removed from the launch blocker list.
 - [ ] GitHub Actions has **no failing runs** on `main` in the last 10 pushes (`gh run list --branch main --limit 10`).
 - [ ] No open issues labeled `launch-blocker` on `github.com/litestar-org/litestar-skills/issues`.
 

@@ -204,3 +204,66 @@ app = Litestar(
 ```
 
 Access the secondary session via `bind_key` in your service configuration.
+
+## Session backend + session store
+
+When you want Litestar server-side sessions persisted in your main database (instead of Redis or in-memory), Advanced Alchemy ships two integrations:
+
+- `advanced_alchemy.extensions.litestar.session` — `SQLAlchemyAsyncSessionBackend` / `SQLAlchemySyncSessionBackend` plus the `SessionModelMixin` declarative mixin. This is the Litestar `ServerSideSessionBackend` implementation that stores raw session bytes, keyed by session ID.
+- `advanced_alchemy.extensions.litestar.store` — `SQLAlchemyStore` (generic, supports both sync and async configs) plus `StoreModelMixin`. This is a generic `NamespacedStore` for Litestar's response-cache / rate-limit / arbitrary-value needs, keyed by `(key, namespace)`.
+
+### When to use
+
+Pick the session backend when you want `ServerSideSessionConfig` persistence colocated with your domain data — auditable, transactional, same backup strategy. Pick `SQLAlchemyStore` when you want a key/value store backed by SQLAlchemy for Litestar's `stores` registry (caching `@get` responses, rate-limit buckets, password-reset tokens).
+
+### Config wiring
+
+```python
+from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+from advanced_alchemy.extensions.litestar.session import (
+    SQLAlchemyAsyncSessionBackend,
+    SessionModelMixin,
+)
+from litestar import Litestar
+from litestar.middleware.session.server_side import ServerSideSessionConfig
+
+
+class AppSession(SessionModelMixin):
+    __tablename__ = "app_session"
+
+
+db_config = SQLAlchemyAsyncConfig(connection_string="postgresql+asyncpg://localhost/app")
+
+session_backend = SQLAlchemyAsyncSessionBackend(
+    config=ServerSideSessionConfig(max_age=3600),
+    alchemy_config=db_config,
+    model=AppSession,
+)
+
+app = Litestar(
+    route_handlers=[],
+    plugins=[SQLAlchemyPlugin(config=db_config)],
+    middleware=[session_backend.config.middleware],
+)
+```
+
+### Table schema
+
+`SessionModelMixin` extends `UUIDv7Base` (so you inherit `id: UUIDv7`) and declares:
+
+- `session_id: Mapped[str]` — `String(255)`, unique constraint `uq_<table>_session_id` (Spanner uses a unique index `ix_<table>_session_id_unique` instead).
+- `data: Mapped[bytes]` — `LargeBinary`.
+- `expires_at: Mapped[datetime.datetime]` — indexed for expiry sweeps.
+- `is_expired` hybrid property — comparable in both Python (`datetime.now(tz=utc) > expires_at`) and SQL (`func.now() > expires_at`).
+
+`StoreModelMixin` is analogous with `key` + `namespace` instead of `session_id`, and `value` instead of `data`. Unique constraint is on `(key, namespace)`.
+
+### Migration
+
+Table creation is NOT automatic — both mixins are `__abstract__ = True`, and you must (a) subclass with a concrete `__tablename__` against a metadata registry that Alembic sees, and (b) generate a migration via `alembic revision --autogenerate`. The `UUIDv7Base` parent is already registered on the default metadata, so once the concrete subclass is imported at Alembic env time it will be picked up.
+
+### Common pitfalls
+
+- **Expiry GC is not scheduled.** Both backends expose `delete_expired()` but do not run it automatically. Wire a periodic task (SAQ cron job, Litestar `on_startup` background task) that calls `await backend.delete_expired()` on a schedule, or run it on `get()` access for your own session keys — `backend.get()` already deletes a row when it finds it expired.
+- **Session ID generation is Litestar's concern.** The `SQLAlchemyAsyncSessionBackend` truncates inbound session IDs to 255 chars (`SESSION_ID_MAX_LENGTH`) but does not generate them — that is handled by `ServerSideSessionConfig`'s cookie middleware.
+- **Upsert path varies by dialect.** On PostgreSQL / SQLite / MySQL / DuckDB / CockroachDB the backend uses `OnConflictUpsert.create_upsert`; on Oracle it uses `MergeStatement`; elsewhere it falls back to SELECT-then-INSERT/UPDATE. PostgreSQL 15+ MERGE is currently disabled upstream via `_DISABLE_POSTGRES_MERGE` due to locking concerns — expect `ON CONFLICT` for all Postgres versions.

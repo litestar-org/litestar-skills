@@ -45,7 +45,7 @@ file_cache: SQLFileCacheEntry          # Loaded SQL files with content checksums
 Each namespace supports independent tuning:
 
 ```python
-from sqlspec.config import CacheConfig
+from sqlspec.core.cache import CacheConfig
 
 cache_config = CacheConfig(
     statement_cache=NamespaceCacheConfig(
@@ -81,7 +81,7 @@ cache_config = CacheConfig(
 ### Cache Hit/Miss Monitoring
 
 ```python
-from sqlspec.config import CacheConfig
+from sqlspec.core.cache import CacheConfig
 
 # Enable metrics collection
 cache_config = CacheConfig(enable_metrics=True)

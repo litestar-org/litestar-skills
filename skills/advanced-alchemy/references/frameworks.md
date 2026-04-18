@@ -21,65 +21,65 @@ advanced_alchemy.extensions.starlette  → Starlette (standalone)
 ```python
 from fastapi import FastAPI
 from advanced_alchemy.extensions.fastapi import (
-    SQLAlchemyPlugin,
+    AdvancedAlchemy,
     SQLAlchemyAsyncConfig,
-    async_autocommit_before_send_handler,
 )
 
 
 db_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://user:pass@localhost:5432/mydb",
-    before_send_handler=async_autocommit_before_send_handler,
+    commit_mode="autocommit",
 )
 
 app = FastAPI()
-plugin = SQLAlchemyPlugin(config=db_config)
-plugin.init_app(app)
+alchemy = AdvancedAlchemy(config=db_config, app=app)
 ```
+
+`AdvancedAlchemy` is the public extension class for FastAPI. Pass the FastAPI instance via `app=` (or call `alchemy.init_app(app)` later) and it wires up engine startup/shutdown plus per-request session management. `commit_mode="autocommit"` commits on success and rolls back on exception; use `"manual"` (the default) to manage transactions yourself.
 
 ### Lifespan Handler
 
-For FastAPI's lifespan pattern, the plugin integrates with the ASGI lifespan:
+`AdvancedAlchemy` exposes a context manager for use with FastAPI's lifespan pattern:
 
 ```python
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from advanced_alchemy.extensions.fastapi import (
-    SQLAlchemyPlugin,
+    AdvancedAlchemy,
     SQLAlchemyAsyncConfig,
-    async_autocommit_before_send_handler,
 )
 
 
 db_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://user:pass@localhost:5432/mydb",
-    before_send_handler=async_autocommit_before_send_handler,
+    commit_mode="autocommit",
 )
-plugin = SQLAlchemyPlugin(config=db_config)
+alchemy = AdvancedAlchemy(config=db_config)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with plugin.lifespan(app):
+    async with alchemy.lifespan(app):
         yield
 
 
 app = FastAPI(lifespan=lifespan)
-plugin.init_app(app)
+alchemy.init_app(app)
 ```
 
 ### Dependency Injection with Depends()
 
+`provide_session` is a method on the `AdvancedAlchemy` instance — call it to obtain a per-config FastAPI dependency:
+
 ```python
 from fastapi import Depends, APIRouter
 from sqlalchemy.ext.asyncio import AsyncSession
-from advanced_alchemy.extensions.fastapi import provide_session
 
 router = APIRouter()
 
 
 async def provide_user_service(
-    session: AsyncSession = Depends(provide_session),
+    session: AsyncSession = Depends(alchemy.provide_session()),
 ) -> UserService:
     return UserService(session=session)
 
@@ -114,18 +114,16 @@ async def create_user(
 
 ```python
 from advanced_alchemy.extensions.fastapi import (
-    SQLAlchemyPlugin,
+    AdvancedAlchemy,
     SQLAlchemySyncConfig,
-    sync_autocommit_before_send_handler,
 )
 
 sync_config = SQLAlchemySyncConfig(
     connection_string="postgresql+psycopg://user:pass@localhost:5432/mydb",
-    before_send_handler=sync_autocommit_before_send_handler,
+    commit_mode="autocommit",
 )
 
-plugin = SQLAlchemyPlugin(config=sync_config)
-plugin.init_app(app)
+alchemy = AdvancedAlchemy(config=sync_config, app=app)
 ```
 
 ---
@@ -137,35 +135,32 @@ plugin.init_app(app)
 ```python
 from flask import Flask
 from advanced_alchemy.extensions.flask import (
-    SQLAlchemyPlugin,
+    AdvancedAlchemy,
     SQLAlchemySyncConfig,
-    sync_autocommit_before_send_handler,
 )
 
 
 db_config = SQLAlchemySyncConfig(
     connection_string="postgresql+psycopg://user:pass@localhost:5432/mydb",
-    before_send_handler=sync_autocommit_before_send_handler,
+    commit_mode="autocommit",
 )
 
 app = Flask(__name__)
-plugin = SQLAlchemyPlugin(config=db_config)
-plugin.init_app(app)
+alchemy = AdvancedAlchemy(config=db_config, app=app)
 ```
 
 ### App Context Session Management
 
-Flask manages sessions via the application context. The plugin hooks into Flask's `teardown_appcontext` to handle session cleanup.
+Flask manages sessions via the application context. `AdvancedAlchemy` hooks into Flask's `teardown_appcontext` to handle session cleanup, and exposes `get_session()` (or `get_sync_session()`) on the extension instance.
 
 ```python
 from flask import Flask
 from sqlalchemy.orm import Session
-from advanced_alchemy.extensions.flask import provide_session
 
 
 @app.route("/users")
 def list_users():
-    session: Session = provide_session()
+    session: Session = alchemy.get_sync_session()
     service = UserService(session=session)
     results = service.list()  # Sync operations in Flask
     return [{"id": str(r.id), "email": r.email} for r in results]
@@ -175,18 +170,16 @@ def list_users():
 
 ```python
 from advanced_alchemy.extensions.flask import (
-    SQLAlchemyPlugin,
+    AdvancedAlchemy,
     SQLAlchemyAsyncConfig,
-    async_autocommit_before_send_handler,
 )
 
 async_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://user:pass@localhost:5432/mydb",
-    before_send_handler=async_autocommit_before_send_handler,
+    commit_mode="autocommit",
 )
 
-plugin = SQLAlchemyPlugin(config=async_config)
-plugin.init_app(app)
+alchemy = AdvancedAlchemy(config=async_config, app=app)
 ```
 
 ---
@@ -201,15 +194,14 @@ For Starlette applications without FastAPI:
 from starlette.applications import Starlette
 from starlette.routing import Route
 from advanced_alchemy.extensions.starlette import (
-    SQLAlchemyPlugin,
+    AdvancedAlchemy,
     SQLAlchemyAsyncConfig,
-    async_autocommit_before_send_handler,
 )
 
 
 db_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://user:pass@localhost:5432/mydb",
-    before_send_handler=async_autocommit_before_send_handler,
+    commit_mode="autocommit",
 )
 
 
@@ -222,8 +214,7 @@ async def list_users(request):
 
 
 app = Starlette(routes=[Route("/users", list_users)])
-plugin = SQLAlchemyPlugin(config=db_config)
-plugin.init_app(app)
+alchemy = AdvancedAlchemy(config=db_config, app=app)
 ```
 
 ### Middleware-Based Session
@@ -239,20 +230,18 @@ The Starlette plugin injects the session into `request.state`, making it availab
 ```python
 from sanic import Sanic
 from advanced_alchemy.extensions.sanic import (
-    SQLAlchemyPlugin,
+    AdvancedAlchemy,
     SQLAlchemyAsyncConfig,
-    async_autocommit_before_send_handler,
 )
 
 
 db_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://user:pass@localhost:5432/mydb",
-    before_send_handler=async_autocommit_before_send_handler,
+    commit_mode="autocommit",
 )
 
 app = Sanic("MyApp")
-plugin = SQLAlchemyPlugin(config=db_config)
-plugin.init_app(app)
+alchemy = AdvancedAlchemy(config=db_config, app=app)
 ```
 
 ### Route Handlers
@@ -279,11 +268,11 @@ async def list_users(request: Request):
 
 ### Plugin Configuration
 
-All framework integrations follow the same configuration pattern:
+All framework integrations follow the same configuration pattern. The non-Litestar integrations expose a single class — `AdvancedAlchemy` — that wires engines, sessions, and lifecycle hooks into the host framework:
 
 ```python
-from advanced_alchemy.extensions.<framework> import (
-    SQLAlchemyPlugin,
+from advanced_alchemy.extensions.fastapi import (
+    AdvancedAlchemy,
     SQLAlchemyAsyncConfig,   # or SQLAlchemySyncConfig
     EngineConfig,
 )
@@ -297,51 +286,51 @@ config = SQLAlchemyAsyncConfig(
         pool_recycle=300,
         echo=False,
     ),
-    before_send_handler=async_autocommit_before_send_handler,
+    commit_mode="autocommit",
 )
 
-plugin = SQLAlchemyPlugin(config=config)
-plugin.init_app(app)
+alchemy = AdvancedAlchemy(config=config, app=app)
 ```
+
+For Litestar, use `SQLAlchemyPlugin(config=...)` — see `litestar_plugin.md`.
 
 ### Session Injection
 
-Every plugin ensures one session per request with automatic cleanup:
+Every integration ensures one session per request with automatic cleanup:
 
 | Framework | Session Location | Cleanup Mechanism |
 | --- | --- | --- |
-| Litestar | DI (`db_session` parameter) | `before_send_handler` |
-| FastAPI | `Depends(provide_session)` | ASGI middleware |
-| Flask | `provide_session()` / app context | `teardown_appcontext` |
+| Litestar | DI (`db_session` parameter) | `commit_mode` middleware |
+| FastAPI | `Depends(alchemy.provide_session())` | ASGI middleware |
+| Flask | `alchemy.get_sync_session()` / app context | `teardown_appcontext` |
 | Starlette | `request.state.session` | ASGI middleware |
 | Sanic | `request.ctx.session` | Request middleware |
 
 ### Transaction Management
 
-All integrations support the same `before_send_handler` options:
+All integrations support the same `commit_mode` settings on the config class:
 
-- `async_autocommit_before_send_handler` / `sync_autocommit_before_send_handler`: auto-commits if no exception, rolls back on error
-- `async_autocommit_handler_maker(commit_on_redirect=False)`: customizable behavior
-- Manual: omit the handler and manage `session.commit()` / `session.rollback()` yourself
+- `commit_mode="autocommit"`: auto-commits if no exception, rolls back on error
+- `commit_mode="autocommit_include_redirect"`: same behavior, also commits on 3xx redirect responses
+- `commit_mode="manual"` (default): omit autocommit and manage `session.commit()` / `session.rollback()` yourself
 
 ### Multiple Database Support
 
-All plugins accept a list of configs for multi-database setups:
+All integrations accept a list of configs for multi-database setups:
 
 ```python
 primary = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://localhost/primary",
-    before_send_handler=async_autocommit_before_send_handler,
+    commit_mode="autocommit",
 )
 
 analytics = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://localhost/analytics",
-    before_send_handler=async_autocommit_before_send_handler,
+    commit_mode="autocommit",
     bind_key="analytics",
 )
 
-plugin = SQLAlchemyPlugin(config=[primary, analytics])
-plugin.init_app(app)
+alchemy = AdvancedAlchemy(config=[primary, analytics], app=app)
 ```
 
 ---

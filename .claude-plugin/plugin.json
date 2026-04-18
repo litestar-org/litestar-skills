@@ -13,6 +13,6 @@
   "keywords": ["litestar", "skills", "agent", "ai", "sqlspec", "advanced-alchemy", "granian", "msgspec", "dishka", "mcp"],
   "skills": "./skills/",
   "commands": "./commands/",
-  "agents": "./agents/",
+  "agents": "./.claude-plugin/agents/",
   "hooks": "./hooks/hooks.json"
 }

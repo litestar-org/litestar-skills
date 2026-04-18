@@ -14,7 +14,6 @@ from advanced_alchemy.types import (
     BigIntIdentity,
     ORA_JSONB,
     PasswordHash,
-    ColorType,
 )
 from advanced_alchemy.types.file_object import FileObject, StoredObject
 ```
@@ -119,7 +118,7 @@ Transparent encryption at rest for sensitive data. Values are encrypted before w
 
 ```python
 from advanced_alchemy.types import EncryptedString, EncryptedText
-from advanced_alchemy.types.encrypted_string import FernetBackend, AESGCMBackend
+from advanced_alchemy.types.encrypted_string import FernetBackend, PGCryptoBackend
 ```
 
 ### Backends
@@ -127,7 +126,6 @@ from advanced_alchemy.types.encrypted_string import FernetBackend, AESGCMBackend
 | Backend | Import | Notes |
 | --- | --- | --- |
 | `FernetBackend` | `advanced_alchemy.types.encrypted_string` | Fernet symmetric encryption (recommended default) |
-| `AESGCMBackend` | `advanced_alchemy.types.encrypted_string` | AES-256-GCM authenticated encryption |
 | `PGCryptoBackend` | `advanced_alchemy.types.encrypted_string` | PostgreSQL pgcrypto extension (server-side) |
 
 ### Usage
@@ -156,24 +154,25 @@ class UserSecret(UUIDAuditBase):
     )
 ```
 
-### AES-GCM Backend
+### PGCrypto Backend (PostgreSQL Only)
 
 ```python
-from advanced_alchemy.types.encrypted_string import AESGCMBackend
+from advanced_alchemy.types.encrypted_string import PGCryptoBackend
 
-aes_backend = AESGCMBackend(key="your-32-byte-key-in-base64")
+pg_backend = PGCryptoBackend(key="your-encryption-key")
 
 
 class SecureRecord(UUIDAuditBase):
     __tablename__ = "secure_record"
 
     secret: Mapped[str] = mapped_column(
-        EncryptedString(backend=aes_backend),
+        EncryptedString(backend=pg_backend),
     )
 ```
 
-- Encrypted columns cannot be used in WHERE clauses or indexes (the ciphertext changes each write)
-- Store the encryption key in environment variables or a secrets manager, never in code
+- `PGCryptoBackend` requires the PostgreSQL `pgcrypto` extension and performs encryption server-side.
+- Encrypted columns cannot be used in WHERE clauses or indexes (the ciphertext changes each write).
+- Store the encryption key in environment variables or a secrets manager, never in code.
 
 ---
 
@@ -183,23 +182,26 @@ Automatic password hashing on write with verification support. The column stores
 
 ```python
 from advanced_alchemy.types import PasswordHash
-from advanced_alchemy.types.password_hash import Argon2Hasher, BcryptHasher, PwdlibHasher, PasslibHasher
+from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+from advanced_alchemy.types.password_hash.pwdlib import PwdlibHasher
+from advanced_alchemy.types.password_hash.passlib import PasslibHasher
 ```
 
 ### Backends
 
-| Backend | Library | Notes |
-| --- | --- | --- |
-| `Argon2Hasher` | `argon2-cffi` | Recommended — memory-hard, resistant to GPU attacks |
-| `BcryptHasher` | `bcrypt` | Widely used, good default |
-| `PwdlibHasher` | `pwdlib` | Pure-Python option |
-| `PasslibHasher` | `passlib` | Legacy support, many algorithms |
+| Backend | Library | Import path | Notes |
+| --- | --- | --- | --- |
+| `Argon2Hasher` | `argon2-cffi` | `advanced_alchemy.types.password_hash.argon2` | Recommended — memory-hard, resistant to GPU attacks |
+| `PwdlibHasher` | `pwdlib` | `advanced_alchemy.types.password_hash.pwdlib` | Modern wrapper supporting argon2 / bcrypt |
+| `PasslibHasher` | `passlib` | `advanced_alchemy.types.password_hash.passlib` | Legacy support, many algorithms |
+
+Each backend lives in its own submodule and pulls in its hashing dependency only when imported — install the matching extra (e.g., `pip install argon2-cffi`).
 
 ### Usage
 
 ```python
 from advanced_alchemy.types import PasswordHash
-from advanced_alchemy.types.password_hash import Argon2Hasher
+from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
 
 
 class Account(UUIDAuditBase):
@@ -218,32 +220,11 @@ class Account(UUIDAuditBase):
 account = Account(email="user@example.com", password="my-secret-password")
 
 # Verifying — compare plain text against the stored hash
-from advanced_alchemy.types.password_hash import Argon2Hasher
+from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
 
 hasher = Argon2Hasher()
 is_valid = hasher.verify("my-secret-password", account.password)
 ```
-
----
-
-## ColorType
-
-Stores CSS color values. Accepts and returns color strings, storing them in a normalized format.
-
-```python
-from advanced_alchemy.types import ColorType
-
-
-class Theme(UUIDAuditBase):
-    __tablename__ = "theme"
-
-    name: Mapped[str] = mapped_column()
-    primary_color: Mapped[str | None] = mapped_column(ColorType, default=None)
-    accent_color: Mapped[str | None] = mapped_column(ColorType, default=None)
-```
-
-- Accepts hex (`#ff0000`), named colors (`red`), RGB, HSL formats
-- Useful for user-configurable UI themes stored in the database
 
 ---
 
@@ -310,11 +291,12 @@ local_storage = StorageBackend(
 ### Registering Backends
 
 ```python
-from advanced_alchemy.types.file_object import register_backend
+from advanced_alchemy.types.file_object import storages
 
-# Register during app startup
-register_backend(s3_storage)
-register_backend(local_storage)
+# Register during app startup — `storages` is a module-level `StorageRegistry`
+# singleton; `register_backend` is a method on it.
+storages.register_backend(s3_storage)
+storages.register_backend(local_storage)
 ```
 
 ### Storing Files
@@ -356,5 +338,4 @@ if document.file:
 | `EncryptedString` | `VARCHAR` | `VARCHAR` | `VARCHAR` | `VARCHAR2` |
 | `EncryptedText` | `TEXT` | `TEXT` | `TEXT` | `CLOB` |
 | `PasswordHash` | `VARCHAR` | `VARCHAR` | `VARCHAR` | `VARCHAR2` |
-| `ColorType` | `VARCHAR` | `VARCHAR` | `VARCHAR` | `VARCHAR2` |
 | `StoredObject` | `JSONB` | `JSON` | `JSON` | `JSON` |

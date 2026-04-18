@@ -67,8 +67,7 @@ class UserService(SQLAlchemyAsyncRepositoryService[m.User]):
 ## Helper Utilities
 
 ```python
-from advanced_alchemy.service import schema_dump
-from advanced_alchemy.utils import is_dict_with_field, is_dict_without_field
+from advanced_alchemy.service import schema_dump, is_dict_with_field, is_dict_without_field
 
 
 # Convert a Pydantic/msgspec/attrs schema to dict for service ingestion

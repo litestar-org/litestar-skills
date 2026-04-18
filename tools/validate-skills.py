@@ -59,10 +59,14 @@ SKILLS_DIR = REPO_ROOT / "skills"
 COMMANDS_DIR = REPO_ROOT / "commands"
 # `agents/` at repo root is Gemini CLI's extension subagents directory.
 # `.opencode/agents/` is OpenCode's project-scoped subagents directory.
-# The two hosts use incompatible frontmatter schemas, so each location is
-# validated by its own rules (see `validate_gemini_agent` / `validate_opencode_agent`).
+# `.claude-plugin/agents/` is Claude Code's plugin subagents directory.
+# All three hosts use incompatible frontmatter schemas, so each location is
+# validated by its own rules (see `validate_gemini_agent` /
+# `validate_opencode_agent` / `validate_claude_agent`).
 AGENTS_DIR = REPO_ROOT / "agents"
 OPENCODE_AGENTS_DIR = REPO_ROOT / ".opencode" / "agents"
+CLAUDE_AGENTS_DIR = REPO_ROOT / ".claude-plugin" / "agents"
+CODEX_AGENTS_DIR = REPO_ROOT / ".codex" / "agents"
 SHIPPED_ROOT_FILES = ("AGENTS.md", "CONTRIBUTING.md", "README.md", "GEMINI.md")
 
 MAX_DESCRIPTION_CHARS = 1024
@@ -121,8 +125,62 @@ _AUTHORING_TREE_SUBPATHS = (
 _leak_targets = "|".join(re.escape(p) for p in _AUTHORING_TREE_SUBPATHS)
 AGENTS_LEAK_PATTERN = re.compile(rf"(?<![A-Za-z0-9_])\.agents/(?:{_leak_targets})")
 
+# Forbidden vocabulary in shipped content. These tokens leak internal Flow
+# workflow taxonomy, codenames from non-public canonical apps, or machine-
+# specific filesystem paths. Each tuple is ``(regex, human-readable label)``.
+# Keep the list narrow and high-confidence; generic English meanings of these
+# words rarely appear in this repo's prose, so default to forbidding the leak
+# form. Add allowlist exceptions in ``_FORBIDDEN_VOCAB_ALLOWLIST`` below if a
+# legitimate use is found.
+FORBIDDEN_VOCAB_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    # --- Internal Flow workflow vocabulary ----------------------------------
+    (re.compile(r"\bSaga(?:s|-\d+)?\b"), "Flow workflow vocabulary 'Saga'"),
+    (re.compile(r"\bEpics?\b"), "Flow workflow vocabulary 'Epic'"),
+    (re.compile(r"\bCh\d+\b(?!\w)"), "internal PRD chapter ID 'ChN'"),
+    (re.compile(r"TODO\(Ch\d+\)"), "internal PRD chapter TODO marker"),
+    (re.compile(r"\b(?:parent\s+)?PRD\b"), "Flow vocabulary 'PRD' / 'parent PRD'"),
+    (re.compile(r"\bls-[a-z]{3}\.\d+"), "Beads issue slug"),
+    (re.compile(r"\bFlow\s+framework\b", re.IGNORECASE), "Flow framework name"),
+    # --- Internal canonical-app codenames (non-public) ----------------------
+    (re.compile(r"dma/accelerator"), "internal canonical-app path 'dma/accelerator'"),
+    (re.compile(r"\bETLLogObserver\b"), "internal class name 'ETLLogObserver'"),
+    (re.compile(r"~/\.dma/"), "internal app install path '~/.dma/'"),
+    (re.compile(r"/opt/dma\b"), "internal app install path '/opt/dma'"),
+    (re.compile(r"\bsrc/py/dma/"), "internal package path 'src/py/dma/'"),
+    (re.compile(r"\bdma_(?:tasks|jobs|app|runtime)\b"), "internal app-derived identifier 'dma_*'"),
+    # --- Machine-specific paths --------------------------------------------
+    (re.compile(r"/home/cody/"), "machine-specific filesystem path '/home/cody/...'"),
+)
+
+# Files exempt from FORBIDDEN_VOCAB_PATTERNS. Tests legitimately reference the
+# literal patterns to verify the validator catches them; the validator itself
+# documents the patterns in code. Use repo-relative POSIX paths.
+_FORBIDDEN_VOCAB_ALLOWLIST: frozenset[str] = frozenset(
+    {
+        "tools/validate-skills.py",  # the validator defines the patterns
+        "tests/test_validate_skills.py",  # tests assert against the patterns
+    }
+)
+
 VALID_AGENT_MODES = frozenset({"subagent", "primary"})
 VALID_AGENT_TOOLS = frozenset({"read", "grep", "glob", "bash", "edit", "write", "todoWrite", "webFetch", "webSearch"})
+
+# Claude Code subagent tool registry (canonical Claude tool names exposed to
+# subagents — see https://code.claude.com/docs/en/sub-agents).
+VALID_CLAUDE_TOOLS = frozenset(
+    {
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Edit",
+        "Write",
+        "WebFetch",
+        "WebSearch",
+        "TodoWrite",
+        "NotebookEdit",
+    }
+)
 
 # Gemini CLI subagent tool registry (see docs/core/subagents.md in google-gemini/gemini-cli).
 # Wildcards `*`, `mcp_*`, and `mcp_<server>_*` are also accepted at runtime.
@@ -141,6 +199,10 @@ VALID_GEMINI_TOOLS = frozenset(
     }
 )
 _GEMINI_WILDCARD_PATTERN = re.compile(r"^(?:\*|mcp_[A-Za-z0-9_-]*\*?)$")
+
+# Codex nickname_candidates entries: ASCII letters, digits, spaces, hyphens,
+# underscores only. Per https://developers.openai.com/codex/subagents.
+_CODEX_NICKNAME_PATTERN = re.compile(r"^[A-Za-z0-9 _-]+$")
 
 
 class Violation(NamedTuple):
@@ -325,6 +387,108 @@ def validate_gemini_agent(path: Path) -> list[Violation]:
     return violations
 
 
+def validate_claude_agent(path: Path) -> list[Violation]:
+    """Validate a Claude Code subagent file under ``.claude-plugin/agents/``.
+
+    Claude schema: ``tools`` as a comma-separated string of canonical Claude
+    tool names (e.g. ``Read, Grep, Glob, Bash``). YAML lists and dict mappings
+    are rejected by Claude's plugin manifest validator. ``mode`` is not part
+    of Claude's subagent schema.
+    """
+    violations: list[Violation] = []
+    text = path.read_text(encoding="utf-8")
+    try:
+        fm, _body_start, _body = extract_frontmatter(text)
+    except ValueError as exc:
+        return [Violation(path, 1, str(exc))]
+    expected_name = path.stem
+    if fm.get("name") != expected_name:
+        violations.append(Violation(path, 1, f"name {fm.get('name')!r} != filename stem {expected_name!r}"))
+    violations.extend(_check_description(fm.get("description"), path, 1))
+    if "mode" in fm:
+        violations.append(Violation(path, 1, "mode key not allowed (Claude subagents reject it)"))
+    tools = fm.get("tools")
+    if tools is None:
+        return violations
+    if not isinstance(tools, str):
+        violations.append(
+            Violation(path, 1, "tools must be a comma-separated string (Claude rejects YAML lists/dicts)")
+        )
+        return violations
+    for entry in (t.strip() for t in tools.split(",")):
+        if not entry:
+            continue
+        if entry not in VALID_CLAUDE_TOOLS:
+            violations.append(Violation(path, 1, f"tool {entry!r} not in Claude tool registry"))
+    return violations
+
+
+def validate_codex_agent(path: Path) -> list[Violation]:
+    """Validate a Codex CLI subagent file under ``.codex/agents/``.
+
+    Codex schema (per https://developers.openai.com/codex/subagents) is pure
+    TOML: the prompt body lives in ``developer_instructions`` (string), and
+    tools are inherited from the session's ``config.toml`` — Codex does NOT
+    accept a per-agent ``tools`` allowlist. ``mode`` is an OpenCode dialect
+    and is also rejected.
+    """
+    violations: list[Violation] = []
+    try:
+        data = _toml_loads(path.read_text(encoding="utf-8"))
+    except _TOMLDecodeError as exc:
+        return [Violation(path, 1, f"TOML parse error: {exc}")]
+    expected_name = path.stem
+    fm_name = data.get("name")
+    if fm_name != expected_name:
+        violations.append(Violation(path, 1, f"name {fm_name!r} != filename stem {expected_name!r}"))
+    violations.extend(_check_description(data.get("description"), path, 1))
+    instructions = data.get("developer_instructions")
+    if not isinstance(instructions, str) or not instructions.strip():
+        violations.append(Violation(path, 1, "developer_instructions missing or empty"))
+    if "tools" in data:
+        violations.append(
+            Violation(
+                path,
+                1,
+                "tools key not allowed (Codex inherits tools from session config.toml)",
+            )
+        )
+    if "mode" in data:
+        violations.append(
+            Violation(
+                path,
+                1,
+                "mode key not allowed (Codex has no mode concept; OpenCode dialect leak)",
+            )
+        )
+    nicknames = data.get("nickname_candidates")
+    if nicknames is not None:
+        if not isinstance(nicknames, list) or not nicknames:
+            violations.append(Violation(path, 1, "nickname_candidates must be a non-empty list"))
+        else:
+            nicknames_typed = cast("list[Any]", nicknames)  # type: ignore[redundant-cast]
+            seen: set[str] = set()
+            for entry in nicknames_typed:
+                if not isinstance(entry, str):
+                    type_name = type(entry).__name__
+                    violations.append(
+                        Violation(path, 1, f"nickname_candidates entry must be a string, got {type_name}")
+                    )
+                    continue
+                if entry in seen:
+                    violations.append(Violation(path, 1, f"nickname_candidates entry {entry!r} is duplicated"))
+                seen.add(entry)
+                if not _CODEX_NICKNAME_PATTERN.match(entry):
+                    violations.append(
+                        Violation(
+                            path,
+                            1,
+                            f"nickname_candidates entry {entry!r} must match [A-Za-z0-9 _-]+",
+                        )
+                    )
+    return violations
+
+
 def check_agents_leak(files: Iterable[Path]) -> list[Violation]:
     violations: list[Violation] = []
     for path in files:
@@ -344,6 +508,41 @@ def check_agents_leak(files: Iterable[Path]) -> list[Violation]:
                         f"shipped content references framework path: {snippet}",
                     )
                 )
+    return violations
+
+
+def check_forbidden_vocab(files: Iterable[Path]) -> list[Violation]:
+    """Flag forbidden internal vocabulary or machine-specific paths in shipped
+    content.
+
+    Walks every file, line by line, and flags any match of
+    :data:`FORBIDDEN_VOCAB_PATTERNS`. Files in
+    :data:`_FORBIDDEN_VOCAB_ALLOWLIST` are skipped (the validator + its tests
+    legitimately reference the literal patterns).
+    """
+    violations: list[Violation] = []
+    for path in files:
+        rel = _rel(path)
+        if rel in _FORBIDDEN_VOCAB_ALLOWLIST:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            for pattern, label in FORBIDDEN_VOCAB_PATTERNS:
+                if pattern.search(line):
+                    snippet = line.strip()
+                    if len(snippet) > 80:
+                        snippet = snippet[:77] + "..."
+                    violations.append(
+                        Violation(
+                            path,
+                            lineno,
+                            f"forbidden vocabulary ({label}): {snippet}",
+                        )
+                    )
+                    break  # one violation per line is enough
     return violations
 
 
@@ -367,6 +566,16 @@ def iter_opencode_agents() -> Iterator[Path]:
         yield from sorted(OPENCODE_AGENTS_DIR.glob("*.md"))
 
 
+def iter_claude_agents() -> Iterator[Path]:
+    if CLAUDE_AGENTS_DIR.is_dir():
+        yield from sorted(CLAUDE_AGENTS_DIR.glob("*.md"))
+
+
+def iter_codex_agents() -> Iterator[Path]:
+    if CODEX_AGENTS_DIR.is_dir():
+        yield from sorted(CODEX_AGENTS_DIR.glob("*.toml"))
+
+
 def iter_all_shipped_files() -> Iterator[Path]:
     if SKILLS_DIR.is_dir():
         yield from sorted(SKILLS_DIR.rglob("*.md"))
@@ -376,8 +585,26 @@ def iter_all_shipped_files() -> Iterator[Path]:
         yield from sorted(AGENTS_DIR.rglob("*.md"))
     if OPENCODE_AGENTS_DIR.is_dir():
         yield from sorted(OPENCODE_AGENTS_DIR.rglob("*.md"))
+    if CLAUDE_AGENTS_DIR.is_dir():
+        yield from sorted(CLAUDE_AGENTS_DIR.rglob("*.md"))
+    if CODEX_AGENTS_DIR.is_dir():
+        yield from sorted(CODEX_AGENTS_DIR.rglob("*.toml"))
     for name in SHIPPED_ROOT_FILES:
         candidate = REPO_ROOT / name
+        if candidate.is_file():
+            yield candidate
+    # Public docs/ tree — user-facing release notes, roadmap, launch playbook.
+    docs_dir = REPO_ROOT / "docs"
+    if docs_dir.is_dir():
+        yield from sorted(docs_dir.rglob("*.md"))
+    # Host-specific install / config files that ship with the plugin.
+    for rel in (
+        ".opencode/INSTALL.md",
+        ".opencode/plugins/litestar-skills.js",
+        ".codex/INSTALL.md",
+        ".codex/config.toml",
+    ):
+        candidate = REPO_ROOT / rel
         if candidate.is_file():
             yield candidate
 
@@ -394,6 +621,8 @@ def main() -> int:
     commands = list(iter_commands())
     gemini_agents = list(iter_gemini_agents())
     opencode_agents = list(iter_opencode_agents())
+    claude_agents = list(iter_claude_agents())
+    codex_agents = list(iter_codex_agents())
     for skill_path in skills:
         all_violations.extend(validate_skill(skill_path))
     for cmd_path in commands:
@@ -402,12 +631,18 @@ def main() -> int:
         all_violations.extend(validate_gemini_agent(agent_path))
     for agent_path in opencode_agents:
         all_violations.extend(validate_opencode_agent(agent_path))
-    all_violations.extend(check_agents_leak(iter_all_shipped_files()))
+    for agent_path in claude_agents:
+        all_violations.extend(validate_claude_agent(agent_path))
+    for agent_path in codex_agents:
+        all_violations.extend(validate_codex_agent(agent_path))
+    shipped = list(iter_all_shipped_files())
+    all_violations.extend(check_agents_leak(shipped))
+    all_violations.extend(check_forbidden_vocab(shipped))
     if all_violations:
         _print_violations(all_violations)
         print(f"\n{len(all_violations)} violation(s)", file=sys.stderr)
         return 1
-    agent_total = len(gemini_agents) + len(opencode_agents)
+    agent_total = len(gemini_agents) + len(opencode_agents) + len(claude_agents) + len(codex_agents)
     print(f"[ OK ] validated {len(skills)} skills, {len(commands)} commands, {agent_total} agents — no violations")
     return 0
 

@@ -343,7 +343,7 @@ export default defineConfig({
 
 | App | Stack | Link |
 | --- | --- | --- |
-| `litestar-fullstack-spa` | React + TanStack + advanced-alchemy + SAQ | <https://github.com/litestar-org/litestar-fullstack-spa> |
-| `litestar-fullstack-inertia` | Inertia + React + advanced-alchemy | <https://github.com/litestar-org/litestar-fullstack-inertia> |
+| [litestar-fullstack](https://github.com/litestar-org/litestar-fullstack) | React + TanStack + advanced-alchemy + SAQ | <https://github.com/litestar-org/litestar-fullstack> |
+| [litestar-fullstack-inertia](https://github.com/litestar-org/litestar-fullstack-inertia) | Inertia + React + advanced-alchemy | <https://github.com/litestar-org/litestar-fullstack-inertia> |
 
 When adopting a framework, start from the canonical example, not a blank slate.

@@ -2,7 +2,7 @@
 
 Litestar apps use one of two settings patterns depending on the project's ecosystem:
 
-- **`@dataclass(frozen=True)` + `get_env()` + `@lru_cache`** — zero extra deps; used by first-party canonical apps (`litestar-fullstack-spa`, `litestar-fullstack-inertia`, and other reference implementations). Pick this for fresh projects.
+- **`@dataclass(frozen=True)` + `get_env()` + `@lru_cache`** — zero extra deps; used by first-party canonical apps ([litestar-fullstack](https://github.com/litestar-org/litestar-fullstack), [litestar-fullstack-inertia](https://github.com/litestar-org/litestar-fullstack-inertia), and other reference implementations). Pick this for fresh projects.
 - **`pydantic_settings.BaseSettings`** — fully supported and recommended when the project already has Pydantic in its dependency graph (e.g., DTOs shared with non-Litestar microservices, or an existing Pydantic-heavy codebase). Pick this to avoid a split validation stack.
 
 Both patterns share the same call-site shape: a cached `get_settings()` function returning an immutable, nested settings object with env-driven defaults.
@@ -253,8 +253,6 @@ def __getattr__(name: str) -> object:
     msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(msg)
 ```
-
-Pattern adapted from `dma/accelerator/src/py/dma/config.py:L1–179` (module docstring + `_initialize` at L74–126 + `__getattr__` at L169–179).
 
 ### Gotchas
 

@@ -115,19 +115,26 @@ plugin = SQLSpecPlugin(config=config)
 plugin.init_app(app)
 ```
 
-### FastAPI Dependency Pattern
+### FastAPI / Starlette Session Access
+
+`SQLSpecPlugin` exposes a `get_session(request, key=None)` method on the plugin instance — call it inside any handler that needs a per-request session.
 
 ```python
-from fastapi import Depends, FastAPI
-from sqlspec.extensions.starlette import get_session
+from fastapi import FastAPI, Request
+from sqlspec.extensions.starlette import SQLSpecPlugin
 
 app = FastAPI()
+db_ext = SQLSpecPlugin(sqlspec=spec, app=app)
+
 
 @app.get("/users")
-async def list_users(db_session=Depends(get_session)):
+async def list_users(request: Request):
+    db_session = db_ext.get_session(request)
     result = await db_session.select_many("SELECT * FROM users")
     return result
 ```
+
+The plugin caches the session on `request.state` under the configured `session_key` (defaults to `"db"`), so subsequent calls within the same request reuse the same session.
 
 ---
 
@@ -144,7 +151,7 @@ Analyze and optimize query execution plans fluently.
 ### Fluent Usage
 
 ```python
-from sqlspec.explain import Explain
+from sqlspec.builder import Explain
 
 explain = (
     Explain("SELECT * FROM users", dialect="postgres")

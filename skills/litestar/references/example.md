@@ -78,7 +78,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from litestar import Controller, Request, get, post, patch, delete
-from advanced_alchemy.extensions.litestar import create_filter_dependencies
+from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
 from advanced_alchemy.service import OffsetPagination
 
 from app.domain.accounts.guards import requires_active_user

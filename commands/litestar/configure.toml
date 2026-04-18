@@ -18,7 +18,7 @@ Ask which approach the user wants:
 
 ### A) `@dataclass` + `get_env()` (canonical — recommended)
 
-This is the pattern used in `litestar-fullstack-spa` and `dma/accelerator`. Type-safe, zero external deps, cached.
+This is the pattern used in [litestar-fullstack](https://github.com/litestar-org/litestar-fullstack). Type-safe, zero external deps, cached.
 
 ```python
 from __future__ import annotations
@@ -189,7 +189,7 @@ Guide the user through:
 
 For users structuring their `server/` module, show these canonical patterns:
 
-### A) `ApplicationCore` Plugin (from `litestar-fullstack-spa`)
+### A) `ApplicationCore` Plugin (from `litestar-fullstack`)
 
 The app's core wiring lives in a single `InitPluginProtocol` class. This class:
 - Sets `debug`, `openapi_config`, `cors_config`, `session_config`
@@ -223,7 +223,7 @@ Then in `asgi.py`: `app = Litestar(plugins=[ApplicationCore()])` — one plugin 
 
 **Why:** centralizes all wiring decisions in one auditable place. Plugins, middleware, exception handlers, OpenAPI config, CLI commands — all discoverable from one class.
 
-### B) `DomainPlugin` Auto-Discovery (from `litestar-fullstack-spa`)
+### B) `DomainPlugin` Auto-Discovery (from `litestar-fullstack`)
 
 Automatically discovers and registers controllers, services, schemas, signals, and repositories from `domain/*/` subpackages — no manual imports needed:
 

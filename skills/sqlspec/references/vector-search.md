@@ -1,6 +1,6 @@
 # Vector search with sqlspec
 
-This reference covers similarity search for semantic retrieval and intent classification against embeddings stored in the same transactional database as the application's data. It documents the Oracle `VECTOR_DISTANCE(..., COSINE)` pattern in full (sourced from `oracledb-vertexai-demo`) with pgvector cross-reference for PostgreSQL stacks. For the Litestar handler and ADK runner that consume these services, see [`../../litestar/references/ai-serving.md`](../../litestar/references/ai-serving.md).
+This reference covers similarity search for semantic retrieval and intent classification against embeddings stored in the same transactional database as the application's data. It documents the Oracle `VECTOR_DISTANCE(..., COSINE)` pattern in full (sourced from [oracledb-vertexai-demo](https://github.com/cofin/oracledb-vertexai-demo)) with pgvector cross-reference for PostgreSQL stacks. For the Litestar handler and ADK runner that consume these services, see [`../../litestar/references/ai-serving.md`](../../litestar/references/ai-serving.md).
 
 ## Backend support matrix
 
@@ -10,15 +10,17 @@ This reference covers similarity search for semantic retrieval and intent classi
 | PostgreSQL + pgvector | `:a <=> :b` | `1 - (:a <=> :b)` | `LIMIT :n` |
 | SQLite + sqlite-vec | `vec_distance_cosine(:a, :b)` | `1 - vec_distance_cosine(...)` | `LIMIT :n` |
 
-Ch6 documents the **Oracle** path in full (canonical demo). See [pgvector branch (short)](#pgvector-branch-short) for the PostgreSQL equivalent. Full pgvector coverage will land in a future chapter when a canonical pgvector reference app is available.
+This reference documents the **Oracle** path in full (sourced from `oracledb-vertexai-demo`). See [pgvector branch (short)](#pgvector-branch-short) for the PostgreSQL equivalent; full pgvector coverage will land when a canonical pgvector reference app is available.
 
 ## Vector-search service pattern (Oracle)
 
 Cosine distance is converted to similarity via `1 - VECTOR_DISTANCE(..., COSINE)` so that higher values mean more similar. Canonical source: `oracledb-vertexai-demo/src/py/app/domain/products/services/services.py:L42–53`.
 
-```python
+`SQLSpecAsyncService` is a project-defined base from the canonical apps — copy it from [`oracledb-vertexai-demo/src/py/app/lib/service.py`](https://github.com/cofin/oracledb-vertexai-demo) into `app/lib/service.py`. It wraps an `AsyncDriverAdapterBase` with helpers like `paginate`, `get_or_404`, and `begin_transaction`.
+
+```python  # pragma: legacy-example
 from typing import Any
-from sqlspec.base import SQLSpecAsyncService
+from app.lib.service import SQLSpecAsyncService
 
 
 class VectorSearchService(SQLSpecAsyncService):
@@ -77,10 +79,10 @@ async def generate_embedding(
 
 A SQL-based cache keyed by `SHA256(text)` avoids redundant embedding API calls. `ON CONFLICT DO NOTHING` is safe under concurrent inserts. `hit_count` and `last_accessed` support decay-based eviction if needed. Canonical source: `oracledb-vertexai-demo/src/py/app/domain/system/services/services.py:L155–180`.
 
-```python
+```python  # pragma: legacy-example
 import hashlib
 from typing import Any
-from sqlspec.base import SQLSpecAsyncService
+from app.lib.service import SQLSpecAsyncService
 
 
 class EmbeddingCacheService(SQLSpecAsyncService):

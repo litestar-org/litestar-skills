@@ -2,10 +2,16 @@
 
 ## Service Layer Pattern
 
-Create bounded services wrapping common database operations with `SQLSpecAsyncService`:
+`SQLSpecAsyncService` is a thin **project-defined** base class used by the canonical Litestar + SQLSpec apps to wrap a `sqlspec.driver.AsyncDriverAdapterBase` with helpers like `paginate`, `get_or_404`, `exists`, and `begin_transaction`. It is *not* part of upstream `sqlspec`; copy it into your project's `lib/service.py` from the canonical reference app:
 
-```python
-from sqlspec.service import SQLSpecAsyncService, OffsetPagination
+> Source: [`litestar-sqlstack/src/sqlstack/lib/service.py`](https://github.com/cofin/litestar-sqlstack) — also used in [`oracledb-vertexai-demo`](https://github.com/cofin/oracledb-vertexai-demo).
+
+Once the base class lives in your codebase, services consume it like this:
+
+```python  # pragma: legacy-example
+from app.lib.service import SQLSpecAsyncService
+from sqlspec.core.filters import OffsetPagination
+
 
 class UserService(SQLSpecAsyncService):
     async def list_users(self, page: int = 1, page_size: int = 20) -> OffsetPagination[User]:

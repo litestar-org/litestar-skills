@@ -6,7 +6,15 @@
 
 ## Status
 
-**v0.1.0 — early access.** Multi-host plumbing, 16 skills, ~22,800 lines of canonical content. Full launch-skill catalog growing.
+**v0.1.1 — early access.** Multi-host plumbing, 16 skills, ~22,800 lines of canonical content. Full launch-skill catalog growing.
+
+## Support Tiers
+
+Each host falls into one of three tiers:
+
+- **First-class** — the repo ships maintained host-specific artifacts and install guidance. Currently: Claude Code, Gemini CLI, Codex CLI, OpenCode.
+- **Compatible bundle** — the host consumes standard manifests or generic skill-discovery paths. Currently: Cursor, VS Code/Copilot, OpenClaw.
+- **Free ride** — the host discovers generic Agent Skills without a dedicated integration. Currently: Google Antigravity.
 
 ## Install
 
@@ -35,17 +43,52 @@ Gemini auto-indexes this repo into its [extension gallery](https://geminicli.com
 git clone https://github.com/litestar-org/litestar-skills ~/.codex/plugins/litestar-skills
 ```
 
-Then inside Codex: `$skill list | grep litestar`. See [`.codex/INSTALL.md`](.codex/INSTALL.md) for project-scoped install.
+Codex auto-discovers plugins under `~/.codex/plugins/`. Ships `.codex/agents/litestar-reviewer.toml` (pure TOML, tools inherited from session `config.toml`). Verify with `$skill list | grep litestar`. See [`.codex/INSTALL.md`](.codex/INSTALL.md) for project-scoped marketplace install.
 
 ### OpenCode
 
+OpenCode reads `.opencode/skills/`, `.claude/skills/`, and `.agents/skills/` natively — the recommended install is project-local:
+
 ```bash
-git clone https://github.com/litestar-org/litestar-skills ~/.config/opencode/litestar-skills
-ln -sf ~/.config/opencode/litestar-skills/.opencode/plugins/litestar-skills.js \
-       ~/.config/opencode/plugins/litestar-skills.js
+git clone --depth 1 https://github.com/litestar-org/litestar-skills /tmp/litestar-skills
+mkdir -p .agents/skills
+cp -r /tmp/litestar-skills/skills/* .agents/skills/
 ```
 
-OpenCode also reads `.claude/skills/` and `.agents/skills/` natively — for a project-local install, copy the `skills/` tree there. See [`.opencode/INSTALL.md`](.opencode/INSTALL.md).
+A global-plugin variant exists for users who want cross-project coverage, but the JS plugin entrypoint is a no-op stub today — skill discovery happens through the paths above either way. See [`.opencode/INSTALL.md`](.opencode/INSTALL.md).
+
+### Google Antigravity
+
+Antigravity reads Agent Skills from `.agent/skills/` (**singular** `.agent`, note the naming collision with the plural `.agents/skills/` used by Claude Code / OpenCode / VS Code) or from `~/.gemini/antigravity/skills/` globally. Since this repo ships the plural form, the recommended workspace-scope install is a symlink:
+
+```bash
+cd your-project
+git clone --depth 1 https://github.com/litestar-org/litestar-skills /tmp/litestar-skills
+mkdir -p .agents/skills
+cp -r /tmp/litestar-skills/skills/* .agents/skills/
+ln -s .agents .agent       # community workaround — not a Google-blessed integration
+```
+
+For global installs across all workspaces:
+
+```bash
+mkdir -p ~/.gemini/antigravity/skills
+cp -r /tmp/litestar-skills/skills/* ~/.gemini/antigravity/skills/
+```
+
+See [Antigravity Skills docs](https://antigravity.google/docs/skills). The installer's `--antigravity-symlink` flag (below) automates the workspace symlink when you already have `.agents/skills/` present.
+
+### OpenClaw
+
+OpenClaw reads the generic Agent Skills tree; no OpenClaw-specific manifest is needed:
+
+```bash
+git clone --depth 1 https://github.com/litestar-org/litestar-skills /tmp/litestar-skills
+mkdir -p .agents/skills
+cp -r /tmp/litestar-skills/skills/* .agents/skills/
+```
+
+Compatible-bundle tier — the repo does not promise dedicated OpenClaw wrapper support, but the generic skills work unmodified.
 
 ### Cursor
 
@@ -118,6 +161,24 @@ pwsh -File tools/install.ps1 -Only gemini,codex
 If PowerShell 7+ is not installed: `winget install Microsoft.PowerShell`. If Git for Windows is not installed: <https://git-scm.com/download/win>.
 
 </details>
+
+## Optional: Google Developer Knowledge MCP
+
+Google publishes an MCP server that returns fresh Firebase / Google Cloud / Android / Maps docs at `developerknowledge.googleapis.com`. Useful when a Litestar project depends on a Google-managed service. No manifest is shipped; users opt in per host.
+
+```bash
+# Claude Code
+claude mcp add google-dev-knowledge --transport http \
+  https://developerknowledge.googleapis.com/mcp \
+  --header "X-Goog-Api-Key: YOUR_API_KEY"
+
+# Gemini CLI
+gemini mcp add -t http -H "X-Goog-Api-Key: YOUR_API_KEY" \
+  google-developer-knowledge \
+  https://developerknowledge.googleapis.com/mcp --scope user
+```
+
+Generate the API key at `https://console.cloud.google.com/apis/credentials` and restrict it to the Developer Knowledge API. Full reference: [`skills/litestar-styleguide/references/google-developer-knowledge-mcp.md`](skills/litestar-styleguide/references/google-developer-knowledge-mcp.md).
 
 ## Discovery topics
 
