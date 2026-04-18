@@ -1,6 +1,6 @@
 {
   "name": "litestar-skills",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Opinionated first-party agent skills for the Litestar framework ecosystem",
   "author": {
     "name": "Cody Fincher",
@@ -11,6 +11,8 @@
   "license": "MIT",
   "keywords": ["litestar", "skills", "agent", "ai", "sqlspec", "advanced-alchemy"],
   "skills": "./skills/",
+  "commands": "./commands/",
+  "agents": "./.codex/agents/",
   "hooks": "./hooks/hooks-codex.json",
   "interface": {
     "displayName": "Litestar Skills",

@@ -459,6 +459,30 @@ class TestValidateCodexAgent:
         assert any("nickname" in v.message.lower() for v in violations)
 
 
+class TestValidateManifest:
+    def test_valid_claude_manifest_no_violations(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        manifest_dir = tmp_path / ".claude-plugin"
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        manifest = manifest_dir / "plugin.json"
+        manifest.write_text('{"name": "x", "version": "0.1", "agents": ["./a.md"]}')
+        violations = mod.validate_manifest(manifest)
+        assert violations == []
+
+    def test_invalid_claude_agents_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        manifest_dir = tmp_path / ".claude-plugin"
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        manifest = manifest_dir / "plugin.json"
+        # Claude requires array for agents
+        manifest.write_text('{"name": "x", "version": "0.1", "agents": "./dir/"}')
+        violations = mod.validate_manifest(manifest)
+        assert len(violations) == 1
+        assert "array" in violations[0].message.lower()
+
+
 class TestAgentsLeakGuard:
     def test_patterns_md_leak_yields_violation(self, tmp_path: Path) -> None:
         mod = _load_validator()
