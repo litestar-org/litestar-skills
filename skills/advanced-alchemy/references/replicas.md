@@ -6,7 +6,7 @@ Advanced Alchemy provides built-in read/write routing that automatically directs
 
 In practice, you **configure routing once** and let repositories/services use it transparently. Reads automatically go to replicas, writes go to the primary — no code changes needed in your service layer.
 
-For low-level routing control (context managers, explicit bind groups), see the AA routing reference: <https://docs.advanced-alchemy.litestar.dev/reference/config/routing.html>
+For low-level routing control (context managers, explicit bind groups), see the AA routing reference: <https://advanced-alchemy.litestar.dev/latest/reference/config/routing.html>
 
 ---
 

@@ -148,7 +148,7 @@ Concurrent cache misses for the same key are deduplicated automatically via sing
 
 For advanced use cases (custom cache keys, manual invalidation, custom serialization), the `CacheManager` provides direct methods. This is rarely needed — the repository/service layer handles caching automatically. See the AA source reference for details:
 
-- <https://docs.advanced-alchemy.litestar.dev/reference/cache.html>
+- <https://advanced-alchemy.litestar.dev/latest/reference/cache.html>
 
 ---
 
