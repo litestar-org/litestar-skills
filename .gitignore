@@ -32,8 +32,12 @@ build/
 # Host-local settings (may contain per-machine paths or tokens)
 .claude/settings.local.json
 
-# Flow framework state — local-only per project convention
-.agents/
+# Flow framework state — local-only per project convention.
+# `.agents/*` (NOT `.agents/`) so git descends into the directory and honors
+# the `!`-includes below. Otherwise re-includes do not work.
+.agents/*
+!.agents/plugins/
+!.agents/plugins/marketplace.json
 .beads/
 
 # Beads / Dolt internals
