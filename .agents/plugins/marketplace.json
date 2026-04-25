@@ -16,7 +16,7 @@
       "name": "litestar-skills",
       "version": "0.1.2",
       "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
-      "source": { "source": "local", "path": "./" },
+      "source": { "source": "local", "path": "./plugins/litestar-skills" },
       "policy": { "installation": "AVAILABLE" },
       "category": "Development",
       "author": {

@@ -34,10 +34,14 @@ build/
 
 # Flow framework state — local-only per project convention.
 # `.agents/*` (NOT `.agents/`) so git descends into the directory and honors
-# the `!`-includes below. Otherwise re-includes do not work.
+# the `!`-includes below. Codex CLI 0.125+ requires the marketplace file at
+# `.agents/plugins/marketplace.json` AND a nested plugin subtree at
+# `.agents/plugins/plugins/<name>/` (because Codex rejects `source.path: "./"`).
 .agents/*
 !.agents/plugins/
+.agents/plugins/*
 !.agents/plugins/marketplace.json
+!.agents/plugins/plugins/
 .beads/
 
 # Beads / Dolt internals

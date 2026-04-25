@@ -1,6 +1,5 @@
 {
   "name": "litestar-skills",
-  "displayName": "Litestar Skills",
   "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
   "version": "0.1.2",
   "author": {

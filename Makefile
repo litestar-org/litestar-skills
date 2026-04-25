@@ -223,8 +223,14 @@ check-upstream-imports:                             ## Verify every Python impor
 	@uv run python tools/check-upstream-imports.py
 	@echo "${OK} Upstream imports verified ✨"
 
+.PHONY: validate-codex-manifest
+validate-codex-manifest:                            ## Validate Codex marketplace + plugin manifests for Codex CLI 0.125+
+	@echo "${INFO} Validating Codex manifests... 🔍"
+	@uv run python tools/validate-codex-manifest.py
+	@echo "${OK} Codex manifests valid"
+
 .PHONY: validate
-validate: agents-check validate-skills sync-manifests check-upstream-imports  ## Run all repo-integrity validators
+validate: agents-check validate-skills sync-manifests validate-codex-manifest check-upstream-imports  ## Run all repo-integrity validators
 	@echo "${OK} All validators passed ✨"
 
 # -----------------------------------------------------------------------------

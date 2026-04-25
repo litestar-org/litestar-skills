@@ -50,6 +50,13 @@ def test_codex_marketplace_is_committed() -> None:
     )
 
 
+def test_codex_nested_plugin_is_committed() -> None:
+    """Codex 0.125+ requires the plugin under `./plugins/<name>/`, not `./`."""
+    assert _is_tracked(".agents/plugins/plugins/litestar-skills/.codex-plugin/plugin.json"), (
+        'Codex nested plugin manifest must be committed — Codex CLI 0.125+ rejects `source.path: "./"`'
+    )
+
+
 def test_codex_marketplace_is_trackable() -> None:
     assert _is_trackable(".agents/plugins/marketplace.json"), (
         "carve-out broken — file must be re-included via `!.agents/plugins/marketplace.json`"

@@ -181,7 +181,7 @@ search = '      "version": "{current_version}"'
 replace = '      "version": "{new_version}"'
 
 [[tool.bumpversion.files]]
-filename = ".codex-plugin/plugin.json"
+filename = ".agents/plugins/plugins/litestar-skills/.codex-plugin/plugin.json"
 search = '"version": "{current_version}"'
 replace = '"version": "{new_version}"'
 
