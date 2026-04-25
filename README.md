@@ -39,23 +39,31 @@ Gemini auto-indexes this repo into its [extension gallery](https://geminicli.com
 
 ### Codex CLI
 
+> **Codex CLI 0.125+** required. The marketplace and plugin manifest live under `.agents/plugins/` per Codex's nested-path requirement.
+
 ```bash
-git clone https://github.com/litestar-org/litestar-skills ~/.codex/plugins/litestar-skills
+codex plugin marketplace add litestar-org/litestar-skills
 ```
 
-Codex auto-discovers plugins under `~/.codex/plugins/`. Ships `.codex/agents/litestar-reviewer.toml` (pure TOML, tools inherited from session `config.toml`). Verify with `$skill list | grep litestar`. See [`.codex/INSTALL.md`](.codex/INSTALL.md) for project-scoped marketplace install.
+Then enable inside a Codex session via `/plugins`. See [`.codex/INSTALL.md`](.codex/INSTALL.md) for local-development and legacy-clone install paths.
 
 ### OpenCode
 
-OpenCode reads `.opencode/skills/`, `.claude/skills/`, and `.agents/skills/` natively — the recommended install is project-local:
+OpenCode reads `.opencode/skills/`, `.claude/skills/`, and `.agents/skills/` natively. Two install paths:
 
 ```bash
+# Option 1: project-local skills (no plugin features)
 git clone --depth 1 https://github.com/litestar-org/litestar-skills /tmp/litestar-skills
 mkdir -p .agents/skills
 cp -r /tmp/litestar-skills/skills/* .agents/skills/
+
+# Option 2: global plugin (recommended) — injects project-aware skill reminders
+git clone https://github.com/litestar-org/litestar-skills ~/.config/opencode/litestar-skills
+ln -sf ~/.config/opencode/litestar-skills/.opencode/plugins/litestar-skills.js \
+       ~/.config/opencode/plugins/litestar-skills.js
 ```
 
-A global-plugin variant exists for users who want cross-project coverage, but the JS plugin entrypoint is a no-op stub today — skill discovery happens through the paths above either way. See [`.opencode/INSTALL.md`](.opencode/INSTALL.md).
+Option 2 ships a real `experimental.chat.system.transform` handler that injects targeted Litestar skill reminders into the system prompt and honors managed-config policy. See [`.opencode/INSTALL.md`](.opencode/INSTALL.md).
 
 ### Google Antigravity
 
@@ -245,7 +253,7 @@ Each skill includes a `SKILL.md` plus focused references.
 
 - [Launch checklist](docs/launch-checklist.md) — day-of v0.1 release playbook and post-launch verification
 - [Roadmap](docs/roadmap.md) — shipped, v0.2 candidates, and explicitly-deferred items with graduation triggers
-- [Policy & permissions](docs/policy.md) — per-host allow/ask/deny grammar, managed-settings paths, and the cross-host policy bootstrap pattern. Sample managed config at [docs/managed-settings-example.json](docs/managed-settings-example.json).
+- [Policy & permissions](docs/policy.md) — per-host allow/ask/deny grammar, managed-settings paths, and the cross-host policy bootstrap pattern. Drop-in template at [templates/managed-settings/claude-code.json](templates/managed-settings/claude-code.json).
 
 ## Contributing
 

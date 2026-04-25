@@ -88,7 +88,7 @@ Evaluation order is **deny → ask → allow**, first match wins.
 - `disableSkillShellExecution` — block any shell execution invoked by a skill.
 - `pluginTrustMessage` — banner shown to users on plugin install.
 
-A copy-pasteable starting point lives at [`docs/managed-settings-example.json`](managed-settings-example.json).
+A copy-pasteable starting point lives at [`templates/managed-settings/claude-code.json`](../templates/managed-settings/claude-code.json).
 
 **To deny a specific litestar-skills capability for an org:**
 
