@@ -124,6 +124,18 @@ test-hooks:                                         ## Run hooks subset only (de
 	@uv run pytest tests/hooks -v
 	@echo "${OK} Hook tests complete"
 
+.PHONY: agents
+agents:                                             ## Regenerate per-host agent dialects from canonical YAML sources
+	@echo "${INFO} Regenerating agent dialects... 🤖"
+	@uv run python tools/generate-agents.py
+	@echo "${OK} Agents regenerated"
+
+.PHONY: agents-check
+agents-check:                                       ## CI drift gate — fail if generated output differs from on-disk
+	@echo "${INFO} Checking agent dialect drift... 🔎"
+	@uv run python tools/generate-agents.py --check
+	@echo "${OK} No agent dialect drift"
+
 .PHONY: coverage
 coverage:                                           ## Run tests with coverage report
 	@echo "${INFO} Running tests with coverage... 📊"
@@ -212,7 +224,7 @@ check-upstream-imports:                             ## Verify every Python impor
 	@echo "${OK} Upstream imports verified ✨"
 
 .PHONY: validate
-validate: validate-skills sync-manifests check-upstream-imports  ## Run all repo-integrity validators
+validate: agents-check validate-skills sync-manifests check-upstream-imports  ## Run all repo-integrity validators
 	@echo "${OK} All validators passed ✨"
 
 # -----------------------------------------------------------------------------
