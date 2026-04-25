@@ -1,6 +1,6 @@
 # Contributing to `litestar-skills`
 
-See [`docs/roadmap.md`](docs/roadmap.md) for shipped features, v0.2 candidates, and deferred items with graduation triggers.
+See [`docs/roadmap.md`](docs/roadmap.md) for v0.2 candidates and deferred items with graduation triggers. For what's already shipped, see [GitHub Releases](https://github.com/litestar-org/litestar-skills/releases).
 
 ## Adding a Skill
 

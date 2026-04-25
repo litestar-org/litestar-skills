@@ -223,8 +223,6 @@ Each host has knobs only the user can flip — there's no plugin-author hook for
 
 ---
 
-## Deferred — enterprise managed-settings pack
+## Enterprise managed-settings pack
 
-A production-ready `docs/enterprise/managed-settings.json` for org-wide rollouts (with `allowManagedPermissionRulesOnly: true`, MCP server allowlists, marketplace pinning, and Jamf/Group-Policy deployment guides) is tracked but deferred. Trigger: an internal Litestar customer asks for org-wide deny rules.
-
-Filed: Beads `ls-1x6` (Enterprise managed-settings pack).
+A production-ready `docs/enterprise/managed-settings.json` for org-wide rollouts — with `allowManagedPermissionRulesOnly: true`, MCP server allowlists, marketplace pinning, and Jamf / Group Policy deployment guides — is on the roadmap but not yet shipped. If you need it for an enterprise rollout, open an issue describing the scope you need covered and we'll prioritize.

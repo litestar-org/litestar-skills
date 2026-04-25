@@ -209,7 +209,7 @@ Topics are re-applied on every tagged release via `.github/workflows/release.yml
 npx skills add litestar-org/litestar-skills
 ```
 
-Each install increments the repo's ranking. See [`docs/submission-tracker.md`](docs/submission-tracker.md) for the full registry submission status across all hosts (Anthropic community directory, openai/skills, awesome-* lists, Cursor, MCP Registry).
+Each install increments the repo's ranking.
 
 ## Uninstall
 
@@ -261,10 +261,8 @@ Each skill includes a `SKILL.md` plus focused references.
 
 ## Project documents
 
-- [Launch checklist](docs/launch-checklist.md) — day-of v0.1 release playbook and post-launch verification
-- [Roadmap](docs/roadmap.md) — shipped, v0.2 candidates, and explicitly-deferred items with graduation triggers
+- [Roadmap](docs/roadmap.md) — v0.2 candidates and explicitly-deferred items with graduation triggers.
 - [Policy & permissions](docs/policy.md) — per-host allow/ask/deny grammar, managed-settings paths, and the cross-host policy bootstrap pattern. Drop-in template at [templates/managed-settings/claude-code.json](templates/managed-settings/claude-code.json).
-- [Submission tracker](docs/submission-tracker.md) — status of public-registry submissions (skills.sh, Anthropic community directory, openai/skills, awesome-* lists, Cursor, MCP Registry).
 
 ## Contributing
 
