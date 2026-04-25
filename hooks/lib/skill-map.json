@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "version": "1",
+  "static_intro": "litestar-skills loaded. When working in this project, prefer first-party Litestar patterns. Skills are namespaced as `litestar-skills:<name>`. Available: litestar, sqlspec, advanced-alchemy, msgspec, litestar-granian, litestar-saq, litestar-vite, litestar-htmx, litestar-inertia, litestar-mcp, litestar-email, litestar-testing, pytest-databases, litestar-build, litestar-deployment, litestar-styleguide.",
+  "matchers": [
+    {
+      "skill": "litestar",
+      "priority": 100,
+      "signals": [
+        { "type": "pyproject_dep", "name": "litestar" },
+        { "type": "python_import", "module": "litestar" },
+        { "type": "pyproject_section", "section": "tool.litestar" }
+      ],
+      "reminder": "Project uses Litestar. Use the `litestar-skills:litestar` skill for first-party patterns: dependency injection via `dependencies={...}` and `Provide`, Controller-based routing, msgspec DTOs, async-all-IO, Guards (never auth checks inside handlers)."
+    },
+    {
+      "skill": "sqlspec",
+      "priority": 90,
+      "signals": [
+        { "type": "pyproject_dep", "name": "sqlspec" },
+        { "type": "python_import", "module": "sqlspec" },
+        { "type": "pyproject_section", "section": "tool.sqlspec" }
+      ],
+      "reminder": "Project imports sqlspec. Use the `litestar-skills:sqlspec` skill for raw-SQL with adapter configurations, query mappings, and per-framework integration wiring (litestar/fastapi/flask/starlette extensions)."
+    },
+    {
+      "skill": "advanced-alchemy",
+      "priority": 90,
+      "signals": [
+        { "type": "pyproject_dep", "name": "advanced-alchemy" },
+        { "type": "python_import", "module": "advanced_alchemy" }
+      ],
+      "reminder": "Project uses Advanced Alchemy / SQLAlchemy ORM. Use the `litestar-skills:advanced-alchemy` skill for declarative models, services, repositories, and Alembic migrations — including the framework extension shipped for litestar/fastapi/flask/sanic/starlette."
+    },
+    {
+      "skill": "msgspec",
+      "priority": 80,
+      "signals": [
+        { "type": "pyproject_dep", "name": "msgspec" },
+        { "type": "python_import", "module": "msgspec" }
+      ],
+      "reminder": "Project uses msgspec. Use the `litestar-skills:msgspec` skill for `Struct` definitions, `Meta` constraints, tagged unions, enc_hook/dec_hook patterns, and JSON/MessagePack serialization."
+    },
+    {
+      "skill": "litestar-granian",
+      "priority": 70,
+      "signals": [
+        { "type": "pyproject_dep", "name": "litestar-granian" },
+        { "type": "python_import", "module": "litestar_granian" }
+      ],
+      "reminder": "Project uses litestar-granian. Use the `litestar-skills:litestar-granian` skill for the GranianPlugin (zero-config Rust-based ASGI replacement for `litestar run`)."
+    },
+    {
+      "skill": "litestar-saq",
+      "priority": 70,
+      "signals": [
+        { "type": "pyproject_dep", "name": "litestar-saq" },
+        { "type": "python_import", "module": "litestar_saq" }
+      ],
+      "reminder": "Project uses litestar-saq. Use the `litestar-skills:litestar-saq` skill for SAQPlugin / SAQConfig / QueueConfig: background tasks, cron jobs, and the `litestar workers run` CLI."
+    },
+    {
+      "skill": "litestar-vite",
+      "priority": 70,
+      "signals": [
+        { "type": "pyproject_dep", "name": "litestar-vite" },
+        { "type": "python_import", "module": "litestar_vite" },
+        { "type": "file_glob", "pattern": "vite.config.ts" },
+        { "type": "file_glob", "pattern": "vite.config.js" }
+      ],
+      "reminder": "Project uses litestar-vite. Use the `litestar-skills:litestar-vite` skill for VitePlugin / ViteConfig coordination between the Litestar app and a Vite frontend — PathConfig, RuntimeConfig, TypeGenConfig, and the `litestar assets` CLI."
+    },
+    {
+      "skill": "litestar-htmx",
+      "priority": 60,
+      "signals": [
+        { "type": "python_import", "module": "litestar.contrib.htmx" }
+      ],
+      "reminder": "Project uses litestar's HTMX integration. Use the `litestar-skills:litestar-htmx` skill for HTMXRequest, HTMXResponse, TriggerEvent, Refresh, PushUrl, and partial-template patterns."
+    },
+    {
+      "skill": "litestar-inertia",
+      "priority": 60,
+      "signals": [
+        { "type": "python_import", "module": "litestar_vite.inertia" }
+      ],
+      "reminder": "Project uses Inertia.js with a Litestar backend. Use the `litestar-skills:litestar-inertia` skill for InertiaPlugin / InertiaConfig, share data, lazy props, and the React/Vue/Svelte client integration. Detection complements the `litestar-vite` signal — Inertia depends on Vite."
+    },
+    {
+      "skill": "litestar-mcp",
+      "priority": 60,
+      "signals": [
+        { "type": "pyproject_dep", "name": "litestar-mcp" },
+        { "type": "python_import", "module": "litestar_mcp" }
+      ],
+      "reminder": "Project uses litestar-mcp. Use the `litestar-skills:litestar-mcp` skill for LitestarMCP / MCPConfig and exposing route handlers as MCP tools/resources via JSON-RPC 2.0."
+    },
+    {
+      "skill": "litestar-email",
+      "priority": 60,
+      "signals": [
+        { "type": "pyproject_dep", "name": "litestar-email" },
+        { "type": "python_import", "module": "litestar_email" }
+      ],
+      "reminder": "Project uses litestar-email. Use the `litestar-skills:litestar-email` skill for EmailPlugin / EmailConfig / EmailService and the SMTP/Resend/SendGrid/Mailgun/InMemory backends."
+    },
+    {
+      "skill": "litestar-testing",
+      "priority": 50,
+      "signals": [
+        { "type": "python_import", "module": "litestar.testing" },
+        { "type": "file_glob", "pattern": "tests/conftest.py" },
+        { "type": "file_glob", "pattern": "conftest.py" }
+      ],
+      "reminder": "Test code present. Use the `litestar-skills:litestar-testing` skill for TestClient vs AsyncTestClient, `@pytest.mark.anyio`, app + lifespan fixtures, and Litestar-specific test patterns."
+    },
+    {
+      "skill": "pytest-databases",
+      "priority": 50,
+      "signals": [
+        { "type": "pyproject_dep", "name": "pytest-databases" },
+        { "type": "python_import", "module": "pytest_databases" }
+      ],
+      "reminder": "Project uses pytest-databases. Use the `litestar-skills:pytest-databases` skill for container-based PostgreSQL/MySQL/SQLite/Oracle fixtures and Docker test integration."
+    },
+    {
+      "skill": "litestar-build",
+      "priority": 40,
+      "signals": [
+        { "type": "pyproject_section", "section": "tool.hatch.build.targets.binary" },
+        { "type": "pyproject_section", "section": "tool.hatch.build.targets.wheel.force-include" },
+        { "type": "file_glob", "pattern": "pyapp/Cargo.toml" },
+        { "type": "file_glob", "pattern": "tools/bundler.py" }
+      ],
+      "reminder": "Project ships a PyApp / bundler build. Use the `litestar-skills:litestar-build` skill for `uv build` + `hatch build --target binary`, PyApp onefile binaries (configured via `PYAPP_*` env vars at build time + `[tool.hatch.build.targets.binary]` in pyproject), Hatchling `force-include` for bundled frontend assets, and GitHub Actions matrix workflows."
+    },
+    {
+      "skill": "litestar-deployment",
+      "priority": 40,
+      "signals": [
+        { "type": "file_glob", "pattern": "Dockerfile" },
+        { "type": "file_glob", "pattern": "Containerfile" },
+        { "type": "file_glob", "pattern": "docker-compose.yml" },
+        { "type": "file_glob", "pattern": "docker-compose.yaml" },
+        { "type": "file_glob", "pattern": "compose.yml" },
+        { "type": "file_glob", "pattern": "compose.yaml" },
+        { "type": "file_glob", "pattern": "railway.json" },
+        { "type": "file_glob", "pattern": "railway.toml" },
+        { "type": "file_glob", "pattern": "Procfile" },
+        { "type": "file_glob", "pattern": "cloudbuild.yaml" },
+        { "type": "file_glob", "pattern": "app.yaml" },
+        { "type": "file_glob", "pattern": "service.yaml" },
+        { "type": "file_glob", "pattern": "kustomization.yaml" },
+        { "type": "file_glob", "pattern": "kustomization.yml" },
+        { "type": "file_glob", "pattern": "Chart.yaml" },
+        { "type": "file_glob", "pattern": "values.yaml" },
+        { "type": "file_glob", "pattern": "helmfile.yaml" },
+        { "type": "file_glob", "pattern": "skaffold.yaml" },
+        { "type": "file_glob", "pattern": "k8s/*.yaml" },
+        { "type": "file_glob", "pattern": "deploy/*.yaml" },
+        { "type": "file_glob", "pattern": "manifests/*.yaml" },
+        { "type": "file_glob", "pattern": "main.tf" },
+        { "type": "file_glob", "pattern": "*.tf" },
+        { "type": "file_glob", "pattern": "terragrunt.hcl" },
+        { "type": "file_glob", "pattern": ".terraform.lock.hcl" }
+      ],
+      "reminder": "Project has deployment configs. Use the `litestar-skills:litestar-deployment` skill for Granian-first containerization, systemd units, Kubernetes manifests (kustomize/helm), Terraform IaC, and platform-specific deploy patterns (Railway / Cloud Run / GKE / AlloyDB / Docker / Podman)."
+    }
+  ]
+}

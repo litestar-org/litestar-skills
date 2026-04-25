@@ -61,8 +61,12 @@ Every host falls into one of three tiers:
 | Subagents (Gemini CLI) | `agents/<agent-name>.md` (`tools` as YAML list of Gemini tool names) |
 | Subagents (OpenCode) | `.opencode/agents/<agent-name>.md` (`tools` as dict mapping + `mode: subagent`) |
 | MCP servers | `mcp-servers/<server-name>/` |
-| Hooks | `hooks/*.json` + `hooks/session-start` |
+| Hooks | `hooks/hooks-<host>.json` + `hooks/session-start.{sh,ps1,js}` + `hooks/lib/{detect-env.{sh,ps1,js},_detector.py,skill-map.json}` |
 | Templates | `templates/skill-template/` |
+
+## Hooks
+
+The SessionStart hook scans the project's cwd for known Litestar-ecosystem signals (pyproject deps, `[tool.<lib>]` sections, Python imports, file globs in `hooks/lib/skill-map.json`) and injects per-host context naming the relevant `litestar-skills:<skill>` skills. Detection logic lives in `hooks/lib/_detector.py` (the canonical Python implementation reused by `detect-env.sh` and `detect-env.ps1`) and a parallel ESM port in `hooks/lib/detect-env.js` (used by the OpenCode plugin). Per-host shims: `hooks/hooks-claude.json` (Claude Code), `hooks/hooks-cursor.json` (Cursor), `hooks/hooks-codex.json` (Codex), and `hooks/hooks.json` (the Gemini CLI auto-discovers this exact name). Override via `LITESTAR_SKILLS_HOOK_DISABLE=1`. Run `make test-hooks` to exercise the suite.
 
 ## Development Commands
 

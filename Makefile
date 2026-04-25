@@ -118,6 +118,12 @@ test:                                               ## Run Python and JavaScript
 	@bun test 2>/dev/null || echo "${INFO} (no bun tests yet)"
 	@echo "${OK} Tests complete ✨"
 
+.PHONY: test-hooks
+test-hooks:                                         ## Run hooks subset only (detect-env + session-start)
+	@echo "${INFO} Running hook tests... 🪝"
+	@uv run pytest tests/hooks -v
+	@echo "${OK} Hook tests complete"
+
 .PHONY: coverage
 coverage:                                           ## Run tests with coverage report
 	@echo "${INFO} Running tests with coverage... 📊"

@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "name": "litestar-skills-session-start",
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\"",
+            "description": "Inject project-aware Litestar skill reminders into the session context.",
+            "async": false
+          }
+        ]
+      }
+    ]
+  }
+}

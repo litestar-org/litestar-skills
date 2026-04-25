@@ -13,5 +13,6 @@
   "keywords": ["litestar", "skills", "agent", "ai", "sqlspec", "advanced-alchemy", "granian", "msgspec", "dishka", "mcp"],
   "skills": ["./skills/"],
   "commands": ["./commands/"],
-  "agents": ["./.claude-plugin/agents/litestar-reviewer.md"]
+  "agents": ["./.claude-plugin/agents/litestar-reviewer.md"],
+  "hooks": "./hooks/hooks-claude.json"
 }
