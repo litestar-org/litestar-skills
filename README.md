@@ -245,6 +245,7 @@ Each skill includes a `SKILL.md` plus focused references.
 
 - [Launch checklist](docs/launch-checklist.md) — day-of v0.1 release playbook and post-launch verification
 - [Roadmap](docs/roadmap.md) — shipped, v0.2 candidates, and explicitly-deferred items with graduation triggers
+- [Policy & permissions](docs/policy.md) — per-host allow/ask/deny grammar, managed-settings paths, and the cross-host policy bootstrap pattern. Sample managed config at [docs/managed-settings-example.json](docs/managed-settings-example.json).
 
 ## Contributing
 

@@ -1,0 +1,58 @@
+{
+  "$comment": [
+    "litestar-skills — example Claude Code managed-settings.json",
+    "",
+    "Drop this at the OS-specific managed-settings path:",
+    "  macOS:   /Library/Application Support/ClaudeCode/managed-settings.json",
+    "  Linux:   /etc/claude-code/managed-settings.json",
+    "  Windows: C:/Program Files/ClaudeCode/managed-settings.json",
+    "",
+    "Or as a drop-in under */managed-settings.d/*.json. Settings here cannot be",
+    "overridden by user/project-level settings.json files.",
+    "",
+    "Comments use the `$comment` convention since JSON has no native comments.",
+    "Strip them before deployment if your tooling rejects unknown keys."
+  ],
+
+  "permissions": {
+    "allow": [
+      "Skill(litestar-skills:*)",
+      "Bash(make *)",
+      "Bash(uv *)",
+      "Bash(bun *)"
+    ],
+    "ask": [
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(npm install *)",
+      "Bash(pnpm install *)"
+    ],
+    "deny": [
+      "Bash(sudo *)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf $HOME*)",
+      "Bash(rm -rf ~*)",
+      "Bash(curl * | sh)",
+      "Bash(curl * | bash)",
+      "Bash(wget * | sh)",
+      "Bash(wget * | bash)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.ssh/**)",
+      "Read(~/.config/gh/**)"
+    ]
+  },
+
+  "allowManagedPermissionRulesOnly": true,
+  "allowManagedHooksOnly": false,
+  "allowManagedMcpServersOnly": false,
+
+  "strictKnownMarketplaces": true,
+  "blockedMarketplaces": [],
+
+  "disableSkillShellExecution": false,
+
+  "pluginTrustMessage": "litestar-skills is approved by your org. Other plugins require security review before install."
+}
