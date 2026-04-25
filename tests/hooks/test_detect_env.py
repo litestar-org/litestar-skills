@@ -15,6 +15,8 @@ from typing import Any
 
 import pytest
 
+from tests.hooks._subproc import bash_executable, subprocess_env
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DETECT_ENV = REPO_ROOT / "hooks" / "lib" / "detect-env.sh"
 SKILL_MAP = REPO_ROOT / "hooks" / "lib" / "skill-map.json"
@@ -23,14 +25,11 @@ SKILL_MAP = REPO_ROOT / "hooks" / "lib" / "skill-map.json"
 def _run(project_root: Path, *, env_overrides: dict[str, str] | None = None) -> dict[str, Any]:
     """Run detect-env.sh against a project root and return the parsed JSON."""
     assert DETECT_ENV.exists(), f"detect-env.sh missing: {DETECT_ENV}"
-    env = {"PATH": "/usr/bin:/bin:/usr/local/bin"}
-    if env_overrides:
-        env.update(env_overrides)
     result = subprocess.run(
-        ["bash", str(DETECT_ENV), str(project_root)],
+        [bash_executable(), str(DETECT_ENV), str(project_root)],
         capture_output=True,
         text=True,
-        env=env,
+        env=subprocess_env(overrides=env_overrides),
         check=False,
         timeout=10,
     )

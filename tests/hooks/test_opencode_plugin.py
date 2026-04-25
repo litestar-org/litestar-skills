@@ -30,8 +30,9 @@ pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node not a
 
 def _run_node(script: str, cwd: Path) -> dict[str, Any]:
     """Eval a small Node script that imports the plugin and returns JSON to stdout."""
+    plugin_url = PLUGIN_PATH.as_uri()
     full = f"""
-import('{PLUGIN_PATH.as_posix()}').then(async (mod) => {{
+import('{plugin_url}').then(async (mod) => {{
   {script}
 }}).catch(err => {{
   process.stdout.write(JSON.stringify({{error: String(err), stack: err?.stack}}));

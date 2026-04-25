@@ -10,6 +10,7 @@ run ``make agents``.
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -31,7 +32,7 @@ def test_at_least_one_canonical_source_present() -> None:
 def test_no_agent_dialect_drift() -> None:
     """If this fails: contributor edited a generated file directly. Run `make agents`."""
     result = subprocess.run(
-        ["python3", str(GENERATOR), "--check"],
+        [sys.executable, str(GENERATOR), "--check"],
         cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,

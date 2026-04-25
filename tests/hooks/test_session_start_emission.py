@@ -9,18 +9,19 @@ from typing import Any
 
 import pytest
 
+from tests.hooks._subproc import bash_executable, subprocess_env
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SESSION_START = REPO_ROOT / "hooks" / "session-start.sh"
 
 
 def _run(cwd: Path, env_overrides: dict[str, str]) -> dict[str, Any]:
-    env = {"PATH": "/usr/bin:/bin:/usr/local/bin", "PWD": str(cwd)}
-    env.update(env_overrides)
+    overrides = {"PWD": str(cwd), **env_overrides}
     result = subprocess.run(
-        ["bash", str(SESSION_START)],
+        [bash_executable(), str(SESSION_START)],
         capture_output=True,
         text=True,
-        env=env,
+        env=subprocess_env(overrides=overrides),
         cwd=str(cwd),
         check=False,
         timeout=10,

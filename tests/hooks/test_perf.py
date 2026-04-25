@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.hooks._subproc import bash_executable, subprocess_env
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SESSION_START = REPO_ROOT / "hooks" / "session-start.sh"
 
@@ -32,10 +34,10 @@ def litestar_cwd(tmp_path: Path) -> Path:
 
 
 def _run_once(cwd: Path) -> float:
-    env = {"PATH": "/usr/bin:/bin:/usr/local/bin", "PWD": str(cwd), "CLAUDE_PLUGIN_ROOT": "/x"}
+    env = subprocess_env(overrides={"PWD": str(cwd), "CLAUDE_PLUGIN_ROOT": "/x"})
     start = time.perf_counter()
     result = subprocess.run(
-        ["bash", str(SESSION_START)],
+        [bash_executable(), str(SESSION_START)],
         capture_output=True,
         env=env,
         cwd=str(cwd),
