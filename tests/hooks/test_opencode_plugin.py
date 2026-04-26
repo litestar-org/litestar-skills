@@ -45,7 +45,7 @@ import('{plugin_url}').then(async (mod) => {{
         text=True,
         check=False,
         cwd=str(cwd),
-        timeout=15,
+        timeout=60,
     )
     parsed: dict[str, Any] = json.loads(result.stdout) if result.stdout else {}
     return parsed
