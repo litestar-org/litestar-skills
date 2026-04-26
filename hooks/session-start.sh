@@ -41,8 +41,9 @@ elif [[ -n "${GEMINI_CLI:-}${GEMINI_EXTENSION_NAME:-}" ]]; then
     host="gemini"
 fi
 
-if command -v python3 >/dev/null 2>&1; then
-    python3 - "$host" "$detector_output" <<'PY'
+_session_python=""
+if _session_python=$(_resolve_python); then
+    "$_session_python" - "$host" "$detector_output" <<'PY'
 import json, sys
 host = sys.argv[1]
 data = json.loads(sys.argv[2])
