@@ -242,7 +242,7 @@ Per-host uninstall:
 
 ## What's In This Repo
 
-16 skills, 85 reference files, ~22,800 lines of canonical content:
+17 skills, focused references, ~22,800+ lines of canonical content:
 
 | Category | Skills |
 | --- | --- |
@@ -255,7 +255,7 @@ Per-host uninstall:
 | Integrations | `litestar-mcp`, `litestar-email` |
 | Packaging | `litestar-build` |
 | Deployment | `litestar-deployment` |
-| Testing | `litestar-testing`, `pytest-databases` |
+| Testing | `litestar-testing`, `pytest-databases`, `polyfactory` |
 
 Each skill includes a `SKILL.md` plus focused references.
 

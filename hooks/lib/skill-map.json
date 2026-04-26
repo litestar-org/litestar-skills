@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "version": "1",
-  "static_intro": "litestar-skills loaded. When working in this project, prefer first-party Litestar patterns. Skills are namespaced as `litestar-skills:<name>`. Available: litestar, sqlspec, advanced-alchemy, msgspec, litestar-granian, litestar-saq, litestar-vite, litestar-htmx, litestar-inertia, litestar-mcp, litestar-email, litestar-testing, pytest-databases, litestar-build, litestar-deployment, litestar-styleguide.",
+  "static_intro": "litestar-skills loaded. When working in this project, prefer first-party Litestar patterns. Skills are namespaced as `litestar-skills:<name>`. Available: litestar, sqlspec, advanced-alchemy, msgspec, litestar-granian, litestar-saq, litestar-vite, litestar-htmx, litestar-inertia, litestar-mcp, litestar-email, litestar-testing, pytest-databases, polyfactory, litestar-build, litestar-deployment, litestar-styleguide.",
   "matchers": [
     {
       "skill": "litestar",
@@ -122,6 +122,15 @@
         { "type": "python_import", "module": "pytest_databases" }
       ],
       "reminder": "Project uses pytest-databases. Use the `litestar-skills:pytest-databases` skill for container-based PostgreSQL/MySQL/SQLite/Oracle fixtures and Docker test integration."
+    },
+    {
+      "skill": "polyfactory",
+      "priority": 50,
+      "signals": [
+        { "type": "pyproject_dep", "name": "polyfactory" },
+        { "type": "python_import", "module": "polyfactory" }
+      ],
+      "reminder": "Project uses polyfactory. Use the `litestar-skills:polyfactory` skill for typed mock-data factories: pick the right base (`ModelFactory` Pydantic / `DataclassFactory` / `MsgspecFactory` / `AttrsFactory` / `SQLAlchemyFactory`), customize fields with `Use(...)` / `Fixture(...)`, register fixtures via `@register_fixture`, and parametrize over `coverage()` for discriminated unions. Pairs with `litestar-skills:litestar-testing` for the request side."
     },
     {
       "skill": "litestar-build",
