@@ -13,5 +13,10 @@
   "keywords": ["litestar", "skills", "agent", "ai", "sqlspec", "advanced-alchemy"],
   "skills": "./skills/",
   "commands": "./commands/",
-  "hooks": "./hooks/hooks-cursor.json"
+  "hooks": "./hooks/hooks-cursor.json",
+  "interface": {
+    "displayName": "Litestar Skills",
+    "shortDescription": "First-party Litestar framework skills: handlers, DTOs, DI, plugins, MCP, SAQ, Granian, SQLSpec, Advanced Alchemy",
+    "category": "Development"
+  }
 }

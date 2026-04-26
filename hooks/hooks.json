@@ -2,12 +2,13 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|clear|compact",
+        "matcher": "*",
         "hooks": [
           {
+            "name": "litestar-skills-session-start",
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd\" session-start",
-            "async": false
+            "command": "bun ${extensionPath}${/}hooks${/}session-start.js || node ${extensionPath}${/}hooks${/}session-start.js || bash ${extensionPath}${/}hooks${/}session-start.sh",
+            "description": "Inject project-aware Litestar skill reminders into the Gemini CLI session context."
           }
         ]
       }

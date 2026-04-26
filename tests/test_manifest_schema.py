@@ -29,8 +29,13 @@ def test_claude_plugin_manifest_agents_is_list() -> None:
 
 
 def test_codex_plugin_manifest_agents_is_string() -> None:
-    """Codex CLI plugin.json 'agents' field should be a string directory path."""
-    manifest_path = REPO_ROOT / ".codex-plugin" / "plugin.json"
+    """Codex CLI plugin.json 'agents' field should be a string directory path.
+
+    Codex 0.125+ requires the plugin manifest under
+    `.agents/plugins/plugins/<name>/.codex-plugin/plugin.json` so the
+    marketplace `source.path` can be a non-empty subdirectory.
+    """
+    manifest_path = REPO_ROOT / ".agents" / "plugins" / "plugins" / "litestar-skills" / ".codex-plugin" / "plugin.json"
     assert manifest_path.exists(), f"{manifest_path} is missing"
 
     with open(manifest_path, encoding="utf-8") as f:

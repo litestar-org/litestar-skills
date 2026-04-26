@@ -1,8 +1,9 @@
 @echo off
-REM Cross-platform hook runner for litestar-skills plugin (Windows dispatch).
-REM Delegates to Git Bash to run the hook, since hooks are bash scripts.
+REM Cross-platform hook runner for litestar-skills (Windows dispatch).
+REM Dispatch order: PowerShell 7+ -> Windows PowerShell 5.1 -> Git Bash -> WSL.
 REM
 REM Usage: run-hook.cmd <hook-name>
+REM   <hook-name> = session-start (the only hook today)
 
 setlocal enableextensions
 
@@ -14,23 +15,33 @@ if "%HOOK_NAME%"=="" (
     exit /b 1
 )
 
-set "HOOK_SCRIPT=%SCRIPT_DIR%%HOOK_NAME%"
+set "PS1_SCRIPT=%SCRIPT_DIR%%HOOK_NAME%.ps1"
+set "SH_SCRIPT=%SCRIPT_DIR%%HOOK_NAME%.sh"
 
-if not exist "%HOOK_SCRIPT%" (
-    echo {"error": "Hook script not found: %HOOK_NAME%"} >&2
-    exit /b 1
+REM 1. Try PowerShell 7+ (pwsh) first
+where pwsh.exe >nul 2>&1
+if %ERRORLEVEL%==0 if exist "%PS1_SCRIPT%" (
+    pwsh.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%PS1_SCRIPT%"
+    exit /b %ERRORLEVEL%
 )
 
-REM Detect Git Bash (Git for Windows) - common install paths
+REM 2. Fall back to Windows PowerShell 5.1
+where powershell.exe >nul 2>&1
+if %ERRORLEVEL%==0 if exist "%PS1_SCRIPT%" (
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%PS1_SCRIPT%"
+    exit /b %ERRORLEVEL%
+)
+
+REM 3. Fall back to Git Bash (Git for Windows)
 set "BASH_EXE="
 if exist "%ProgramFiles%\Git\bin\bash.exe" set "BASH_EXE=%ProgramFiles%\Git\bin\bash.exe"
 if exist "%ProgramFiles(x86)%\Git\bin\bash.exe" set "BASH_EXE=%ProgramFiles(x86)%\Git\bin\bash.exe"
 where bash.exe >nul 2>&1 && if not defined BASH_EXE for /f "delims=" %%i in ('where bash.exe') do set "BASH_EXE=%%i"
 
-if not defined BASH_EXE (
-    echo {"error": "Git Bash not found. Install Git for Windows from https://git-scm.com/download/win or use WSL."} >&2
-    exit /b 1
+if defined BASH_EXE if exist "%SH_SCRIPT%" (
+    "%BASH_EXE%" "%SH_SCRIPT%"
+    exit /b %ERRORLEVEL%
 )
 
-"%BASH_EXE%" "%HOOK_SCRIPT%"
-exit /b %ERRORLEVEL%
+echo {"error": "No supported runtime found. Install PowerShell 7+ (https://aka.ms/PSWindows) or Git for Windows (https://git-scm.com/download/win)."} >&2
+exit /b 1

@@ -1,51 +1,52 @@
 # Codex CLI — Install
 
-Three install paths.
+> **Codex CLI 0.125+** is required. Earlier versions accept the `source: "./"` marketplace shape but newer versions reject it.
 
-## Option 1: User-level plugin (recommended)
+## Option 1: Marketplace install (recommended)
+
+```bash
+codex plugin marketplace add litestar-org/litestar-skills
+```
+
+Then in a Codex session:
+
+```text
+/plugins
+```
+
+Enable `litestar-skills` from the list. The plugin manifest lives at `.agents/plugins/plugins/litestar-skills/.codex-plugin/plugin.json`; the marketplace catalog is `.agents/plugins/marketplace.json` at the repo root.
+
+## Option 2: Local marketplace (for development)
+
+If you have the repo cloned and want Codex to pick up your local changes:
+
+```bash
+codex plugin marketplace add /path/to/litestar-skills
+```
+
+Codex auto-discovers the marketplace at `.agents/plugins/marketplace.json` and the nested plugin under `.agents/plugins/plugins/litestar-skills/`.
+
+## Option 3: User-level clone (legacy fallback)
 
 ```bash
 git clone https://github.com/litestar-org/litestar-skills ~/.codex/plugins/litestar-skills
 ```
 
-Codex auto-discovers plugins in `~/.codex/plugins/`. The clone includes `.codex/agents/litestar-reviewer.toml` (pure-TOML custom agent; tools inherited from your session `config.toml`).
-
-## Option 2: Repo-scoped marketplace (team)
-
-For a single project, clone into the repo's `plugins/` directory and register a local marketplace:
-
-```bash
-mkdir -p plugins
-git clone https://github.com/litestar-org/litestar-skills plugins/litestar-skills
-mkdir -p .codex
-cat > .codex/marketplace.json <<'EOF'
-{
-  "name": "litestar-marketplace",
-  "description": "The Litestar Marketplace — opinionated first-party skills, plugins, subagents, commands, and MCP servers for Litestar and its ecosystem",
-  "plugins": [
-    { "name": "litestar-skills", "source": "./plugins/litestar-skills" }
-  ]
-}
-EOF
-```
-
-## Option 3: Skills-only via `.agents/skills/`
-
-If you only want the skills (no plugin metadata or custom agent), clone and copy:
-
-```bash
-git clone --depth 1 https://github.com/litestar-org/litestar-skills /tmp/litestar-skills
-mkdir -p .agents/skills
-cp -r /tmp/litestar-skills/skills/* .agents/skills/
-```
-
-Codex reads `.agents/skills/` natively at session start.
+Codex auto-discovers plugins under `~/.codex/plugins/`. Provided as a fallback for environments where `codex plugin marketplace add` is unavailable.
 
 ## Custom agents
 
-Codex custom agents live in `.codex/agents/*.toml` and are discovered automatically when the plugin is installed. The repo ships `litestar-reviewer` — invoke with `$agent litestar-reviewer` inside Codex.
+Codex custom agents live in `.codex/agents/*.toml` (pure TOML; tools inherited from session `config.toml`). The repo ships `litestar-reviewer` — invoke with `$agent litestar-reviewer` inside Codex.
+
+The four host-dialect agent files are generated from canonical YAML sources at `tools/agent-sources/<name>.yaml`. Run `make agents` after editing the source.
 
 ## Updating
+
+```bash
+codex plugin marketplace upgrade litestar-marketplace
+```
+
+For Option 3:
 
 ```bash
 cd ~/.codex/plugins/litestar-skills && git pull
@@ -53,14 +54,16 @@ cd ~/.codex/plugins/litestar-skills && git pull
 
 ## Verification
 
-Inside Codex:
+In a Codex session:
 
 ```text
 $skill list | grep litestar
 $agent list | grep litestar-reviewer
 ```
 
-## Disabling Specific Skills
+The SessionStart hook (`hooks/session-start.sh`, dispatched via `hooks/hooks-codex.json`) should inject project-aware Litestar skill reminders into the session context.
+
+## Disabling specific skills
 
 Edit `~/.codex/config.toml`:
 
@@ -69,3 +72,13 @@ Edit `~/.codex/config.toml`:
 path = "/path/to/skill/SKILL.md"
 enabled = false
 ```
+
+## Why the nested layout
+
+Codex CLI 0.125.0+ requires local marketplace `source.path` to:
+
+1. Start with `./`
+2. Be a non-empty subdirectory (rejects `./` alone)
+3. Contain no `..` traversal
+
+That's why the plugin lives under `./plugins/litestar-skills` (relative to `.agents/plugins/marketplace.json`) instead of being collocated with the marketplace file.

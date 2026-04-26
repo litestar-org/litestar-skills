@@ -20,7 +20,8 @@
       "homepage": "https://github.com/litestar-org/litestar-skills",
       "license": "MIT",
       "keywords": ["litestar", "skills", "sqlspec", "advanced-alchemy", "msgspec", "dishka", "granian", "saq", "vite", "mcp"],
-      "category": "Development"
+      "category": "Development",
+      "policy": { "installation": "AVAILABLE" }
     }
   ]
 }

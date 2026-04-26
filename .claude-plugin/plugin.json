@@ -1,6 +1,5 @@
 {
   "name": "litestar-skills",
-  "displayName": "Litestar Skills",
   "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
   "version": "0.1.2",
   "author": {
@@ -13,5 +12,6 @@
   "keywords": ["litestar", "skills", "agent", "ai", "sqlspec", "advanced-alchemy", "granian", "msgspec", "dishka", "mcp"],
   "skills": ["./skills/"],
   "commands": ["./commands/"],
-  "agents": ["./.claude-plugin/agents/litestar-reviewer.md"]
+  "agents": ["./.claude-plugin/agents/litestar-reviewer.md"],
+  "hooks": "./hooks/hooks-claude.json"
 }

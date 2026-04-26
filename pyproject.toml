@@ -95,8 +95,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "ARG", "T201"]
+"tests/**" = ["S101", "ARG", "T201", "S603", "S607"]
 "tools/**" = ["T201"]
+"hooks/**" = ["T201"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -180,12 +181,17 @@ search = '      "version": "{current_version}"'
 replace = '      "version": "{new_version}"'
 
 [[tool.bumpversion.files]]
-filename = ".codex-plugin/plugin.json"
+filename = ".agents/plugins/plugins/litestar-skills/.codex-plugin/plugin.json"
 search = '"version": "{current_version}"'
 replace = '"version": "{new_version}"'
 
 [[tool.bumpversion.files]]
 filename = ".cursor-plugin/plugin.json"
+search = '"version": "{current_version}"'
+replace = '"version": "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = ".agents/plugins/marketplace.json"
 search = '"version": "{current_version}"'
 replace = '"version": "{new_version}"'
 

@@ -1,0 +1,31 @@
+{
+  "name": "litestar-marketplace",
+  "interface": {
+    "displayName": "Litestar Skills",
+    "shortDescription": "First-party Litestar framework skills: handlers, DTOs, DI, plugins, MCP, SAQ, Granian, SQLSpec, Advanced Alchemy"
+  },
+  "metadata": {
+    "description": "The Litestar Marketplace — opinionated first-party skills, plugins, subagents, commands, and MCP servers for Litestar and its ecosystem"
+  },
+  "owner": {
+    "name": "litestar-org",
+    "url": "https://github.com/litestar-org"
+  },
+  "plugins": [
+    {
+      "name": "litestar-skills",
+      "version": "0.1.2",
+      "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
+      "source": { "source": "local", "path": "./plugins/litestar-skills" },
+      "policy": { "installation": "AVAILABLE" },
+      "category": "Development",
+      "author": {
+        "name": "Cody Fincher",
+        "email": "cofin@litestar.dev"
+      },
+      "homepage": "https://github.com/litestar-org/litestar-skills",
+      "license": "MIT",
+      "keywords": ["litestar", "skills", "sqlspec", "advanced-alchemy", "msgspec", "dishka", "granian", "saq", "vite", "mcp"]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Contributing to `litestar-skills`
 
-See [`docs/roadmap.md`](docs/roadmap.md) for shipped features, v0.2 candidates, and deferred items with graduation triggers.
+See [`docs/roadmap.md`](docs/roadmap.md) for v0.2 candidates and deferred items with graduation triggers. For what's already shipped, see [GitHub Releases](https://github.com/litestar-org/litestar-skills/releases).
 
 ## Adding a Skill
 
@@ -33,20 +33,51 @@ When adding a skill, command, subagent, or MCP server, update the relevant per-h
 | --- | --- |
 | New skill | None — all host manifests point at `./skills/` root. Skills auto-discovered. |
 | New slash command | None — `./commands/` root is shared. |
-| New subagent | Four host-specific projections — see [Multi-Projection Subagent Maintenance](#multi-projection-subagent-maintenance) below. |
+| New subagent | Edit `tools/agent-sources/<name>.yaml` and run `make agents` — see [Multi-Projection Subagent Maintenance — Generator-driven](#multi-projection-subagent-maintenance--generator-driven) below. |
 | New MCP server | `.codex-plugin/plugin.json` `dependencies.tools`, `gemini-extension.json` `mcpServers`, and `.codex/config.toml` |
 | New host support | New `.<host>-plugin/plugin.json` + entry in `[[tool.bumpversion.files]]` |
 
-### Multi-Projection Subagent Maintenance
+### Multi-Projection Subagent Maintenance — Generator-driven
 
-Every subagent ships in four host-specific dialects. When changing a reviewer prompt or adding a new subagent, update **all four** projections in the same PR — otherwise hosts drift:
+Every subagent ships in four host-specific dialects, each with its own frontmatter shape. **Do NOT hand-edit the generated files** — edit the canonical YAML source and regenerate.
 
-| Host | Path | Dialect |
+**Workflow:**
+
+1. Edit the canonical source: `tools/agent-sources/<name>.yaml` (frontmatter + body in one file; `tools` uses canonical names — `read`, `grep`, `glob`, `bash`).
+2. Run `make agents` — regenerates the four host dialects.
+3. Commit the source AND the regenerated dialect files.
+
+CI runs `make agents-check` (`tools/generate-agents.py --check`); it fails on any drift between the source and the on-disk dialect files. If the test fails, run `make agents` and re-commit.
+
+**Per-host dialects produced by the generator:**
+
+| Host | Path | Dialect shape |
 | --- | --- | --- |
-| Claude Code | `.claude-plugin/agents/<name>.md` | Markdown body; `tools` is a comma-separated string (`Read, Grep, Glob, Bash`) of PascalCase Claude tool names. |
-| Codex CLI | `.codex/agents/<name>.toml` | Pure TOML; prompt lives in `developer_instructions` (triple-quoted string). No top-level `tools` — tools inherit from session `config.toml`. |
-| Gemini CLI | `agents/<name>.md` | Markdown body; `tools` is a YAML list (`- read_file`) of snake_case Gemini tool names. |
-| OpenCode | `.opencode/agents/<name>.md` | Markdown body; `tools` is a dict (`read: true`) plus `mode: subagent`. |
+| Claude Code | `.claude-plugin/agents/<name>.md` | `tools` as comma-string of PascalCase names (`Read, Grep, Glob, Bash`) |
+| Codex CLI | `.codex/agents/<name>.toml` | Pure TOML; body in `developer_instructions = """..."""`; no `tools` field (inherited from session `config.toml`) |
+| Gemini CLI | `agents/<name>.md` | `tools` as YAML list of snake_case (`- read_file`) |
+| OpenCode | `.opencode/agents/<name>.md` | `tools` as dict (`read: true`) plus `mode: subagent` |
+
+The tool-name mapping (`read` → `read_file` for Gemini, `Read` for Claude, `read` for OpenCode, etc.) lives in `tools/generate-agents.py` `TOOL_MAP`. Add new canonical tools there.
+
+### Codex `.agents/plugins/` carve-out
+
+The Codex CLI marketplace lives at `.agents/plugins/marketplace.json` per Codex's spec. The Codex plugin manifest lives at `.agents/plugins/plugins/<name>/.codex-plugin/plugin.json` (Codex 0.125+ rejects `source.path: "./"` so the plugin must be a subdirectory). These two paths are the ONLY exception to the rule that `.agents/` is Flow authoring (gitignored). The carve-out shape in `.gitignore` is:
+
+```text
+.agents/*
+!.agents/plugins/
+.agents/plugins/*
+!.agents/plugins/marketplace.json
+!.agents/plugins/plugins/
+```
+
+`tools/validate-codex-manifest.py` enforces the constraints (run via `make validate`):
+
+- `source.path` must start with `./`, be non-empty, contain no `..`
+- Claude `userConfig` keys must be camelCase; types must be one of `string|number|boolean|directory|file`; every entry must have a `title`
+
+If you're working in a Flow stealth-mode clone (`bd init --stealth`), `.git/info/exclude` will contain a duplicate `.agents/` rule. Mirror the same `.agents/*` + `!.agents/plugins/...` pattern locally so the carve-out resolves.
 
 The four `description` fields must match verbatim so agent-selection heuristics route to the same subagent regardless of host. Each dialect is enforced by a dedicated validator in `tools/validate-skills.py` (`validate_claude_agent`, `validate_codex_agent`, `validate_gemini_agent`, `validate_opencode_agent`) — mutual rejection catches drift (e.g., a Codex file with a top-level `tools = [...]` array fails CI).
 

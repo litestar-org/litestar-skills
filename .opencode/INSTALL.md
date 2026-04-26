@@ -21,9 +21,9 @@ mkdir -p .opencode/agents
 cp /tmp/litestar-skills/.opencode/agents/litestar-reviewer.md .opencode/agents/
 ```
 
-## Option 3: Global plugin symlink (optional)
+## Option 3: Global plugin install (recommended for cross-project coverage)
 
-A global plugin entrypoint exists but is a **no-op stub today** — skill discovery still happens through the native paths above. Install only if you want the plugin to appear in OpenCode's extension listing:
+The repo ships a real OpenCode plugin at `.opencode/plugins/litestar-skills.js` that injects project-aware Litestar skill reminders into the session via `experimental.chat.system.transform`. The plugin honors `managedConfig.disabledPlugins` / `allowedPlugins` (org policy wins) and exposes `LITESTAR_SKILLS_PLUGIN_ROOT` to spawned shells via `shell.env`.
 
 ```bash
 git clone https://github.com/litestar-org/litestar-skills ~/.config/opencode/litestar-skills
@@ -31,7 +31,7 @@ ln -sf ~/.config/opencode/litestar-skills/.opencode/plugins/litestar-skills.js \
        ~/.config/opencode/plugins/litestar-skills.js
 ```
 
-The JS plugin wrapper ships as a stub (`export default {}`); real programmatic registration is on the v0.2+ roadmap and is not required for skill discovery.
+No npm publish yet — install path stays git+symlink. The plugin reuses the same `hooks/lib/detect-env.js` detection library that powers Claude / Codex / Cursor / Gemini hooks, so the reminder text is identical across all five hosts.
 
 ## Updating
 
@@ -50,6 +50,32 @@ cd ~/.config/opencode/litestar-skills && git pull
 opencode skill list | grep litestar
 ```
 
+After Option 3, in a Litestar project, the SessionStart system prompt should include a paragraph naming `litestar-skills:litestar` (and any other matched skills like `litestar-skills:sqlspec`).
+
 ## Tool Mapping
 
 OpenCode uses its native `skill` tool — no special configuration needed. Skills authored in the Anthropic SKILL.md format work unchanged.
+
+## Disabling via managed config
+
+For Jamf / Kandji / FleetDM org-managed Macs, the plugin honors `ai.opencode.managed` PayloadType:
+
+```json
+{
+  "managedConfig": {
+    "disabledPlugins": ["litestar-skills"]
+  }
+}
+```
+
+Or restrict to an allowlist:
+
+```json
+{
+  "managedConfig": {
+    "allowedPlugins": ["other-org-plugin"]
+  }
+}
+```
+
+The plugin early-returns `{}` when disabled — no skill reminder injection, no env vars exposed.

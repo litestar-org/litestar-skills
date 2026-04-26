@@ -118,6 +118,24 @@ test:                                               ## Run Python and JavaScript
 	@bun test 2>/dev/null || echo "${INFO} (no bun tests yet)"
 	@echo "${OK} Tests complete ✨"
 
+.PHONY: test-hooks
+test-hooks:                                         ## Run hooks subset only (detect-env + session-start)
+	@echo "${INFO} Running hook tests... 🪝"
+	@uv run pytest tests/hooks -v
+	@echo "${OK} Hook tests complete"
+
+.PHONY: agents
+agents:                                             ## Regenerate per-host agent dialects from canonical YAML sources
+	@echo "${INFO} Regenerating agent dialects... 🤖"
+	@uv run python tools/generate-agents.py
+	@echo "${OK} Agents regenerated"
+
+.PHONY: agents-check
+agents-check:                                       ## CI drift gate — fail if generated output differs from on-disk
+	@echo "${INFO} Checking agent dialect drift... 🔎"
+	@uv run python tools/generate-agents.py --check
+	@echo "${OK} No agent dialect drift"
+
 .PHONY: coverage
 coverage:                                           ## Run tests with coverage report
 	@echo "${INFO} Running tests with coverage... 📊"
@@ -205,8 +223,14 @@ check-upstream-imports:                             ## Verify every Python impor
 	@uv run python tools/check-upstream-imports.py
 	@echo "${OK} Upstream imports verified ✨"
 
+.PHONY: validate-codex-manifest
+validate-codex-manifest:                            ## Validate Codex marketplace + plugin manifests for Codex CLI 0.125+
+	@echo "${INFO} Validating Codex manifests... 🔍"
+	@uv run python tools/validate-codex-manifest.py
+	@echo "${OK} Codex manifests valid"
+
 .PHONY: validate
-validate: validate-skills sync-manifests check-upstream-imports  ## Run all repo-integrity validators
+validate: agents-check validate-skills sync-manifests validate-codex-manifest check-upstream-imports  ## Run all repo-integrity validators
 	@echo "${OK} All validators passed ✨"
 
 # -----------------------------------------------------------------------------

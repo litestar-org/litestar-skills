@@ -39,23 +39,31 @@ Gemini auto-indexes this repo into its [extension gallery](https://geminicli.com
 
 ### Codex CLI
 
+> **Codex CLI 0.125+** required. The marketplace and plugin manifest live under `.agents/plugins/` per Codex's nested-path requirement.
+
 ```bash
-git clone https://github.com/litestar-org/litestar-skills ~/.codex/plugins/litestar-skills
+codex plugin marketplace add litestar-org/litestar-skills
 ```
 
-Codex auto-discovers plugins under `~/.codex/plugins/`. Ships `.codex/agents/litestar-reviewer.toml` (pure TOML, tools inherited from session `config.toml`). Verify with `$skill list | grep litestar`. See [`.codex/INSTALL.md`](.codex/INSTALL.md) for project-scoped marketplace install.
+Then enable inside a Codex session via `/plugins`. See [`.codex/INSTALL.md`](.codex/INSTALL.md) for local-development and legacy-clone install paths.
 
 ### OpenCode
 
-OpenCode reads `.opencode/skills/`, `.claude/skills/`, and `.agents/skills/` natively — the recommended install is project-local:
+OpenCode reads `.opencode/skills/`, `.claude/skills/`, and `.agents/skills/` natively. Two install paths:
 
 ```bash
+# Option 1: project-local skills (no plugin features)
 git clone --depth 1 https://github.com/litestar-org/litestar-skills /tmp/litestar-skills
 mkdir -p .agents/skills
 cp -r /tmp/litestar-skills/skills/* .agents/skills/
+
+# Option 2: global plugin (recommended) — injects project-aware skill reminders
+git clone https://github.com/litestar-org/litestar-skills ~/.config/opencode/litestar-skills
+ln -sf ~/.config/opencode/litestar-skills/.opencode/plugins/litestar-skills.js \
+       ~/.config/opencode/plugins/litestar-skills.js
 ```
 
-A global-plugin variant exists for users who want cross-project coverage, but the JS plugin entrypoint is a no-op stub today — skill discovery happens through the paths above either way. See [`.opencode/INSTALL.md`](.opencode/INSTALL.md).
+Option 2 ships a real `experimental.chat.system.transform` handler that injects targeted Litestar skill reminders into the system prompt and honors managed-config policy. See [`.opencode/INSTALL.md`](.opencode/INSTALL.md).
 
 ### Google Antigravity
 
@@ -193,6 +201,16 @@ This repo is tagged with GitHub topics so downstream registries and galleries au
 
 Topics are re-applied on every tagged release via `.github/workflows/release.yml`. The operation is idempotent; `gh repo edit --add-topic` is additive and deduplicates.
 
+### Vercel skills.sh
+
+[skills.sh](https://skills.sh) ranks skill bundles by install volume from the `npx skills` CLI — there is no submission flow. To install via that path:
+
+```bash
+npx skills add litestar-org/litestar-skills
+```
+
+Each install increments the repo's ranking.
+
 ## Uninstall
 
 ```bash
@@ -224,7 +242,7 @@ Per-host uninstall:
 
 ## What's In This Repo
 
-16 skills, 85 reference files, ~22,800 lines of canonical content:
+17 skills, focused references, ~22,800+ lines of canonical content:
 
 | Category | Skills |
 | --- | --- |
@@ -237,14 +255,14 @@ Per-host uninstall:
 | Integrations | `litestar-mcp`, `litestar-email` |
 | Packaging | `litestar-build` |
 | Deployment | `litestar-deployment` |
-| Testing | `litestar-testing`, `pytest-databases` |
+| Testing | `litestar-testing`, `pytest-databases`, `polyfactory` |
 
 Each skill includes a `SKILL.md` plus focused references.
 
 ## Project documents
 
-- [Launch checklist](docs/launch-checklist.md) — day-of v0.1 release playbook and post-launch verification
-- [Roadmap](docs/roadmap.md) — shipped, v0.2 candidates, and explicitly-deferred items with graduation triggers
+- [Roadmap](docs/roadmap.md) — v0.2 candidates and explicitly-deferred items with graduation triggers.
+- [Policy & permissions](docs/policy.md) — per-host allow/ask/deny grammar, managed-settings paths, and the cross-host policy bootstrap pattern. Drop-in template at [templates/managed-settings/claude-code.json](templates/managed-settings/claude-code.json).
 
 ## Contributing
 

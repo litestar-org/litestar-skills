@@ -616,6 +616,82 @@ def iter_manifests() -> Iterator[Path]:
             yield candidate
 
 
+# Per-host hook manifests under hooks/. Names are load-bearing:
+#   hooks.json         -> Gemini CLI auto-discovers this name (do NOT rename)
+#   hooks-claude.json  -> Claude Code (referenced from .claude-plugin/plugin.json)
+#   hooks-cursor.json  -> Cursor (referenced from .cursor-plugin/plugin.json)
+#   hooks-codex.json   -> Codex CLI (referenced from .codex-plugin/plugin.json)
+HOOK_MANIFESTS = {
+    "hooks.json": "gemini",
+    "hooks-claude.json": "claude",
+    "hooks-cursor.json": "cursor",
+    "hooks-codex.json": "codex",
+}
+
+
+def iter_hook_manifests() -> Iterator[tuple[Path, str]]:
+    hooks_dir = REPO_ROOT / "hooks"
+    if not hooks_dir.is_dir():
+        return
+    for name, host in HOOK_MANIFESTS.items():
+        candidate = hooks_dir / name
+        if candidate.is_file():
+            yield candidate, host
+
+
+def validate_hook_manifest(path: Path, host: str) -> list[Violation]:
+    """Validate a hooks/hooks-<host>.json (or hooks.json for Gemini auto-discovery).
+
+    Enforces:
+      * Valid JSON.
+      * Top-level "hooks" object exists.
+      * Cursor uses "sessionStart"; everyone else uses "SessionStart".
+      * No deprecated PreToolUse `decision: "approve"|"block"` (April 2026 schema
+        requires `hookSpecificOutput.permissionDecision`).
+      * No reference to undocumented `${CLAUDE_PLUGIN_DATA}` env var.
+    """
+    violations: list[Violation] = []
+    try:
+        text = path.read_text(encoding="utf-8")
+        data: Any = json.loads(text)
+    except (json.JSONDecodeError, OSError) as exc:
+        return [Violation(path, 1, f"JSON parse error: {exc}")]
+
+    if not isinstance(data, dict) or "hooks" not in data:
+        violations.append(Violation(path, 1, "missing top-level 'hooks' object"))
+        return violations
+
+    hooks_obj = cast("dict[str, Any]", data).get("hooks")
+    if not isinstance(hooks_obj, dict):
+        violations.append(Violation(path, 1, "'hooks' must be an object"))
+        return violations
+
+    expected_event = "sessionStart" if host == "cursor" else "SessionStart"
+    if expected_event not in cast("dict[str, Any]", hooks_obj):
+        violations.append(Violation(path, 1, f"missing {expected_event!r} key for host {host!r}"))
+
+    if "${CLAUDE_PLUGIN_DATA}" in text:
+        violations.append(
+            Violation(
+                path,
+                1,
+                "uses undocumented ${CLAUDE_PLUGIN_DATA}; only ${CLAUDE_PLUGIN_ROOT} is supported",
+            )
+        )
+
+    if re.search(r'"decision"\s*:\s*"(approve|block)"', text):
+        violations.append(
+            Violation(
+                path,
+                1,
+                "uses deprecated decision:approve|block — April 2026 schema requires "
+                "hookSpecificOutput.permissionDecision (allow|deny|ask|defer)",
+            )
+        )
+
+    return violations
+
+
 def iter_all_shipped_files() -> Iterator[Path]:
     yield from iter_manifests()
     if SKILLS_DIR.is_dir():
@@ -667,6 +743,9 @@ def main() -> int:
     manifests = list(iter_manifests())
     for manifest_path in manifests:
         all_violations.extend(validate_manifest(manifest_path))
+    hook_manifests = list(iter_hook_manifests())
+    for hook_path, hook_host in hook_manifests:
+        all_violations.extend(validate_hook_manifest(hook_path, hook_host))
     for skill_path in skills:
         all_violations.extend(validate_skill(skill_path))
     for cmd_path in commands:
@@ -687,7 +766,10 @@ def main() -> int:
         print(f"\n{len(all_violations)} violation(s)", file=sys.stderr)
         return 1
     agent_total = len(gemini_agents) + len(opencode_agents) + len(claude_agents) + len(codex_agents)
-    print(f"[ OK ] validated {len(skills)} skills, {len(commands)} commands, {agent_total} agents — no violations")
+    print(
+        f"[ OK ] validated {len(skills)} skills, {len(commands)} commands, "
+        f"{agent_total} agents, {len(hook_manifests)} hook manifests — no violations"
+    )
     return 0
 
 
