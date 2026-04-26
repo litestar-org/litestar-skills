@@ -515,6 +515,16 @@ class TestAgentsLeakGuard:
         violations = mod.check_agents_leak([skill_path])
         assert len(violations) == 1
 
+    def test_unknown_agents_subpath_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        skill_dir = tmp_path / "skills" / "future-leak"
+        skill_dir.mkdir(parents=True)
+        skill_path = skill_dir / "SKILL.md"
+        skill_path.write_text("See .agents/future-authoring.md for more.\n")
+        violations = mod.check_agents_leak([skill_path])
+        assert len(violations) == 1
+
     def test_install_path_whitelist_no_violation(self, tmp_path: Path) -> None:
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
@@ -522,6 +532,16 @@ class TestAgentsLeakGuard:
         skill_dir.mkdir(parents=True)
         skill_path = skill_dir / "SKILL.md"
         skill_path.write_text("Install into `.agents/skills/foo/` on your machine.\n")
+        violations = mod.check_agents_leak([skill_path])
+        assert violations == []
+
+    def test_plugins_path_whitelist_no_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        skill_dir = tmp_path / "skills" / "codex-install-ok"
+        skill_dir.mkdir(parents=True)
+        skill_path = skill_dir / "SKILL.md"
+        skill_path.write_text("Codex marketplace lives at `.agents/plugins/marketplace.json`.\n")
         violations = mod.check_agents_leak([skill_path])
         assert violations == []
 

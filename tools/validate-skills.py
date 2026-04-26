@@ -91,40 +91,14 @@ _H2_HEADING_PATTERNS = {
 
 LINK_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
-# Match references to the framework authoring tree. A "leak" is a shipped-
-# content file citing a path that only exists in the authoring workspace
-# (``.agents/patterns.md``, ``.agents/knowledge/...``, ``.agents/specs/...``,
-# ``.agents/archive/...``, ``.agents/plans/...``, ``.agents/research/...``,
-# ``.agents/flows.md``, ``.agents/product.md``, ``.agents/product-guidelines.md``,
-# ``.agents/workflow.md``, ``.agents/tech-stack.md``, ``.agents/index.md``,
-# ``.agents/beads.json``, ``.agents/setup-state.json``, ``.agents/code-styleguides/``,
-# ``.agents/backlog/``). These never exist on a user install.
-#
-# Benign mentions (prose about the Flow authoring convention, the user-install
-# ``.agents/skills/`` or ``.agents/plugins/`` convention paths, or a bare
-# ``.agents/`` directory reference) are allowed. The lookbehind rejects alnum/
-# underscore prefixes so filesystem paths like ``foo_.agents/`` are not
-# flagged.
-_AUTHORING_TREE_SUBPATHS = (
-    "patterns.md",
-    "knowledge/",
-    "specs/",
-    "archive/",
-    "plans/",
-    "research/",
-    "flows.md",
-    "product.md",
-    "product-guidelines.md",
-    "workflow.md",
-    "tech-stack.md",
-    "index.md",
-    "beads.json",
-    "setup-state.json",
-    "code-styleguides/",
-    "backlog/",
-)
-_leak_targets = "|".join(re.escape(p) for p in _AUTHORING_TREE_SUBPATHS)
-AGENTS_LEAK_PATTERN = re.compile(rf"(?<![A-Za-z0-9_])\.agents/(?:{_leak_targets})")
+# Match any shipped-content reference to a ``.agents/`` path, then allow only
+# host-owned convention paths. This defaults new framework authoring paths to
+# violations instead of requiring each future ``.agents/<name>`` file to be
+# added to a deny-list. The lookbehind rejects alnum/underscore prefixes so
+# filesystem paths like ``foo_.agents/`` are not flagged.
+AGENTS_PATH_PATTERN = re.compile(r"(?<![A-Za-z0-9_])\.agents/(?P<suffix>[^\s)`'\"<>,]*)")
+_ALLOWED_AGENTS_PATH_PREFIXES = ("skills", "plugins")
+_ALLOWED_AGENTS_LITERAL_SUFFIXES = frozenset({"", "*"})
 
 # Forbidden vocabulary in shipped content. These tokens leak internal Flow
 # workflow taxonomy, codenames from non-public canonical apps, or machine-
@@ -522,6 +496,13 @@ def validate_codex_agent(path: Path) -> list[Violation]:
     return violations
 
 
+def _is_allowed_agents_path(suffix: str) -> bool:
+    if suffix in _ALLOWED_AGENTS_LITERAL_SUFFIXES:
+        return True
+    first_segment = suffix.split("/", 1)[0]
+    return first_segment in _ALLOWED_AGENTS_PATH_PREFIXES
+
+
 def check_agents_leak(files: Iterable[Path]) -> list[Violation]:
     violations: list[Violation] = []
     for path in files:
@@ -530,7 +511,14 @@ def check_agents_leak(files: Iterable[Path]) -> list[Violation]:
         except (OSError, UnicodeDecodeError):
             continue
         for lineno, line in enumerate(text.splitlines(), start=1):
-            if AGENTS_LEAK_PATTERN.search(line):
+            if match := next(
+                (
+                    candidate
+                    for candidate in AGENTS_PATH_PATTERN.finditer(line)
+                    if not _is_allowed_agents_path(candidate.group("suffix"))
+                ),
+                None,
+            ):
                 snippet = line.strip()
                 if len(snippet) > 80:
                     snippet = snippet[:77] + "..."
@@ -538,7 +526,7 @@ def check_agents_leak(files: Iterable[Path]) -> list[Violation]:
                     Violation(
                         path,
                         lineno,
-                        f"shipped content references framework path: {snippet}",
+                        f"shipped content references framework path {match.group(0)!r}: {snippet}",
                     )
                 )
     return violations
