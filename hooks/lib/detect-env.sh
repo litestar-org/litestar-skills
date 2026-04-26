@@ -20,9 +20,26 @@ LIB_DIR="$(_lib_dir)"
 SKILL_MAP_PATH="${LIB_DIR}/skill-map.json"
 DETECTOR_PY="${LIB_DIR}/_detector.py"
 
-_have_python3() { command -v python3 >/dev/null 2>&1; }
+# Resolve a working Python interpreter. Honors LITESTAR_SKILLS_PYTHON when set,
+# then tries python3, then python. Each candidate is verified by importing the
+# stdlib modules the detector actually uses — bare `command -v` is not enough
+# because Windows ships a Microsoft Store python3 stub, and corrupted uv Python
+# installs surface as `SRE module mismatch` only when stdlib is imported.
+_resolve_python() {
+    local candidates=()
+    [[ -n "${LITESTAR_SKILLS_PYTHON:-}" ]] && candidates+=("${LITESTAR_SKILLS_PYTHON}")
+    candidates+=(python3 python)
+    local candidate
+    for candidate in "${candidates[@]}"; do
+        command -v "$candidate" >/dev/null 2>&1 || continue
+        "$candidate" -c 'import json, re' >/dev/null 2>&1 || continue
+        printf '%s' "$candidate"
+        return 0
+    done
+    return 1
+}
 
-# Pure-bash JSON string escape (last-resort fallback when no python3).
+# Pure-bash JSON string escape (last-resort fallback when no python is usable).
 _json_escape() {
     local s="$1"
     s="${s//\\/\\\\}"; s="${s//\"/\\\"}"
@@ -37,8 +54,9 @@ detect_env() {
         echo "{}"
         return 0
     fi
-    if _have_python3; then
-        python3 "$DETECTOR_PY" "$project_root" "$SKILL_MAP_PATH"
+    local py
+    if py=$(_resolve_python); then
+        "$py" "$DETECTOR_PY" "$project_root" "$SKILL_MAP_PATH"
         return $?
     fi
     # Pure-bash fallback: emit minimal JSON with intro only.

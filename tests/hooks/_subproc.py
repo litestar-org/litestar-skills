@@ -1,9 +1,12 @@
 """Cross-platform helpers for subprocess-based hook tests.
 
 Windows ships a ``C:\\Windows\\System32\\bash.exe`` stub that prints a WSL
-install banner instead of running scripts. The hook tests invoke bash to
-exercise ``detect-env.sh`` / ``session-start.sh``, so they need to find the
-real Git Bash and inherit a usable PATH.
+install banner instead of running scripts, and ``python3`` on Windows often
+resolves to either the Microsoft Store stub or a corrupted uv-managed Python
+that fails with ``SRE module mismatch`` on stdlib import. The helpers here
+point at Git Bash explicitly and pin the interpreter to ``sys.executable``
+via ``LITESTAR_SKILLS_PYTHON`` so the hook tests can't be derailed by
+whatever stray pythons happen to be on the runner's PATH.
 """
 
 from __future__ import annotations
@@ -31,11 +34,16 @@ def subprocess_env(*, overrides: dict[str, str] | None = None) -> dict[str, str]
     On Windows, inherit ``os.environ`` so Git Bash and any uv-managed Python
     remain on PATH. On POSIX, lock PATH down to the canonical system dirs for
     determinism — these tests should not depend on the developer's shell.
+
+    Always pins ``LITESTAR_SKILLS_PYTHON`` to the running interpreter; the
+    hook honors that env var ahead of ``python3`` lookup so a working Python
+    is guaranteed even when the runner's ``python3`` is broken.
     """
     if sys.platform == "win32":
         env = dict(os.environ)
     else:
         env = {"PATH": "/usr/bin:/bin:/usr/local/bin"}
+    env["LITESTAR_SKILLS_PYTHON"] = sys.executable
     if overrides:
         env.update(overrides)
     return env
