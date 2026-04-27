@@ -50,11 +50,20 @@ def test_codex_marketplace_is_committed() -> None:
     )
 
 
-def test_codex_nested_plugin_is_committed() -> None:
-    """Codex 0.125+ requires the plugin under `./plugins/<name>/`, not `./`."""
-    assert _is_tracked(".agents/plugins/plugins/litestar/.codex-plugin/plugin.json"), (
-        'Codex nested plugin manifest must be committed — Codex CLI 0.125+ rejects `source.path: "./"`'
+def test_codex_plugin_package_is_committed() -> None:
+    """Codex 0.125+ resolves `source.path` against the repo root, so the plugin
+    package lives at `<repo>/plugins/litestar/`. The package itself is composed
+    of symlinks back to the canonical sources (`.codex-plugin`, `skills`,
+    `commands`, `.codex`, `hooks`) — every symlink and the canonical manifest
+    must be tracked by git."""
+    assert _is_tracked(".codex-plugin/plugin.json"), (
+        ".codex-plugin/plugin.json must be committed — it is the canonical Codex plugin manifest"
     )
+    for entry in (".codex-plugin", "skills", "commands", ".codex", "hooks"):
+        assert _is_tracked(f"plugins/litestar/{entry}"), (
+            f"plugins/litestar/{entry} symlink must be committed — Codex 0.125+ resolves "
+            '`source.path: "./plugins/litestar"` against the repo root'
+        )
 
 
 def test_codex_marketplace_is_trackable() -> None:
