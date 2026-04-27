@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "name": "litestar-session-start",
+        "command": "bash ./hooks/session-start.sh",
+        "description": "Inject project-aware Litestar skill reminders into the Cursor session context."
+      }
+    ]
+  }
+}

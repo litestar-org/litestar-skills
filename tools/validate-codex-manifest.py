@@ -12,15 +12,14 @@ Codex 0.125+ enforces:
 * ``interface.defaultPrompt`` is silently capped at 3 entries — anything beyond is
   dropped with a WARN in the TUI log.
 
-Additionally verifies that ``plugins/litestar/`` is assembled with the expected
-symlinks back to the repo-root canonical sources. Drift fails CI; the fix is
+Additionally verifies that ``plugins/litestar/`` is a real generated package
+layout, not symlinks. Drift fails ``make codex-package-check``; the fix is
 ``make sync-codex-package``.
 """
 
 from __future__ import annotations
 
 import json
-import os
 import re
 import sys
 from collections.abc import Iterator
@@ -30,12 +29,12 @@ from typing import Any, cast
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 PACKAGE_ROOT = Path("plugins/litestar")
-PACKAGE_DIR_SYMLINKS: tuple[tuple[str, str], ...] = (
-    (".codex-plugin", "../../.codex-plugin"),
-    ("skills", "../../skills"),
-    ("commands", "../../commands"),
-    (".codex", "../../.codex"),
-    ("hooks", "../../hooks"),
+PACKAGE_DIRS = (
+    ".codex-plugin",
+    "skills",
+    "commands",
+    ".codex",
+    "hooks",
 )
 
 
@@ -164,16 +163,22 @@ def _validate_codex_package_layout() -> int:
     print(f"Validating Codex package layout: {PACKAGE_ROOT}")
     errors = 0
 
+    if package.is_symlink():
+        print(f"  ERROR [symlink]: {PACKAGE_ROOT} (expected a real directory)")
+        return 1
     if not package.is_dir():
         print(f"  ERROR: package directory '{package}' is missing — run 'make sync-codex-package'")
         return 1
 
-    expected_names = {name for name, _ in PACKAGE_DIR_SYMLINKS}
+    expected_names = set(PACKAGE_DIRS)
     actual_names = {p.name for p in package.iterdir()}
 
-    for name, expected_target in PACKAGE_DIR_SYMLINKS:
-        link = package / name
-        errors += _check_symlink(link, expected_target)
+    for name in PACKAGE_DIRS:
+        errors += _check_real_directory(package / name)
+
+    for symlink in sorted(p.relative_to(REPO_ROOT) for p in package.rglob("*") if p.is_symlink()):
+        print(f"  ERROR [symlink]: {symlink} (package payload must contain real files)")
+        errors += 1
 
     for stray in sorted(actual_names - expected_names):
         print(f"  ERROR [stray]: {PACKAGE_ROOT}/{stray} (expected only {sorted(expected_names)})")
@@ -184,19 +189,16 @@ def _validate_codex_package_layout() -> int:
     return errors
 
 
-def _check_symlink(link: Path, expected_target: str) -> int:
-    if not link.is_symlink():
-        if link.exists():
-            print(f"  ERROR [not-a-symlink]: {link} (expected -> {expected_target})")
-        else:
-            print(f"  ERROR [missing-link]: {link} (expected -> {expected_target})")
+def _check_real_directory(path: Path) -> int:
+    rel_path = path.relative_to(REPO_ROOT)
+    if path.is_symlink():
+        print(f"  ERROR [symlink]: {rel_path} (expected a real directory)")
         return 1
-    actual = os.readlink(link).replace("\\", "/")
-    if actual != expected_target:
-        print(f"  ERROR [wrong-target]: {link} -> {actual} (expected -> {expected_target})")
+    if not path.exists():
+        print(f"  ERROR [missing-directory]: {rel_path}")
         return 1
-    if not link.resolve().exists():
-        print(f"  ERROR [dangling]: {link} -> {actual}")
+    if not path.is_dir():
+        print(f"  ERROR [not-a-directory]: {rel_path}")
         return 1
     return 0
 

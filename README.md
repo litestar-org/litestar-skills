@@ -6,7 +6,7 @@
 
 ## Status
 
-**v0.1.3 — early access.** Multi-host plumbing, 28 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
+**v0.1.4 — early access.** Multi-host plumbing, 28 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
 
 **Breaking host identity note:** host-facing marketplace, plugin, extension, managed-config, and skill namespace IDs are `litestar`. Existing installs under `litestar-skills` should be removed and reinstalled; no alias is shipped. The Python package and repository remain `litestar-skills`.
 
@@ -48,7 +48,7 @@ Gemini auto-indexes this repo into its [extension gallery](https://geminicli.com
 
 ### Codex CLI
 
-> **Codex CLI 0.125+** required. The marketplace and plugin manifest live under `.agents/plugins/` per Codex's nested-path requirement.
+> **Codex CLI 0.125+** required. The marketplace lives at `.agents/plugins/marketplace.json` and points at the committed generated package under `plugins/litestar/`.
 
 ```bash
 codex plugin marketplace add litestar-org/litestar-skills

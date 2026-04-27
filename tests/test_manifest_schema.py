@@ -82,7 +82,8 @@ def test_codex_plugin_manifest_agents_is_string() -> None:
 
     Codex 0.125+ resolves marketplace `source.path` against the repo root, so
     the canonical plugin manifest lives at `<repo>/.codex-plugin/plugin.json`
-    and the package at `<repo>/plugins/litestar/` symlinks back to it.
+    and the generated package at `<repo>/plugins/litestar/` contains a committed
+    copy of it.
     """
     manifest_path = REPO_ROOT / ".codex-plugin" / "plugin.json"
     assert manifest_path.exists(), f"{manifest_path} is missing"

@@ -2235,7 +2235,7 @@ wheels = [
 
 [[package]]
 name = "litestar-skills"
-version = "0.1.3"
+version = "0.1.4"
 source = { editable = "." }
 
 [package.optional-dependencies]

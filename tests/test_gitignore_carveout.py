@@ -28,6 +28,17 @@ def _is_tracked(rel_path: str) -> bool:
     return result.returncode == 0
 
 
+def _git_ls_files_stat(rel_path: str) -> list[str]:
+    result = subprocess.run(
+        ["git", "ls-files", "-s", rel_path],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return [line for line in result.stdout.splitlines() if line]
+
+
 def _is_trackable(rel_path: str) -> bool:
     """A path is trackable if `git check-ignore -v` indicates the matching rule is a negation."""
     result = subprocess.run(
@@ -52,18 +63,25 @@ def test_codex_marketplace_is_committed() -> None:
 
 def test_codex_plugin_package_is_committed() -> None:
     """Codex 0.125+ resolves `source.path` against the repo root, so the plugin
-    package lives at `<repo>/plugins/litestar/`. The package itself is composed
-    of symlinks back to the canonical sources (`.codex-plugin`, `skills`,
-    `commands`, `.codex`, `hooks`) — every symlink and the canonical manifest
-    must be tracked by git."""
+    package lives at `<repo>/plugins/litestar/`. The package itself is generated
+    from canonical sources (`.codex-plugin`, `skills`, `commands`, `.codex`,
+    `hooks`) as tracked real files, not symlinks."""
     assert _is_tracked(".codex-plugin/plugin.json"), (
         ".codex-plugin/plugin.json must be committed — it is the canonical Codex plugin manifest"
     )
-    for entry in (".codex-plugin", "skills", "commands", ".codex", "hooks"):
-        assert _is_tracked(f"plugins/litestar/{entry}"), (
-            f"plugins/litestar/{entry} symlink must be committed — Codex 0.125+ resolves "
+    for path in (
+        "plugins/litestar/.codex-plugin/plugin.json",
+        "plugins/litestar/skills/litestar/SKILL.md",
+        "plugins/litestar/commands/litestar/review.toml",
+        "plugins/litestar/.codex/config.toml",
+        "plugins/litestar/hooks/hooks-codex.json",
+    ):
+        assert _is_tracked(path), (
+            f"{path} must be committed — Codex 0.125+ resolves "
             '`source.path: "./plugins/litestar"` against the repo root'
         )
+    for line in _git_ls_files_stat("plugins/litestar"):
+        assert not line.startswith("120000 "), f"Codex package must not contain tracked symlinks: {line}"
 
 
 def test_codex_marketplace_is_trackable() -> None:

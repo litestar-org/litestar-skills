@@ -1,0 +1,438 @@
+description = "Scaffold a new domain module in a Litestar app — controllers, schemas, services, guards, jobs, events — with proper wiring, route registration, and stack-appropriate patterns"
+prompt = """
+# Scaffold a new Litestar domain
+
+You are creating a new domain module following the canonical domain-driven structure used in first-party Litestar reference apps ([litestar-fullstack](https://github.com/litestar-org/litestar-fullstack), [litestar-fullstack-inertia](https://github.com/litestar-org/litestar-fullstack-inertia), and others). Ask about the project's stack first — services and controllers branch on the data-access layer.
+
+## Gather requirements (one question at a time)
+
+1. **Domain name** — a noun (e.g., `posts`, `tasks`, `orders`, `notifications`).
+   Becomes: directory `domain/{name}/`, Python package `app.domain.{name}`.
+
+2. **Primary resource** — the main entity this domain manages (e.g., `Post`, `Task`, `Order`).
+   This drives the initial model, service, schema, and controller.
+
+3. **Data access layer** — which is this project on?
+   - `advanced-alchemy` (default — opinionated ORM + repository service)
+   - `sqlspec` (direct SQL + driver methods + LimitOffsetFilter)
+   - `raw-sqlalchemy` (AsyncSession-based service, no repository abstraction)
+   This determines imports, service base class, pagination pattern, and Controller shape.
+
+4. **CRUD operations** — which of Create / Read (list + detail) / Update / Delete?
+   Default: all four. User may exclude some (e.g., read-only domain).
+
+5. **Authentication** — does this domain need guards?
+   Options:
+   - `requires_active_user` (most common — any logged-in user)
+   - `requires_superuser` (admin-only)
+   - `requires_membership` (multi-tenant — user must be a member of the resource's tenant/team/workspace)
+   - None (public endpoint)
+
+6. **Background jobs** — will this domain have SAQ tasks? (e.g., import jobs, notification dispatch)
+   Default: no. If yes, create `jobs/` subpackage.
+
+7. **Real-time events** — will this domain broadcast to WebSocket Channels?
+   Default: no. If yes, create `channels.py` with channel name patterns (broker backend already picked at app-scaffold time).
+
+8. **DI strategy** — which dependency injection does the project use?
+   Options:
+   - `provide` — Litestar built-in `Provide()` (default for small/mid apps)
+   - `dishka` — Dishka `FromDishka as Inject[T]` (enterprise scope management)
+   This determines how the service is injected into Controller handlers.
+
+9. **Serialization layer** — `msgspec` (default) or `pydantic`? Drives the schema base class.
+
+10. **Domain-specific eager-load configs** — any custom DI providers beyond the standard service injection?
+    Default: no. If yes, create `deps.py` with the appropriate eager-load / join patterns for the chosen data-access layer.
+
+## Generate the domain structure
+
+```
+domain/{name}/
+├── __init__.py               # Exports: controllers, schemas, services
+├── controllers/
+│   ├── __init__.py           # Re-exports all controller classes
+│   └── _{resource}.py        # Controller class with CRUD routes — branched per data-access
+├── schemas/
+│   ├── __init__.py           # Re-exports all schema types
+│   └── _{resource}.py        # DTO base class per serialization choice
+├── services/
+│   ├── __init__.py           # Re-exports all service classes
+│   └── _{resource}.py        # Service class — branched per data-access
+├── guards.py                 # (if auth selected) Domain-specific guard functions
+├── deps.py                   # (if custom DI) Eager-load / join configs, DI providers
+├── listeners.py              # (if events) Event listener stubs
+├── channels.py               # (if real-time) Channel name patterns
+└── jobs/
+    ├── __init__.py           # (if background jobs) Job registry
+    └── _{task}.py            # (if background jobs) SAQ task functions
+```
+
+## File content — canonical patterns
+
+### `schemas/_{resource}.py` — msgspec (default)
+
+```python
+from __future__ import annotations
+
+from datetime import datetime
+from uuid import UUID
+
+from app.lib.schema import CamelizedBaseStruct
+
+
+class {Resource}(CamelizedBaseStruct):
+    id: UUID
+    # TODO: add domain-specific fields
+    created_at: datetime
+    updated_at: datetime
+
+
+class {Resource}Create(CamelizedBaseStruct):
+    # TODO: add required creation fields
+    pass
+
+
+class {Resource}Update(CamelizedBaseStruct):
+    # TODO: add optional update fields
+    pass
+```
+
+### `schemas/_{resource}.py` — pydantic (when project is on Pydantic)
+
+```python
+from __future__ import annotations
+
+from datetime import datetime
+from uuid import UUID
+
+from app.lib.schema import BaseSchema  # configures alias_generator=to_camel
+
+
+class {Resource}(BaseSchema):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class {Resource}Create(BaseSchema):
+    pass
+
+
+class {Resource}Update(BaseSchema):
+    pass
+```
+
+### `services/_{resource}.py` — Branch A: advanced-alchemy
+
+```python
+from __future__ import annotations
+
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
+
+from app.db.models import {Resource}
+
+
+class {Resource}Repository(SQLAlchemyAsyncRepository[{Resource}]):
+    model_type = {Resource}
+
+
+class {Resource}Service(SQLAlchemyAsyncRepositoryService[{Resource}]):
+    repository_type = {Resource}Repository
+```
+
+### `services/_{resource}.py` — Branch B: sqlspec
+
+```python
+from __future__ import annotations
+
+from uuid import UUID
+
+from sqlspec.service import SQLSpecAsyncService
+
+from app.domain.{name}.schemas import {Resource}
+
+
+class {Resource}Service(SQLSpecAsyncService):
+    async def list_and_count(self, *filters) -> tuple[list[{Resource}], int]:
+        return await self.driver.select_and_count(
+            "SELECT * FROM {resources}",
+            filters=filters,
+            schema_type={Resource},
+        )
+
+    async def get_one_or_none(self, item_id: UUID) -> {Resource} | None:
+        return await self.driver.select_one_or_none(
+            "SELECT * FROM {resources} WHERE id = :id",
+            parameters={{"id": item_id}},
+            schema_type={Resource},
+        )
+
+    async def create(self, data: dict) -> {Resource}:
+        return await self.driver.insert_returning(
+            "INSERT INTO {resources} (...) VALUES (...) RETURNING *",
+            parameters=data,
+            schema_type={Resource},
+        )
+```
+
+### `services/_{resource}.py` — Branch C: raw SQLAlchemy
+
+```python
+from __future__ import annotations
+
+from uuid import UUID
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.models import {Resource} as {Resource}Model
+
+
+class {Resource}Service:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_and_count(self, limit: int = 20, offset: int = 0) -> tuple[list[{Resource}Model], int]:
+        stmt = select({Resource}Model).limit(limit).offset(offset)
+        result = await self._session.execute(stmt)
+        rows = list(result.scalars())
+        total = await self._session.scalar(select(func.count()).select_from({Resource}Model))
+        return rows, total or 0
+
+    async def get_one_or_none(self, item_id: UUID) -> {Resource}Model | None:
+        return await self._session.scalar(select({Resource}Model).where({Resource}Model.id == item_id))
+```
+
+### `controllers/_{resource}.py` — Branch A: advanced-alchemy + `provide` DI
+
+```python
+from __future__ import annotations
+
+from uuid import UUID
+
+from litestar import Controller, get, post, patch, delete
+from advanced_alchemy.extensions.litestar import create_filter_dependencies
+from advanced_alchemy.service import OffsetPagination
+
+from app.domain.{name}.schemas import {Resource}, {Resource}Create, {Resource}Update
+from app.domain.{name}.services import {Resource}Service
+from app.lib.exceptions import NotFoundError
+{guard_import}
+
+
+class {Resource}Controller(Controller):
+    path = "/api/{name}"
+    {guards_line}
+    tags = ["{Resource}s"]
+    dependencies = create_filter_dependencies({{
+        "id_filter": "UUID",
+        "pagination_type": "limit_offset",
+        "pagination_size": 20,
+        {search_fields}
+    }})
+
+    @get("/")
+    async def list_{resources}(
+        self, {resource}_service: {Resource}Service, filters: list,
+    ) -> OffsetPagination[{Resource}]:
+        results, total = await {resource}_service.list_and_count(*filters)
+        return {resource}_service.to_schema(results, total, filters=filters, schema_type={Resource})
+
+    @get("/{{item_id:uuid}}")
+    async def get_{resource}(
+        self, item_id: UUID, {resource}_service: {Resource}Service,
+    ) -> {Resource}:
+        db_obj = await {resource}_service.get_one_or_none(id=item_id)
+        if db_obj is None:
+            raise NotFoundError(detail="{Resource} not found")
+        return {resource}_service.to_schema(db_obj, schema_type={Resource})
+
+    @post("/")
+    async def create_{resource}(
+        self, data: {Resource}Create, {resource}_service: {Resource}Service,
+    ) -> {Resource}:
+        db_obj = await {resource}_service.create(data.to_dict())
+        return {resource}_service.to_schema(db_obj, schema_type={Resource})
+
+    @patch("/{{item_id:uuid}}")
+    async def update_{resource}(
+        self, item_id: UUID, data: {Resource}Update, {resource}_service: {Resource}Service,
+    ) -> {Resource}:
+        db_obj = await {resource}_service.update({{**data.to_dict(), "id": item_id}})
+        return {resource}_service.to_schema(db_obj, schema_type={Resource})
+
+    @delete("/{{item_id:uuid}}")
+    async def delete_{resource}(
+        self, item_id: UUID, {resource}_service: {Resource}Service,
+    ) -> None:
+        await {resource}_service.delete(item_id)
+```
+
+### `controllers/_{resource}.py` — Branch B: sqlspec + `provide` DI
+
+```python
+from __future__ import annotations
+
+from uuid import UUID
+
+from litestar import Controller, get, post, patch, delete
+from sqlspec.filters import LimitOffsetFilter, OrderByFilter
+
+from app.domain.{name}.schemas import {Resource}, {Resource}Create, {Resource}Update
+from app.domain.{name}.services import {Resource}Service
+from app.lib.exceptions import NotFoundError
+{guard_import}
+
+
+class {Resource}Controller(Controller):
+    path = "/api/{name}"
+    {guards_line}
+    tags = ["{Resource}s"]
+
+    @get("/")
+    async def list_{resources}(
+        self,
+        {resource}_service: {Resource}Service,
+        limit_offset: LimitOffsetFilter,
+        order_by: OrderByFilter,
+    ) -> list[{Resource}]:
+        rows, _total = await {resource}_service.list_and_count(limit_offset, order_by)
+        return rows
+
+    @get("/{{item_id:uuid}}")
+    async def get_{resource}(
+        self, item_id: UUID, {resource}_service: {Resource}Service,
+    ) -> {Resource}:
+        row = await {resource}_service.get_one_or_none(item_id)
+        if row is None:
+            raise NotFoundError(detail="{Resource} not found")
+        return row
+
+    @post("/")
+    async def create_{resource}(
+        self, data: {Resource}Create, {resource}_service: {Resource}Service,
+    ) -> {Resource}:
+        return await {resource}_service.create(data.__dict__)
+```
+
+### `controllers/_{resource}.py` — Branch C: raw SQLAlchemy + `provide` DI
+
+```python
+from __future__ import annotations
+
+from uuid import UUID
+
+from litestar import Controller, get
+
+from app.domain.{name}.services import {Resource}Service
+from app.lib.exceptions import NotFoundError
+{guard_import}
+
+
+class {Resource}Controller(Controller):
+    path = "/api/{name}"
+    {guards_line}
+
+    @get("/")
+    async def list_{resources}(
+        self, {resource}_service: {Resource}Service, limit: int = 20, offset: int = 0,
+    ) -> dict:
+        rows, total = await {resource}_service.list_and_count(limit, offset)
+        return {{"items": rows, "limit": limit, "offset": offset, "total": total}}
+
+    @get("/{{item_id:uuid}}")
+    async def get_{resource}(
+        self, item_id: UUID, {resource}_service: {Resource}Service,
+    ) -> "{Resource}":
+        row = await {resource}_service.get_one_or_none(item_id)
+        if row is None:
+            raise NotFoundError(detail="{Resource} not found")
+        return row
+```
+
+### Dishka DI overlay (applies to any branch)
+
+If the user chose Dishka, change handler params from `{resource}_service: {Resource}Service` to `{resource}_service: Inject[{Resource}Service]`:
+
+```python
+from dishka.integrations.litestar import FromDishka as Inject
+```
+
+After scaffolding, remind the user to register `{Resource}Service` in their Dishka `Provider` (in `lib/di.py` from the `/litestar:new-app` scaffold).
+
+### `__init__.py`
+
+```python
+\"\"\"{Resource}s domain.\"\"\"
+from app.domain.{name} import controllers, schemas, services
+
+__all__ = ("controllers", "schemas", "services")
+```
+
+### `guards.py` (if auth selected)
+
+Generate the appropriate guard function based on the user's auth choice. Use the patterns from `skills/litestar-auth-guards/references/guards.md`.
+
+### `jobs/__init__.py` (if background jobs)
+
+```python
+\"\"\"Background tasks for the {name} domain.\"\"\"
+```
+
+### `channels.py` (if real-time)
+
+```python
+\"\"\"WebSocket channel patterns for {name} domain.\"\"\"
+
+{NAME}_CHANNEL = "{name}:{{item_id}}"
+```
+
+## After generating
+
+1. **Register the domain's routes** — help the user add the controller to the app's
+   `route_handlers` list or Router composition:
+
+   ```python
+   from app.domain.{name}.controllers import {Resource}Controller
+
+   app = Litestar(route_handlers=[..., {Resource}Controller])
+   ```
+
+2. **Register DI providers** (if applicable) — add the service provider to the app's
+   `dependencies` dict (for `provide` DI) or to the Dishka `Provider` (for `dishka` DI).
+
+3. **Create the model / schema pack** — the location depends on data-access:
+   - `advanced-alchemy`: add a SQLAlchemy model under `app/db/models/{resource}.py` extending `UUIDAuditBase`:
+
+     ```python
+     from advanced_alchemy.base import UUIDAuditBase
+     from sqlalchemy.orm import Mapped, mapped_column
+
+     class {Resource}(UUIDAuditBase):
+         __tablename__ = "{resources}"
+         # TODO: add columns
+     ```
+
+   - `sqlspec`: add a schema / TypedDict / msgspec Struct describing the row shape (no ORM model required); add a migration script with the CREATE TABLE.
+   - `raw-sqlalchemy`: same as advanced-alchemy but without `UUIDAuditBase` — use `DeclarativeBase` and handle id/created_at/updated_at columns explicitly.
+
+4. **Generate a migration** — tool depends on stack:
+   - `advanced-alchemy` / `raw-sqlalchemy`: `alembic revision --autogenerate -m "add {resources} table"`
+   - `sqlspec`: use the sqlspec migrations CLI or hand-write the SQL migration.
+
+5. **Register SAQ jobs** (if background tasks) — add the task dotted-path to the SAQ queue config in `server/plugins.py`. Broker DSN was picked at app-scaffold time (Redis or PostgreSQL).
+
+6. **Run `make check`** — verify everything wires up clean.
+
+## Naming conventions
+
+- Directory: `domain/{name}/` (plural, kebab-case → snake_case in Python)
+- Controller class: `{Resource}Controller` (singular resource, PascalCase)
+- Service class: `{Resource}Service`
+- Repository class (advanced-alchemy / raw-sa only): `{Resource}Repository`
+- Schema classes: `{Resource}`, `{Resource}Create`, `{Resource}Update`
+- Route path: `/api/{name}` (plural)
+- Controller file: `_{resource}.py` (underscore-prefixed, singular, snake_case)
+"""

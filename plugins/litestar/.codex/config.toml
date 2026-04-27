@@ -1,0 +1,11 @@
+# litestar-skills — Codex CLI configuration
+#
+# No MCP servers shipped yet. Populated when MCP servers land
+# (tracked in docs/roadmap.md §PyPI / npm publishing — concrete candidates
+# include `litestar-skills-mcp-docs`).
+#
+# Example (commented out):
+# [mcp_servers.litestar_docs]
+# command = "uvx"
+# args = ["litestar-skills-mcp-docs"]
+# startup_timeout_sec = 30
