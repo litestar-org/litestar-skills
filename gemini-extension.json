@@ -1,6 +1,6 @@
 {
   "name": "litestar",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Opinionated first-party agent skills for the Litestar framework ecosystem",
   "contextFileName": "GEMINI.md",
   "excludeTools": [
