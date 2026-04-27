@@ -49,7 +49,7 @@ def test_host_facing_plugin_identity_is_litestar() -> None:
     claude_marketplace_path = REPO_ROOT / ".claude-plugin" / "marketplace.json"
     claude_plugin_path = REPO_ROOT / ".claude-plugin" / "plugin.json"
     codex_marketplace_path = REPO_ROOT / ".agents" / "plugins" / "marketplace.json"
-    codex_plugin_path = REPO_ROOT / ".agents" / "plugins" / "plugins" / "litestar" / ".codex-plugin" / "plugin.json"
+    codex_plugin_path = REPO_ROOT / ".codex-plugin" / "plugin.json"
     gemini_path = REPO_ROOT / "gemini-extension.json"
     cursor_path = REPO_ROOT / ".cursor-plugin" / "plugin.json"
 
@@ -80,11 +80,11 @@ def test_python_distribution_remains_litestar_skills() -> None:
 def test_codex_plugin_manifest_agents_is_string() -> None:
     """Codex CLI plugin.json 'agents' field should be a string directory path.
 
-    Codex 0.125+ requires the plugin manifest under
-    `.agents/plugins/plugins/<name>/.codex-plugin/plugin.json` so the
-    marketplace `source.path` can be a non-empty subdirectory.
+    Codex 0.125+ resolves marketplace `source.path` against the repo root, so
+    the canonical plugin manifest lives at `<repo>/.codex-plugin/plugin.json`
+    and the package at `<repo>/plugins/litestar/` symlinks back to it.
     """
-    manifest_path = REPO_ROOT / ".agents" / "plugins" / "plugins" / "litestar" / ".codex-plugin" / "plugin.json"
+    manifest_path = REPO_ROOT / ".codex-plugin" / "plugin.json"
     assert manifest_path.exists(), f"{manifest_path} is missing"
 
     with open(manifest_path, encoding="utf-8") as f:

@@ -1,6 +1,6 @@
 {
   "name": "litestar",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Opinionated first-party agent skills for the Litestar framework ecosystem",
   "author": {
     "name": "Cody Fincher",
@@ -21,11 +21,8 @@
     "capabilities": ["Read", "Write"],
     "defaultPrompt": [
       "Expose this SQLAlchemy model as a Litestar Controller with full CRUD routes",
-      "Make my Litestar routes available as MCP tools via litestar-mcp",
-      "Wire up a Vite frontend (React / Vue / Svelte / HTMX / Inertia) with litestar-vite",
       "Serve an AI model from Litestar — streaming responses, batching, background workers via SAQ",
-      "Implement JWT auth with refresh tokens, rotation, and secure cookie storage",
-      "Scaffold a new Litestar app with opinionated defaults (Granian + msgspec + advanced-alchemy + sqlspec)"
+      "Implement JWT auth with refresh tokens, rotation, and secure cookie storage"
     ]
   }
 }

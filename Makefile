@@ -223,6 +223,12 @@ check-upstream-imports:                             ## Verify every Python impor
 	@uv run python tools/check-upstream-imports.py
 	@echo "${OK} Upstream imports verified ✨"
 
+.PHONY: sync-codex-package
+sync-codex-package:                                 ## Assemble the Codex plugin package at plugins/litestar/ via symlinks
+	@echo "${INFO} Syncing Codex package symlinks... 🔗"
+	@bash tools/sync-codex-package.sh
+	@echo "${OK} Codex package assembled"
+
 .PHONY: validate-codex-manifest
 validate-codex-manifest:                            ## Validate Codex marketplace + plugin manifests for Codex CLI 0.125+
 	@echo "${INFO} Validating Codex manifests... 🔍"
