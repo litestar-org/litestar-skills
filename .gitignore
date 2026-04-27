@@ -36,8 +36,8 @@ build/
 # `.agents/*` (NOT `.agents/`) so git descends into the directory and honors
 # the `!`-includes below. Codex CLI 0.125+ requires the marketplace file at
 # `.agents/plugins/marketplace.json`; the plugin package itself lives at
-# `<repo>/plugins/litestar/` (assembled via `make sync-codex-package`) because
-# Codex resolves `source.path` against the repo root, not the marketplace.json.
+# `<repo>/plugins/litestar/` (generated real files via `make sync-codex-package`)
+# because Codex resolves `source.path` against the repo root, not marketplace.json.
 .agents/*
 !.agents/plugins/
 .agents/plugins/*

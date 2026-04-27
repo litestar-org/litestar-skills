@@ -194,11 +194,11 @@ oxlint:                                             ## Run oxlint on JavaScript 
 .PHONY: markdownlint
 markdownlint:                                       ## Run markdownlint on all markdown files
 	@echo "${INFO} Running markdownlint... 🔍"
-	@bunx markdownlint-cli2 "**/*.md" "#node_modules" "#.agents" "#.beads"
+	@bunx markdownlint-cli2 "**/*.md" "#node_modules" "#.agents" "#.beads" "#plugins/litestar"
 	@echo "${OK} markdownlint checks passed ✨"
 
 .PHONY: lint
-lint: ruff oxlint markdownlint                      ## Run all linters
+lint: ruff oxlint markdownlint codex-package-check  ## Run all linters
 	@echo "${OK} All linting checks passed ✨"
 
 # -----------------------------------------------------------------------------
@@ -224,10 +224,16 @@ check-upstream-imports:                             ## Verify every Python impor
 	@echo "${OK} Upstream imports verified ✨"
 
 .PHONY: sync-codex-package
-sync-codex-package:                                 ## Assemble the Codex plugin package at plugins/litestar/ via symlinks
-	@echo "${INFO} Syncing Codex package symlinks... 🔗"
-	@bash tools/sync-codex-package.sh
+sync-codex-package:                                 ## Assemble the committed Codex plugin package at plugins/litestar/
+	@echo "${INFO} Syncing Codex package payload... 🔗"
+	@uv run python tools/sync-codex-package.py
 	@echo "${OK} Codex package assembled"
+
+.PHONY: codex-package-check
+codex-package-check:                                ## Verify plugins/litestar/ matches generated Codex package payload
+	@echo "${INFO} Checking Codex package payload... 🔍"
+	@uv run python tools/sync-codex-package.py --check
+	@echo "${OK} Codex package payload is current"
 
 .PHONY: validate-codex-manifest
 validate-codex-manifest:                            ## Validate Codex marketplace + plugin manifests for Codex CLI 0.125+

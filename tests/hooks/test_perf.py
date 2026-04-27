@@ -4,7 +4,7 @@ Loose budgets — these are guardrails, not benchmarks. They flag clear
 regressions without flaking on a busy CI runner.
 
 Cold (first invocation, fresh fixture): <= 1500ms.
-Warm (immediate re-invocation, same fixture): <= 500ms.
+Warm (immediate re-invocation, same fixture): <= 500ms, or <= 750ms on Windows.
 
 (Targets in PRD are 200ms / 50ms; CI runners are noisy enough that
 we use 7.5x headroom to avoid false positives. Tighten locally if needed.)
@@ -12,6 +12,7 @@ we use 7.5x headroom to avoid false positives. Tighten locally if needed.)
 
 from __future__ import annotations
 
+import platform
 import subprocess
 import time
 from pathlib import Path
@@ -24,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SESSION_START = REPO_ROOT / "hooks" / "session-start.sh"
 
 COLD_BUDGET_MS = 1500
-WARM_BUDGET_MS = 500
+WARM_BUDGET_MS = 750 if platform.system() == "Windows" else 500
 
 
 @pytest.fixture
