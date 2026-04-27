@@ -1,11 +1,11 @@
 ---
 name: litestar-htmx
-description: "Auto-activate for litestar.contrib.htmx imports, HTMXRequest, HTMXResponse, hx-* attributes in templates served by Litestar. Litestar's first-party HTMX integration: HTMXRequest helpers, HTMXResponse, TriggerEvent, Refresh, PushUrl, HXLocation, partial-HTML responses, OOB swaps, and pairing with litestar-vite for HTMX mode. Produces Litestar Controllers/handlers that return partial HTML, HTMX response helpers (TriggerEvent / Reswap / Retarget), and template patterns for hx-* driven UIs. Use when: building HTMX-powered Litestar apps, returning partial HTML, triggering client events from server, integrating htmx with litestar-vite. Not for full SPAs (React/Vue/Svelte — see litestar-vite SPA mode), not for non-Litestar HTMX apps."
+description: "Auto-activate for litestar_htmx imports, HTMXPlugin, HTMXRequest, HTMXTemplate, TriggerEvent, PushUrl, HXLocation, hx-* attributes in Litestar templates, or partial HTML responses. Use when building HTMX-powered Litestar handlers, templates, and server-triggered client events. Not for full SPA routing or non-Litestar HTMX apps."
 ---
 
 # litestar-htmx
 
-Litestar has first-party HTMX support in `litestar.contrib.htmx` (or `litestar_htmx` depending on version). It exposes `HTMXRequest` (request-side helpers), `HTMXResponse` (typed partial HTML response), and a set of HTMX-specific response objects (`TriggerEvent`, `Reswap`, `Retarget`, `Refresh`, `PushUrl`, `HXLocation`, `ClientRedirect`, `ClientRefresh`).
+Litestar has first-party HTMX support in `litestar_htmx`. It exposes `HTMXPlugin`, `HTMXRequest` (request-side helpers), `HTMXTemplate` (template response with HTMX headers), and HTMX-specific response objects (`TriggerEvent`, `Reswap`, `Retarget`, `PushUrl`, `HXLocation`, `ClientRedirect`, `ClientRefresh`).
 
 This skill is **Litestar-specific**. For generic HTMX `hx-*` attributes and patterns that aren't Litestar-bound, refer directly to <https://htmx.org/docs/>.
 
@@ -25,7 +25,7 @@ This skill is **Litestar-specific**. For generic HTMX `hx-*` attributes and patt
 
 ```python
 from litestar import get
-from litestar.contrib.htmx.request import HTMXRequest
+from litestar_htmx import HTMXRequest
 
 @get("/items")
 async def list_items(request: HTMXRequest) -> ...:
@@ -48,12 +48,12 @@ Wire it into the app:
 
 ```python
 from litestar import Litestar
-from litestar.contrib.htmx.request import HTMXRequest
+from litestar_htmx import HTMXPlugin
 
-app = Litestar(route_handlers=[...], request_class=HTMXRequest)
+app = Litestar(route_handlers=[...], plugins=[HTMXPlugin()])
 ```
 
-### HTMXResponse + Partial HTML
+### HTMXTemplate + Partial HTML
 
 Return Jinja partials from handlers:
 
@@ -83,7 +83,6 @@ For HTMX-targeted endpoints, the template is a fragment (no `<html>` / `<body>`)
 | Response Object | Purpose |
 | --- | --- |
 | `TriggerEvent(name, after="receive", params={...})` | Sets `HX-Trigger` / `HX-Trigger-After-Swap` / `HX-Trigger-After-Settle` |
-| `Refresh()` | Sets `HX-Refresh: true` — full page refresh |
 | `ClientRedirect(redirect_to=...)` | Sets `HX-Redirect` — client-side hard redirect |
 | `ClientRefresh()` | Sets `HX-Refresh: true` |
 | `PushUrl(push_url=...)` | Sets `HX-Push-Url` — adds entry to browser history |
@@ -95,7 +94,7 @@ For HTMX-targeted endpoints, the template is a fragment (no `<html>` / `<body>`)
 Example: trigger a custom event after a successful save:
 
 ```python
-from litestar.contrib.htmx.response import TriggerEvent
+from litestar_htmx import TriggerEvent
 
 @post("/items")
 async def create_item(data: ItemCreate) -> TriggerEvent:
@@ -136,9 +135,9 @@ Use Litestar's CSRF middleware; expose the token to templates as a `<meta>` tag 
 </script>
 ```
 
-### Pairing with `litestar-vite` (HTMX mode)
+### Pairing with `litestar-vite` (template mode)
 
-For HTMX projects with bundled JS/CSS and HMR, use `litestar-vite` in `template` mode. Vite bundles HTMX + extensions + CSS; Litestar returns partials. See `../litestar-vite/SKILL.md` and [`../litestar-vite/references/modes.md`](../litestar-vite/references/modes.md#htmx-mode).
+For HTMX projects with bundled JS/CSS and HMR, use `litestar-vite` in `template` mode. Vite bundles HTMX + extensions + CSS; Litestar returns partials. See `../litestar-vite/SKILL.md` and [`../litestar-vite/references/modes.md`](../litestar-vite/references/modes.md#htmx--template-mode).
 
 ```html
 <!-- base.html.j2 -->
@@ -285,8 +284,8 @@ assert "<ul" in resp.text
 
 ## Guardrails
 
-- **Use `litestar.contrib.htmx`** (or `litestar_htmx`), not generic ASGI patterns — the contrib module integrates with Litestar's lifecycle, OpenAPI, and DI.
-- **Set `request_class=HTMXRequest`** at the app level — handlers shouldn't construct it ad-hoc.
+- **Use `litestar_htmx`**, not generic ASGI patterns — the plugin integrates with Litestar's lifecycle, OpenAPI, and DI.
+- **Register `HTMXPlugin()`** at the app level — handlers shouldn't construct `HTMXRequest` ad-hoc.
 - **Return partial HTML for HTMX-targeted routes** — never return a full layout to an `hx-get` target.
 - **Use `Template` (Litestar response) — never string-concat HTML** — XSS risk and template caching benefits.
 - **CSRF protection applies to HTMX too** — non-GET HTMX requests must include the CSRF token (header preferred).
@@ -303,13 +302,13 @@ assert "<ul" in resp.text
 
 Before delivering Litestar + HTMX code, verify:
 
-- [ ] `request_class=HTMXRequest` is set on the `Litestar(...)` constructor
+- [ ] `HTMXPlugin()` is registered on the `Litestar(...)` constructor
 - [ ] HTMX-targeted routes return Jinja2 fragments (no `<html>` / `<body>`)
 - [ ] `Template` response object used (not raw HTML strings)
 - [ ] CSRF middleware enabled; token forwarded via `htmx:configRequest`
 - [ ] Server-driven behavior uses `TriggerEvent` / `Reswap` / `Retarget` (not ad-hoc JS)
 - [ ] Tests assert against partial HTML with `HX-Request: true` header
-- [ ] If using `litestar-vite`, mode is `template` or `htmx`
+- [ ] If using `litestar-vite`, mode is `template`
 
 </validation>
 
@@ -322,9 +321,8 @@ Before delivering Litestar + HTMX code, verify:
 ```python
 # app/domain/items/controllers.py
 from litestar import Controller, get, post
-from litestar.contrib.htmx.request import HTMXRequest
-from litestar.contrib.htmx.response import TriggerEvent
 from litestar.response import Template
+from litestar_htmx import HTMXRequest, TriggerEvent
 
 
 class ItemController(Controller):
@@ -399,12 +397,12 @@ async def test_create_item_triggers_event(client):
 
 ## References Index
 
-- **[litestar-vite Integration](references/litestar_vite.md)** — Bundling HTMX + custom JS/CSS with `litestar-vite` in HTMX mode.
+- **[litestar-vite Integration](references/litestar_vite.md)** — Bundling HTMX + custom JS/CSS with `litestar-vite` in template mode.
 
 ## Cross-References
 
 - **[litestar](../litestar/SKILL.md)** — Litestar fundamentals (Templates, Controllers, Guards, middleware).
-- **[litestar-vite](../litestar-vite/SKILL.md)** — HTMX mode with Vite-bundled assets.
+- **[litestar-vite](../litestar-vite/SKILL.md)** — HTMX + Jinja with Vite-bundled assets.
 
 ## Official References
 

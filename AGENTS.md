@@ -21,7 +21,7 @@ Style baseline for every skill here: [`skills/litestar-styleguide/`](skills/lite
 
 Every `SKILL.md` MUST follow these conventions:
 
-1. **YAML frontmatter** with `name` (kebab-case, matches directory) and `description` (starts with auto-activation signal, ends with `Not for X — why`).
+1. **YAML frontmatter** with `name` (kebab-case, matches directory) and trigger-only `description` (starts with `Auto-activate for` or `Use when`, includes concrete file/import/API signals, ends with `Not for X — why`, and contains no process summary such as "Produces ...").
 2. **XML-tagged sections** in this order: Code Style Rules → Quick Reference → `<workflow>` → `<guardrails>` → `<validation>` → `<example>` → References Index → Official References → Shared Styleguide Baseline.
 3. **Match-your-stack**: when multiple valid libraries / backends / patterns exist for a concern (data access, DI, background tasks, Channels backend, settings, serialization, deployment target), present all options and help the user pick based on what's already in their project. Never force one path.
 4. **Litestar code-sample conventions** (full detail in [`skills/litestar-styleguide/`](skills/litestar-styleguide/SKILL.md)):
@@ -33,22 +33,18 @@ Every `SKILL.md` MUST follow these conventions:
 
 ## Supported Hosts
 
-Every host falls into one of three tiers:
+Document hosts by the artifacts this repo ships. Do not describe hosts as compatibility tiers.
 
-- **First-class** — the repo ships maintained host-specific manifests, agents, and install guidance; changes to the shared skills tree are verified against the host.
-- **Compatible bundle** — the host consumes the repo through standard manifests or generic skill-discovery paths; no native wrapper is promised.
-- **Free ride** — the host discovers generic Agent Skills / `AGENTS.md` content; the repo ships no dedicated integration.
-
-| Host | Tier | Entry Point | Notes |
-| --- | --- | --- | --- |
-| **Claude Code** | first-class | `.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` + `.claude-plugin/agents/*.md` | Full plugin with skills, commands, agents, hooks. |
-| **Gemini CLI** | first-class | `gemini-extension.json` + `agents/*.md`, context via `GEMINI.md` | Auto-indexed gallery (topic `gemini-cli-extension`). |
-| **Codex CLI** | first-class | `.codex-plugin/plugin.json` + `.codex/agents/*.toml` + `.codex/config.toml` | Custom agents ship as pure TOML (tools inherited from session). |
-| **OpenCode** | first-class | `.opencode/plugins/litestar-skills.js` + `.opencode/agents/*.md` + native `.claude/skills/` / `.agents/skills/` reads | JS plugin wrapper + dict-schema agents. |
-| **Cursor** | compatible bundle | `.cursor-plugin/plugin.json` | Hooks via `hooks/hooks-cursor.json`. |
-| **VS Code / Copilot** | compatible bundle | User adds path to `chat.skillsLocations` | Raw SKILL.md tree (no wrapper extension in v0.1). |
-| **Google Antigravity** | free ride | `.agent/skills/` (workspace, note **singular**) or `~/.gemini/antigravity/skills/` (global) | Symlink `.agent → .agents` in your workspace; see README install. |
-| **OpenClaw** | compatible bundle | `.agents/skills/` + `AGENTS.md` | Consumes generic Agent Skills tree without extra config. |
+| Host | Entry Point | Notes |
+| --- | --- | --- |
+| **Claude Code** | `.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` + `.claude-plugin/agents/*.md` | Full plugin with skills, commands, agents, hooks. |
+| **Gemini CLI** | `gemini-extension.json` + `agents/*.md`, context via `GEMINI.md` | Auto-indexed gallery (topic `gemini-cli-extension`). |
+| **Codex CLI** | `.codex-plugin/plugin.json` + `.codex/agents/*.toml` + `.codex/config.toml` | Custom agents ship as pure TOML (tools inherited from session). |
+| **OpenCode** | `.opencode/plugins/litestar.js` + `.opencode/agents/*.md` + native `.claude/skills/` / `.agents/skills/` reads | JS plugin wrapper + dict-schema agents. |
+| **Cursor** | `.cursor-plugin/plugin.json` | Hooks via `hooks/hooks-cursor.json`. |
+| **VS Code / Copilot** | User adds path to `chat.skillsLocations` | Raw SKILL.md tree; no wrapper extension in v0.1. |
+| **Google Antigravity** | `.agent/skills/` (workspace, note **singular**) or `~/.gemini/antigravity/skills/` (global) | Symlink `.agent → .agents` in your workspace; see README install. |
+| **OpenClaw** | `.agents/skills/` + `AGENTS.md` | Consumes generic Agent Skills tree without extra config. |
 
 ## File Resolution
 
@@ -66,7 +62,7 @@ Every host falls into one of three tiers:
 
 ## Hooks
 
-The SessionStart hook scans the project's cwd for known Litestar-ecosystem signals (pyproject deps, `[tool.<lib>]` sections, Python imports, file globs in `hooks/lib/skill-map.json`) and injects per-host context naming the relevant `litestar-skills:<skill>` skills. Detection logic lives in `hooks/lib/_detector.py` (the canonical Python implementation reused by `detect-env.sh` and `detect-env.ps1`) and a parallel ESM port in `hooks/lib/detect-env.js` (used by the OpenCode plugin). Per-host shims: `hooks/hooks-claude.json` (Claude Code), `hooks/hooks-cursor.json` (Cursor), `hooks/hooks-codex.json` (Codex), and `hooks/hooks.json` (the Gemini CLI auto-discovers this exact name). Override via `LITESTAR_SKILLS_HOOK_DISABLE=1`. Run `make test-hooks` to exercise the suite.
+The SessionStart hook scans the project's cwd for known Litestar-ecosystem signals (pyproject deps, `[tool.<lib>]` sections, Python imports, file globs in `hooks/lib/skill-map.json`) and injects per-host context naming the relevant `litestar:<skill>` skills. Detection logic lives in `hooks/lib/_detector.py` (the canonical Python implementation reused by `detect-env.sh` and `detect-env.ps1`) and a parallel ESM port in `hooks/lib/detect-env.js` (used by the OpenCode plugin). Per-host shims: `hooks/hooks-claude.json` (Claude Code), `hooks/hooks-cursor.json` (Cursor), `hooks/hooks-codex.json` (Codex), and `hooks/hooks.json` (the Gemini CLI auto-discovers this exact name). Override via `LITESTAR_SKILLS_HOOK_DISABLE=1`. Run `make test-hooks` to exercise the suite.
 
 ## Development Commands
 

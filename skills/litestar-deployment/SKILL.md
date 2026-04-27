@@ -1,6 +1,6 @@
 ---
 name: litestar-deployment
-description: "Auto-activate for Dockerfile, docker-compose.yml, railway.json, railway.toml, Procfile, cloudbuild.yaml, app.yaml, service.yaml, `.github/workflows/deploy*`, deploy.sh, systemd unit files, or `granian` / `litestar run` in deployment context. Litestar deployment across targets: Docker multi-stage builds (standard + distroless), Docker Compose, Railway, Cloud Run, GKE, systemd. Produces Dockerfiles, compose files, K8s manifests, Railway configs, Cloud Run service.yaml, systemd units, CI/CD workflows, health-check endpoints. Key patterns: uv for packages, Bun for frontend builds, tini as PID 1, non-root UID 65532, UV_COMPILE_BYTECODE=1, STOPSIGNAL SIGINT, distroless prod images, separate SAQ worker containers, Vite asset pipeline in Docker, LITESTAR_APP env var. Use when: deploying a Litestar app, writing Dockerfiles, Docker Compose, Railway/Cloud Run/GKE, systemd, or CI/CD pipelines with asset builds. Not for non-Litestar Python apps — Litestar has specific Granian/entrypoint/lifespan conventions."
+description: "Auto-activate for Dockerfile, docker-compose.yml, railway.json, railway.toml, Procfile, cloudbuild.yaml, app.yaml, service.yaml, deploy.sh, systemd units, Kubernetes manifests, Terraform, or granian/litestar run in deployment context. Use when deploying Litestar apps to containers, Railway, Cloud Run, GKE, systemd, or CI/CD release targets. Not for non-Litestar Python apps or build artifact packaging alone."
 ---
 
 # Litestar Deployment
@@ -170,7 +170,7 @@ For Kubernetes production deployment with HPA, Ingress, and GKE Workload Identit
 - [litestar-granian](../litestar-granian/SKILL.md) — ASGI server tuning (workers, threads, HTTP/2, backpressure)
 - [litestar-saq](../litestar-saq/SKILL.md) — SAQ worker configuration and task definitions
 - [litestar-vite](../litestar-vite/SKILL.md) — Vite asset build pipeline and TypeGen
-- [litestar settings](../litestar/references/settings.md) — env-driven `@dataclass` settings pattern
+- [litestar settings](../litestar-settings/references/settings.md) — env-driven `@dataclass` settings pattern
 
 ## Shared Styleguide Baseline
 

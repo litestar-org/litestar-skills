@@ -50,7 +50,7 @@ Each item has a **Status**, a **Rationale**, a **Trigger**, and — where useful
 
 ### Claude Code marketplace auto-add
 
-- **Status:** Partial. `install.sh --claude-settings` (opt-in) whitelists `litestar-org/litestar-skills` in `~/.claude/settings.json`'s `extraKnownMarketplaces`, which means users only need `/plugin install litestar-skills@litestar-marketplace` inside Claude Code (no separate `/plugin marketplace add` required). Full headless auto-add is impossible today because `/plugin` is a TUI-only interaction.
+- **Status:** Partial. `install.sh --claude-settings` (opt-in) whitelists `litestar-org/litestar-skills` in `~/.claude/settings.json`'s `extraKnownMarketplaces`, which means users only need `/plugin install litestar@litestar` inside Claude Code (no separate `/plugin marketplace add` required). Full headless auto-add is impossible today because `/plugin` is a TUI-only interaction.
 - **Rationale:** `tools/install.sh` runs outside any Claude Code session; it cannot invoke in-session slash commands.
 - **Trigger:** Anthropic ships a `claude plugin marketplace add <repo>` CLI subcommand (or equivalent) callable from outside a session. Less likely alternates: a host-agnostic `agentskills.io`-style config-file protocol, or a new `autoInstallPlugins` settings key that pre-installs rather than only whitelisting.
 - **Monitor:** Claude Code [changelog](https://docs.anthropic.com/en/docs/claude-code/release-notes) and the Claude Code Discord `#plugin-dev` channel. When the subcommand ships, `tools/install.sh` gains a one-line invocation alongside the Gemini path and the README install section collapses from "two-step" to "one-shot".

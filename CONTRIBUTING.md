@@ -7,7 +7,7 @@ See [`docs/roadmap.md`](docs/roadmap.md) for v0.2 candidates and deferred items 
 1. Copy `templates/skill-template/` to `skills/<your-skill-name>/`.
 2. Fill in `SKILL.md` frontmatter:
    - `name` — kebab-case, must match directory name, ≤64 chars
-   - `description` — starts with auto-activation signal (file globs, imports), ends with `Not for X — why`
+   - `description` — trigger-only; starts with `Auto-activate for` or `Use when`, names concrete file/import/API signals, includes `Not for X — why`, and contains no process summary such as `Produces ...`
 3. Author the body in this XML-tagged section order:
    - Code Style Rules → Quick Reference → `<workflow>` → `<guardrails>` → `<validation>` → `<example>` → References Index → Official References → Shared Styleguide Baseline (link to the relevant files in [`skills/litestar-styleguide/references/`](skills/litestar-styleguide/SKILL.md))
 4. Apply the Litestar-first-party bias for all code samples.
@@ -15,15 +15,11 @@ See [`docs/roadmap.md`](docs/roadmap.md) for v0.2 candidates and deferred items 
 6. Run `make check` — full CI parity locally.
 7. Open a PR. Maintainer review verifies tone, first-party bias, and technical accuracy.
 
-## Support Tiers
+## Host Artifacts
 
-When adding or changing host support, classify the host into one of three tiers:
+When adding or changing host support, document the exact artifacts this repo ships for that host: manifests, generated subagents, hooks, install docs, and validator coverage.
 
-- **First-class** — the repo ships maintained host-specific artifacts (manifest, subagents, hooks) and install guidance. Adding a new first-class host requires per-host validator coverage in `tools/validate-skills.py`.
-- **Compatible bundle** — the host consumes standard manifests or generic skill-discovery paths. No native wrapper is promised; no per-host validator is required.
-- **Free ride** — the host discovers generic Agent Skills / `AGENTS.md` content. The repo ships no dedicated integration; docs only.
-
-Do not promote a host to a higher tier without shipping the corresponding artifacts and validator coverage in the same PR.
+Do not document a host capability unless the corresponding artifact exists in the same PR. If a host consumes only the raw `skills/` tree, say that directly and do not imply a native wrapper.
 
 ## Updating Host Manifests
 
@@ -91,7 +87,7 @@ Several host-manifest fields are deferred from v0.1 to avoid shipping empty stub
 
 - **`gemini-extension.json`**: `mcpServers` and `excludeTools` — added when the first Litestar MCP server ships (v0.2).
 - **`.claude-plugin/plugin.json`**: `mcpServers` — same as above.
-- **`.opencode/plugins/litestar-skills.js`**: currently a minimal `export default {}` stub. Real `@opencode-ai/plugin` integration may land if programmatic registration proves necessary; OpenCode's native `.claude/skills/` + `.agents/skills/` discovery covers v0.1 needs.
+- **`.opencode/plugins/litestar.js`**: currently a minimal `export default {}` stub. Real `@opencode-ai/plugin` integration may land if programmatic registration proves necessary; OpenCode's native `.claude/skills/` + `.agents/skills/` discovery covers v0.1 needs.
 
 When adding any of the above, update both the manifest and this section.
 

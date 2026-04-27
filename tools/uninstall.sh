@@ -8,7 +8,7 @@
 set -euo pipefail
 
 VERSION="0.1.2"
-PLUGIN_NAME="litestar-skills"
+PLUGIN_NAME="litestar"
 REPO_SLUG="litestar-org/litestar-skills"
 
 # =============================================================================
@@ -144,7 +144,7 @@ import json, sys, os
 path = sys.argv[1]
 with open(path) as f:
     data = json.load(f)
-plugins = [p for p in data.get("plugins", []) if p.get("name") != "litestar-skills"]
+plugins = [p for p in data.get("plugins", []) if p.get("name") != "litestar"]
 data["plugins"] = plugins
 with open(path, "w") as f:
     json.dump(data, f, indent=2)
@@ -201,7 +201,7 @@ PYEOF
 ${BOLD}Next step (inside Claude Code):${NC}
 
   /plugin uninstall ${PLUGIN_NAME}
-  /plugin marketplace remove litestar-marketplace
+  /plugin marketplace remove litestar
 
 CLAUDE_INSTRUCTIONS
     STATUSES+=("claude:instructions-printed")
@@ -214,7 +214,7 @@ uninstall_cursor() {
 
 Remove the Remote Rule in Cursor:
 
-  Cursor → Settings → Rules → Delete the litestar-skills rule
+  Cursor → Settings → Rules → Delete the litestar rule
 
 If you cloned the skills/ tree into .agents/skills/ or .cursor/skills/,
 remove those directories manually.

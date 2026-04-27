@@ -61,7 +61,7 @@ detect_env() {
     fi
     # Pure-bash fallback: emit minimal JSON with intro only.
     printf '{"detected_skills":[],"context":%s,"project_root":%s}\n' \
-        "\"$(_json_escape "litestar-skills loaded.")\"" \
+        "\"$(_json_escape "litestar loaded.")\"" \
         "\"$(_json_escape "$project_root")\""
 }
 

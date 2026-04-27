@@ -73,6 +73,11 @@ SHIPPED_ROOT_FILES = ("AGENTS.md", "CONTRIBUTING.md", "README.md", "GEMINI.md")
 MAX_DESCRIPTION_CHARS = 1024
 
 REQUIRED_SECTIONS = ("workflow", "guardrails", "validation", "example")
+SKILL_DESCRIPTION_PREFIX_PATTERN = re.compile(r"^(?:Auto-activate for|Use when)\b")
+SKILL_DESCRIPTION_PROCESS_SUMMARY_PATTERN = re.compile(
+    r"\b(?:Produces|Provides|Generates|Creates|Builds|Outputs|Returns)\b",
+    re.IGNORECASE,
+)
 
 # Match `<tag>` for each required section.
 _XML_TAG_PATTERNS = {name: re.compile(rf"<{name}\b", re.IGNORECASE) for name in REQUIRED_SECTIONS}
@@ -91,40 +96,14 @@ _H2_HEADING_PATTERNS = {
 
 LINK_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
-# Match references to the framework authoring tree. A "leak" is a shipped-
-# content file citing a path that only exists in the authoring workspace
-# (``.agents/patterns.md``, ``.agents/knowledge/...``, ``.agents/specs/...``,
-# ``.agents/archive/...``, ``.agents/plans/...``, ``.agents/research/...``,
-# ``.agents/flows.md``, ``.agents/product.md``, ``.agents/product-guidelines.md``,
-# ``.agents/workflow.md``, ``.agents/tech-stack.md``, ``.agents/index.md``,
-# ``.agents/beads.json``, ``.agents/setup-state.json``, ``.agents/code-styleguides/``,
-# ``.agents/backlog/``). These never exist on a user install.
-#
-# Benign mentions (prose about the Flow authoring convention, the user-install
-# ``.agents/skills/`` or ``.agents/plugins/`` convention paths, or a bare
-# ``.agents/`` directory reference) are allowed. The lookbehind rejects alnum/
-# underscore prefixes so filesystem paths like ``foo_.agents/`` are not
-# flagged.
-_AUTHORING_TREE_SUBPATHS = (
-    "patterns.md",
-    "knowledge/",
-    "specs/",
-    "archive/",
-    "plans/",
-    "research/",
-    "flows.md",
-    "product.md",
-    "product-guidelines.md",
-    "workflow.md",
-    "tech-stack.md",
-    "index.md",
-    "beads.json",
-    "setup-state.json",
-    "code-styleguides/",
-    "backlog/",
-)
-_leak_targets = "|".join(re.escape(p) for p in _AUTHORING_TREE_SUBPATHS)
-AGENTS_LEAK_PATTERN = re.compile(rf"(?<![A-Za-z0-9_])\.agents/(?:{_leak_targets})")
+# Match any shipped-content reference to a ``.agents/`` path, then allow only
+# host-owned convention paths. This defaults new framework authoring paths to
+# violations instead of requiring each future ``.agents/<name>`` file to be
+# added to a deny-list. The lookbehind rejects alnum/underscore prefixes so
+# filesystem paths like ``foo_.agents/`` are not flagged.
+AGENTS_PATH_PATTERN = re.compile(r"(?<![A-Za-z0-9_])\.agents/(?P<suffix>[^\s)`'\"<>,]*)")
+_ALLOWED_AGENTS_PATH_PREFIXES = ("skills", "plugins")
+_ALLOWED_AGENTS_LITERAL_SUFFIXES = frozenset({"", "*"})
 
 # Forbidden vocabulary in shipped content. These tokens leak internal Flow
 # workflow taxonomy, codenames from non-public canonical apps, or machine-
@@ -255,6 +234,19 @@ def _check_description(desc: object, path: Path, line: int) -> list[Violation]:
     return out
 
 
+def _check_skill_description(desc: object, path: Path, line: int) -> list[Violation]:
+    out = _check_description(desc, path, line)
+    if not isinstance(desc, str) or not desc.strip():
+        return out
+    if not SKILL_DESCRIPTION_PREFIX_PATTERN.match(desc):
+        out.append(Violation(path, line, "skill description must start with 'Auto-activate for' or 'Use when'"))
+    if "not for" not in desc.lower():
+        out.append(Violation(path, line, "skill description must include a 'Not for ...' negative scope"))
+    if SKILL_DESCRIPTION_PROCESS_SUMMARY_PATTERN.search(desc):
+        out.append(Violation(path, line, "skill description must be trigger-only; remove process summary verbs"))
+    return out
+
+
 def _section_present(body: str, section: str) -> bool:
     if _XML_TAG_PATTERNS[section].search(body):
         return True
@@ -272,7 +264,7 @@ def validate_skill(path: Path) -> list[Violation]:
     fm_name = fm.get("name")
     if fm_name != expected_name:
         violations.append(Violation(path, 1, f"name {fm_name!r} != parent dir {expected_name!r}"))
-    violations.extend(_check_description(fm.get("description"), path, 1))
+    violations.extend(_check_skill_description(fm.get("description"), path, 1))
     for section in REQUIRED_SECTIONS:
         if not _section_present(body, section):
             violations.append(
@@ -425,10 +417,10 @@ def validate_claude_agent(path: Path) -> list[Violation]:
 
 
 def validate_manifest(path: Path) -> list[Violation]:
-    """Validate a host-specific plugin.json manifest.
+    """Validate a host-specific plugin or marketplace manifest.
 
     Enforces host-specific schema requirements (e.g. Claude Code requiring arrays
-    for file lists).
+    for file lists and rejecting Codex-only marketplace keys).
     """
     violations: list[Violation] = []
     try:
@@ -440,8 +432,8 @@ def validate_manifest(path: Path) -> list[Violation]:
     host_dir = path.parent.name
     is_claude = host_dir == ".claude-plugin"
 
-    # Claude Code specific rules
-    if is_claude:
+    # Claude Code plugin manifest rules.
+    if is_claude and path.name == "plugin.json":
         for field in ("agents", "skills", "commands"):
             val = data.get(field)
             if val is not None and not isinstance(val, list):
@@ -452,6 +444,21 @@ def validate_manifest(path: Path) -> list[Violation]:
                         f"Claude manifest {field!r} field must be an array for maximum reliability",
                     )
                 )
+
+    # Claude Code marketplace schema rejects Codex-style policy fields.
+    if is_claude and path.name == "marketplace.json":
+        plugins = data.get("plugins")
+        if isinstance(plugins, list):
+            plugins_list = cast("list[object]", plugins)
+            for index, plugin in enumerate(plugins_list):
+                if isinstance(plugin, dict) and "policy" in plugin:
+                    violations.append(
+                        Violation(
+                            path,
+                            1,
+                            f"Claude marketplace plugins.{index} must not include unrecognized key 'policy'",
+                        )
+                    )
 
     return violations
 
@@ -522,6 +529,13 @@ def validate_codex_agent(path: Path) -> list[Violation]:
     return violations
 
 
+def _is_allowed_agents_path(suffix: str) -> bool:
+    if suffix in _ALLOWED_AGENTS_LITERAL_SUFFIXES:
+        return True
+    first_segment = suffix.split("/", 1)[0]
+    return first_segment in _ALLOWED_AGENTS_PATH_PREFIXES
+
+
 def check_agents_leak(files: Iterable[Path]) -> list[Violation]:
     violations: list[Violation] = []
     for path in files:
@@ -530,7 +544,14 @@ def check_agents_leak(files: Iterable[Path]) -> list[Violation]:
         except (OSError, UnicodeDecodeError):
             continue
         for lineno, line in enumerate(text.splitlines(), start=1):
-            if AGENTS_LEAK_PATTERN.search(line):
+            if match := next(
+                (
+                    candidate
+                    for candidate in AGENTS_PATH_PATTERN.finditer(line)
+                    if not _is_allowed_agents_path(candidate.group("suffix"))
+                ),
+                None,
+            ):
                 snippet = line.strip()
                 if len(snippet) > 80:
                     snippet = snippet[:77] + "..."
@@ -538,7 +559,7 @@ def check_agents_leak(files: Iterable[Path]) -> list[Violation]:
                     Violation(
                         path,
                         lineno,
-                        f"shipped content references framework path: {snippet}",
+                        f"shipped content references framework path {match.group(0)!r}: {snippet}",
                     )
                 )
     return violations
@@ -610,8 +631,13 @@ def iter_codex_agents() -> Iterator[Path]:
 
 
 def iter_manifests() -> Iterator[Path]:
-    for host in (".claude-plugin", ".codex-plugin", ".cursor-plugin"):
-        candidate = REPO_ROOT / host / "plugin.json"
+    for rel in (
+        ".claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        ".codex-plugin/plugin.json",
+        ".cursor-plugin/plugin.json",
+    ):
+        candidate = REPO_ROOT / rel
         if candidate.is_file():
             yield candidate
 
@@ -717,7 +743,7 @@ def iter_all_shipped_files() -> Iterator[Path]:
     # Host-specific install / config files that ship with the plugin.
     for rel in (
         ".opencode/INSTALL.md",
-        ".opencode/plugins/litestar-skills.js",
+        ".opencode/plugins/litestar.js",
         ".codex/INSTALL.md",
         ".codex/config.toml",
     ):

@@ -6,7 +6,7 @@ Inside a Claude Code session:
 
 ```text
 /plugin marketplace add litestar-org/litestar-skills
-/plugin install litestar-skills@litestar-marketplace
+/plugin install litestar@litestar
 ```
 
 The `/plugin` commands run **inside** Claude Code — they cannot be automated from a shell. Claude prompts for any `userConfig` values on first install (none today), then enables the plugin.
@@ -41,8 +41,8 @@ Most users should prefer the marketplace install — Claude handles updates, ver
 ## Updating
 
 ```text
-/plugin marketplace update litestar-marketplace
-/plugin update litestar-skills@litestar-marketplace
+/plugin marketplace update litestar
+/plugin update litestar@litestar
 ```
 
 ## Verifying the install
@@ -53,18 +53,18 @@ In a Claude Code session:
 /status
 ```
 
-Should show `litestar-skills` under enabled plugins. Open a Litestar project (one with `litestar` in `pyproject.toml`) and a fresh session — the SessionStart hook injects a context paragraph naming `litestar-skills:litestar` (plus any other detected skills).
+Should show `litestar` under enabled plugins. Open a Litestar project (one with `litestar` in `pyproject.toml`) and a fresh session — the SessionStart hook injects a context paragraph naming `litestar:litestar` (plus any other detected skills).
 
 ## Restricting capabilities
 
 Claude Code is the only host with a mature allow/ask/deny grammar. See [`docs/policy.md`](../docs/policy.md) for per-rule syntax and managed-settings paths. A drop-in template for org-managed installs lives at [`templates/managed-settings/claude-code.json`](../templates/managed-settings/claude-code.json).
 
-To deny a specific litestar-skills skill:
+To deny a specific litestar skill:
 
 ```json
 {
   "permissions": {
-    "deny": ["Skill(litestar-skills:litestar-deployment)"]
+    "deny": ["Skill(litestar:litestar-deployment)"]
   }
 }
 ```

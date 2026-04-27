@@ -1,6 +1,6 @@
 ---
 name: advanced-alchemy
-description: "Auto-activate for alembic/, alembic.ini, advanced_alchemy imports, and for web frameworks advanced-alchemy ships an extension for: litestar, fastapi, flask, sanic, starlette. Expert knowledge for Advanced Alchemy / SQLAlchemy ORM patterns with deep per-framework session wiring. Produces ORM models with audit trails, repository/service patterns, Alembic migrations, and framework-idiomatic session injection. Use when: defining models with UUIDAuditBase, building repositories and services, configuring the AdvancedAlchemy extension for Litestar/FastAPI/Flask/Sanic/Starlette, creating DTOs, running Alembic migrations, using custom types (EncryptedString, FileObject, PasswordHash, DateTimeUTC), composing filters and pagination, choosing base classes and mixins, configuring dogpile.cache query caching, setting up read/write replica routing, or managing file storage with obstore/fsspec backends. Not for raw SQLAlchemy without Advanced Alchemy abstractions."
+description: "Auto-activate for alembic/, alembic.ini, advanced_alchemy imports, SQLAlchemyAsyncRepositoryService, SQLAlchemyAsyncConfig, UUIDAuditBase, repository_type, service_class, or web framework Advanced Alchemy extensions. Use when working with Advanced Alchemy ORM models, repositories, services, Alembic migrations, filters, pagination, framework session wiring, custom types, caching, replicas, or file storage. Not for raw SQLAlchemy without Advanced Alchemy abstractions."
 ---
 
 # Advanced Alchemy

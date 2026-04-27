@@ -6,26 +6,27 @@ For full litestar-vite reference, see `../../litestar-vite/SKILL.md`.
 
 ```python
 from litestar import Litestar, get
-from litestar_vite import ViteConfig, VitePlugin, PathConfig, TypeGenConfig
-from litestar_vite.inertia import InertiaPlugin, InertiaConfig, InertiaResponse
+from litestar.middleware.session.client_side import CookieBackendConfig
+from litestar_vite import InertiaConfig, PathConfig, TypeGenConfig, ViteConfig, VitePlugin
+from litestar_vite.inertia import InertiaResponse
 
-vite_config = ViteConfig(
-    mode="hybrid",                                          # Inertia mode
-    paths=PathConfig(resource_dir="resources"),
-    types=TypeGenConfig(
-        enabled=True,
-        generate_page_props=True,                           # Inertia page props
-        output="resources/generated",
-    ),
+session_backend = CookieBackendConfig(secret=b"development-only-secret-32-chars")
+
+vite = VitePlugin(
+    config=ViteConfig(
+        mode="hybrid",                                      # Inertia mode
+        paths=PathConfig(resource_dir="resources"),
+        inertia=InertiaConfig(root_template="base.html"),
+        types=TypeGenConfig(
+            generate_page_props=True,                       # Inertia page props
+            output="resources/generated",
+        ),
+    )
 )
 
-inertia_config = InertiaConfig(root_template="base.html")
-
 app = Litestar(
-    plugins=[
-        VitePlugin(config=vite_config),
-        InertiaPlugin(config=inertia_config),
-    ],
+    plugins=[vite],
+    middleware=[session_backend.middleware],
 )
 ```
 

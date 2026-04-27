@@ -208,13 +208,12 @@ class MyPlugin(InitPluginProtocol):
 from litestar_vite import ViteConfig, VitePlugin, PathConfig, TypeGenConfig
 
 vite_config = ViteConfig(
-    mode="spa",  # spa, template, htmx, hybrid, framework
+    mode="spa",  # spa, template, hybrid, ssr, ssg, external
     paths=PathConfig(
         resource_dir="src",
         bundle_dir="dist",
     ),
     types=TypeGenConfig(
-        enabled=True,
         generate_sdk=True,
         generate_routes=True,
         generate_schemas=True,
@@ -228,12 +227,17 @@ app = Litestar(plugins=[VitePlugin(config=vite_config)])
 ## Inertia Integration
 
 ```python
-from litestar_vite.inertia import InertiaPlugin, InertiaConfig, InertiaResponse
+from litestar_vite import InertiaConfig, ViteConfig, VitePlugin
+from litestar_vite.inertia import InertiaResponse
 
 app = Litestar(
     plugins=[
-        VitePlugin(config=vite_config),
-        InertiaPlugin(config=InertiaConfig(root_template="base.html")),
+        VitePlugin(
+            config=ViteConfig(
+                mode="hybrid",
+                inertia=InertiaConfig(root_template="base.html"),
+            )
+        ),
     ],
 )
 

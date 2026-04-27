@@ -23,8 +23,8 @@ set -euo pipefail
 VERSION="0.1.2"
 REPO_URL="https://github.com/litestar-org/litestar-skills"
 REPO_SLUG="litestar-org/litestar-skills"
-MARKETPLACE_NAME="litestar-marketplace"
-PLUGIN_NAME="litestar-skills"
+MARKETPLACE_NAME="litestar"
+PLUGIN_NAME="litestar"
 
 # =============================================================================
 # Formatting
@@ -257,15 +257,15 @@ install_codex() {
         python3 - "$marketplace" "$target" <<'PYEOF'
 import json, sys, os
 path, plugin_path = sys.argv[1], sys.argv[2]
-data = {"name": "litestar-marketplace", "plugins": []}
+data = {"name": "litestar", "plugins": []}
 if os.path.exists(path):
     try:
         with open(path) as f: data = json.load(f)
     except Exception: pass
-data.setdefault("name", "litestar-marketplace")
+data.setdefault("name", "litestar")
 plugins = data.setdefault("plugins", [])
-plugins = [p for p in plugins if p.get("name") != "litestar-skills"]
-plugins.append({"name": "litestar-skills", "source": plugin_path})
+plugins = [p for p in plugins if p.get("name") != "litestar"]
+plugins.append({"name": "litestar", "source": plugin_path})
 data["plugins"] = plugins
 os.makedirs(os.path.dirname(path), exist_ok=True)
 with open(path, "w") as f: json.dump(data, f, indent=2)

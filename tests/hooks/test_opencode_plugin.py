@@ -1,4 +1,4 @@
-"""Smoke tests for .opencode/plugins/litestar-skills.js.
+"""Smoke tests for .opencode/plugins/litestar.js.
 
 These tests exercise the plugin module in a Node subprocess, asserting:
 
@@ -23,7 +23,7 @@ from typing import Any
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PLUGIN_PATH = REPO_ROOT / ".opencode" / "plugins" / "litestar-skills.js"
+PLUGIN_PATH = REPO_ROOT / ".opencode" / "plugins" / "litestar.js"
 
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node not available")
 
@@ -91,8 +91,8 @@ def test_transform_pushes_reminder(litestar_cwd: Path) -> None:
     system: list[str] = out.get("system", [])
     assert isinstance(system, list)
     assert len(system) == 1
-    assert "litestar-skills:litestar" in system[0]
-    assert "litestar-skills:sqlspec" in system[0]
+    assert "litestar:litestar" in system[0]
+    assert "litestar:sqlspec" in system[0]
 
 
 def test_transform_noops_when_output_shape_unrecognised(tmp_path: Path) -> None:
@@ -112,7 +112,7 @@ def test_managed_config_disabled_plugins_returns_empty(tmp_path: Path) -> None:
     out = _run_node(
         """
         const handlers = await mod.default({
-            config: { managedConfig: { disabledPlugins: ['litestar-skills'] } }
+            config: { managedConfig: { disabledPlugins: ['litestar'] } }
         });
         process.stdout.write(JSON.stringify({keys: Object.keys(handlers)}));
         """,
@@ -138,7 +138,7 @@ def test_managed_config_allowed_plugins_includes_us(tmp_path: Path) -> None:
     out = _run_node(
         """
         const handlers = await mod.default({
-            config: { managedConfig: { allowedPlugins: ['litestar-skills'] } }
+            config: { managedConfig: { allowedPlugins: ['litestar'] } }
         });
         process.stdout.write(JSON.stringify({keys: Object.keys(handlers)}));
         """,

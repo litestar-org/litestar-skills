@@ -1,6 +1,6 @@
 # Policy & Permissions Reference
 
-Per-host quick reference for restricting what `litestar-skills` (and any other plugin) can do. Each host has different enforcement primitives — this page documents what each one supports today and what we ship as opinionated defaults.
+Per-host quick reference for restricting what the `litestar` plugin (and any other plugin) can do. Each host has different enforcement primitives — this page documents what each one supports today and what we ship as opinionated defaults.
 
 > **Asymmetry warning.** Claude Code is the only host with a mature allow/ask/deny grammar plus org-level managed settings. Gemini ships denylist-only via `excludeTools`. OpenCode has a tri-state `permission` block. Cursor and Codex have no public deny grammar — restriction is uninstall-only. Don't expect uniform enforcement across hosts.
 
@@ -34,13 +34,13 @@ Per-host quick reference for restricting what `litestar-skills` (and any other p
 
 Evaluation order is **deny → ask → allow**, first match wins.
 
-**Example — minimal `.claude/settings.json` (project) that's strict by default but lets the litestar-skills hooks run:**
+**Example — minimal `.claude/settings.json` (project) that's strict by default but lets the litestar hooks run:**
 
 ```json
 {
   "permissions": {
     "allow": [
-      "Skill(litestar-skills:*)",
+      "Skill(litestar:*)",
       "Bash(make *)",
       "Bash(uv *)",
       "Bash(bun *)"
@@ -90,14 +90,14 @@ Evaluation order is **deny → ask → allow**, first match wins.
 
 A copy-pasteable starting point lives at [`templates/managed-settings/claude-code.json`](../templates/managed-settings/claude-code.json).
 
-**To deny a specific litestar-skills capability for an org:**
+**To deny a specific litestar capability for an org:**
 
 ```json
 {
   "permissions": {
     "deny": [
-      "Skill(litestar-skills:litestar-deployment)",
-      "Skill(litestar-skills:litestar-build)"
+      "Skill(litestar:litestar-deployment)",
+      "Skill(litestar:litestar-build)"
     ]
   },
   "allowManagedPermissionRulesOnly": true
@@ -114,7 +114,7 @@ Run `/status` in a Claude Code session to inspect the active layers.
 
 **Syntax:** `tool(arg)` — argument is a glob pattern.
 
-**Defaults shipped by litestar-skills** (`gemini-extension.json`):
+**Defaults shipped by the Litestar extension** (`gemini-extension.json`):
 
 ```json
 {
@@ -181,7 +181,7 @@ tools:
 
 **Managed-config layer:** deployed via `ai.opencode.managed` PayloadType (macOS `.mobileconfig` — Jamf, Kandji, FleetDM). Loaded last; highest precedence. Cannot be overridden.
 
-**The `litestar-skills` OpenCode plugin honors `managedConfig.disabledPlugins` and `managedConfig.allowedPlugins`** — early-returns `{}` if disabled. Org policy wins.
+**The `litestar` OpenCode plugin honors `managedConfig.disabledPlugins` and `managedConfig.allowedPlugins`** — early-returns `{}` if disabled. Org policy wins.
 
 ---
 
@@ -189,7 +189,7 @@ tools:
 
 **Public deny grammar:** none documented as of Codex CLI 0.125. The `interface.capabilities` array on plugin manifests is metadata, not enforcement.
 
-**To restrict litestar-skills on Codex:** uninstall the plugin (`codex plugin marketplace remove litestar-marketplace`) or omit it from your marketplace allowlist. There is no per-plugin tool denylist.
+**To restrict `litestar` on Codex:** uninstall the plugin (`codex plugin marketplace remove litestar`) or omit it from your marketplace allowlist. There is no per-plugin tool denylist.
 
 ---
 
@@ -197,7 +197,7 @@ tools:
 
 **Public deny grammar:** none documented. Cursor relies on its built-in trust model and manual marketplace review.
 
-**To restrict litestar-skills on Cursor:** uninstall the plugin via the Cursor command palette (`/remove-plugin`), or — for Team/Enterprise installs — use a private team marketplace with central governance.
+**To restrict `litestar` on Cursor:** uninstall the plugin via the Cursor command palette (`/remove-plugin`), or — for Team/Enterprise installs — use a private team marketplace with central governance.
 
 ---
 

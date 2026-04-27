@@ -373,7 +373,7 @@ __all__ = ("controllers", "schemas", "services")
 
 ### `guards.py` (if auth selected)
 
-Generate the appropriate guard function based on the user's auth choice. Use the patterns from `skills/litestar/references/guards.md`.
+Generate the appropriate guard function based on the user's auth choice. Use the patterns from `skills/litestar-auth-guards/references/guards.md`.
 
 ### `jobs/__init__.py` (if background jobs)
 

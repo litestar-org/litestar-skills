@@ -46,7 +46,14 @@ Ask the user each of these, one at a time. Record the answers as variables to dr
    - `advanced-alchemy-session` (AA + PG stack)
    Store as `{channels_backend}`.
 
-9. **Frontend approach** — one of: `none` (API-only), `htmx-jinja`, `inertia-react`, `inertia-vue`, `spa-react`, `spa-vue`, `spa-svelte`, `spa-angular`. Store as `{frontend}`.
+9. **Frontend approach** — one of:
+   - `none` (API-only)
+   - `template-jinja` (server-rendered Jinja + Vite-bundled assets)
+   - `htmx-jinja` (Jinja + `litestar-htmx` + Vite-bundled assets)
+   - `inertia-react`, `inertia-react-jinja`, `inertia-vue`, `inertia-vue-jinja`
+   - `spa-react`, `spa-vue`, `spa-svelte`, `spa-angular`
+   - `ssr-nuxt`, `ssr-sveltekit`, `ssg-astro`, `external-angular-cli`
+   Store as `{frontend}`.
 
 10. **ASGI server** — `granian` (default) or `uvicorn`. Store as `{asgi_server}`.
 
@@ -78,14 +85,17 @@ Base layout (universal, independent of stack choices):
 │   │   └── migrations/         # Alembic (advanced-alchemy / raw-sa) OR sqlspec migrations
 │   └── domain/
 │       └── {example_domain}/   # controllers.py, services.py, schemas.py, guards.py — branched per {data_access}
-├── src/js/                     # Only if {frontend} != "none"
+├── resources/                  # Template / HTMX / Inertia frontend source root
+├── src/js/web/                 # SPA frontend source root when following litestar-fullstack-spa
+├── app/ or framework dir        # Nuxt / SvelteKit / Astro / Angular CLI source root per example
 ├── tests/
 │   ├── conftest.py             # pytest-databases or manual fixtures per {testing}
 │   ├── unit/
 │   └── integration/
 ├── pyproject.toml              # uv + hatchling + ruff + mypy + pyright + bump-my-version
 ├── package.json                # bun — only if {frontend} != "none"
-├── vite.config.ts              # litestar-vite-plugin — only if {frontend} != "none"
+├── vite.config.ts              # SPA / template / HTMX / Inertia Vite entry
+├── astro.config.mjs            # Astro only; uses litestar-vite-plugin/astro
 ├── Makefile                    # Canonical make install / make check / make test / make lint targets
 ├── Dockerfile / railway.toml / service.yaml  # Per {deploy}
 └── README.md
@@ -125,13 +135,18 @@ Each branch below is driven by the answers from Step 1. Do NOT generate patterns
 
 ### Channels backend ({channels_backend})
 
-Only wire a `ChannelsPlugin` if the user picked a backend. Import path is per-branch — see `skills/litestar/references/websockets.md` for exact symbols.
+Only wire a `ChannelsPlugin` if the user picked a backend. Import path is per-branch — see `skills/litestar-realtime/references/websockets.md` for exact symbols.
 
 ### Frontend ({frontend})
 
-- `none`: no `src/js/`, no Vite plugin.
-- `htmx-jinja`: add `TemplatesPlugin` with Jinja; add `hx-` attributes to scaffold pages.
-- `inertia-*` / `spa-*`: add `VitePlugin` + frontend framework scaffold under `src/js/`.
+- `none`: no frontend source tree, no `package.json`, no Vite plugin.
+- `template-jinja`: add `TemplateConfig(directory=..., engine=JinjaTemplateEngine)` and one `VitePlugin(config=ViteConfig(mode="template", paths=PathConfig(resource_dir="resources"), ...))`. Use template helpers from `litestar-vite`; do not add `litestar-htmx`.
+- `htmx-jinja`: use the same Jinja `TemplateConfig` + `VitePlugin(mode="template")`, then register `HTMXPlugin()` and scaffold `hx-*` / `ls-*` templates. The canonical `litestar-vite/examples/jinja-htmx` app uses Litestar template configuration, not a template plugin object.
+- `inertia-*`: configure one `VitePlugin(config=ViteConfig(inertia=InertiaConfig(...), types=TypeGenConfig(output=...), paths=PathConfig(resource_dir="resources", ...)))`. Do not add a second Inertia integration plugin; `VitePlugin` configures the Inertia integration from `ViteConfig.inertia`. Add session middleware and use `@get(..., component="PageName")` / `@post(..., component="PageName")` for page routes. Use `mode="hybrid"` when the app needs an explicit mode; otherwise follow the reference app auto-detection.
+- `spa-react` / `spa-vue` / `spa-svelte` / `spa-angular`: add `VitePlugin(config=ViteConfig(mode="spa", ...))`, a framework-specific `vite.config.ts`, and a client app under `src/js/web` or the chosen frontend root. Keep `bundle_dir`, `hotFile`, `asset_url`, and TypeGen output aligned between Python and TypeScript.
+- `ssr-nuxt` / `ssr-sveltekit`: use `ViteConfig(mode="ssr", ...)`; the JS framework owns rendering and Litestar serves/proxies the API.
+- `ssg-astro`: use `ViteConfig(mode="ssg", ...)` plus `astro.config.mjs` with `litestar-vite-plugin/astro`; no root `vite.config.ts` is required.
+- `external-angular-cli`: use `ViteConfig(mode="external", ...)` and the Angular CLI project layout. Do not force the Analog Vite example when the user picked Angular CLI.
 
 ### ASGI server ({asgi_server})
 

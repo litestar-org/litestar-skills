@@ -1,13 +1,13 @@
 ---
 name: polyfactory
-description: "Auto-activate for `polyfactory` imports, `ModelFactory`, `DataclassFactory`, `MsgspecFactory`, `AttrsFactory`, `Use`, `Fixture`, `register_fixture`, `polyfactory.pytest_plugin`. The first-party Litestar-org library for typed mock-data factories. Use when: generating fake Pydantic/dataclass/msgspec/attrs/TypedDict instances for tests, registering factories as pytest fixtures, customizing fields via `Use(...)` / `Fixture(...)`, pinning determinism via `__random_seed__`, parametrizing handler tests over `coverage()`, or feeding TestClient/AsyncTestClient bodies. Produces typed factories that respect msgspec.Meta / Pydantic Field / attrs validators, plus batch/coverage helpers. Pairs with `litestar-skills:litestar-testing` for the request side. Not for production seeding (write a deterministic seeder) or property-based testing (use Hypothesis — polyfactory generates one realistic value per call, not an input space)."
+description: "Auto-activate for polyfactory imports, ModelFactory, DataclassFactory, MsgspecFactory, AttrsFactory, Use, Fixture, register_fixture, polyfactory.pytest_plugin, __random_seed__, or coverage(). Use when generating typed mock data for tests or pytest fixtures. Not for production seeding or property-based testing."
 ---
 
 # polyfactory
 
 Polyfactory is a typed mock-data factory library: declare `ModelFactory[T]` (or `DataclassFactory`, `MsgspecFactory`, `AttrsFactory`, `TypedDictFactory`) and `.build()` returns a fully-populated, validation-passing instance of `T`. Because the factory inspects the model's annotations and constraints, generated data already respects `msgspec.Meta` ranges, Pydantic `Field` constraints, and attrs validators — no additional fixtures needed for happy-path tests.
 
-In Litestar projects, polyfactory's pytest plugin is the canonical way to feed `TestClient.post(...)` / `AsyncTestClient.put(...)` payloads. The companion skill `litestar-skills:litestar-testing` covers the request side.
+In Litestar projects, polyfactory's pytest plugin is the canonical way to feed `TestClient.post(...)` / `AsyncTestClient.put(...)` payloads. The companion skill `litestar:litestar-testing` covers the request side.
 
 ## Code Style Rules
 

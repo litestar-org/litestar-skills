@@ -16,7 +16,7 @@
 
   "permissions": {
     "allow": [
-      "Skill(litestar-skills:*)",
+      "Skill(litestar:*)",
       "Bash(make *)",
       "Bash(uv *)",
       "Bash(bun *)"

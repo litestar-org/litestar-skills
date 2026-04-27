@@ -4,7 +4,7 @@ Dishka is an explicit-scope DI framework for Python that gives you precise contr
 
 **When to use Dishka vs Litestar's built-in `Provide`:**
 
-- **Use `Provide`** (Litestar's default) for simple apps with a handful of injected services, no cross-request singletons, and no WebSocket session scope. It's zero-dep and composable with Litestar's controller-level `dependencies` dict. See [`../../litestar/references/di.md`](../../litestar/references/di.md) for the full guide.
+- **Use `Provide`** (Litestar's default) for simple apps with a handful of injected services, no cross-request singletons, and no WebSocket session scope. It's zero-dep and composable with Litestar's controller-level `dependencies` dict. See [`../../litestar-di/references/di.md`](../../litestar-di/references/di.md) for the full guide.
 - **Use Dishka** when you need explicit scope control (APP vs REQUEST vs SESSION), multiple provider classes with lifecycle hooks, or the same provider graph across Litestar and background workers (SAQ, Celery). Dishka also makes provider graphs testable in isolation via `make_async_container`.
 
 ## Provider overview — 3 providers, 3 scopes
@@ -105,7 +105,7 @@ __all__ = ["Inject", "inject"]
 | `Scope.APP` | `ChannelsBackend`, long-lived clients, config objects, caches | Created at app startup, lives until process exit |
 | `Scope.SESSION` | WebSocket connections — Dishka manages a child container per WS session | Created at `ws.accept()`, released at `ws.close()` |
 
-`Scope.SESSION` is managed internally by Dishka's `with_websocket_request` context manager — you typically don't register `Scope.SESSION` providers manually. See [`../../litestar/references/websockets.md`](../../litestar/references/websockets.md) §Dishka DI in WS handlers for details.
+`Scope.SESSION` is managed internally by Dishka's `with_websocket_request` context manager — you typically don't register `Scope.SESSION` providers manually. See [`../../litestar-realtime/references/websockets.md`](../../litestar-realtime/references/websockets.md) §Dishka DI in WS handlers for details.
 
 ## Full provider example
 
@@ -223,14 +223,14 @@ def create_app() -> Litestar:
 
 ## When Dishka is overkill
 
-Dishka's explicit scope control is most valuable when you have multiple provider classes, APP-scoped singletons, and WebSocket SESSION scope in the same app. For simpler setups — a handful of handlers, one DB pool, no pub/sub backend — Litestar's built-in `Provide` is the lighter choice. It requires no extra dependency, composes naturally with controller-level `dependencies` dicts, and keeps the DI graph implicit rather than explicit. See [`../../litestar/references/di.md`](../../litestar/references/di.md) for the full `Provide` reference.
+Dishka's explicit scope control is most valuable when you have multiple provider classes, APP-scoped singletons, and WebSocket SESSION scope in the same app. For simpler setups — a handful of handlers, one DB pool, no pub/sub backend — Litestar's built-in `Provide` is the lighter choice. It requires no extra dependency, composes naturally with controller-level `dependencies` dicts, and keeps the DI graph implicit rather than explicit. See [`../../litestar-di/references/di.md`](../../litestar-di/references/di.md) for the full `Provide` reference.
 
 ## Cross-references
 
 - [`service-patterns.md`](service-patterns.md) — `SQLSpecAsyncService` base, `db_manager.get_sql`, variadic `*filters`, `create_filter_dependencies()`
 - [`observability.md`](observability.md) — `ObservabilityConfig`, `StatementObserver`, SQL-level event broadcasting
-- [`../../litestar/references/di.md`](../../litestar/references/di.md) — Litestar built-in `Provide`; when to use it vs Dishka
-- [`../../litestar/references/websockets.md`](../../litestar/references/websockets.md) — `with_websocket_request`, Dishka `Scope.SESSION` in WS handlers
+- [`../../litestar-di/references/di.md`](../../litestar-di/references/di.md) — Litestar built-in `Provide`; when to use it vs Dishka
+- [`../../litestar-realtime/references/websockets.md`](../../litestar-realtime/references/websockets.md) — `with_websocket_request`, Dishka `Scope.SESSION` in WS handlers
 
 ## Shared Styleguide Baseline
 

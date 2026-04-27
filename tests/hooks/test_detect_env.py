@@ -73,6 +73,71 @@ def import_only_project(tmp_path: Path) -> Path:
     return tmp_path
 
 
+@pytest.fixture
+def routing_project(tmp_path: Path) -> Path:
+    src = tmp_path / "src" / "myapp"
+    src.mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "api"\ndependencies = ["litestar"]\n')
+    (src / "users.py").write_text(
+        "from litestar import Controller, get, post\n\n"
+        "class UserController(Controller):\n"
+        '    path = "/users"\n\n'
+        '    @get("/")\n'
+        "    async def list_users(self) -> list[str]:\n"
+        "        return []\n"
+    )
+    return tmp_path
+
+
+@pytest.fixture
+def realtime_project(tmp_path: Path) -> Path:
+    src = tmp_path / "src" / "myapp"
+    src.mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "api"\ndependencies = ["litestar"]\n')
+    (src / "stream.py").write_text(
+        "from litestar import websocket\n"
+        "from litestar.channels import ChannelsPlugin\n\n"
+        '@websocket("/ws")\n'
+        "async def ws(socket, channels: ChannelsPlugin) -> None:\n"
+        "    await socket.accept()\n"
+    )
+    return tmp_path
+
+
+@pytest.fixture
+def settings_project(tmp_path: Path) -> Path:
+    src = tmp_path / "src" / "myapp"
+    src.mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "api"\ndependencies = ["litestar"]\n')
+    (src / "settings.py").write_text(
+        "from dataclasses import dataclass, field\n"
+        "from functools import lru_cache\n"
+        "from os import getenv\n\n"
+        "def get_env(key: str, default: str) -> str:\n"
+        "    return getenv(key, default)\n\n"
+        "@dataclass(frozen=True)\n"
+        "class AppSettings:\n"
+        '    name: str = field(default_factory=lambda: get_env("APP_NAME", "api"))\n\n'
+        "@lru_cache(maxsize=1)\n"
+        "def get_settings() -> AppSettings:\n"
+        "    return AppSettings()\n"
+    )
+    return tmp_path
+
+
+@pytest.fixture
+def htmx_project(tmp_path: Path) -> Path:
+    src = tmp_path / "src" / "myapp"
+    src.mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "web"\ndependencies = ["litestar", "litestar-htmx"]\n')
+    (src / "app.py").write_text(
+        "from litestar import Litestar\n"
+        "from litestar_htmx import HTMXPlugin\n\n"
+        "app = Litestar(route_handlers=[], plugins=[HTMXPlugin()])\n"
+    )
+    return tmp_path
+
+
 def test_skill_map_exists() -> None:
     """skill-map.json must exist and be valid JSON with required structure."""
     assert SKILL_MAP.exists(), f"skill-map.json missing: {SKILL_MAP}"
@@ -87,7 +152,7 @@ def test_empty_project_detects_nothing(tmp_project: Path) -> None:
     out = _run(tmp_project)
     assert out["detected_skills"] == []
     assert isinstance(out["context"], str)
-    assert "litestar-skills loaded" in out["context"]
+    assert "litestar loaded" in out["context"]
 
 
 def test_litestar_pyproject_dep_detected(litestar_project: Path) -> None:
@@ -95,7 +160,7 @@ def test_litestar_pyproject_dep_detected(litestar_project: Path) -> None:
     out = _run(litestar_project)
     assert "litestar" in out["detected_skills"]
     assert "msgspec" in out["detected_skills"]
-    assert "litestar-skills:litestar" in out["context"]
+    assert "litestar:litestar" in out["context"]
 
 
 def test_litestar_plus_sqlspec(litestar_sqlspec_project: Path) -> None:
@@ -104,8 +169,8 @@ def test_litestar_plus_sqlspec(litestar_sqlspec_project: Path) -> None:
     assert "litestar" in out["detected_skills"]
     assert "sqlspec" in out["detected_skills"]
     ctx = str(out["context"])
-    assert "litestar-skills:litestar" in ctx
-    assert "litestar-skills:sqlspec" in ctx
+    assert "litestar:litestar" in ctx
+    assert "litestar:sqlspec" in ctx
 
 
 def test_dockerfile_triggers_deployment(deployment_project: Path) -> None:
@@ -118,6 +183,35 @@ def test_python_import_signal(import_only_project: Path) -> None:
     """A .py file importing litestar should trigger the skill even without pyproject.toml."""
     out = _run(import_only_project)
     assert "litestar" in out["detected_skills"]
+
+
+def test_controller_signal_triggers_routing_skill(routing_project: Path) -> None:
+    """Controller and route decorators should trigger the focused routing skill."""
+    out = _run(routing_project)
+    assert "litestar" in out["detected_skills"]
+    assert "litestar-routing" in out["detected_skills"]
+    assert "litestar:litestar-routing" in str(out["context"])
+
+
+def test_websocket_signal_triggers_realtime_skill(realtime_project: Path) -> None:
+    """WebSocket and Channels usage should trigger the focused realtime skill."""
+    out = _run(realtime_project)
+    assert "litestar-realtime" in out["detected_skills"]
+    assert "litestar:litestar-realtime" in str(out["context"])
+
+
+def test_settings_signal_triggers_settings_skill(settings_project: Path) -> None:
+    """Litestar env-loading settings modules should trigger the focused settings skill."""
+    out = _run(settings_project)
+    assert "litestar-settings" in out["detected_skills"]
+    assert "litestar:litestar-settings" in str(out["context"])
+
+
+def test_htmx_signal_triggers_htmx_skill(htmx_project: Path) -> None:
+    """litestar_htmx imports should trigger the focused HTMX skill."""
+    out = _run(htmx_project)
+    assert "litestar-htmx" in out["detected_skills"]
+    assert "litestar:litestar-htmx" in str(out["context"])
 
 
 def test_disable_env_var_short_circuits(litestar_project: Path) -> None:
@@ -138,7 +232,7 @@ def test_context_includes_static_intro(litestar_project: Path) -> None:
     """Static intro must always be included when at least one skill matches."""
     out = _run(litestar_project)
     ctx = str(out["context"])
-    assert "litestar-skills loaded" in ctx
+    assert "litestar loaded" in ctx
 
 
 def test_pyproject_section_signal(tmp_path: Path) -> None:

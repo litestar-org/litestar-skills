@@ -1,4 +1,4 @@
-"""Canonical Python detector for litestar-skills hooks.
+"""Canonical Python detector for Litestar skill hooks.
 
 Read by hooks/lib/detect-env.sh and hooks/lib/detect-env.ps1 (the .js variant
 is a separate Node ESM port for OpenCode reuse — see detect-env.js).
@@ -41,6 +41,7 @@ def detect(root: Path, map_path: Path) -> dict[str, object]:
     pyproject_deps: dict[str, str] = {}
     pyproject_sections: list[tuple[str, str]] = []
     python_imports: dict[str, str] = {}
+    python_regexes: list[tuple[re.Pattern[str], str]] = []
     file_globs: list[tuple[str, str]] = []
     for m in matchers:
         skill = m["skill"]
@@ -52,6 +53,11 @@ def detect(root: Path, map_path: Path) -> dict[str, object]:
                 pyproject_sections.append((sig["section"], skill))
             elif t == "python_import":
                 python_imports[sig["module"]] = skill
+            elif t == "python_regex":
+                try:
+                    python_regexes.append((re.compile(sig["pattern"], re.MULTILINE | re.DOTALL), skill))
+                except re.error:
+                    continue
             elif t == "file_glob":
                 file_globs.append((sig["pattern"], skill))
 
@@ -74,7 +80,7 @@ def detect(root: Path, map_path: Path) -> dict[str, object]:
             if re.search(pattern, pyproject_text, re.MULTILINE):
                 detected.add(skill)
 
-    if python_imports:
+    if python_imports or python_regexes:
         patterns = {
             mod: re.compile(
                 rf"^\s*(?:from\s+{re.escape(mod)}(?:\.|\s)|import\s+{re.escape(mod)}(?:\.|\s|$|,))",
@@ -98,6 +104,11 @@ def detect(root: Path, map_path: Path) -> dict[str, object]:
                 if skill in detected:
                     continue
                 if patterns[mod].search(content):
+                    detected.add(skill)
+            for pattern, skill in python_regexes:
+                if skill in detected:
+                    continue
+                if pattern.search(content):
                     detected.add(skill)
 
     for pattern, skill in file_globs:

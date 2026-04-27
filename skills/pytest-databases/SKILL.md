@@ -1,6 +1,6 @@
 ---
 name: pytest-databases
-description: "Auto-activate for pytest_databases imports, conftest.py with database fixtures. Container-based database testing with pytest. Use when: creating PostgreSQL/MySQL/SQLite/Oracle fixtures, Docker test containers, database integration tests, or any pytest database setup. Produces container-based database test fixtures with proper lifecycle management. Not for mocking databases or non-pytest test frameworks."
+description: "Auto-activate for pytest_databases imports, conftest.py database fixtures, Docker-backed PostgreSQL/MySQL/SQLite/Oracle tests, or integration-test database lifecycle. Use when configuring pytest database containers and fixtures. Not for mocked databases or non-pytest test frameworks."
 ---
 
 # pytest-databases

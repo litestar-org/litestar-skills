@@ -135,12 +135,20 @@ export async function detectEnv(projectRoot) {
   const pyprojectDeps = new Map();
   const pyprojectSections = [];
   const pythonImports = new Map();
+  const pythonRegexes = [];
   const fileGlobs = [];
   for (const m of matchers) {
     for (const sig of m.signals || []) {
       if (sig.type === "pyproject_dep") pyprojectDeps.set(sig.name.toLowerCase(), m.skill);
       else if (sig.type === "pyproject_section") pyprojectSections.push([sig.section, m.skill]);
       else if (sig.type === "python_import") pythonImports.set(sig.module, m.skill);
+      else if (sig.type === "python_regex") {
+        try {
+          pythonRegexes.push([new RegExp(sig.pattern, "ms"), m.skill]);
+        } catch {
+          // Ignore malformed optional signals; validation catches shipped map errors.
+        }
+      }
       else if (sig.type === "file_glob") fileGlobs.push([sig.pattern, m.skill]);
     }
   }
@@ -166,8 +174,8 @@ export async function detectEnv(projectRoot) {
     }
   }
 
-  // python imports (capped)
-  if (pythonImports.size > 0) {
+  // python imports / regex content signals (capped)
+  if (pythonImports.size > 0 || pythonRegexes.length > 0) {
     const patterns = new Map();
     for (const [mod] of pythonImports) {
       patterns.set(
@@ -189,6 +197,10 @@ export async function detectEnv(projectRoot) {
       for (const [mod, skill] of pythonImports) {
         if (detected.has(skill)) continue;
         if (patterns.get(mod).test(text)) detected.add(skill);
+      }
+      for (const [pattern, skill] of pythonRegexes) {
+        if (detected.has(skill)) continue;
+        if (pattern.test(text)) detected.add(skill);
       }
     }
   }

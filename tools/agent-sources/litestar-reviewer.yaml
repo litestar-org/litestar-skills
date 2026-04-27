@@ -144,10 +144,10 @@ body: |
   Read these before starting review:
 
   - `skills/litestar/SKILL.md` — guardrails + validation checkpoint
-  - `skills/litestar/references/services.md` — repository service patterns (advanced-alchemy branch)
+  - `skills/litestar-data-services/references/services.md` — repository service patterns (advanced-alchemy branch)
   - `skills/sqlspec/references/service-patterns.md` — repository service patterns (sqlspec branch)
-  - `skills/litestar/references/guards.md` — guard patterns
-  - `skills/litestar/references/dto.md` — DTO conventions
-  - `skills/litestar/references/exceptions.md` — error handling patterns
-  - `skills/litestar/references/pagination.md` — paginated response envelopes per stack
+  - `skills/litestar-auth-guards/references/guards.md` — guard patterns
+  - `skills/litestar-dto-openapi/references/dto.md` — DTO conventions
+  - `skills/litestar-exceptions/references/exceptions.md` — error handling patterns
+  - `skills/litestar-data-services/references/pagination.md` — paginated response envelopes per stack
   - `skills/litestar-saq/SKILL.md` — canonical background-work branches
