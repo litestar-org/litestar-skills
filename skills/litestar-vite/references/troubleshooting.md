@@ -17,7 +17,7 @@ See `hmr.md` for the full debug checklist. Quick summary:
 - Hot file path mismatch between Python and JS configs
 - Vite not actually running (check `litestar run` logs)
 - CORS / port mismatch
-- Missing `vite_hmr_client()` in template
+- Missing `vite_hmr()` in template
 
 ## Type Generation Fails
 
@@ -41,7 +41,7 @@ See `hmr.md` for the full debug checklist. Quick summary:
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Page renders as JSON, not HTML | Missing `InertiaPlugin` or `mode != "hybrid"` | Add `InertiaPlugin`; set `mode="hybrid"` |
+| Page renders as JSON, not HTML | `ViteConfig.inertia` missing or route lacks `component=` / Inertia response helper | Add `InertiaConfig(...)` to `ViteConfig`; set `mode="hybrid"` when explicit mode is needed |
 | Type errors on page props | `inertia-pages.json` stale | Re-run `litestar assets generate-types` |
 | First-load works, navigations break | `root_template` missing Inertia head tags | Use Inertia layout pattern in `base.html` |
 

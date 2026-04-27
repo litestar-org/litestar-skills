@@ -1,6 +1,6 @@
 # Vector search with sqlspec
 
-This reference covers similarity search for semantic retrieval and intent classification against embeddings stored in the same transactional database as the application's data. It documents the Oracle `VECTOR_DISTANCE(..., COSINE)` pattern in full (sourced from [oracledb-vertexai-demo](https://github.com/cofin/oracledb-vertexai-demo)) with pgvector cross-reference for PostgreSQL stacks. For the Litestar handler and ADK runner that consume these services, see [`../../litestar/references/ai-serving.md`](../../litestar/references/ai-serving.md).
+This reference covers similarity search for semantic retrieval and intent classification against embeddings stored in the same transactional database as the application's data. It documents the Oracle `VECTOR_DISTANCE(..., COSINE)` pattern in full (sourced from [oracledb-vertexai-demo](https://github.com/cofin/oracledb-vertexai-demo)) with pgvector cross-reference for PostgreSQL stacks. For the Litestar handler and ADK runner that consume these services, see [`../../litestar-ai-serving/references/ai-serving.md`](../../litestar-ai-serving/references/ai-serving.md).
 
 ## Backend support matrix
 
@@ -231,7 +231,7 @@ The `<=>` operator returns cosine distance (0 = identical, 2 = opposite); `1 - (
 
 ## Cross-references
 
-- [`../../litestar/references/ai-serving.md`](../../litestar/references/ai-serving.md) — Litestar handler, ADK Runner wiring, Dishka provider chain, persona-augmented prompts
+- [`../../litestar-ai-serving/references/ai-serving.md`](../../litestar-ai-serving/references/ai-serving.md) — Litestar handler, ADK Runner wiring, Dishka provider chain, persona-augmented prompts
 - [`./service-patterns.md`](./service-patterns.md) — `SQLSpecAsyncService` base, named SQL templates, driver API
 - [`./observability.md`](./observability.md) — SQL broadcast telemetry (applies to embedding inserts if observability is needed)
 

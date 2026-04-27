@@ -2,7 +2,7 @@
   "name": "litestar-skills",
   "version": "0.1.2",
   "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
-  "main": ".opencode/plugins/litestar-skills.js",
+  "main": ".opencode/plugins/litestar.js",
   "type": "module",
   "license": "MIT",
   "author": "Cody Fincher <cofin@litestar.dev>",

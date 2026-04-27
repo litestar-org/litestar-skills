@@ -5,17 +5,15 @@ Full reference for the Python `ViteConfig` family and the JS-side `vite.config.t
 ## ViteConfig
 
 ```python
-from litestar_vite import ViteConfig, PathConfig, RuntimeConfig, TypeGenConfig
+from litestar_vite import InertiaConfig, PathConfig, RuntimeConfig, TypeGenConfig, ViteConfig
 
 ViteConfig(
-    mode="spa",                          # spa | template | htmx | hybrid | framework
+    mode="spa",                          # spa | template | hybrid | ssr | ssg | external
     paths=PathConfig(...),
     runtime=RuntimeConfig(...),
-    types=TypeGenConfig(...),            # optional
-    use_asset_linker=True,
-    use_server_lifespan=True,
+    types=TypeGenConfig(...),            # presence enables type generation
+    inertia=InertiaConfig(...),          # Inertia only
     dev_mode=False,                      # env-toggled; True in dev
-    hot_file="public/hot",               # MUST match vite.config.ts hotFile
 )
 ```
 
@@ -24,29 +22,32 @@ ViteConfig(
 | Option | Default | Description |
 | --- | --- | --- |
 | `root` | `Path.cwd()` | Project root (parent of `vite.config.*`) |
-| `resource_dir` | `"resources"` | Frontend source root |
+| `resource_dir` | `"src"` | Frontend source root |
 | `bundle_dir` | `"public"` | Production build output |
-| `public_dir` | `"public"` | Static files served at `/` |
-| `vite_config` | `"vite.config.ts"` | Path to the JS-side config file |
+| `static_dir` | `"public"` | Static files copied by Vite; adjusted to `<resource_dir>/public` if it would collide with `bundle_dir` |
+| `hot_file` | `"hot"` | Dev-server marker; must match `litestar()` `hotFile` |
+| `asset_url` | `ASSET_URL` or `"/static/"` | Public URL prefix for production assets |
+| `ssr_output_dir` | `None` | SSR bootstrap output directory |
 
 ## RuntimeConfig
 
 | Option | Default | Description |
 | --- | --- | --- |
 | `port` | `5173` | Vite dev server port |
-| `host` | `"localhost"` | Vite dev server host |
+| `host` | `"127.0.0.1"` | Vite dev server host |
 | `protocol` | `"http"` | `"http"` or `"https"` |
-| `hot_reload` | `True` | Enable HMR |
+| `executor` | `None` | JS runtime (`node`, `bun`, `deno`, `yarn`, `pnpm`) |
+| `start_dev_server` | `True` | Start the dev server when `dev_mode=True` |
+| `is_react` | `False` | Enable React Fast Refresh support |
 
 ## TypeGenConfig
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `enabled` | `False` | Master switch |
-| `generate_sdk` | `False` | TypeScript API client |
-| `generate_routes` | `False` | `routes.ts` typed URL builder |
-| `generate_schemas` | `False` | `schemas.ts` from OpenAPI |
-| `generate_page_props` | `False` | Inertia-only — `inertia-pages.json` |
+| `generate_sdk` | `True` | TypeScript API client |
+| `generate_routes` | `True` | `routes.ts` typed URL builder |
+| `generate_schemas` | `True` | `schemas.ts` from OpenAPI |
+| `generate_page_props` | `True` | Inertia-only — `inertia-pages.json`; requires `ViteConfig.inertia` |
 | `output` | `"src/generated"` | Output directory (relative to `paths.root`) |
 
 ## vite.config.ts Contract
@@ -57,9 +58,9 @@ The JS-side plugin (`litestar-vite-plugin` from npm) must agree with `ViteConfig
 import litestar from "litestar-vite-plugin"
 
 litestar({
-  input: ["src/main.tsx", "src/styles.css"],   // matches ViteConfig.resource_dir
-  bundleDir: "...",                             // matches ViteConfig.bundle_dir
-  hotFile: "...",                               // matches ViteConfig.hot_file
+  input: ["src/main.tsx", "src/styles.css"],   // under ViteConfig.paths.resource_dir
+  bundleDir: "...",                             // matches ViteConfig.paths.bundle_dir
+  hotFile: "...",                               // matches ViteConfig.paths.hot_file
   assetUrl: "/static/",                         // matches Vite `base` in prod
 })
 ```

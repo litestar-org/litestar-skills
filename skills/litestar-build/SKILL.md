@@ -1,6 +1,6 @@
 ---
 name: litestar-build
-description: "Auto-activate for `uv build`, `hatch build`, pyapp invocations, bundler scripts, Hatchling force-include config, wheel packaging with bundled frontend assets, PyApp onefile binaries, GitHub Actions matrix workflows, `PYAPP_*` env vars, cargo-zigbuild, python-build-standalone. Produces Hatchling build configs that bundle Vite/Bun output into the wheel, Makefile build graphs (`build-assets` → `build-wheel` → `build-onefile`), PyApp hatch-binary targets, advanced PyApp pipelines with custom bundler and install-dir patching, GitHub Actions CI/release workflows with Python matrix + uv + Bun. Use when: building a Litestar wheel with embedded frontend assets, packaging an app as a single-file PyApp binary (standard or offline), customizing PyApp install location, setting up `uv` + `bun` CI, writing release pipelines that produce wheels + onefiles + container images. Not for runtime deployment — see litestar-deployment. Not for Vite plugin authoring — see litestar-vite."
+description: "Auto-activate for uv build, hatch build, pyapp, Hatchling force-include, bundled frontend assets, PyApp onefile binaries, GitHub Actions build matrices, PYAPP_* env vars, cargo-zigbuild, or python-build-standalone. Use when packaging Litestar apps as wheels, onefile binaries, release artifacts, or asset-bundled distributions. Not for runtime deployment - use litestar-deployment."
 ---
 
 # litestar-build
@@ -238,7 +238,7 @@ Everything in this skill is distilled from three production projects. Read these
 - [litestar-deployment](../litestar-deployment/SKILL.md) — runtime deployment (Dockerfiles, K8s, Railway, Cloud Run, systemd) that consumes the artifacts this skill produces
 - [litestar-vite](../litestar-vite/SKILL.md) — Vite plugin config (asset pipeline details, TypeGen, HMR)
 - [litestar-granian](../litestar-granian/SKILL.md) — Granian ASGI server (what the wheel's entry-point starts)
-- [litestar settings](../litestar/references/settings.md) — env-driven `@dataclass` settings that work both in-wheel and as a PyApp binary
+- [litestar settings](../litestar-settings/references/settings.md) — env-driven `@dataclass` settings that work both in-wheel and as a PyApp binary
 
 ## Shared Styleguide Baseline
 

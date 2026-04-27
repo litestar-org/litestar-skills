@@ -1,6 +1,6 @@
 ---
 name: litestar-testing
-description: "Auto-activate for test_*.py, conftest.py in a Litestar project, litestar.testing imports (TestClient, AsyncTestClient, create_test_client). Litestar-specific testing: TestClient vs AsyncTestClient, @pytest.mark.anyio, app + lifespan, fixtures from canonical Litestar apps, mocking Guards / DI dependencies, integration with pytest-databases, and request-body / header / cookie / response assertions. Produces pytest fixtures, async tests, Guard mocks, DI overrides, AsyncTestClient setups, and pytest-databases-backed integration tests for Litestar apps. Use when: writing tests for a Litestar app, mocking auth/Guards, integration-testing handlers + DB, exercising HTMX or Inertia handlers. Not for generic non-Litestar pytest patterns (use the upstream pytest docs) or for Vitest/JS tests (one-liner pointer below)."
+description: "Auto-activate for test_*.py, conftest.py, litestar.testing imports, TestClient, AsyncTestClient, create_test_client, @pytest.mark.anyio, Guard mocks, DI overrides, or Litestar handler tests. Use when testing Litestar apps, handlers, lifespan, auth, HTMX, Inertia, or database-backed integration flows. Not for generic pytest, Vitest, or non-Litestar test suites."
 ---
 
 # litestar-testing

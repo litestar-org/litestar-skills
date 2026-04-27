@@ -8,7 +8,7 @@ Inside Cursor:
 /add-plugin
 ```
 
-Then search for `litestar-skills` (once the plugin is approved on the Cursor marketplace — submission is pending; see [docs/roadmap.md](../docs/roadmap.md)).
+Then search for `litestar` (once the plugin is approved on the Cursor marketplace — submission is pending; see [docs/roadmap.md](../docs/roadmap.md)).
 
 ## Local-development install
 
@@ -16,7 +16,7 @@ Until the plugin lands on the Cursor marketplace, install it locally:
 
 ```bash
 mkdir -p ~/.cursor/plugins/local
-ln -s "$(pwd)" ~/.cursor/plugins/local/litestar-skills
+ln -s "$(pwd)" ~/.cursor/plugins/local/litestar
 ```
 
 Then restart Cursor. The plugin manifest at `.cursor-plugin/plugin.json` is auto-discovered.
@@ -34,7 +34,7 @@ Then restart Cursor. The plugin manifest at `.cursor-plugin/plugin.json` is auto
 If installed via the local symlink, just `git pull` in the cloned directory:
 
 ```bash
-cd ~/.cursor/plugins/local/litestar-skills && git pull
+cd ~/.cursor/plugins/local/litestar && git pull
 ```
 
 ## Restricting capabilities

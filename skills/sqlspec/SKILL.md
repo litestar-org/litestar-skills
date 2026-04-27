@@ -1,6 +1,6 @@
 ---
 name: sqlspec
-description: "Auto-activate for sqlspec imports and for web frameworks sqlspec ships an extension for: litestar, fastapi, flask, starlette. Produces database adapter configurations, SQL query mappings, per-framework integration wiring, and observability plumbing. Use when working with database adapters, SQL execution, query building, Arrow integration, parameter handling, framework extensions (Litestar/FastAPI/Flask/Starlette), filters, pagination, event channels, SQL file loading, migrations, the ADK session/memory/artifact stores, data-dictionary introspection, OTEL/Prometheus observability, or cloud log formatters. Not for raw SQL or ORM-specific patterns (see sqlalchemy, advanced-alchemy)."
+description: "Auto-activate for sqlspec imports, SQLSpec, SQLFileLoader, driver adapters, query builders, named SQL files, filters, pagination, Arrow, framework extensions, ADK stores, data dictionary introspection, or observability hooks. Use when working with direct SQL through sqlspec across Litestar, FastAPI, Flask, or Starlette. Not for ORM-specific repository patterns or raw driver usage without sqlspec."
 ---
 
 # SQLSpec Skill

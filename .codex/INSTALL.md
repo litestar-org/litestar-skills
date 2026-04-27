@@ -14,7 +14,7 @@ Then in a Codex session:
 /plugins
 ```
 
-Enable `litestar-skills` from the list. The plugin manifest lives at `.agents/plugins/plugins/litestar-skills/.codex-plugin/plugin.json`; the marketplace catalog is `.agents/plugins/marketplace.json` at the repo root.
+Enable `litestar` from the list. The plugin manifest lives at `.agents/plugins/plugins/litestar/.codex-plugin/plugin.json`; the marketplace catalog is `.agents/plugins/marketplace.json` at the repo root.
 
 ## Option 2: Local marketplace (for development)
 
@@ -24,15 +24,15 @@ If you have the repo cloned and want Codex to pick up your local changes:
 codex plugin marketplace add /path/to/litestar-skills
 ```
 
-Codex auto-discovers the marketplace at `.agents/plugins/marketplace.json` and the nested plugin under `.agents/plugins/plugins/litestar-skills/`.
+Codex auto-discovers the marketplace at `.agents/plugins/marketplace.json` and the nested plugin under `.agents/plugins/plugins/litestar/`.
 
-## Option 3: User-level clone (legacy fallback)
+## Option 3: User-level clone
 
 ```bash
-git clone https://github.com/litestar-org/litestar-skills ~/.codex/plugins/litestar-skills
+git clone https://github.com/litestar-org/litestar-skills ~/.codex/plugins/litestar
 ```
 
-Codex auto-discovers plugins under `~/.codex/plugins/`. Provided as a fallback for environments where `codex plugin marketplace add` is unavailable.
+Codex auto-discovers plugins under `~/.codex/plugins/`. Provided for environments where `codex plugin marketplace add` is unavailable.
 
 ## Custom agents
 
@@ -43,13 +43,13 @@ The four host-dialect agent files are generated from canonical YAML sources at `
 ## Updating
 
 ```bash
-codex plugin marketplace upgrade litestar-marketplace
+codex plugin marketplace upgrade litestar
 ```
 
 For Option 3:
 
 ```bash
-cd ~/.codex/plugins/litestar-skills && git pull
+cd ~/.codex/plugins/litestar && git pull
 ```
 
 ## Verification
@@ -81,4 +81,4 @@ Codex CLI 0.125.0+ requires local marketplace `source.path` to:
 2. Be a non-empty subdirectory (rejects `./` alone)
 3. Contain no `..` traversal
 
-That's why the plugin lives under `./plugins/litestar-skills` (relative to `.agents/plugins/marketplace.json`) instead of being collocated with the marketplace file.
+That's why the plugin lives under `./plugins/litestar` (relative to `.agents/plugins/marketplace.json`) instead of being collocated with the marketplace file.

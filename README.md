@@ -6,15 +6,24 @@
 
 ## Status
 
-**v0.1.2 — early access.** Multi-host plumbing, 16 skills, ~22,800 lines of canonical content. Full launch-skill catalog growing.
+**v0.1.2 — early access.** Multi-host plumbing, 28 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
 
-## Support Tiers
+**Breaking host identity note:** host-facing marketplace, plugin, extension, managed-config, and skill namespace IDs are `litestar`. Existing installs under `litestar-skills` should be removed and reinstalled; no alias is shipped. The Python package and repository remain `litestar-skills`.
 
-Each host falls into one of three tiers:
+## Host Artifacts
 
-- **First-class** — the repo ships maintained host-specific artifacts and install guidance. Currently: Claude Code, Gemini CLI, Codex CLI, OpenCode.
-- **Compatible bundle** — the host consumes standard manifests or generic skill-discovery paths. Currently: Cursor, VS Code/Copilot, OpenClaw.
-- **Free ride** — the host discovers generic Agent Skills without a dedicated integration. Currently: Google Antigravity.
+This repo documents hosts by the artifacts it ships:
+
+| Host | Entry Point |
+| --- | --- |
+| Claude Code | `.claude-plugin/plugin.json` + marketplace metadata |
+| Gemini CLI | `gemini-extension.json` + `agents/*.md` |
+| Codex CLI | `.codex-plugin/plugin.json` + `.codex/agents/*.toml` |
+| OpenCode | `.opencode/plugins/litestar.js` + `.opencode/agents/*.md` |
+| Cursor | `.cursor-plugin/plugin.json` |
+| VS Code / Copilot | Raw `skills/` path via `chat.skillsLocations` |
+| Google Antigravity | `.agent/skills/` or `~/.gemini/antigravity/skills/` |
+| OpenClaw | `.agents/skills/` + `AGENTS.md` |
 
 ## Install
 
@@ -24,7 +33,7 @@ Pick your host and run the one command below. If you use several agents, skip to
 
 ```text
 /plugin marketplace add litestar-org/litestar-skills
-/plugin install litestar-skills@litestar-marketplace
+/plugin install litestar@litestar
 ```
 
 The `/plugin` commands run **inside** a Claude Code session — the installer can't automate this part.
@@ -45,7 +54,7 @@ Gemini auto-indexes this repo into its [extension gallery](https://geminicli.com
 codex plugin marketplace add litestar-org/litestar-skills
 ```
 
-Then enable inside a Codex session via `/plugins`. See [`.codex/INSTALL.md`](.codex/INSTALL.md) for local-development and legacy-clone install paths.
+Then enable inside a Codex session via `/plugins`. See [`.codex/INSTALL.md`](.codex/INSTALL.md) for local-development install paths.
 
 ### OpenCode
 
@@ -58,9 +67,9 @@ mkdir -p .agents/skills
 cp -r /tmp/litestar-skills/skills/* .agents/skills/
 
 # Option 2: global plugin (recommended) — injects project-aware skill reminders
-git clone https://github.com/litestar-org/litestar-skills ~/.config/opencode/litestar-skills
-ln -sf ~/.config/opencode/litestar-skills/.opencode/plugins/litestar-skills.js \
-       ~/.config/opencode/plugins/litestar-skills.js
+git clone https://github.com/litestar-org/litestar-skills ~/.config/opencode/litestar
+ln -sf ~/.config/opencode/litestar/.opencode/plugins/litestar.js \
+       ~/.config/opencode/plugins/litestar.js
 ```
 
 Option 2 ships a real `experimental.chat.system.transform` handler that injects targeted Litestar skill reminders into the system prompt and honors managed-config policy. See [`.opencode/INSTALL.md`](.opencode/INSTALL.md).
@@ -107,7 +116,7 @@ Cursor → Settings → Rules → Add Remote Rule → https://github.com/litesta
 ### VS Code / GitHub Copilot
 
 ```bash
-git clone https://github.com/litestar-org/litestar-skills ~/.copilot/litestar-skills
+git clone https://github.com/litestar-org/litestar-skills ~/.copilot/litestar
 ```
 
 Then in VS Code `settings.json`:
@@ -115,7 +124,7 @@ Then in VS Code `settings.json`:
 ```json
 {
   "chat.skillsLocations": {
-    "~/.copilot/litestar-skills/skills": true
+    "~/.copilot/litestar/skills": true
   }
 }
 ```
@@ -221,10 +230,10 @@ Or from a clone: `./tools/uninstall.sh --help`. Same `--only`, `--skip`, `--dry-
 
 Per-host uninstall:
 
-- **Claude Code**: `/plugin uninstall litestar-skills` inside Claude Code
-- **Gemini CLI**: `gemini extensions uninstall litestar-skills`
-- **Codex CLI**: `rm -rf ~/.codex/plugins/litestar-skills`
-- **OpenCode**: `rm ~/.config/opencode/plugins/litestar-skills.js && rm -rf ~/.config/opencode/litestar-skills`
+- **Claude Code**: `/plugin uninstall litestar` inside Claude Code
+- **Gemini CLI**: `gemini extensions uninstall litestar`
+- **Codex CLI**: `rm -rf ~/.codex/plugins/litestar`
+- **OpenCode**: `rm ~/.config/opencode/plugins/litestar.js && rm -rf ~/.config/opencode/litestar`
 - **Cursor**: remove the Remote Rule from Settings → Rules
 - **VS Code**: remove the `chat.skillsLocations` entry + delete the clone
 
@@ -242,11 +251,12 @@ Per-host uninstall:
 
 ## What's In This Repo
 
-17 skills, focused references, ~22,800+ lines of canonical content:
+28 skills, focused references, ~28,500+ lines of canonical content:
 
 | Category | Skills |
 | --- | --- |
 | Core | `litestar` |
+| Litestar app surfaces | `litestar-routing`, `litestar-dto-openapi`, `litestar-auth-guards`, `litestar-di`, `litestar-data-services`, `litestar-settings`, `litestar-exceptions`, `litestar-middleware`, `litestar-plugins`, `litestar-realtime`, `litestar-ai-serving` |
 | Foundation | `litestar-styleguide` |
 | Data | `advanced-alchemy`, `sqlspec`, `msgspec` |
 | Server | `litestar-granian` |

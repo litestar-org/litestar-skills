@@ -1,19 +1,26 @@
-# litestar-vite Integration (HTMX mode)
+# litestar-vite Integration (HTMX + Jinja)
 
 For full litestar-vite reference see `../../litestar-vite/SKILL.md`.
 
-## Setup with VitePlugin (HTMX mode)
+## Setup with VitePlugin (template mode)
 
 ```python
 from litestar import Litestar
+from litestar.contrib.jinja import JinjaTemplateEngine
+from litestar.template.config import TemplateConfig
+from litestar_htmx import HTMXPlugin
 from litestar_vite import ViteConfig, VitePlugin, PathConfig
 
 vite_config = ViteConfig(
-    mode="htmx",
-    paths=PathConfig(resource_dir="src"),
+    mode="template",
+    paths=PathConfig(resource_dir="resources"),
 )
+templates = TemplateConfig(directory="templates", engine=JinjaTemplateEngine)
 
-app = Litestar(plugins=[VitePlugin(config=vite_config)])
+app = Litestar(
+    plugins=[VitePlugin(config=vite_config), HTMXPlugin()],
+    template_config=templates,
+)
 ```
 
 ## HTMX Helpers from `litestar-vite-plugin` (npm)

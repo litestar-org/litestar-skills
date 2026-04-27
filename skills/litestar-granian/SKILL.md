@@ -1,6 +1,6 @@
 ---
 name: litestar-granian
-description: "Auto-activate for litestar_granian imports, GranianPlugin, granian CLI commands, ASGI server config in a Litestar app. The litestar-granian plugin: zero-config replacement for `litestar run` that uses Granian (Rust-based ASGI server) instead of uvicorn. Produces GranianPlugin configurations, GranianConfig tuning (workers/threads/HTTP/SSL/backpressure), and Litestar app lifespan integration. Use when: serving a Litestar app in dev or production, replacing uvicorn, configuring workers/threads, enabling HTTP/2 or SSL, or tuning backpressure. Not for FastAPI, Django, or non-Litestar apps — use plain `granian` CLI for those. Not for uvicorn — Granian is preferred for all Litestar deployments."
+description: "Auto-activate for litestar_granian imports, GranianPlugin, GranianConfig, granian CLI commands, worker/thread tuning, HTTP/2, SSL, backpressure, or ASGI server config in a Litestar app. Use when serving Litestar with Granian in development or production. Not for FastAPI, Django, non-Litestar apps, or uvicorn-specific configuration."
 ---
 
 # litestar-granian

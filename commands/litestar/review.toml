@@ -38,7 +38,7 @@ Apply the project's existing stack to each criterion — flag a violation only w
 
 Consult these skills for the canonical patterns:
 - `skills/litestar/SKILL.md` — guardrails + validation checklist
-- `skills/litestar/references/` — deep-dive per topic
+- `skills/litestar-*/references/` — focused deep-dive references per topic
 - `skills/advanced-alchemy/SKILL.md` — service + repository patterns
 - `skills/msgspec/SKILL.md` — DTO patterns
 """

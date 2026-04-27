@@ -48,7 +48,7 @@ if ($python) {
 }
 
 # No Python — emit minimal JSON with intro only.
-$intro = 'litestar-skills loaded.'
+$intro = 'litestar loaded.'
 $out = [ordered]@{
     detected_skills = @()
     context         = $intro

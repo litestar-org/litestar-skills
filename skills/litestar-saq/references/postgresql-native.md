@@ -336,7 +336,7 @@ If you need dashboards or you're already on Redis, stay with SAQ. If the app is 
 ## Cross-references
 
 - [`../SKILL.md`](../SKILL.md) — SAQ paths (Redis broker and PG broker)
-- [`../../litestar/references/settings.md`](../../litestar/references/settings.md) — settings patterns (including PEP 562 lazy materialization)
+- [`../../litestar-settings/references/settings.md`](../../litestar-settings/references/settings.md) — settings patterns (including PEP 562 lazy materialization)
 - [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md) — `SQLSpecAsyncService` base class + canonical service patterns
 
 ## Shared Styleguide Baseline

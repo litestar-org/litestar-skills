@@ -44,7 +44,7 @@ def test_claude_shape(litestar_cwd: Path) -> None:
     assert isinstance(hs, dict)
     assert hs["hookEventName"] == "SessionStart"
     assert "additionalContext" in hs
-    assert "litestar-skills:litestar" in hs["additionalContext"]
+    assert "litestar:litestar" in hs["additionalContext"]
     assert "additional_context" not in out
     assert "systemMessage" not in out
 
@@ -61,7 +61,7 @@ def test_cursor_shape(litestar_cwd: Path) -> None:
     out = _run(litestar_cwd, {"CURSOR_PLUGIN_ROOT": "/fake/path"})
     assert "additional_context" in out
     assert "hookSpecificOutput" not in out
-    assert "litestar-skills:litestar" in str(out["additional_context"])
+    assert "litestar:litestar" in str(out["additional_context"])
 
 
 def test_gemini_shape(litestar_cwd: Path) -> None:

@@ -124,7 +124,7 @@ Deploy workers on **GKE**, **Compute Engine**, or **Cloud Run Jobs** (for batch-
 
 ## IAP (Identity-Aware Proxy)
 
-Cloud Run services behind IAP receive the `X-Goog-IAP-JWT-Assertion` header. See the [litestar deployment reference](../litestar/references/deployment.md) for IAP middleware integration.
+Cloud Run services behind IAP receive the `X-Goog-IAP-JWT-Assertion` header. See the [litestar app deployment reference](litestar-app.md) for IAP middleware integration.
 
 ```bash
 # Enable IAP on Cloud Run

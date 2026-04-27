@@ -50,7 +50,7 @@ Sample.
 def _write_skill(
     root: Path,
     name: str,
-    description: str = "A valid skill description.",
+    description: str = "Auto-activate for demo imports. Use when validating test skills. Not for production guidance.",
     body: str = VALID_SKILL_BODY,
     frontmatter_name: str | None = None,
 ) -> Path:
@@ -113,6 +113,31 @@ class TestValidateSkill:
         violations = mod.validate_skill(skill)
         assert any("description" in v.message.lower() for v in violations)
 
+    def test_description_without_activation_prefix_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        skill = _write_skill(tmp_path, "vague-desc", description="A valid skill description.")
+        violations = mod.validate_skill(skill)
+        assert any("description must start" in v.message.lower() for v in violations)
+
+    def test_description_without_negative_scope_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        skill = _write_skill(tmp_path, "no-negative", description="Use when writing a test skill.")
+        violations = mod.validate_skill(skill)
+        assert any("not for" in v.message.lower() for v in violations)
+
+    def test_description_with_process_summary_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        skill = _write_skill(
+            tmp_path,
+            "process-desc",
+            description="Use when writing skills. Produces detailed workflows and examples. Not for runtime apps.",
+        )
+        violations = mod.validate_skill(skill)
+        assert any("process summary" in v.message.lower() for v in violations)
+
     def test_name_mismatch_yields_violation(self, tmp_path: Path) -> None:
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
@@ -162,8 +187,44 @@ class TestValidateSkill:
         violations = mod.validate_skill(skill)
         assert violations == []
 
+    def test_real_litestar_description_is_hub_only(self) -> None:
+        mod = _load_validator()
+        text = (REPO_ROOT / "skills" / "litestar" / "SKILL.md").read_text(encoding="utf-8")
+        fm, _body_start, _body = mod.extract_frontmatter(text)
+        desc = fm["description"]
+        for broad_signal in (
+            "litestar_granian",
+            "litestar_saq",
+            "litestar_vite",
+            "litestar_mcp",
+            "litestar_email",
+            "sqlspec",
+            "advanced_alchemy",
+            "msgspec",
+            "dishka",
+        ):
+            assert broad_signal not in desc
+
 
 class TestValidateCommand:
+    def test_new_app_frontend_guidance_matches_reference_apps(self) -> None:
+        text = (REPO_ROOT / "commands" / "litestar" / "new-app.toml").read_text(encoding="utf-8")
+        assert "TemplatesPlugin" not in text
+        assert "InertiaPlugin" not in text
+        for expected in (
+            "TemplateConfig",
+            "HTMXPlugin",
+            'mode="template"',
+            "InertiaConfig",
+            "one `VitePlugin",
+            'component="PageName"',
+            'mode="ssr"',
+            'mode="ssg"',
+            'mode="external"',
+            "litestar-vite-plugin/astro",
+        ):
+            assert expected in text
+
     def test_valid_command_returns_no_violations(self, tmp_path: Path) -> None:
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
@@ -547,7 +608,7 @@ class TestAgentsLeakGuard:
 
     def test_bare_agents_dir_mention_not_flagged(self, tmp_path: Path) -> None:
         """Prose mentioning a user-project `.agents/` directory (no framework
-        sub-path) is legitimate Flow-compatibility documentation."""
+        sub-path) is legitimate Flow-aware documentation."""
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
         skill_dir = tmp_path / "skills" / "flow-aware"

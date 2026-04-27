@@ -1,6 +1,6 @@
 ---
 name: litestar-saq
-description: "Auto-activate for litestar_saq imports, SAQPlugin, SAQConfig, QueueConfig, TaskQueues. The first-party Litestar plugin around SAQ (Simple Async Queue): background tasks, cron jobs, queue web UI, `litestar workers run` CLI, DI of `TaskQueues`. Produces SAQPlugin configs, QueueConfig definitions, task functions, CronJobs, and DI-injected enqueue patterns. Use when: adding background jobs to a Litestar app, scheduling cron work, exposing the SAQ web UI, or running workers via the Litestar CLI. Not for Celery, RQ, or Dramatiq — Litestar's first-party choice is SAQ. For raw SAQ patterns outside Litestar, see standalone SAQ docs. Or document the custom-PG-native alternative pattern when SAQ is explicitly rejected."
+description: "Auto-activate for litestar_saq imports, SAQPlugin, SAQConfig, QueueConfig, TaskQueues, CronJob, litestar workers run, background jobs, scheduled jobs, or SAQ web UI. Use when adding first-party SAQ background work to Litestar. Not for Celery, RQ, Dramatiq, raw SAQ outside Litestar, or custom PostgreSQL-native queues unless explicitly chosen."
 ---
 
 # litestar-saq
@@ -239,7 +239,7 @@ Inject `TaskQueues` into route handlers. Use `task_queues.get("name")` then `awa
 
 ### Step 7: Publish to Channels (optional)
 
-For real-time updates after a job completes, publish to Litestar Channels from inside the task. See `../litestar/references/websockets.md`.
+For real-time updates after a job completes, publish to Litestar Channels from inside the task. See `../litestar-realtime/references/websockets.md`.
 
 ### Step 8: Run
 
@@ -259,7 +259,7 @@ For production: `litestar workers run --process` separately from `litestar run`.
 - **Use `CronJob` for scheduled work** — not external cron. CronJobs participate in retries, timeouts, and observability.
 - **Use `key=` for deduplication** — same logical job (per-user sync, per-resource refresh) should not stack.
 - **`use_server_lifespan=True`** for dev and small-to-mid apps (workers inside the web process). Switch to `--process` for high-throughput production.
-- **Publish to Litestar Channels from tasks** when the job result must update connected websocket clients. See `../litestar/references/websockets.md`.
+- **Publish to Litestar Channels from tasks** when the job result must update connected websocket clients. See `../litestar-realtime/references/websockets.md`.
 - **Pull shared resources from `ctx["state"]`**, not module-level globals — keeps tests deterministic and supports per-worker init.
 - **Reach for a custom PG-native queue instead of SAQ when** you need `pg_notify` wake-ups, `FOR UPDATE SKIP LOCKED` atomic claim, or execution-target routing across Cloud Run / local. For every other PG-only case, SAQ+PG is the simpler default. See [references/postgresql-native.md](references/postgresql-native.md).
 
@@ -406,7 +406,7 @@ litestar --app app:app workers run --process
 ## Cross-References
 
 - **[litestar](../litestar/SKILL.md)** — Litestar app initialization, plugins, and lifespan.
-- **[litestar websockets reference](../litestar/references/websockets.md)** — Publish from a SAQ task to Litestar Channels for real-time UI updates.
+- **[litestar websockets reference](../litestar-realtime/references/websockets.md)** — Publish from a SAQ task to Litestar Channels for real-time UI updates.
 
 ## Official References
 

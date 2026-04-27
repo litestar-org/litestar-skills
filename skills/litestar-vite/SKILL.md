@@ -1,13 +1,13 @@
 ---
 name: litestar-vite
-description: "Auto-activate for litestar_vite imports, VitePlugin, ViteConfig, PathConfig, RuntimeConfig, TypeGenConfig, vite.config.ts, astro.config.mjs with `litestar-vite-plugin/astro`, `litestar assets` CLI. First-party plugin coordinating a Vite frontend with a Litestar backend across **SPA / template / HTMX / Inertia / framework** modes. Produces ViteConfig + vite.config.ts wiring, manifest resolution, TypeGen (routes.ts, schemas.ts, openapi.json, inertia-pages.json), Jinja helpers (`vite()`, `vite_hmr()`, `vite_react_refresh()`), HMR, production build. Supported frameworks: **React** (+ TanStack Router), **Vue 3**, **Svelte**, **Angular** (`@analogjs/vite-plugin-angular`), **HTMX+Jinja** (with `ls-for`/`ls-if`/`$data` client templating), **Inertia.js** (React/Vue ±Jinja), **Nuxt, SvelteKit, Astro**. Use when: wiring any frontend with Litestar, choosing a mode, scaffolding from an example, setting up HMR, or generating types. Not for Webpack, Rollup, esbuild, Parcel, or plain Vite outside Litestar."
+description: "Auto-activate for litestar_vite imports, VitePlugin, ViteConfig, PathConfig, RuntimeConfig, TypeGenConfig, InertiaConfig, vite.config.ts, astro.config.mjs with litestar-vite-plugin/astro, litestar assets, HMR, or generated route/schema assets. Use when wiring a Vite frontend with Litestar across SPA, template, HTMX/Jinja, Inertia, SSR, SSG, or external Angular CLI modes. Not for Webpack, Rollup, Parcel, or plain Vite outside Litestar."
 ---
 
 # litestar-vite
 
 `litestar-vite` is the first-party plugin that connects a [Vite](https://vite.dev/) frontend build pipeline to a Litestar backend. It handles dev-server proxying, HMR coordination, manifest resolution for production assets, and (optionally) end-to-end type generation from Litestar OpenAPI to TypeScript.
 
-It supports five modes — **SPA**, **template**, **HTMX**, **Inertia (hybrid)**, and **framework (SSR)** — letting one plugin cover everything from a static-asset add-on to a full Inertia.js app.
+The reference apps use `spa`, `template`, `hybrid`, `ssr`, `ssg`, and `external` modes. HTMX is a template-mode app with `HTMXPlugin()` layered in. Inertia is one `VitePlugin` configured with `ViteConfig(inertia=InertiaConfig(...))`; the plugin wires the internal Inertia integration from that config.
 
 The plugin pairs with the npm package [`litestar-vite-plugin`](https://www.npmjs.com/package/litestar-vite-plugin) on the JS side. Both must agree on `input`, `bundleDir`, `hotFile`, and asset URL.
 
@@ -23,14 +23,17 @@ The plugin pairs with the npm package [`litestar-vite-plugin`](https://www.npmjs
 
 ```python
 from litestar import Litestar
-from litestar_vite import ViteConfig, VitePlugin
+from litestar_vite import PathConfig, RuntimeConfig, ViteConfig, VitePlugin
 
 vite_config = ViteConfig(
-    bundle_dir="public",                # built assets land here
-    resource_dir="resources",           # frontend source root
-    use_server_lifespan=True,           # vite dev runs alongside `litestar run`
+    mode="spa",
+    paths=PathConfig(
+        resource_dir="resources",       # frontend source root
+        bundle_dir="public",            # built assets land here
+        hot_file="hot",                 # MUST match vite.config.ts hotFile
+    ),
+    runtime=RuntimeConfig(port=5173),
     dev_mode=True,                      # toggled by env in production
-    hot_file="public/hot",              # MUST match vite.config.ts hotFile
 )
 
 app = Litestar(plugins=[VitePlugin(config=vite_config)])
@@ -62,19 +65,23 @@ export default defineConfig({
 
 | Mode | Use For | Key Setup |
 | --- | --- | --- |
-| `spa` | Standalone single-page app (React, Vue, Svelte) with Litestar JSON API backend | `dev_mode=True` proxies to Vite; manifest in prod |
-| `template` | Server-rendered pages (Jinja2/Mako) with Vite-bundled JS/CSS sprinkles | `vite_asset()` template helper resolves dev/prod URLs |
-| `htmx` | HTMX hypermedia with Vite-bundled assets and HMR | `template` mode + `htmx` extras; partial HTML responses |
-| `hybrid` (Inertia) | Inertia.js — server routes returning Inertia responses + JS page components | `litestar_vite.inertia.InertiaPlugin` alongside `VitePlugin` |
-| `framework` | SSR frameworks (Nuxt, SvelteKit) | Plugin defers to the framework; coordinates port + manifest |
+| `spa` | React, Vue, Svelte, or Analog-powered Angular SPA with a Litestar JSON API backend | `dev_mode=True` proxies to Vite; manifest in prod |
+| `template` | Server-rendered Jinja2/Mako pages with Vite-bundled JS/CSS sprinkles | `TemplateConfig` + template helpers resolve dev/prod URLs |
+| `template` + `HTMXPlugin()` | HTMX hypermedia with Jinja templates and Vite-bundled assets | Add `litestar-htmx`; use `hx-*` and `ls-*` attributes |
+| `hybrid` (Inertia) | Inertia.js routes returning JS page components | `ViteConfig(inertia=InertiaConfig(...))` on a single `VitePlugin` |
+| `ssr` | Nuxt or SvelteKit SSR | JS framework owns rendering; Litestar provides/proxies API |
+| `ssg` | Astro static generation | `astro.config.mjs` imports `litestar-vite-plugin/astro` |
+| `external` | Angular CLI or another external dev/build process | Litestar coordinates URLs/types while the external tool owns build |
 
 Decision tree:
 
 - Need full SPA with client-side routing → **spa**
 - Server-rendered HTML, sprinkle Vite-bundled JS → **template**
-- HTMX-driven hypermedia with Vite assets → **htmx**
+- HTMX-driven hypermedia with Vite assets → **template + HTMXPlugin**
 - Server-side routing + JS page components, shared data → **hybrid (Inertia)** (see `../litestar-inertia/SKILL.md`)
-- Already using Nuxt / SvelteKit / a JS-side SSR framework → **framework**
+- Already using Nuxt or SvelteKit → **ssr**
+- Building an Astro site → **ssg**
+- Using Angular CLI rather than the Analog Vite example → **external**
 
 ### `VitePlugin` config (Python)
 
@@ -85,31 +92,28 @@ from litestar_vite import (
 
 vite_config = ViteConfig(
     mode="spa",
+    dev_mode=False,           # True in dev, False in prod (env-toggled)
     paths=PathConfig(
         root=".",
         resource_dir="src",
         bundle_dir="public",
-        public_dir="public",
-        vite_config="vite.config.ts",
+        static_dir="src/public",
+        hot_file="hot",
+        asset_url="/static/",
     ),
     runtime=RuntimeConfig(
         port=5173,
         host="localhost",
         protocol="http",
-        hot_reload=True,
+        executor="bun",
     ),
     types=TypeGenConfig(
-        enabled=True,
         generate_sdk=True,
         generate_routes=True,
         generate_schemas=True,
         generate_page_props=True,
         output="src/generated",
     ),
-    use_asset_linker=True,
-    use_server_lifespan=True,
-    dev_mode=False,           # True in dev, False in prod (env-toggled)
-    hot_file="public/hot",
 )
 ```
 
@@ -166,7 +170,6 @@ The `config.vite` `ViteConfig` references the **same** `bundle_dir`, `hot_file`,
 
 ```python
 TypeGenConfig(
-    enabled=True,
     generate_sdk=True,
     generate_routes=True,
     generate_schemas=True,
@@ -208,10 +211,10 @@ Auto-registered Jinja2 globals when a template engine is configured:
 
 | Helper | Use |
 | --- | --- |
-| `{{ vite_asset('src/main.ts') }}` | Resolve script URL (dev: proxied; prod: hashed manifest) |
-| `{{ vite_css('src/app.css') }}` | Render `<link rel="stylesheet">` tag |
-| `{{ vite_hmr_client() }}` | Inject HMR client `<script>` in dev mode (no-op in prod) |
-| `{{ vite_react_refresh() }}` | Inject React Fast Refresh preamble before React app code |
+| `{{ vite('resources/main.ts') }}` | Render script/link tags for a Vite input; handles dev vs manifest |
+| `{{ vite_hmr() }}` | Inject HMR client `<script>` in dev mode; no-op in prod |
+| `{{ vite_static('favicon.svg') }}` | Resolve a static asset URL |
+| `{{ vite_routes() }}` | Render inline route metadata for client-side routing |
 
 Minimal base template:
 
@@ -219,13 +222,11 @@ Minimal base template:
 <!DOCTYPE html>
 <html>
 <head>
-  {{ vite_hmr_client() }}
-  {{ vite_react_refresh() }}
-  {{ vite_css('src/app.css') }}
+  {{ vite_hmr() }}
+  {{ vite('resources/main.tsx') }}
 </head>
 <body>
   <div id="app"></div>
-  {{ vite_asset('src/main.tsx') | safe }}
 </body>
 </html>
 ```
@@ -249,7 +250,7 @@ async def index() -> Template:
 ```bash
 litestar assets init             # Scaffold vite.config.ts and package.json
 litestar assets install          # Run npm/pnpm/bun install
-litestar assets serve            # Start Vite dev server (also auto-started with `litestar run` when use_server_lifespan=True)
+litestar assets serve            # Start Vite dev server (also auto-started when `dev_mode=True`)
 litestar assets build            # Production build (emits manifest.json + hashed bundles)
 litestar assets generate-types   # TypeScript type generation
 litestar assets export-routes    # routes.ts only
@@ -262,13 +263,13 @@ In dev mode:
 
 1. Vite dev server runs on `runtime.port` (e.g., `5173`).
 2. Plugin writes a "hot file" (path = `hot_file`) signaling dev-mode is active.
-3. `vite_asset()` returns proxied URLs (`http://localhost:5173/...`) instead of manifest paths.
-4. `vite_hmr_client()` injects the HMR client script.
+3. `vite()` returns proxied URLs (`http://localhost:5173/...`) instead of manifest paths.
+4. `vite_hmr()` injects the HMR client script.
 5. On rebuild, Vite pushes updates over WS; the page hot-swaps without a reload.
 
 Common HMR gotchas:
 
-- **Hot file mismatch**: `ViteConfig.hot_file` and `vite.config.ts` `hotFile` must point to the same path. Mismatch ⇒ stale prod URLs in dev.
+- **Hot file mismatch**: `ViteConfig.paths.hot_file` and `vite.config.ts` `hotFile` must point to the same marker. Mismatch ⇒ stale prod URLs in dev.
 - **CORS errors**: set `server.cors: true` in `vite.config.ts` so the Litestar origin can fetch dev assets.
 - **Port conflict**: pin `runtime.port` and `server.port`; do not let Vite auto-pick.
 - **Browsers cache `manifest.json`**: cache-bust by hash; never serve manifest.json from a CDN with long TTL.
@@ -290,7 +291,7 @@ In production:
 
 - Set `dev_mode=False` (env-toggled).
 - Litestar serves `bundle_dir` as static files OR a CDN serves them and `base` (Vite) / `assetUrl` (plugin) points at the CDN.
-- `vite_asset()` reads `manifest.json` once and returns hashed URLs.
+- `vite()` reads `manifest.json` and returns hashed asset tags.
 - HMR helpers become no-ops.
 
 CDN pattern:
@@ -306,20 +307,25 @@ export default defineConfig({
 ### Inertia integration
 
 ```python
-from litestar_vite import VitePlugin
-from litestar_vite.inertia import InertiaPlugin, InertiaConfig
+from litestar_vite import InertiaConfig, PathConfig, TypeGenConfig, ViteConfig, VitePlugin
 
-app = Litestar(plugins=[
-    VitePlugin(config=vite_config),
-    InertiaPlugin(config=InertiaConfig(root_template="base.html")),
-])
+vite = VitePlugin(
+    config=ViteConfig(
+        mode="hybrid",
+        paths=PathConfig(resource_dir="resources"),
+        inertia=InertiaConfig(root_template="base.html"),
+        types=TypeGenConfig(output="resources/generated"),
+    )
+)
+
+app = Litestar(plugins=[vite], middleware=[session_backend.middleware])
 ```
 
 See `../litestar-inertia/SKILL.md` for client adapter setup.
 
 ### HTMX integration
 
-For HTMX mode, use `template` mode in `ViteConfig` plus the HTMX htmx-vite plugin client. Vite handles JS/CSS bundling; Litestar returns partial HTML enriched with `hx-*` attributes. See `../litestar-htmx/SKILL.md`.
+For HTMX + Jinja, use `ViteConfig(mode="template", ...)`, Litestar `TemplateConfig`, and `HTMXPlugin()`. Vite handles JS/CSS bundling; Litestar returns partial HTML enriched with `hx-*` attributes. See `../litestar-htmx/SKILL.md`.
 
 <workflow>
 
@@ -327,7 +333,7 @@ For HTMX mode, use `template` mode in `ViteConfig` plus the HTMX htmx-vite plugi
 
 ### Step 1: Pick the Mode
 
-Run the decision tree above. Most apps want `spa` or `hybrid`. Lock the choice before configuring — switching mode mid-project is painful.
+Run the decision tree above. Most apps want `spa`, `template`, or `hybrid`. Lock the choice before configuring — switching mode mid-project rewires paths, assets, and TypeGen output.
 
 ### Step 2: Install
 
@@ -350,11 +356,12 @@ Add `litestar()` plugin with matching `input`, `bundleDir`, `hotFile`. Set `serv
 
 ### Step 5: Enable Type Generation (optional)
 
-For SPA / Inertia projects, set `TypeGenConfig(enabled=True, ...)`. Re-run `litestar assets generate-types` whenever DTOs change. CI should fail if generated files are out of date.
+For SPA / Inertia projects, set `types=TypeGenConfig(...)`. Re-run `litestar assets generate-types` whenever DTOs change. CI should fail if generated files are out of date.
 
 ### Step 6: Wire Templates (template / HTMX modes)
 
-Use `vite_hmr_client()`, `vite_react_refresh()` (React only), `vite_css()`, `vite_asset()` in your base template.
+Use `vite_hmr()` and `vite()` in your base template.
+For HTMX, register `HTMXPlugin()` and keep `ViteConfig(mode="template", ...)`.
 
 ### Step 7: Verify HMR
 
@@ -374,7 +381,7 @@ Use `vite_hmr_client()`, `vite_react_refresh()` (React only), `vite_css()`, `vit
 - **Pin `server.port` in `vite.config.ts`** — auto-picked ports break the plugin's URL resolution.
 - **Set `server.cors: true`** when Litestar serves on a different origin than Vite in dev.
 - **Toggle `dev_mode` from env**, never hardcode `True` in committed code — leaving dev mode on in prod proxies to a non-existent dev server.
-- **Use `use_server_lifespan=True`** for dev so `litestar run` starts/stops Vite. For prod, set `dev_mode=False`; the lifespan is irrelevant.
+- **Keep `RuntimeConfig.start_dev_server=True` in dev** so `litestar run` starts/stops Vite. For prod, set `dev_mode=False`.
 - **Commit generated types** OR regenerate in CI and check no diff — a drift between OpenAPI and `schemas.ts` is a runtime error.
 - **Never serve `manifest.json` with long-TTL caching** — frontend deploys depend on it being current.
 - **One `vite.config.ts` per frontend project** — multiple configs in one repo confuse the plugin's path resolution.
@@ -389,13 +396,16 @@ Use `vite_hmr_client()`, `vite_react_refresh()` (React only), `vite_css()`, `vit
 
 Before delivering a `litestar-vite` integration, verify:
 
-- [ ] Mode (`spa` / `template` / `htmx` / `hybrid` / `framework`) is explicit
-- [ ] `bundle_dir` and `hotFile` paths in `ViteConfig` match `vite.config.ts`
+- [ ] Mode (`spa` / `template` / `hybrid` / `ssr` / `ssg` / `external`) is explicit
+- [ ] HTMX apps use `mode="template"` with `HTMXPlugin()`
+- [ ] Inertia apps put `InertiaConfig` on `ViteConfig` and register one `VitePlugin`
+- [ ] `ViteConfig.paths.bundle_dir` and `vite.config.ts` `bundleDir` match
+- [ ] `ViteConfig.paths.hot_file` and `vite.config.ts` `hotFile` match
 - [ ] `dev_mode` is env-toggled
 - [ ] `server.port` is pinned in `vite.config.ts`
 - [ ] `server.cors: true` if Litestar and Vite are on different origins in dev
-- [ ] Template base file uses `vite_hmr_client()` (and `vite_react_refresh()` for React) before any user JS
-- [ ] If `TypeGenConfig.enabled=True`, generated types are committed or CI verifies they are up-to-date
+- [ ] Template base file uses `vite_hmr()` before `vite(...)`
+- [ ] If `types=TypeGenConfig(...)`, generated types are committed or CI verifies they are up-to-date
 - [ ] Production build sets `dev_mode=False` and ships `manifest.json` + hashed bundles
 - [ ] CDN deploys set `base` / `assetUrl` from `ASSET_URL` env var
 - [ ] No competing Webpack/Rollup config in the same project
@@ -410,20 +420,24 @@ Before delivering a `litestar-vite` integration, verify:
 
 ```python
 # app/config/vite.py
-from litestar_vite import ViteConfig, PathConfig, RuntimeConfig
 import os
+from pathlib import Path
+
+from litestar_vite import PathConfig, RuntimeConfig, ViteConfig
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+FRONTEND_ROOT = PROJECT_ROOT / "src/js/web"
+STATIC_DIR = PROJECT_ROOT / "src/py/app/server/static/web"
 
 vite = ViteConfig(
     paths=PathConfig(
-        root=".",
-        resource_dir="src/js/web",
-        bundle_dir="src/py/app/server/static/web",
-        vite_config="src/js/web/vite.config.ts",
+        root=FRONTEND_ROOT,
+        bundle_dir=STATIC_DIR,
+        hot_file="hot",
+        asset_url="/static/web/",
     ),
-    runtime=RuntimeConfig(port=3006, hot_reload=True),
-    use_server_lifespan=True,
+    runtime=RuntimeConfig(port=3006, executor="bun", is_react=True),
     dev_mode=os.getenv("ENV", "dev") == "dev",
-    hot_file="src/py/app/server/static/web/hot",
 )
 ```
 

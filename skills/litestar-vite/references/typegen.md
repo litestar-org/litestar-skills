@@ -17,7 +17,6 @@ End-to-end type generation from the Litestar backend to TypeScript.
 from litestar_vite import TypeGenConfig
 
 TypeGenConfig(
-    enabled=True,
     generate_sdk=True,
     generate_routes=True,
     generate_schemas=True,
@@ -33,7 +32,7 @@ litestar assets generate-types     # generate everything enabled
 litestar assets export-routes      # routes.ts only
 ```
 
-When `use_server_lifespan=True` and `dev_mode=True`, types regenerate on startup.
+When `types=TypeGenConfig(...)` and `dev_mode=True`, types regenerate on startup.
 
 ## Frontend Use
 

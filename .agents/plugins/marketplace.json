@@ -1,7 +1,7 @@
 {
-  "name": "litestar-marketplace",
+  "name": "litestar",
   "interface": {
-    "displayName": "Litestar Skills",
+    "displayName": "Litestar",
     "shortDescription": "First-party Litestar framework skills: handlers, DTOs, DI, plugins, MCP, SAQ, Granian, SQLSpec, Advanced Alchemy"
   },
   "metadata": {
@@ -13,10 +13,10 @@
   },
   "plugins": [
     {
-      "name": "litestar-skills",
+      "name": "litestar",
       "version": "0.1.2",
       "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
-      "source": { "source": "local", "path": "./plugins/litestar-skills" },
+      "source": { "source": "local", "path": "./plugins/litestar" },
       "policy": { "installation": "AVAILABLE" },
       "category": "Development",
       "author": {

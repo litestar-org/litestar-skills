@@ -1,6 +1,6 @@
 {
-  "name": "litestar-skills",
-  "displayName": "Litestar Skills",
+  "name": "litestar",
+  "displayName": "Litestar",
   "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
   "version": "0.1.2",
   "author": {
@@ -15,7 +15,7 @@
   "commands": "./commands/",
   "hooks": "./hooks/hooks-cursor.json",
   "interface": {
-    "displayName": "Litestar Skills",
+    "displayName": "Litestar",
     "shortDescription": "First-party Litestar framework skills: handlers, DTOs, DI, plugins, MCP, SAQ, Granian, SQLSpec, Advanced Alchemy",
     "category": "Development"
   }

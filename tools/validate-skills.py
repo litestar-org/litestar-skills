@@ -73,6 +73,11 @@ SHIPPED_ROOT_FILES = ("AGENTS.md", "CONTRIBUTING.md", "README.md", "GEMINI.md")
 MAX_DESCRIPTION_CHARS = 1024
 
 REQUIRED_SECTIONS = ("workflow", "guardrails", "validation", "example")
+SKILL_DESCRIPTION_PREFIX_PATTERN = re.compile(r"^(?:Auto-activate for|Use when)\b")
+SKILL_DESCRIPTION_PROCESS_SUMMARY_PATTERN = re.compile(
+    r"\b(?:Produces|Provides|Generates|Creates|Builds|Outputs|Returns)\b",
+    re.IGNORECASE,
+)
 
 # Match `<tag>` for each required section.
 _XML_TAG_PATTERNS = {name: re.compile(rf"<{name}\b", re.IGNORECASE) for name in REQUIRED_SECTIONS}
@@ -229,6 +234,19 @@ def _check_description(desc: object, path: Path, line: int) -> list[Violation]:
     return out
 
 
+def _check_skill_description(desc: object, path: Path, line: int) -> list[Violation]:
+    out = _check_description(desc, path, line)
+    if not isinstance(desc, str) or not desc.strip():
+        return out
+    if not SKILL_DESCRIPTION_PREFIX_PATTERN.match(desc):
+        out.append(Violation(path, line, "skill description must start with 'Auto-activate for' or 'Use when'"))
+    if "not for" not in desc.lower():
+        out.append(Violation(path, line, "skill description must include a 'Not for ...' negative scope"))
+    if SKILL_DESCRIPTION_PROCESS_SUMMARY_PATTERN.search(desc):
+        out.append(Violation(path, line, "skill description must be trigger-only; remove process summary verbs"))
+    return out
+
+
 def _section_present(body: str, section: str) -> bool:
     if _XML_TAG_PATTERNS[section].search(body):
         return True
@@ -246,7 +264,7 @@ def validate_skill(path: Path) -> list[Violation]:
     fm_name = fm.get("name")
     if fm_name != expected_name:
         violations.append(Violation(path, 1, f"name {fm_name!r} != parent dir {expected_name!r}"))
-    violations.extend(_check_description(fm.get("description"), path, 1))
+    violations.extend(_check_skill_description(fm.get("description"), path, 1))
     for section in REQUIRED_SECTIONS:
         if not _section_present(body, section):
             violations.append(
@@ -399,10 +417,10 @@ def validate_claude_agent(path: Path) -> list[Violation]:
 
 
 def validate_manifest(path: Path) -> list[Violation]:
-    """Validate a host-specific plugin.json manifest.
+    """Validate a host-specific plugin or marketplace manifest.
 
     Enforces host-specific schema requirements (e.g. Claude Code requiring arrays
-    for file lists).
+    for file lists and rejecting Codex-only marketplace keys).
     """
     violations: list[Violation] = []
     try:
@@ -414,8 +432,8 @@ def validate_manifest(path: Path) -> list[Violation]:
     host_dir = path.parent.name
     is_claude = host_dir == ".claude-plugin"
 
-    # Claude Code specific rules
-    if is_claude:
+    # Claude Code plugin manifest rules.
+    if is_claude and path.name == "plugin.json":
         for field in ("agents", "skills", "commands"):
             val = data.get(field)
             if val is not None and not isinstance(val, list):
@@ -426,6 +444,21 @@ def validate_manifest(path: Path) -> list[Violation]:
                         f"Claude manifest {field!r} field must be an array for maximum reliability",
                     )
                 )
+
+    # Claude Code marketplace schema rejects Codex-style policy fields.
+    if is_claude and path.name == "marketplace.json":
+        plugins = data.get("plugins")
+        if isinstance(plugins, list):
+            plugins_list = cast("list[object]", plugins)
+            for index, plugin in enumerate(plugins_list):
+                if isinstance(plugin, dict) and "policy" in plugin:
+                    violations.append(
+                        Violation(
+                            path,
+                            1,
+                            f"Claude marketplace plugins.{index} must not include unrecognized key 'policy'",
+                        )
+                    )
 
     return violations
 
@@ -598,8 +631,13 @@ def iter_codex_agents() -> Iterator[Path]:
 
 
 def iter_manifests() -> Iterator[Path]:
-    for host in (".claude-plugin", ".codex-plugin", ".cursor-plugin"):
-        candidate = REPO_ROOT / host / "plugin.json"
+    for rel in (
+        ".claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        ".codex-plugin/plugin.json",
+        ".cursor-plugin/plugin.json",
+    ):
+        candidate = REPO_ROOT / rel
         if candidate.is_file():
             yield candidate
 
@@ -705,7 +743,7 @@ def iter_all_shipped_files() -> Iterator[Path]:
     # Host-specific install / config files that ship with the plugin.
     for rel in (
         ".opencode/INSTALL.md",
-        ".opencode/plugins/litestar-skills.js",
+        ".opencode/plugins/litestar.js",
         ".codex/INSTALL.md",
         ".codex/config.toml",
     ):

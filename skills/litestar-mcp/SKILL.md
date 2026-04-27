@@ -1,6 +1,6 @@
 ---
 name: litestar-mcp
-description: "Auto-activate for litestar_mcp imports, LitestarMCP, MCPConfig, @mcp_tool, @mcp_resource, MCPController. The first-party Litestar plugin exposing route handlers as Model Context Protocol (MCP) tools and resources over JSON-RPC 2.0. Produces LitestarMCP plugin configs, @mcp_tool / @mcp_resource decorators, route filtering (include/exclude tags/operations), OpenAPI-aligned schemas, and OAuth 2.1 / Guard-based auth setups. Use when: exposing a Litestar API to LLM agents, wiring an MCP server, controlling which routes are visible to AI, or aligning MCP tool schemas with OpenAPI. Not for non-Litestar MCP servers (use the upstream Python MCP SDK) or for FastAPI/Django."
+description: "Auto-activate for litestar_mcp imports, LitestarMCP, MCPConfig, MCPController, @mcp_tool, @mcp_resource, JSON-RPC route exposure, route filtering, or OAuth/Guard-protected MCP endpoints. Use when exposing Litestar routes as MCP tools or resources. Not for non-Litestar MCP servers or FastAPI/Django MCP integrations."
 ---
 
 # litestar-mcp

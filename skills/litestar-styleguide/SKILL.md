@@ -1,6 +1,6 @@
 ---
 name: litestar-styleguide
-description: "Shared code-style baseline for every skill in this plugin. Use when authoring or reviewing code in a Litestar / Python / TypeScript project — PEP 604 unions, async I/O, Google docstrings, msgspec over Pydantic, ruff / mypy / pyright tooling, pytest conventions, CI/CD rules. Produces: links to language-specific style references consumed by sibling skills via their `Shared Styleguide Baseline` sections. Use when: writing a new skill, reviewing code in this repo or a consumer project, or resolving a style disagreement. Not for framework-specific guidance (see the individual skills: litestar, sqlspec, advanced-alchemy, msgspec, etc.) — this skill is the cross-cutting baseline, not a framework guide."
+description: "Use when authoring or reviewing Litestar skill content, Python examples, TypeScript examples, shared style rules, PEP 604 unions, async I/O, Google docstrings, ruff/mypy/pyright tooling, pytest conventions, or CI/CD rules. Not for framework-specific implementation guidance - use the individual focused skill."
 ---
 
 # litestar-styleguide

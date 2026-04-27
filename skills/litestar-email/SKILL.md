@@ -1,6 +1,6 @@
 ---
 name: litestar-email
-description: "Auto-activate for litestar_email imports, EmailPlugin, EmailConfig, EmailService, EmailMessage, SMTPConfig, ResendConfig, SendGridConfig, MailgunConfig, InMemoryConfig. The first-party Litestar plugin for sending email with pluggable backends and DI of EmailService. Produces EmailPlugin configs, backend selection (SMTP/Resend/SendGrid/Mailgun/InMemory), EmailMessage construction, multipart (text+HTML) handling, and DI patterns. Use when: sending transactional or notification email from a Litestar app, choosing an email backend, testing email flows with InMemoryConfig, or wiring the EmailService into handlers. Not for non-Litestar email (use the underlying SDK directly) or for marketing/bulk email campaigns at scale (use a dedicated marketing platform)."
+description: "Auto-activate for litestar_email imports, EmailPlugin, EmailConfig, EmailService, EmailMessage, SMTPConfig, ResendConfig, SendGridConfig, MailgunConfig, or InMemoryConfig. Use when sending transactional email from Litestar, choosing an email backend, testing email flows, or injecting EmailService. Not for non-Litestar email SDK usage or marketing campaign platforms."
 ---
 
 # litestar-email

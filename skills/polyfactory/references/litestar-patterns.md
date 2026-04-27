@@ -1,6 +1,6 @@
 # Litestar patterns
 
-How polyfactory fits into a Litestar test suite. The companion skill `litestar-skills:litestar-testing` covers TestClient/AsyncTestClient setup; this page covers what to feed them.
+How polyfactory fits into a Litestar test suite. The companion skill `litestar:litestar-testing` covers TestClient/AsyncTestClient setup; this page covers what to feed them.
 
 ## The default pairing
 
@@ -151,6 +151,6 @@ This pairs with the `litestar-testing` skill's WebSocket / Channels fixtures.
 
 ## Cross-skill links
 
-- Request side: [`litestar-skills:litestar-testing`](../../litestar-testing/SKILL.md) — TestClient/AsyncTestClient, lifespan, Guard mocks, DI overrides.
-- Database fixtures: [`litestar-skills:pytest-databases`](../../pytest-databases/SKILL.md) — container-based DB fixtures that pair with SQLAlchemy factories.
-- Data shapes: [`litestar-skills:msgspec`](../../msgspec/SKILL.md), [`litestar-skills:advanced-alchemy`](../../advanced-alchemy/SKILL.md) for the model side; polyfactory inspects whatever those skills produce.
+- Request side: [`litestar:litestar-testing`](../../litestar-testing/SKILL.md) — TestClient/AsyncTestClient, lifespan, Guard mocks, DI overrides.
+- Database fixtures: [`litestar:pytest-databases`](../../pytest-databases/SKILL.md) — container-based DB fixtures that pair with SQLAlchemy factories.
+- Data shapes: [`litestar:msgspec`](../../msgspec/SKILL.md), [`litestar:advanced-alchemy`](../../advanced-alchemy/SKILL.md) for the model side; polyfactory inspects whatever those skills produce.

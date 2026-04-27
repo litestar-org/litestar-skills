@@ -78,8 +78,8 @@ Set-StrictMode -Version Latest
 $script:Version = '0.1.2'
 $script:RepoUrl = 'https://github.com/litestar-org/litestar-skills'
 $script:RepoSlug = 'litestar-org/litestar-skills'
-$script:MarketplaceName = 'litestar-marketplace'
-$script:PluginName = 'litestar-skills'
+$script:MarketplaceName = 'litestar'
+$script:PluginName = 'litestar'
 $script:ScriptDir = Split-Path -Parent $PSCommandPath
 $script:RepoRoot = Split-Path -Parent $script:ScriptDir
 
@@ -271,7 +271,7 @@ function Install-CodexCli {
         return
     }
 
-    $target = Join-Path $env:USERPROFILE '.codex\plugins\litestar-skills'
+    $target = Join-Path $env:USERPROFILE '.codex\plugins\litestar'
     $parentDir = Split-Path $target
 
     if ((Test-Path (Join-Path $target '.git')) -and (-not $Force)) {
@@ -312,8 +312,8 @@ function Install-OpenCode {
     if (-not (Test-ShouldInstall 'opencode')) { return }
     Write-Info 'Installing for OpenCode'
 
-    $target = Join-Path $env:APPDATA 'opencode\plugins\litestar-skills.js'
-    $source = Join-Path $script:RepoRoot '.opencode\plugins\litestar-skills.js'
+    $target = Join-Path $env:APPDATA 'opencode\plugins\litestar.js'
+    $source = Join-Path $script:RepoRoot '.opencode\plugins\litestar.js'
     $targetDir = Split-Path $target
 
     if (-not (Test-Path $source)) {
@@ -396,7 +396,7 @@ function Install-AntigravitySymlink {
 function Install-VsCode {
     if (-not (Test-ShouldInstall 'vscode')) { return }
     Write-Info 'VS Code / Copilot setup'
-    $target = Join-Path $env:USERPROFILE '.copilot\litestar-skills'
+    $target = Join-Path $env:USERPROFILE '.copilot\litestar'
     Write-Host @"
 
 Clone the repo and point chat.skillsLocations at it:

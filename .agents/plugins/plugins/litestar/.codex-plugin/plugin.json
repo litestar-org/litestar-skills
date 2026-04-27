@@ -1,0 +1,31 @@
+{
+  "name": "litestar",
+  "version": "0.1.2",
+  "description": "Opinionated first-party agent skills for the Litestar framework ecosystem",
+  "author": {
+    "name": "Cody Fincher",
+    "email": "cofin@litestar.dev"
+  },
+  "homepage": "https://github.com/litestar-org/litestar-skills",
+  "repository": "https://github.com/litestar-org/litestar-skills",
+  "license": "MIT",
+  "keywords": ["litestar", "skills", "agent", "ai", "sqlspec", "advanced-alchemy"],
+  "skills": "./skills/",
+  "commands": "./commands/",
+  "agents": "./.codex/agents/",
+  "hooks": "./hooks/hooks-codex.json",
+  "interface": {
+    "displayName": "Litestar",
+    "shortDescription": "First-party Litestar framework skills: handlers, DTOs, DI, plugins, MCP, SAQ, Granian, SQLSpec, Advanced Alchemy",
+    "category": "Development",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "Expose this SQLAlchemy model as a Litestar Controller with full CRUD routes",
+      "Make my Litestar routes available as MCP tools via litestar-mcp",
+      "Wire up a Vite frontend (React / Vue / Svelte / HTMX / Inertia) with litestar-vite",
+      "Serve an AI model from Litestar — streaming responses, batching, background workers via SAQ",
+      "Implement JWT auth with refresh tokens, rotation, and secure cookie storage",
+      "Scaffold a new Litestar app with opinionated defaults (Granian + msgspec + advanced-alchemy + sqlspec)"
+    ]
+  }
+}

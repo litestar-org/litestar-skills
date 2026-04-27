@@ -22,15 +22,15 @@ assets/main.<hash>.css           hashed CSS bundles
 ```python
 ViteConfig(
     dev_mode=False,                   # CRITICAL — env-toggled
-    use_server_lifespan=False,        # no Vite child process
+    runtime=RuntimeConfig(start_dev_server=False),
     ...
 )
 ```
 
 In production:
 
-- `vite_asset()` reads `manifest.json` once at startup (or on each call if `use_asset_linker=True`)
-- `vite_hmr_client()` and `vite_react_refresh()` become no-ops
+- `vite()` resolves URLs from `manifest.json`
+- `vite_hmr()` becomes a no-op
 - No proxy to Vite dev server
 
 ## Static Hosting Options

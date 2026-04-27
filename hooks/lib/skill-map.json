@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "version": "1",
-  "static_intro": "litestar-skills loaded. When working in this project, prefer first-party Litestar patterns. Skills are namespaced as `litestar-skills:<name>`. Available: litestar, sqlspec, advanced-alchemy, msgspec, litestar-granian, litestar-saq, litestar-vite, litestar-htmx, litestar-inertia, litestar-mcp, litestar-email, litestar-testing, pytest-databases, polyfactory, litestar-build, litestar-deployment, litestar-styleguide.",
+  "static_intro": "litestar loaded. Prefer first-party Litestar patterns. Skills are namespaced as `litestar:<name>`. Available: litestar, litestar-routing, litestar-dto-openapi, litestar-auth-guards, litestar-di, litestar-data-services, litestar-settings, litestar-exceptions, litestar-middleware, litestar-plugins, litestar-realtime, litestar-ai-serving, sqlspec, advanced-alchemy, msgspec, litestar-granian, litestar-saq, litestar-vite, litestar-htmx, litestar-inertia, litestar-mcp, litestar-email, litestar-testing, pytest-databases, polyfactory, litestar-build, litestar-deployment, litestar-styleguide.",
   "matchers": [
     {
       "skill": "litestar",
@@ -11,7 +11,107 @@
         { "type": "python_import", "module": "litestar" },
         { "type": "pyproject_section", "section": "tool.litestar" }
       ],
-      "reminder": "Project uses Litestar. Use the `litestar-skills:litestar` skill for first-party patterns: dependency injection via `dependencies={...}` and `Provide`, Controller-based routing, msgspec DTOs, async-all-IO, Guards (never auth checks inside handlers)."
+      "reminder": "Project uses Litestar. Use `litestar:litestar` as a routing hub, then prefer the focused skill matching the work: routing, DTO/OpenAPI, auth/guards, DI, data/services, settings, exceptions, middleware, plugins, realtime, AI serving, testing, build, or deployment."
+    },
+    {
+      "skill": "litestar-routing",
+      "priority": 95,
+      "signals": [
+        { "type": "python_regex", "pattern": "^\\s*from\\s+litestar\\s+import\\s+.*\\b(?:Controller|get|post|put|patch|delete|route)\\b|^\\s*class\\s+\\w+Controller\\s*\\(\\s*Controller\\s*\\)|^\\s*@(?:get|post|put|patch|delete|route)\\s*\\(" }
+      ],
+      "reminder": "Controller, Router, or route decorator signals found. Use `litestar:litestar-routing` for handler signatures, route grouping, path parameters, response returns, and domain module layout."
+    },
+    {
+      "skill": "litestar-dto-openapi",
+      "priority": 95,
+      "signals": [
+        { "type": "python_import", "module": "litestar.dto" },
+        { "type": "python_import", "module": "litestar.openapi" },
+        { "type": "python_regex", "pattern": "\\b(?:MsgspecDTO|DTOConfig|OpenAPIConfig|RequestEncodingType|OpenAPIController)\\b|\\bdto\\s*=" }
+      ],
+      "reminder": "DTO or OpenAPI signals found. Use `litestar:litestar-dto-openapi` for DTO selection, schema generation, request body encoding, OpenAPI config, and msgspec-vs-Pydantic fit."
+    },
+    {
+      "skill": "litestar-auth-guards",
+      "priority": 95,
+      "signals": [
+        { "type": "python_import", "module": "litestar.security" },
+        { "type": "python_regex", "pattern": "\\bguards\\s*=|\\bGuard\\b|\\bASGIConnection\\b|\\bBaseRouteHandler\\b|\\bPermissionDeniedException\\b|\\bconnection\\.user\\b" }
+      ],
+      "reminder": "Guard or auth-context signals found. Use `litestar:litestar-auth-guards` for authentication middleware boundaries, guards, permission failures, and keeping auth checks out of handlers."
+    },
+    {
+      "skill": "litestar-di",
+      "priority": 95,
+      "signals": [
+        { "type": "python_import", "module": "litestar.di" },
+        { "type": "python_import", "module": "dishka.integrations.litestar" },
+        { "type": "python_regex", "pattern": "\\bProvide\\s*\\(|\\bdependencies\\s*=|\\bFromDishka\\b|\\bInject\\b" }
+      ],
+      "reminder": "Dependency injection signals found. Use `litestar:litestar-di` for Provide, layered dependency maps, request-scoped providers, and Dishka integration."
+    },
+    {
+      "skill": "litestar-data-services",
+      "priority": 95,
+      "signals": [
+        { "type": "python_import", "module": "litestar.pagination" },
+        { "type": "python_regex", "pattern": "\\b(?:create_filter_dependencies|LimitOffsetFilter|OffsetPagination|SQLAlchemyAsyncRepositoryService|SQLSpecAsyncService|RepositoryService|service_class)\\b" }
+      ],
+      "reminder": "Data service or pagination signals found. Use `litestar:litestar-data-services` for repositories, service injection, filtering, pagination, and matching sqlspec or Advanced Alchemy."
+    },
+    {
+      "skill": "litestar-settings",
+      "priority": 95,
+      "signals": [
+        { "type": "python_import", "module": "litestar.config" },
+        { "type": "python_regex", "pattern": "\\bdef\\s+get_env\\s*\\(|\\bget_env\\s*\\(|@dataclass\\s*\\([^\\n]*frozen\\s*=\\s*True|\\bBaseSettings\\b|\\bpydantic_settings\\b" }
+      ],
+      "reminder": "Settings or environment loading signals found. Use `litestar:litestar-settings` for dataclass or pydantic-settings config, cached factories, env loading, and app-state wiring."
+    },
+    {
+      "skill": "litestar-exceptions",
+      "priority": 95,
+      "signals": [
+        { "type": "python_import", "module": "litestar.exceptions" },
+        { "type": "python_regex", "pattern": "\\bexception_handlers\\s*=|\\bHTTPException\\b|\\b(?:NotFoundException|ValidationException|InternalServerException|PermissionDeniedException)\\b|\\b(?:ApplicationError|NotFoundError|ConflictError)\\b" }
+      ],
+      "reminder": "Exception handling signals found. Use `litestar:litestar-exceptions` for domain exception hierarchies, HTTP translation, handler registration, and RFC 7807-style responses."
+    },
+    {
+      "skill": "litestar-middleware",
+      "priority": 95,
+      "signals": [
+        { "type": "python_import", "module": "litestar.middleware" },
+        { "type": "python_regex", "pattern": "\\b(?:AbstractMiddleware|DefineMiddleware|MiddlewareProtocol|RequestMiddlewareProtocol)\\b|\\bmiddleware\\s*=|\\b(?:CORSConfig|CSRFConfig|AllowedHostsConfig|CompressionConfig)\\b" }
+      ],
+      "reminder": "Middleware signals found. Use `litestar:litestar-middleware` for middleware ordering, built-in config middleware, custom ASGI middleware, and request lifecycle concerns."
+    },
+    {
+      "skill": "litestar-plugins",
+      "priority": 95,
+      "signals": [
+        { "type": "python_import", "module": "litestar.plugins" },
+        { "type": "python_regex", "pattern": "\\b(?:InitPluginProtocol|CLIPluginProtocol|SerializationPluginProtocol|OpenAPISchemaPluginProtocol)\\b|\\bplugins\\s*=\\s*\\[" }
+      ],
+      "reminder": "Plugin signals found. Use `litestar:litestar-plugins` for first-party and custom plugin protocols, init hooks, CLI registration, serialization plugins, and startup wiring."
+    },
+    {
+      "skill": "litestar-realtime",
+      "priority": 95,
+      "signals": [
+        { "type": "python_import", "module": "litestar.channels" },
+        { "type": "python_regex", "pattern": "^\\s*from\\s+litestar\\s+import\\s+.*\\bwebsocket\\b|^\\s*@websocket\\s*\\(|\\b(?:ChannelsPlugin|ChannelsBackend|WebSocket|ServerSentEvent|sse)\\b" }
+      ],
+      "reminder": "WebSocket, SSE, or Channels signals found. Use `litestar:litestar-realtime` for socket handlers, ChannelsPlugin backends, ServerSentEvent streaming, and fan-out boundaries."
+    },
+    {
+      "skill": "litestar-ai-serving",
+      "priority": 95,
+      "signals": [
+        { "type": "python_import", "module": "google.adk" },
+        { "type": "python_regex", "pattern": "\\b(?:LlmAgent|Runner|SQLSpecSessionService|VertexAI|ModelArmor|AgentEngine)\\b" }
+      ],
+      "reminder": "AI-serving signals found. Use `litestar:litestar-ai-serving` for serving Google ADK agents from Litestar with sqlspec-backed sessions and clear web/API boundaries."
     },
     {
       "skill": "sqlspec",
@@ -21,7 +121,7 @@
         { "type": "python_import", "module": "sqlspec" },
         { "type": "pyproject_section", "section": "tool.sqlspec" }
       ],
-      "reminder": "Project imports sqlspec. Use the `litestar-skills:sqlspec` skill for raw-SQL with adapter configurations, query mappings, and per-framework integration wiring (litestar/fastapi/flask/starlette extensions)."
+      "reminder": "Project imports sqlspec. Use the `litestar:sqlspec` skill for raw-SQL with adapter configurations, query mappings, and per-framework integration wiring (litestar/fastapi/flask/starlette extensions)."
     },
     {
       "skill": "advanced-alchemy",
@@ -30,7 +130,7 @@
         { "type": "pyproject_dep", "name": "advanced-alchemy" },
         { "type": "python_import", "module": "advanced_alchemy" }
       ],
-      "reminder": "Project uses Advanced Alchemy / SQLAlchemy ORM. Use the `litestar-skills:advanced-alchemy` skill for declarative models, services, repositories, and Alembic migrations — including the framework extension shipped for litestar/fastapi/flask/sanic/starlette."
+      "reminder": "Project uses Advanced Alchemy / SQLAlchemy ORM. Use the `litestar:advanced-alchemy` skill for declarative models, services, repositories, and Alembic migrations — including the framework extension shipped for litestar/fastapi/flask/sanic/starlette."
     },
     {
       "skill": "msgspec",
@@ -39,7 +139,7 @@
         { "type": "pyproject_dep", "name": "msgspec" },
         { "type": "python_import", "module": "msgspec" }
       ],
-      "reminder": "Project uses msgspec. Use the `litestar-skills:msgspec` skill for `Struct` definitions, `Meta` constraints, tagged unions, enc_hook/dec_hook patterns, and JSON/MessagePack serialization."
+      "reminder": "Project uses msgspec. Use the `litestar:msgspec` skill for `Struct` definitions, `Meta` constraints, tagged unions, enc_hook/dec_hook patterns, and JSON/MessagePack serialization."
     },
     {
       "skill": "litestar-granian",
@@ -48,7 +148,7 @@
         { "type": "pyproject_dep", "name": "litestar-granian" },
         { "type": "python_import", "module": "litestar_granian" }
       ],
-      "reminder": "Project uses litestar-granian. Use the `litestar-skills:litestar-granian` skill for the GranianPlugin (zero-config Rust-based ASGI replacement for `litestar run`)."
+      "reminder": "Project uses litestar-granian. Use the `litestar:litestar-granian` skill for the GranianPlugin (zero-config Rust-based ASGI replacement for `litestar run`)."
     },
     {
       "skill": "litestar-saq",
@@ -57,7 +157,7 @@
         { "type": "pyproject_dep", "name": "litestar-saq" },
         { "type": "python_import", "module": "litestar_saq" }
       ],
-      "reminder": "Project uses litestar-saq. Use the `litestar-skills:litestar-saq` skill for SAQPlugin / SAQConfig / QueueConfig: background tasks, cron jobs, and the `litestar workers run` CLI."
+      "reminder": "Project uses litestar-saq. Use the `litestar:litestar-saq` skill for SAQPlugin / SAQConfig / QueueConfig: background tasks, cron jobs, and the `litestar workers run` CLI."
     },
     {
       "skill": "litestar-vite",
@@ -68,15 +168,15 @@
         { "type": "file_glob", "pattern": "vite.config.ts" },
         { "type": "file_glob", "pattern": "vite.config.js" }
       ],
-      "reminder": "Project uses litestar-vite. Use the `litestar-skills:litestar-vite` skill for VitePlugin / ViteConfig coordination between the Litestar app and a Vite frontend — PathConfig, RuntimeConfig, TypeGenConfig, and the `litestar assets` CLI."
+      "reminder": "Project uses litestar-vite. Use the `litestar:litestar-vite` skill for VitePlugin / ViteConfig coordination between the Litestar app and a Vite frontend — PathConfig, RuntimeConfig, TypeGenConfig, and the `litestar assets` CLI."
     },
     {
       "skill": "litestar-htmx",
       "priority": 60,
       "signals": [
-        { "type": "python_import", "module": "litestar.contrib.htmx" }
+        { "type": "python_import", "module": "litestar_htmx" }
       ],
-      "reminder": "Project uses litestar's HTMX integration. Use the `litestar-skills:litestar-htmx` skill for HTMXRequest, HTMXResponse, TriggerEvent, Refresh, PushUrl, and partial-template patterns."
+      "reminder": "Project uses litestar's HTMX integration. Use the `litestar:litestar-htmx` skill for HTMXPlugin, HTMXRequest, HTMXTemplate, TriggerEvent, PushUrl, and partial-template patterns."
     },
     {
       "skill": "litestar-inertia",
@@ -84,7 +184,7 @@
       "signals": [
         { "type": "python_import", "module": "litestar_vite.inertia" }
       ],
-      "reminder": "Project uses Inertia.js with a Litestar backend. Use the `litestar-skills:litestar-inertia` skill for InertiaPlugin / InertiaConfig, share data, lazy props, and the React/Vue/Svelte client integration. Detection complements the `litestar-vite` signal — Inertia depends on Vite."
+      "reminder": "Project uses Inertia.js with a Litestar backend. Use the `litestar:litestar-inertia` skill for InertiaConfig, component= routes, shared props, lazy props, and the React/Vue/Svelte client integration. Detection complements the `litestar-vite` signal — Inertia depends on Vite."
     },
     {
       "skill": "litestar-mcp",
@@ -93,7 +193,7 @@
         { "type": "pyproject_dep", "name": "litestar-mcp" },
         { "type": "python_import", "module": "litestar_mcp" }
       ],
-      "reminder": "Project uses litestar-mcp. Use the `litestar-skills:litestar-mcp` skill for LitestarMCP / MCPConfig and exposing route handlers as MCP tools/resources via JSON-RPC 2.0."
+      "reminder": "Project uses litestar-mcp. Use the `litestar:litestar-mcp` skill for LitestarMCP / MCPConfig and exposing route handlers as MCP tools/resources via JSON-RPC 2.0."
     },
     {
       "skill": "litestar-email",
@@ -102,7 +202,7 @@
         { "type": "pyproject_dep", "name": "litestar-email" },
         { "type": "python_import", "module": "litestar_email" }
       ],
-      "reminder": "Project uses litestar-email. Use the `litestar-skills:litestar-email` skill for EmailPlugin / EmailConfig / EmailService and the SMTP/Resend/SendGrid/Mailgun/InMemory backends."
+      "reminder": "Project uses litestar-email. Use the `litestar:litestar-email` skill for EmailPlugin / EmailConfig / EmailService and the SMTP/Resend/SendGrid/Mailgun/InMemory backends."
     },
     {
       "skill": "litestar-testing",
@@ -112,7 +212,7 @@
         { "type": "file_glob", "pattern": "tests/conftest.py" },
         { "type": "file_glob", "pattern": "conftest.py" }
       ],
-      "reminder": "Test code present. Use the `litestar-skills:litestar-testing` skill for TestClient vs AsyncTestClient, `@pytest.mark.anyio`, app + lifespan fixtures, and Litestar-specific test patterns."
+      "reminder": "Test code present. Use the `litestar:litestar-testing` skill for TestClient vs AsyncTestClient, `@pytest.mark.anyio`, app + lifespan fixtures, and Litestar-specific test patterns."
     },
     {
       "skill": "pytest-databases",
@@ -121,7 +221,7 @@
         { "type": "pyproject_dep", "name": "pytest-databases" },
         { "type": "python_import", "module": "pytest_databases" }
       ],
-      "reminder": "Project uses pytest-databases. Use the `litestar-skills:pytest-databases` skill for container-based PostgreSQL/MySQL/SQLite/Oracle fixtures and Docker test integration."
+      "reminder": "Project uses pytest-databases. Use the `litestar:pytest-databases` skill for container-based PostgreSQL/MySQL/SQLite/Oracle fixtures and Docker test integration."
     },
     {
       "skill": "polyfactory",
@@ -130,7 +230,7 @@
         { "type": "pyproject_dep", "name": "polyfactory" },
         { "type": "python_import", "module": "polyfactory" }
       ],
-      "reminder": "Project uses polyfactory. Use the `litestar-skills:polyfactory` skill for typed mock-data factories: pick the right base (`ModelFactory` Pydantic / `DataclassFactory` / `MsgspecFactory` / `AttrsFactory` / `SQLAlchemyFactory`), customize fields with `Use(...)` / `Fixture(...)`, register fixtures via `@register_fixture`, and parametrize over `coverage()` for discriminated unions. Pairs with `litestar-skills:litestar-testing` for the request side."
+      "reminder": "Project uses polyfactory. Use the `litestar:polyfactory` skill for typed mock-data factories: pick the right base (`ModelFactory` Pydantic / `DataclassFactory` / `MsgspecFactory` / `AttrsFactory` / `SQLAlchemyFactory`), customize fields with `Use(...)` / `Fixture(...)`, register fixtures via `@register_fixture`, and parametrize over `coverage()` for discriminated unions. Pairs with `litestar:litestar-testing` for the request side."
     },
     {
       "skill": "litestar-build",
@@ -141,7 +241,7 @@
         { "type": "file_glob", "pattern": "pyapp/Cargo.toml" },
         { "type": "file_glob", "pattern": "tools/bundler.py" }
       ],
-      "reminder": "Project ships a PyApp / bundler build. Use the `litestar-skills:litestar-build` skill for `uv build` + `hatch build --target binary`, PyApp onefile binaries (configured via `PYAPP_*` env vars at build time + `[tool.hatch.build.targets.binary]` in pyproject), Hatchling `force-include` for bundled frontend assets, and GitHub Actions matrix workflows."
+      "reminder": "Project ships a PyApp / bundler build. Use the `litestar:litestar-build` skill for `uv build` + `hatch build --target binary`, PyApp onefile binaries (configured via `PYAPP_*` env vars at build time + `[tool.hatch.build.targets.binary]` in pyproject), Hatchling `force-include` for bundled frontend assets, and GitHub Actions matrix workflows."
     },
     {
       "skill": "litestar-deployment",
@@ -173,7 +273,7 @@
         { "type": "file_glob", "pattern": "terragrunt.hcl" },
         { "type": "file_glob", "pattern": ".terraform.lock.hcl" }
       ],
-      "reminder": "Project has deployment configs. Use the `litestar-skills:litestar-deployment` skill for Granian-first containerization, systemd units, Kubernetes manifests (kustomize/helm), Terraform IaC, and platform-specific deploy patterns (Railway / Cloud Run / GKE / AlloyDB / Docker / Podman)."
+      "reminder": "Project has deployment configs. Use the `litestar:litestar-deployment` skill for Granian-first containerization, systemd units, Kubernetes manifests (kustomize/helm), Terraform IaC, and platform-specific deploy patterns (Railway / Cloud Run / GKE / AlloyDB / Docker / Podman)."
     }
   ]
 }
