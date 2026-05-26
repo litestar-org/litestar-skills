@@ -40,7 +40,7 @@ Advanced Alchemy is NOT a raw ORM — it is a **service/repository layer** built
 | `UUIDBase` | UUID v4 | None | Lookup tables, tags, no audit needed |
 | `UUIDv7AuditBase` | UUID v7 | `created_at`, `updated_at` | Time-sortable IDs (preferred over v6) |
 | `BigIntAuditBase` | BigInt auto-increment | `created_at`, `updated_at` | Legacy systems, integer PKs |
-| `NanoidAuditBase` | Nanoid string | `created_at`, `updated_at` | URL-friendly short IDs |
+| `NanoIDAuditBase` | NanoID string | `created_at`, `updated_at` | URL-friendly short IDs |
 | `DeclarativeBase` | None (define yourself) | None | Full schema control |
 
 ### Repository Pattern
@@ -83,7 +83,7 @@ Key lifecycle hooks: `to_model_on_create`, `to_model_on_update`, `to_model_on_up
 | Mixin | Fields Added | When to Use |
 | --- | --- | --- |
 | `AuditMixin` | `created_at`, `updated_at`, `created_by`, `updated_by` | Any model needing a full audit trail (who + when) |
-| `SlugMixin` | `slug` (auto-generated) | URL-friendly identifiers derived from another field |
+| `SlugKey` | `slug` (auto-generated) | URL-friendly identifiers derived from another field |
 | `UniqueMixin` | `get_or_create` class method | Idempotent inserts for lookup/reference tables |
 | `SentinelMixin` | `_sentinel` version column | Optimistic locking; raises `ConflictError` on stale writes |
 

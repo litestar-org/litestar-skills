@@ -118,14 +118,21 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from advanced_alchemy.base import UUIDBase
+from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
 
-class OrderModel(UUIDBase):
+class CustomerModel(UUIDAuditBase):
+    __tablename__ = "customer"
+    name: Mapped[str] = mapped_column()
+
+class OrderModel(UUIDAuditBase):
     __tablename__ = "order"
+    customer_id: Mapped[UUID] = mapped_column(ForeignKey("customer.id"))
+    customer: Mapped[CustomerModel] = relationship()
     customer_email: Mapped[str] = mapped_column()
     total_cents: Mapped[int] = mapped_column()
 
@@ -288,7 +295,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Mapped, mapped_column
 
 from advanced_alchemy import filters
-from advanced_alchemy.base import UUIDBase
+from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import OffsetPagination, SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.extensions.fastapi import (
@@ -298,7 +305,7 @@ from advanced_alchemy.extensions.fastapi import (
     assign_cli_group,
 )
 
-class OrderModel(UUIDBase):
+class OrderModel(UUIDAuditBase):
     __tablename__ = "order"
     customer_email: Mapped[str] = mapped_column()
     total_cents: Mapped[int] = mapped_column()
