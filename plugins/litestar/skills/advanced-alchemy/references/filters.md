@@ -16,6 +16,17 @@ from advanced_alchemy.filters import (
     NotInCollectionFilter,
     NotInSearchFilter,
     OrderBy,
+    # Value / null / comparison filters
+    NullFilter,
+    NotNullFilter,
+    ComparisonFilter,
+    ChoicesFilter,
+    BooleanFilter,
+    # Correlated subquery + composite filters
+    ExistsFilter,
+    NotExistsFilter,
+    FilterGroup,
+    MultiFilter,
     # Pagination
     LimitOffset,
 )
@@ -212,6 +223,66 @@ results, total = await service.get_many_and_count(
     LimitOffset(limit=20, offset=20),
 )
 ```
+
+### NullFilter / NotNullFilter
+
+`IS NULL` / `IS NOT NULL` on a column (added 1.9).
+
+```python
+from advanced_alchemy.filters import NullFilter, NotNullFilter
+
+results = await service.get_many(NullFilter(field_name="deleted_at"))       # only un-deleted
+results = await service.get_many(NotNullFilter(field_name="verified_at"))   # only verified
+```
+
+### ComparisonFilter
+
+A single `field op value` comparison (`eq`, `ne`, `gt`, `ge`, `lt`, `le`).
+
+```python
+from advanced_alchemy.filters import ComparisonFilter
+
+results = await service.get_many(ComparisonFilter(field_name="age", operator="ge", value=18))
+```
+
+### ChoicesFilter / BooleanFilter
+
+Added 1.11. `ChoicesFilter` matches a field against an allowed set (an `IN` over a fixed choice list); `BooleanFilter` matches a boolean field (no-op when `value` is `None`, which is handy for optional query params).
+
+```python
+from advanced_alchemy.filters import ChoicesFilter, BooleanFilter
+
+results = await service.get_many(ChoicesFilter(field_name="status", values=["active", "pending"]))
+results = await service.get_many(BooleanFilter(field_name="is_published", value=True))
+```
+
+### ExistsFilter / NotExistsFilter
+
+Correlated `EXISTS` / `NOT EXISTS` built from a list of column expressions combined with `operator` (`"and"` / `"or"`).
+
+```python
+from advanced_alchemy.filters import ExistsFilter
+
+results = await service.get_many(
+    ExistsFilter(values=[Post.author_id == User.id], operator="and"),
+)
+```
+
+### FilterGroup / MultiFilter (composite)
+
+`FilterGroup` joins several filters under one logical operator; `MultiFilter` builds a nested filter tree from a serialized dict (useful for client-driven advanced search).
+
+```python
+from advanced_alchemy.filters import FilterGroup, BooleanFilter, ComparisonFilter
+
+group = FilterGroup(
+    logical_operator="or",
+    filters=[BooleanFilter("is_featured", True), ComparisonFilter("views", "ge", 1000)],
+)
+results = await service.get_many(group)
+```
+
+> Filter values may also be SQLAlchemy func expressions (1.8+), e.g. comparing against `func.lower(...)`.
 
 ---
 

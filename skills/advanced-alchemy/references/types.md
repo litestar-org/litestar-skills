@@ -302,6 +302,64 @@ if document.file:
 
 ---
 
+## Bool (dialect-aware boolean)
+
+`Bool` (added 1.11) resolves to each dialect's native boolean, including Oracle 23c's real `BOOLEAN` (falling back to `NUMBER(1)` on older Oracle). Use it instead of `sqlalchemy.Boolean` when the model must run on Oracle as well as PostgreSQL/SQLite/MySQL.
+
+```python
+from advanced_alchemy.types import Bool
+from sqlalchemy.orm import Mapped, mapped_column
+
+
+class User(UUIDBase):
+    is_active: Mapped[bool] = mapped_column(Bool, default=True)
+```
+
+## Vector (dialect-aware similarity search)
+
+`Vector` (added 1.11) is a single fixed-dimension vector column that resolves per dialect — Oracle 23ai `VECTOR`, PostgreSQL/CockroachDB `pgvector` (when installed), and a JSON-array fallback everywhere else. Importing it never requires `pgvector` or `oracledb`; the backend is chosen in `load_dialect_impl`.
+
+```python
+from advanced_alchemy.types import Vector
+from sqlalchemy.orm import Mapped, mapped_column
+
+
+class Document(UUIDBase):
+    embedding: Mapped[list[float]] = mapped_column(Vector(dim=1536))  # storage_format="FLOAT32" default
+```
+
+Similarity search uses the dialect-aware distance operators on the column's `.comparator` — `cosine_distance`, `l2_distance`, `l1_distance`, `max_inner_product` (each maps to the backend operator; the JSON fallback raises, since it has no distance operator):
+
+```python
+from sqlalchemy import select
+
+stmt = (
+    select(Document)
+    .order_by(Document.embedding.cosine_distance(query_vector))
+    .limit(10)
+)
+```
+
+## TOTP and One-Time Codes
+
+Added in 1.11 for authentication flows. `TOTPSecret` is an `EncryptedString` subtype that stores a TOTP shared secret encrypted at rest; pair it with `TOTPProvider` / `generate_totp_secret` to issue and verify codes. `OneTimeCode` / `HashedOneTimeCode` (+ `generate_one_time_code`) store single-use codes (email/SMS verification) hashed like a password.
+
+```python
+from advanced_alchemy.types import (
+    TOTPSecret,
+    HashedOneTimeCode,
+    generate_totp_secret,
+    generate_one_time_code,
+)
+from sqlalchemy.orm import Mapped, mapped_column
+
+
+class Account(UUIDBase):
+    totp_secret: Mapped[str | None] = mapped_column(TOTPSecret(key=ENCRYPTION_KEY), default=None)
+    # writes a plaintext code; the column hashes it. Verify with the column's verify helper.
+    email_code: Mapped[str | None] = mapped_column(HashedOneTimeCode, default=None)
+```
+
 ## Type Compatibility Matrix
 
 | Type | PostgreSQL | SQLite | MySQL | Oracle |
@@ -315,3 +373,5 @@ if document.file:
 | `EncryptedText` | `TEXT` | `TEXT` | `TEXT` | `CLOB` |
 | `PasswordHash` | `VARCHAR` | `VARCHAR` | `VARCHAR` | `VARCHAR2` |
 | `StoredObject` | `JSONB` | `JSON` | `JSON` | `JSON` |
+| `Bool` | `BOOLEAN` | `BOOLEAN` | `BOOL` | `BOOLEAN` (23c) / `NUMBER(1)` |
+| `Vector` | `pgvector` / JSON | `JSON` | `JSON` | `VECTOR` (23ai) / JSON |
