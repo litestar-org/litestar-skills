@@ -5,15 +5,13 @@
 ```python
 from __future__ import annotations
 
-from typing import Annotated
-
 from litestar import Controller, get, post, put, delete
 from litestar.di import Provide
-from litestar.params import Parameter
+from litestar.params import FromPath  # Litestar >= 2.22
 
 
 @get("/items/{item_id:int}")
-async def get_item(item_id: Annotated[int, Parameter()]) -> Item:
+async def get_item(item_id: FromPath[int]) -> Item:
     return await fetch_item(item_id)
 
 
@@ -35,7 +33,7 @@ class ItemController(Controller):
         return await service.list_all()
 
     @get("/{item_id:int}")
-    async def get_item(self, item_id: Annotated[int, Parameter()], service: ItemService) -> Item:
+    async def get_item(self, item_id: FromPath[int], service: ItemService) -> Item:
         return await service.get(item_id)
 ```
 

@@ -15,11 +15,10 @@ Use `create_service_dependencies` from `advanced_alchemy.extensions.litestar.pro
 ```python
 from __future__ import annotations
 
-from typing import Annotated
 from uuid import UUID
 
 from litestar import Controller, get
-from litestar.params import Dependency, Parameter
+from litestar.params import FromPath, SkipValidation  # Litestar >= 2.23
 
 from advanced_alchemy.extensions.litestar.providers import create_service_dependencies
 from advanced_alchemy.filters import FilterTypes
@@ -55,7 +54,7 @@ class UserController(Controller):
     async def list_users(
         self,
         users_service: UserService,
-        filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
+        filters: SkipValidation[list[FilterTypes]],
     ) -> OffsetPagination[User]:
         results, total = await users_service.get_many_and_count(*filters)
         return users_service.to_schema(results, total, filters=filters, schema_type=User)
@@ -64,7 +63,7 @@ class UserController(Controller):
     async def get_user(
         self,
         users_service: UserService,
-        user_id: Annotated[UUID, Parameter()],
+        user_id: FromPath[UUID],
     ) -> User:
         db_user = await users_service.get(user_id)
         return users_service.to_schema(db_user, schema_type=User)

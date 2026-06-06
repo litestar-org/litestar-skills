@@ -78,12 +78,11 @@ from __future__ import annotations
 from uuid import UUID
 
 from litestar import Controller, Request, get, post, patch, delete
-from litestar.params import Dependency, Parameter
+from litestar.params import FromPath, SkipValidation  # Litestar >= 2.23
 from msgspec import to_builtins
 from advanced_alchemy.extensions.litestar.providers import create_service_dependencies
 from advanced_alchemy.filters import FilterTypes
 from advanced_alchemy.service import OffsetPagination
-from typing import Annotated
 
 from app.domain.accounts.guards import requires_active_user
 from app.domain.tasks.schemas import Task, TaskCreate, TaskUpdate
@@ -113,7 +112,7 @@ class TaskController(Controller):
         self,
         tasks_service: TaskService,
         request: Request,
-        filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
+        filters: SkipValidation[list[FilterTypes]],
     ) -> OffsetPagination[Task]:
         results, total = await tasks_service.get_many_and_count(
             *filters, owner_id=request.user.id,
@@ -122,7 +121,7 @@ class TaskController(Controller):
 
     @get("/{task_id:uuid}")
     async def get_task(
-        self, task_id: Annotated[UUID, Parameter()], tasks_service: TaskService, request: Request,
+        self, task_id: FromPath[UUID], tasks_service: TaskService, request: Request,
     ) -> Task:
         db_task = await tasks_service.get_one_or_none(id=task_id, owner_id=request.user.id)
         if db_task is None:
@@ -143,7 +142,7 @@ class TaskController(Controller):
 
     @patch("/{task_id:uuid}")
     async def update_task(
-        self, task_id: Annotated[UUID, Parameter()], data: TaskUpdate,
+        self, task_id: FromPath[UUID], data: TaskUpdate,
         tasks_service: TaskService, request: Request,
     ) -> Task:
         db_task = await tasks_service.update(
@@ -154,7 +153,7 @@ class TaskController(Controller):
 
     @delete("/{task_id:uuid}")
     async def delete_task(
-        self, task_id: Annotated[UUID, Parameter()], tasks_service: TaskService, request: Request,
+        self, task_id: FromPath[UUID], tasks_service: TaskService, request: Request,
     ) -> None:
         await tasks_service.delete(task_id, owner_id=request.user.id)
 ```

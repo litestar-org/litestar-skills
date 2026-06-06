@@ -111,6 +111,8 @@ app = Litestar(
 ### Using in Route Handlers
 
 ```python
+from typing import Annotated
+
 from litestar import get, post, delete
 from litestar.params import Parameter
 
@@ -123,7 +125,8 @@ async def list_users(user_service: UserService) -> list[m.User]:
 @get("/users/{user_id:uuid}")
 async def get_user(
     user_service: UserService,
-    user_id: UUID = Parameter(title="User ID"),
+    # 2.x removes the `field = Parameter(...)` default form in 3.0; use Annotated
+    user_id: Annotated[UUID, Parameter(title="User ID")],
 ) -> m.User:
     return await user_service.get(user_id)
 

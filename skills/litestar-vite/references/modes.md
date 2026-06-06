@@ -89,7 +89,7 @@ Template helpers (available when `template_config` is set + `VitePlugin` is regi
 
 ```python
 from litestar_vite import ViteConfig, VitePlugin, PathConfig
-from litestar.contrib.jinja import JinjaTemplateEngine
+from litestar.plugins.jinja import JinjaTemplateEngine
 from litestar.template.config import TemplateConfig
 
 vite = VitePlugin(config=ViteConfig(

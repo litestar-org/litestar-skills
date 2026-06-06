@@ -46,23 +46,31 @@ Same-name lookups walk inward — handler-level overrides controller, controller
 
 ## Typed Dependency Parameters
 
-Name handler parameters after dependency keys. Use `Dependency(skip_validation=True)` when the value is assembled by a trusted dependency provider such as a filter aggregate.
+Name handler parameters after dependency keys. Use `SkipValidation[T]` (Litestar ≥ 2.23) when the value is assembled by a trusted dependency provider such as a filter aggregate — it replaces the deprecated `Dependency(skip_validation=True)` and works on any parameter, not just dependencies.
 
 ```python
-from typing import Annotated
-
-from litestar.params import Dependency
+from litestar.params import SkipValidation  # Litestar >= 2.23
 
 
 async def list_users(
     users_service: UserService,
-    filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
+    filters: SkipValidation[list[FilterTypes]],
 ) -> OffsetPagination[User]:
     rows, total = await users_service.get_many_and_count(*filters)
     return users_service.to_schema(rows, total, filters=filters, schema_type=User)
 ```
 
-When the dependency key must differ from the parameter name, prefer renaming the parameter to match the key. Keep alias wrappers out of portable skill examples until the target Litestar release exposes them.
+When the dependency key must differ from the parameter name, use `NamedDependency[T]` (Litestar ≥ 2.23, from `litestar.di`) — the supported alias wrapper that replaces `Annotated[T, Dependency()]`:
+
+```python
+from litestar.di import NamedDependency  # Litestar >= 2.23
+
+
+async def list_users(db: NamedDependency[AsyncSession]) -> list[User]:  # injects the "db" provider
+    ...
+```
+
+`params.Dependency` / `DependencyKwarg` are deprecated since 2.23 and removed in 3.0; prefer `NamedDependency` and `SkipValidation`.
 
 ## Dishka (`FromDishka as Inject[T]`)
 

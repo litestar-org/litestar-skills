@@ -213,12 +213,11 @@ from __future__ import annotations
 from uuid import UUID
 
 from litestar import Controller, get, post, patch, delete
-from litestar.params import Dependency, Parameter
+from litestar.params import FromPath, SkipValidation  # Litestar >= 2.23
 from msgspec import to_builtins
 from advanced_alchemy.extensions.litestar.providers import create_service_dependencies
 from advanced_alchemy.filters import FilterTypes
 from advanced_alchemy.service import OffsetPagination
-from typing import Annotated
 
 from app.domain.{name}.schemas import {Resource}, {Resource}Create, {Resource}Update
 from app.domain.{name}.services import {Resource}Service
@@ -245,14 +244,14 @@ class {Resource}Controller(Controller):
     async def list_{resources}(
         self,
         {resource}_service: {Resource}Service,
-        filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
+        filters: SkipValidation[list[FilterTypes]],
     ) -> OffsetPagination[{Resource}]:
         results, total = await {resource}_service.get_many_and_count(*filters)
         return {resource}_service.to_schema(results, total, filters=filters, schema_type={Resource})
 
     @get("/{{item_id:uuid}}")
     async def get_{resource}(
-        self, item_id: Annotated[UUID, Parameter()], {resource}_service: {Resource}Service,
+        self, item_id: FromPath[UUID], {resource}_service: {Resource}Service,
     ) -> {Resource}:
         db_obj = await {resource}_service.get_one_or_none(id=item_id)
         if db_obj is None:
@@ -268,14 +267,14 @@ class {Resource}Controller(Controller):
 
     @patch("/{{item_id:uuid}}")
     async def update_{resource}(
-        self, item_id: Annotated[UUID, Parameter()], data: {Resource}Update, {resource}_service: {Resource}Service,
+        self, item_id: FromPath[UUID], data: {Resource}Update, {resource}_service: {Resource}Service,
     ) -> {Resource}:
         db_obj = await {resource}_service.update({{**to_builtins(data), "id": item_id}})
         return {resource}_service.to_schema(db_obj, schema_type={Resource})
 
     @delete("/{{item_id:uuid}}")
     async def delete_{resource}(
-        self, item_id: Annotated[UUID, Parameter()], {resource}_service: {Resource}Service,
+        self, item_id: FromPath[UUID], {resource}_service: {Resource}Service,
     ) -> None:
         await {resource}_service.delete(item_id)
 ```
@@ -288,11 +287,10 @@ from __future__ import annotations
 from uuid import UUID
 
 from litestar import Controller, get, post, patch, delete
-from litestar.params import Dependency, Parameter
+from litestar.params import FromPath, SkipValidation  # Litestar >= 2.23
 from msgspec import to_builtins
 from sqlspec.core.filters import FilterTypes
 from sqlspec.extensions.litestar.providers import create_filter_dependencies
-from typing import Annotated
 
 from app.domain.{name}.schemas import {Resource}, {Resource}Create, {Resource}Update
 from app.domain.{name}.services import {Resource}Service
@@ -316,14 +314,14 @@ class {Resource}Controller(Controller):
     async def list_{resources}(
         self,
         {resource}_service: {Resource}Service,
-        filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
+        filters: SkipValidation[list[FilterTypes]],
     ) -> list[{Resource}]:
         rows, _total = await {resource}_service.list_and_count(*filters)
         return rows
 
     @get("/{{item_id:uuid}}")
     async def get_{resource}(
-        self, item_id: Annotated[UUID, Parameter()], {resource}_service: {Resource}Service,
+        self, item_id: FromPath[UUID], {resource}_service: {Resource}Service,
     ) -> {Resource}:
         row = await {resource}_service.get_one_or_none(item_id)
         if row is None:

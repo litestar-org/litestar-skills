@@ -95,6 +95,34 @@ async def get_user(user_id: int) -> User:
 | `partial=True` | All fields optional (PATCH endpoints) |
 | `max_nested_depth=N` | Cap nested DTO recursion |
 
+## Request Body Markers (Litestar ≥ 2.23)
+
+Declare the request body media type with the generic body markers from `litestar.params` instead of `Annotated[T, Body(media_type=RequestEncodingType.…)]`:
+
+```python
+from litestar import post
+from litestar.params import JSONBody, MultipartBody, URLEncodedBody  # Litestar >= 2.23
+
+
+@post("/orders")
+async def create_order(data: JSONBody[OrderCreate]) -> Order: ...
+
+
+@post("/upload")
+async def upload(data: MultipartBody[UploadForm]) -> Receipt: ...
+
+
+@post("/login")
+async def login(data: URLEncodedBody[Credentials]) -> Token: ...
+```
+
+| Marker | Media type | Old form |
+| --- | --- | --- |
+| `JSONBody[T]` | `application/json` (default) | `Annotated[T, Body()]` |
+| `MsgPackBody[T]` | `application/x-msgpack` | `Body(media_type=RequestEncodingType.MESSAGEPACK)` |
+| `MultipartBody[T]` | `multipart/form-data` | `Body(media_type=RequestEncodingType.MULTI_PART)` |
+| `URLEncodedBody[T]` | `application/x-www-form-urlencoded` | `Body(media_type=RequestEncodingType.URL_ENCODED)` |
+
 ## msgspec vs DataclassDTO
 
 | Use | Pick |
