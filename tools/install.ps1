@@ -75,7 +75,7 @@ Set-StrictMode -Version Latest
 # =============================================================================
 # Constants
 # =============================================================================
-$script:Version = '0.1.4'
+$script:Version = '0.2.0'
 $script:RepoUrl = 'https://github.com/litestar-org/litestar-skills'
 $script:RepoSlug = 'litestar-org/litestar-skills'
 $script:MarketplaceName = 'litestar'

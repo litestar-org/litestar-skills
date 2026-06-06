@@ -12,7 +12,7 @@
       "name": "litestar",
       "source": "./",
       "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
-      "version": "0.1.4",
+      "version": "0.2.0",
       "author": {
         "name": "Cody Fincher",
         "email": "cofin@litestar.dev"
