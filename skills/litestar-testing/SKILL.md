@@ -1,6 +1,6 @@
 ---
 name: litestar-testing
-description: "Auto-activate for test_*.py, conftest.py, litestar.testing imports, TestClient, AsyncTestClient, create_test_client, @pytest.mark.anyio, Guard mocks, DI overrides, or Litestar handler tests. Use when testing Litestar apps, handlers, lifespan, auth, HTMX, Inertia, or database-backed integration flows. Not for generic pytest, Vitest, or non-Litestar test suites."
+description: "Auto-activate for test_*.py, conftest.py, litestar.testing, TestClient, AsyncTestClient, create_test_client, create_async_test_client, anyio, Guard mocks, DI overrides, or handler tests. Not for generic pytest."
 ---
 
 # litestar-testing
@@ -24,7 +24,7 @@ For JS-side testing (Vitest, Testing Library, Playwright), use the upstream Vite
 - Test modules MAY use `from __future__ import annotations` — they are pure consumer code.
 - Function-based tests (not class-based)
 - One assertion concern per test
-- Async tests use `@pytest.mark.anyio` (not `@pytest.mark.asyncio`); Litestar uses anyio internally
+- Async Litestar tests use `@pytest.mark.anyio` by default; do not mix AnyIO and pytest-asyncio auto modes.
 - Prefer `AsyncTestClient` for new code; `TestClient` only for legacy / sync-only flows
 
 ## Quick Reference
@@ -302,7 +302,7 @@ For tests that should bypass auth, override the Guard's underlying service or re
 
 ## Guardrails
 
-- **Use `@pytest.mark.anyio`, not `@pytest.mark.asyncio`** — Litestar runs on anyio. Mixing breaks lifespan.
+- **Use `@pytest.mark.anyio` for new Litestar async tests** — keep pytest-asyncio only when a project already uses it explicitly, and never mix auto modes.
 - **Always `async with AsyncTestClient(app=app)`** — without the context manager, plugin lifespans (Vite, SAQ, SQLAlchemy) never run, and tests see a half-initialized app.
 - **Prefer `AsyncTestClient` over `TestClient`** for new tests — the async client matches Litestar's runtime model.
 - **Mock side effects via DI override**, not patching — keeps tests isolated from import order and global state.
@@ -311,7 +311,7 @@ For tests that should bypass auth, override the Guard's underlying service or re
 - **One assertion concern per test** — failures should pinpoint a single behavior.
 - **Don't share state between tests** — fresh app + fresh DB per test (or per module with explicit cleanup).
 - **Test the HTMX path with `HX-Request: true`** — handlers that branch on `request.htmx` need both branches covered.
-- **Mock email via `InMemoryConfig`** — see `../litestar-email/SKILL.md`.
+- **Mock email via `backend="memory"` / `InMemoryBackend`** — see `../litestar-email/SKILL.md`.
 
 </guardrails>
 
@@ -419,13 +419,13 @@ async def test_create_account_validation(async_client, payload, expected_status)
 
 ## References Index
 
-- **[Async Testing](references/async_testing.md)** — anyio + pytest-anyio setup, async fixtures, context manager testing, and common pitfalls.
+- **[Async Testing](references/async_testing.md)** — anyio setup, async fixtures, context manager testing, and common pitfalls.
 
 ## Cross-References
 
 - **[litestar](../litestar/SKILL.md)** — Litestar fundamentals.
 - **[pytest-databases](../pytest-databases/SKILL.md)** — Container-based DB fixtures.
-- **[litestar-email](../litestar-email/SKILL.md)** — `InMemoryConfig` for email tests.
+- **[litestar-email](../litestar-email/SKILL.md)** — `backend="memory"` and `InMemoryBackend` for email tests.
 - **[litestar-saq](../litestar-saq/SKILL.md)** — Mocking task queues.
 
 ## JS-side Testing

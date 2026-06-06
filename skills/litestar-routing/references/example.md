@@ -78,7 +78,10 @@ from __future__ import annotations
 from uuid import UUID
 
 from litestar import Controller, Request, get, post, patch, delete
-from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
+from litestar.params import FromPath, SkipValidation  # Litestar >= 2.23
+from msgspec import to_builtins
+from advanced_alchemy.extensions.litestar.providers import create_service_dependencies
+from advanced_alchemy.filters import FilterTypes
 from advanced_alchemy.service import OffsetPagination
 
 from app.domain.accounts.guards import requires_active_user
@@ -92,26 +95,33 @@ class TaskController(Controller):
     path = "/api/tasks"
     guards = [requires_active_user]
     tags = ["Tasks"]
-    dependencies = create_filter_dependencies({
-        "id_filter": "UUID",
-        "pagination_type": "limit_offset",
-        "pagination_size": 20,
-        "search": "title",
-        "created_at": True,
-    })
+    dependencies = create_service_dependencies(
+        TaskService,
+        key="tasks_service",
+        filters={
+            "id_filter": UUID,
+            "pagination_type": "limit_offset",
+            "pagination_size": 20,
+            "search": "title",
+            "created_at": True,
+        },
+    )
 
     @get("/")
     async def list_tasks(
-        self, tasks_service: TaskService, request: Request, filters: list,
+        self,
+        tasks_service: TaskService,
+        request: Request,
+        filters: SkipValidation[list[FilterTypes]],
     ) -> OffsetPagination[Task]:
-        results, total = await tasks_service.list_and_count(
+        results, total = await tasks_service.get_many_and_count(
             *filters, owner_id=request.user.id,
         )
         return tasks_service.to_schema(results, total, filters=filters, schema_type=Task)
 
     @get("/{task_id:uuid}")
     async def get_task(
-        self, task_id: UUID, tasks_service: TaskService, request: Request,
+        self, task_id: FromPath[UUID], tasks_service: TaskService, request: Request,
     ) -> Task:
         db_task = await tasks_service.get_one_or_none(id=task_id, owner_id=request.user.id)
         if db_task is None:
@@ -122,28 +132,28 @@ class TaskController(Controller):
     async def create_task(
         self, data: TaskCreate, tasks_service: TaskService, request: Request,
     ) -> Task:
-        db_task = await tasks_service.create({**data.to_dict(), "owner_id": request.user.id})
+        db_task = await tasks_service.create({**to_builtins(data), "owner_id": request.user.id})
         # Broadcast to the user's WS channel (from request context)
         await channels.wait_published(
-            f"user:{request.user.id}",
             {"type": "task.created", "taskId": str(db_task.id)},
+            f"user:{request.user.id}",
         )
         return tasks_service.to_schema(db_task, schema_type=Task)
 
     @patch("/{task_id:uuid}")
     async def update_task(
-        self, task_id: UUID, data: TaskUpdate,
+        self, task_id: FromPath[UUID], data: TaskUpdate,
         tasks_service: TaskService, request: Request,
     ) -> Task:
         db_task = await tasks_service.update(
-            {**data.to_dict(), "id": task_id},
+            {**to_builtins(data), "id": task_id},
             owner_id=request.user.id,
         )
         return tasks_service.to_schema(db_task, schema_type=Task)
 
     @delete("/{task_id:uuid}")
     async def delete_task(
-        self, task_id: UUID, tasks_service: TaskService, request: Request,
+        self, task_id: FromPath[UUID], tasks_service: TaskService, request: Request,
     ) -> None:
         await tasks_service.delete(task_id, owner_id=request.user.id)
 ```
@@ -161,8 +171,8 @@ from app.server.plugins import channels
 
 async def notify_task_due_job(ctx: Context, *, task_id: str, owner_id: str) -> None:
     await channels.wait_published(
-        f"user:{owner_id}",
         {"type": "task.due", "taskId": task_id},
+        f"user:{owner_id}",
     )
 ```
 

@@ -81,15 +81,15 @@ The four `description` fields must match verbatim so agent-selection heuristics 
 
 Do not hard-code `.agents/` or `.agent/` inside a skill body. Hosts resolve Agent Skills through different directory names — Claude Code, OpenCode, VS Code/Copilot read `.agents/skills/`; Google Antigravity reads `.agent/skills/` (singular). Refer to skills by name, not path.
 
-## Manifest Expansion Plans (v0.2+)
+## Deferred Manifest Fields
 
-Several host-manifest fields are deferred from v0.1 to avoid shipping empty stubs that may trip strict validators:
+Do not ship empty manifest fields. Add optional host fields only when the corresponding artifact exists and a validator covers it:
 
-- **`gemini-extension.json`**: `mcpServers` and `excludeTools` — added when the first Litestar MCP server ships (v0.2).
-- **`.claude-plugin/plugin.json`**: `mcpServers` — same as above.
-- **`.opencode/plugins/litestar.js`**: currently a minimal `export default {}` stub. Real `@opencode-ai/plugin` integration may land if programmatic registration proves necessary; OpenCode's native `.claude/skills/` + `.agents/skills/` discovery covers v0.1 needs.
+- **`gemini-extension.json`**: add `mcpServers` or `excludeTools` only when a shipped MCP server or tool policy requires it.
+- **`.claude-plugin/plugin.json`**: add `mcpServers` only when a shipped MCP server exists.
+- **`.opencode/plugins/litestar.js`**: keep the JS plugin aligned with managed-config and SessionStart reminder behavior.
 
-When adding any of the above, update both the manifest and this section.
+When adding optional fields, update the manifest, install docs, validators, and this section in the same PR.
 
 ## Version Sync Rule
 
@@ -106,7 +106,7 @@ git push --tags
 
 ## Code Style
 
-- **Python 3.10+**, PEP 604 unions (`T | None`). `from __future__ import annotations` is a library-author guardrail, not a consumer rule — application code MAY use it. Avoid it only in modules that define runtime-introspected types (msgspec.Struct, SQLAlchemy 2.0 `Mapped[...]`, Dishka `@provide`, SAQ `@task`, ADK tool registries).
+- **Python 3.10+**, PEP 604 unions (`T | None`). `from __future__ import annotations` is a library-author guardrail, not a consumer rule — application code MAY use it. Avoid it only in modules whose runtime registries cannot resolve postponed annotations (some shared `msgspec.Struct` bases, SQLAlchemy 2.0 `Mapped[...]` model modules, Dishka `@provide`, SAQ `@task`, ADK tool registries).
 - **Linting:** `ruff` + `oxlint` + `markdownlint-cli2`
 - **Type-checking:** `mypy` + `pyright` (both strict)
 - **Pre-commit:** `prek install` (runs on every commit)

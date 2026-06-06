@@ -1,4 +1,4 @@
-description = "Scaffold a new Litestar app — asks stack questions (data access, DI, settings, frontend, deploy) before generating so every decision matches the user's chosen path"
+description = "Use when creating a Litestar app with data access, DI, settings, frontend, deploy, testing, ASGI, or background-task choices. Not for existing domains."
 prompt = """
 # Scaffold a new Litestar application
 
@@ -129,8 +129,8 @@ Each branch below is driven by the answers from Step 1. Do NOT generate patterns
 
 ### Background tasks ({saq_broker})
 
-- `redis`: `SAQConfig(dsn=settings.redis.url, ...)` — also adds `RedisSettings` to `lib/settings.py`.
-- `postgresql`: `SAQConfig(dsn=settings.database.url, ...)` — single Postgres covers app data + job queue.
+- `redis`: `QueueConfig(dsn=settings.redis.url, ...)` — also adds `RedisSettings` to `lib/settings.py`.
+- `postgresql`: `QueueConfig(dsn=settings.database.url, ...)` — single Postgres covers app data + job queue.
 - Skip SAQ entirely if the user answered "no" to Q7.
 
 ### Channels backend ({channels_backend})
@@ -141,11 +141,11 @@ Only wire a `ChannelsPlugin` if the user picked a backend. Import path is per-br
 
 - `none`: no frontend source tree, no `package.json`, no Vite plugin.
 - `template-jinja`: add `TemplateConfig(directory=..., engine=JinjaTemplateEngine)` and one `VitePlugin(config=ViteConfig(mode="template", paths=PathConfig(resource_dir="resources"), ...))`. Use template helpers from `litestar-vite`; do not add `litestar-htmx`.
-- `htmx-jinja`: use the same Jinja `TemplateConfig` + `VitePlugin(mode="template")`, then register `HTMXPlugin()` and scaffold `hx-*` / `ls-*` templates. The canonical `litestar-vite/examples/jinja-htmx` app uses Litestar template configuration, not a template plugin object.
+- `htmx-jinja`: use the same Jinja `TemplateConfig` + `VitePlugin(mode="htmx")`, then register `HTMXPlugin()` and scaffold `hx-*` / `ls-*` templates. The canonical `litestar-vite/examples/jinja-htmx` app uses Litestar template configuration, not a template plugin object.
 - `inertia-*`: configure one `VitePlugin(config=ViteConfig(inertia=InertiaConfig(...), types=TypeGenConfig(output=...), paths=PathConfig(resource_dir="resources", ...)))`. Do not add a second Inertia integration plugin; `VitePlugin` configures the Inertia integration from `ViteConfig.inertia`. Add session middleware and use `@get(..., component="PageName")` / `@post(..., component="PageName")` for page routes. Use `mode="hybrid"` when the app needs an explicit mode; otherwise follow the reference app auto-detection.
 - `spa-react` / `spa-vue` / `spa-svelte` / `spa-angular`: add `VitePlugin(config=ViteConfig(mode="spa", ...))`, a framework-specific `vite.config.ts`, and a client app under `src/js/web` or the chosen frontend root. Keep `bundle_dir`, `hotFile`, `asset_url`, and TypeGen output aligned between Python and TypeScript.
-- `ssr-nuxt` / `ssr-sveltekit`: use `ViteConfig(mode="ssr", ...)`; the JS framework owns rendering and Litestar serves/proxies the API.
-- `ssg-astro`: use `ViteConfig(mode="ssg", ...)` plus `astro.config.mjs` with `litestar-vite-plugin/astro`; no root `vite.config.ts` is required.
+- `ssr-nuxt` / `ssr-sveltekit`: use `ViteConfig(mode="framework", ...)`; the JS framework owns rendering and Litestar serves/proxies the API.
+- `ssg-astro`: use `ViteConfig(mode="framework", ...)` plus `astro.config.mjs` with `litestar-vite-plugin/astro`; no root `vite.config.ts` is required.
 - `external-angular-cli`: use `ViteConfig(mode="external", ...)` and the Angular CLI project layout. Do not force the Analog Vite example when the user picked Angular CLI.
 
 ### ASGI server ({asgi_server})

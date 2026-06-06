@@ -136,7 +136,6 @@ from advanced_alchemy.types.encrypted_string import FernetBackend
 
 # Generate a key: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ENCRYPTION_KEY = "your-fernet-key-here"
-fernet = FernetBackend(key=ENCRYPTION_KEY)
 
 
 class UserSecret(UUIDAuditBase):
@@ -144,12 +143,12 @@ class UserSecret(UUIDAuditBase):
 
     # Short encrypted value
     api_key: Mapped[str] = mapped_column(
-        EncryptedString(backend=fernet),
+        EncryptedString(key=ENCRYPTION_KEY, backend=FernetBackend),
     )
 
     # Long encrypted text
     private_notes: Mapped[str | None] = mapped_column(
-        EncryptedText(backend=fernet),
+        EncryptedText(key=ENCRYPTION_KEY, backend=FernetBackend),
         default=None,
     )
 ```
@@ -159,14 +158,12 @@ class UserSecret(UUIDAuditBase):
 ```python
 from advanced_alchemy.types.encrypted_string import PGCryptoBackend
 
-pg_backend = PGCryptoBackend(key="your-encryption-key")
-
 
 class SecureRecord(UUIDAuditBase):
     __tablename__ = "secure_record"
 
     secret: Mapped[str] = mapped_column(
-        EncryptedString(backend=pg_backend),
+        EncryptedString(key="your-encryption-key", backend=PGCryptoBackend),
     )
 ```
 
@@ -251,40 +248,20 @@ class Document(UUIDAuditBase):
 
 ### Backend Configuration
 
-StoredObject uses `obstore` for cloud storage. Configure backends at application startup:
+Register storage backends at application startup. `ObstoreBackend` is the preferred backend when `advanced-alchemy[obstore]` is installed; use `FSSpecBackend` for protocols that need fsspec.
 
 ```python
-from advanced_alchemy.types.file_object import StorageBackend, FileObject
+from advanced_alchemy.types.file_object import storages
+from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
+from obstore.store import LocalStore, S3Store
 
-# S3 backend
-s3_storage = StorageBackend(
-    key="documents",
-    backend="s3",
-    options={
-        "bucket": "my-bucket",
-        "region": "us-east-1",
-        "access_key_id": "...",
-        "secret_access_key": "...",
-    },
-)
-
-# GCS backend
-gcs_storage = StorageBackend(
-    key="uploads",
-    backend="gcs",
-    options={
-        "bucket": "my-gcs-bucket",
-        "service_account_path": "/path/to/credentials.json",
-    },
-)
-
-# Local filesystem backend
-local_storage = StorageBackend(
+local_storage = ObstoreBackend(
     key="local",
-    backend="file",
-    options={
-        "root": "/var/data/uploads",
-    },
+    fs=LocalStore(prefix="/var/data/uploads"),
+)
+s3_storage = ObstoreBackend(
+    key="documents",
+    fs=S3Store(bucket="my-bucket", region="us-east-1"),
 )
 ```
 
@@ -293,8 +270,7 @@ local_storage = StorageBackend(
 ```python
 from advanced_alchemy.types.file_object import storages
 
-# Register during app startup — `storages` is a module-level `StorageRegistry`
-# singleton; `register_backend` is a method on it.
+# Register during app startup.
 storages.register_backend(s3_storage)
 storages.register_backend(local_storage)
 ```
@@ -307,7 +283,7 @@ file_obj = FileObject(
     filename="report.pdf",
     content_type="application/pdf",
     backend="documents",  # matches the StorageBackend key
-    data=file_bytes,
+    content=file_bytes,
 )
 
 document = Document(title="Q4 Report", file=file_obj)
@@ -326,6 +302,64 @@ if document.file:
 
 ---
 
+## Bool (dialect-aware boolean)
+
+`Bool` (added 1.11) resolves to each dialect's native boolean, including Oracle 23c's real `BOOLEAN` (falling back to `NUMBER(1)` on older Oracle). Use it instead of `sqlalchemy.Boolean` when the model must run on Oracle as well as PostgreSQL/SQLite/MySQL.
+
+```python
+from advanced_alchemy.types import Bool
+from sqlalchemy.orm import Mapped, mapped_column
+
+
+class User(UUIDBase):
+    is_active: Mapped[bool] = mapped_column(Bool, default=True)
+```
+
+## Vector (dialect-aware similarity search)
+
+`Vector` (added 1.11) is a single fixed-dimension vector column that resolves per dialect — Oracle 23ai `VECTOR`, PostgreSQL/CockroachDB `pgvector` (when installed), and a JSON-array fallback everywhere else. Importing it never requires `pgvector` or `oracledb`; the backend is chosen in `load_dialect_impl`.
+
+```python
+from advanced_alchemy.types import Vector
+from sqlalchemy.orm import Mapped, mapped_column
+
+
+class Document(UUIDBase):
+    embedding: Mapped[list[float]] = mapped_column(Vector(dim=1536))  # storage_format="FLOAT32" default
+```
+
+Similarity search uses the dialect-aware distance operators on the column's `.comparator` — `cosine_distance`, `l2_distance`, `l1_distance`, `max_inner_product` (each maps to the backend operator; the JSON fallback raises, since it has no distance operator):
+
+```python
+from sqlalchemy import select
+
+stmt = (
+    select(Document)
+    .order_by(Document.embedding.cosine_distance(query_vector))
+    .limit(10)
+)
+```
+
+## TOTP and One-Time Codes
+
+Added in 1.11 for authentication flows. `TOTPSecret` is an `EncryptedString` subtype that stores a TOTP shared secret encrypted at rest; pair it with `TOTPProvider` / `generate_totp_secret` to issue and verify codes. `OneTimeCode` / `HashedOneTimeCode` (+ `generate_one_time_code`) store single-use codes (email/SMS verification) hashed like a password.
+
+```python
+from advanced_alchemy.types import (
+    TOTPSecret,
+    HashedOneTimeCode,
+    generate_totp_secret,
+    generate_one_time_code,
+)
+from sqlalchemy.orm import Mapped, mapped_column
+
+
+class Account(UUIDBase):
+    totp_secret: Mapped[str | None] = mapped_column(TOTPSecret(key=ENCRYPTION_KEY), default=None)
+    # writes a plaintext code; the column hashes it. Verify with the column's verify helper.
+    email_code: Mapped[str | None] = mapped_column(HashedOneTimeCode, default=None)
+```
+
 ## Type Compatibility Matrix
 
 | Type | PostgreSQL | SQLite | MySQL | Oracle |
@@ -339,3 +373,5 @@ if document.file:
 | `EncryptedText` | `TEXT` | `TEXT` | `TEXT` | `CLOB` |
 | `PasswordHash` | `VARCHAR` | `VARCHAR` | `VARCHAR` | `VARCHAR2` |
 | `StoredObject` | `JSONB` | `JSON` | `JSON` | `JSON` |
+| `Bool` | `BOOLEAN` | `BOOLEAN` | `BOOL` | `BOOLEAN` (23c) / `NUMBER(1)` |
+| `Vector` | `pgvector` / JSON | `JSON` | `JSON` | `VECTOR` (23ai) / JSON |

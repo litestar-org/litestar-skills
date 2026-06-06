@@ -1,6 +1,6 @@
 ---
 name: litestar-data-services
-description: "Auto-activate for SQLAlchemyAsyncRepositoryService, SQLSpecAsyncService, create_filter_dependencies, LimitOffsetFilter, OffsetPagination, repository_type, service_class, filters, pagination, or CRUD service layers. Use when implementing Litestar data services, repositories, filters, or pagination. Not for raw driver usage with no Litestar boundary."
+description: "Auto-activate for SQLAlchemyAsyncRepositoryService, SQLSpecAsyncService, create_filter_dependencies, LimitOffsetFilter, OffsetPagination, filters, or CRUD services. Not for raw drivers."
 ---
 
 # Litestar Data Services

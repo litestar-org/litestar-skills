@@ -49,4 +49,4 @@ See [`docs/policy.md`](../docs/policy.md) for the full per-host reference.
 ## Troubleshooting
 
 - **Plugin not discovered** — ensure the symlink target points at the repo root (the directory containing `.cursor-plugin/plugin.json`), not at `.cursor-plugin/` itself.
-- **Hook doesn't fire** — Cursor's SessionStart hook reads `./hooks/hooks-cursor.json`; ensure the `hooks` field in `.cursor-plugin/plugin.json` is present (it is, as of v0.2).
+- **Hook doesn't fire** — Cursor's SessionStart hook reads `./hooks/hooks-cursor.json`; ensure the `hooks` field in `.cursor-plugin/plugin.json` is present.

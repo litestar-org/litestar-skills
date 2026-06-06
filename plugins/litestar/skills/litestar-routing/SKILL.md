@@ -1,6 +1,6 @@
 ---
 name: litestar-routing
-description: "Auto-activate for Controller classes, Router, route decorators, @get/@post/@put/@patch/@delete, route_handler, path params, app/domain modules, or DomainPlugin layout. Use when designing Litestar routes, handlers, Controller grouping, Router composition, or domain folders. Not for non-Litestar routing or frontend routers."
+description: "Auto-activate for Controller, Router, @get/@post/@put/@patch/@delete, route_handler, path params, app/domain modules, or DomainPlugin layout. Not for frontend routers."
 ---
 
 # Litestar Routing
@@ -12,6 +12,7 @@ Use this skill for route handlers, Controllers, Routers, domain clustering, and 
 - Cluster Controllers by domain, not HTTP method.
 - Keep handlers thin: parse request data, call a service, return a DTO or response object.
 - Put shared path, dependencies, guards, and tags on the Controller class.
+- Prefer the typed markers `FromPath[T]` / `FromQuery[T]` / `FromHeader[T]` / `FromCookie[T]` (Litestar ≥ 2.22) over `Annotated[T, Parameter()]`; never use the `field = Parameter(...)` default form (removed in 3.0).
 - Use typed path parameters and explicit return annotations.
 
 ## Quick Reference

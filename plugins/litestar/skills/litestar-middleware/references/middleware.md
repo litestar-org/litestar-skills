@@ -1,6 +1,6 @@
 # Middleware
 
-Use `AbstractMiddleware` for cross-cutting concerns: timing, request IDs, structured logging, custom auth. Scope-filter to HTTP-only and exclude noise endpoints.
+Use `ASGIMiddleware` for cross-cutting concerns: timing, request IDs, structured logging, custom auth. Scope-filter to HTTP-only and exclude noise endpoints.
 
 ## Pattern
 
@@ -9,44 +9,45 @@ from __future__ import annotations
 
 import time
 
-from litestar.middleware import AbstractMiddleware
-from litestar.types import Receive, Scope, Send
 from litestar.enums import ScopeType
+from litestar.middleware import ASGIMiddleware
+from litestar.types import ASGIApp, Receive, Scope, Send
 import structlog
 
 
 logger = structlog.get_logger()
 
 
-class TimingMiddleware(AbstractMiddleware):
-    scopes = {ScopeType.HTTP}              # HTTP only — skip WebSocket
-    exclude = ["/health", "/metrics"]      # paths to skip entirely
+class TimingMiddleware(ASGIMiddleware):
+    scopes = (ScopeType.HTTP,)                   # HTTP only; skip WebSocket
+    exclude_path_pattern = ("/health", "/metrics")
 
-    async def __call__(
-        self, scope: Scope, receive: Receive, send: Send,
+    async def handle(
+        self, scope: Scope, receive: Receive, send: Send, next_app: ASGIApp,
     ) -> None:
         start = time.perf_counter()
-        await self.app(scope, receive, send)
+        await next_app(scope, receive, send)
         duration = time.perf_counter() - start
         logger.info("request_complete", path=scope["path"], duration_ms=duration * 1000)
 ```
 
 ## Scope Filtering
 
-| `scopes={...}` | Effect |
+| `scopes=(...)` | Effect |
 | --- | --- |
-| `{ScopeType.HTTP}` | HTTP requests only (skip WS) |
-| `{ScopeType.WEBSOCKET}` | WebSocket only |
-| `{ScopeType.HTTP, ScopeType.WEBSOCKET}` | Both (default) |
+| `(ScopeType.HTTP,)` | HTTP requests only (skip WS) |
+| `(ScopeType.WEBSOCKET,)` | WebSocket only |
+| `(ScopeType.HTTP, ScopeType.WEBSOCKET)` | Both |
 
-## `exclude` Pattern
+## Skip Patterns
 
-`exclude` accepts a list of regex patterns matched against `scope["path"]`. Use it for health checks, metrics, and other paths that shouldn't get the middleware's overhead:
+`exclude_path_pattern` accepts regex patterns matched against `scope["path"]`; `exclude_opt_key` skips handlers that set a matching `opt` key. Use these for health checks, metrics, and other paths that shouldn't get the middleware's overhead:
 
 ```python
-class StructuredLoggingMiddleware(AbstractMiddleware):
-    scopes = {ScopeType.HTTP}
-    exclude = ["^/health$", "^/metrics$", "^/schema"]
+class StructuredLoggingMiddleware(ASGIMiddleware):
+    scopes = (ScopeType.HTTP,)
+    exclude_path_pattern = ("^/health$", "^/metrics$", "^/schema")
+    exclude_opt_key = "skip_access_log"
 ```
 
 ## Registration
@@ -54,7 +55,7 @@ class StructuredLoggingMiddleware(AbstractMiddleware):
 ```python
 app = Litestar(
     route_handlers=[...],
-    middleware=[TimingMiddleware, StructuredLoggingMiddleware],
+    middleware=[TimingMiddleware(), StructuredLoggingMiddleware()],
 )
 ```
 

@@ -1,19 +1,19 @@
 ---
 name: litestar-mcp
-description: "Auto-activate for litestar_mcp imports, LitestarMCP, MCPConfig, MCPController, @mcp_tool, @mcp_resource, JSON-RPC route exposure, route filtering, or OAuth/Guard-protected MCP endpoints. Use when exposing Litestar routes as MCP tools or resources. Not for non-Litestar MCP servers or FastAPI/Django MCP integrations."
+description: "Auto-activate for litestar_mcp, LitestarMCP, MCPConfig, MCPAuthConfig, MCPAuthBackend, mcp_tool=, mcp_resource=, Streamable HTTP, or OIDC MCP endpoints. Not for non-Litestar MCP."
 ---
 
 # litestar-mcp
 
-`litestar-mcp` exposes Litestar route handlers as [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools and resources over JSON-RPC 2.0. The plugin discovers routes via the Litestar OpenAPI schema and serves them at `POST /mcp/` (configurable).
+`litestar-mcp` exposes explicitly marked Litestar route handlers as [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools and resources over MCP Streamable HTTP and JSON-RPC 2.0.
 
-GET handlers become **resources** (read-only); POST/PUT/PATCH/DELETE handlers become **tools** (mutations). Per-route overrides via `@mcp_tool`, `@mcp_resource`, or `opt={...}` dicts.
+Mark routes with `mcp_tool="name"` or `mcp_resource="name"` directly on Litestar route decorators. Do not use the removed `@mcp_tool` / `@mcp_resource` decorator API or `opt={"mcp_tool_name": ...}` wrappers.
 
 ## Code Style Rules
 
 - PEP 604 unions: `T | None`, never `Optional[T]`
 - Consumer Litestar app modules MAY use `from __future__ import annotations`
-- Async all I/O — handlers exposed via MCP must be `async def`
+- Async all I/O - handlers exposed through MCP must be `async def`
 
 ## Quick Reference
 
@@ -26,170 +26,158 @@ pip install litestar-mcp
 ### Basic Setup
 
 ```python
-from litestar import Litestar, get
+from litestar import Litestar, get, post
+from litestar.openapi.config import OpenAPIConfig
 from litestar_mcp import LitestarMCP, MCPConfig
 
-@get("/users", name="list_users")
-async def get_users() -> list[dict]: ...
+
+@get("/users", mcp_tool="list_users")
+async def list_users() -> list[dict]:
+    return [{"id": 1, "name": "Alice"}]
+
+
+@post("/analyze", mcp_tool="analyze_data")
+async def analyze_data(data: dict) -> dict:
+    return {"count": len(data)}
+
+
+@get("/config", mcp_resource="app_config")
+async def get_app_config() -> dict:
+    return {"debug": False}
+
 
 app = Litestar(
-    route_handlers=[get_users],
+    route_handlers=[list_users, analyze_data, get_app_config],
     plugins=[LitestarMCP(MCPConfig(name="My API"))],
+    openapi_config=OpenAPIConfig(title="My API", version="1.0.0"),
 )
 ```
 
-The MCP endpoint is mounted at `POST /mcp/` by default.
+The default MCP surface is:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /mcp` | Server-Sent Events stream when requested by the client |
+| `POST /mcp` | JSON-RPC endpoint for `initialize`, `ping`, `tools/*`, `resources/*`, and optional task methods |
+| `GET /.well-known/mcp-server.json` | MCP server manifest |
+| `GET /.well-known/agent-card.json` | Agent card metadata |
+| `GET /.well-known/oauth-protected-resource` | OAuth protected-resource metadata when auth is configured |
 
 ### MCPConfig
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `name` | `str` | `"litestar"` | Server name reported in `initialize` response |
-| `base_path` | `str` | `"/mcp"` | URL prefix for the MCP controller |
-| `guards` | `list[Guard]` | `[]` | Litestar guards applied to the MCP controller |
-| `allowed_origins` | `list[str]` | `["*"]` | CORS origins for the MCP endpoint |
-| `auth` | `OAuthConfig \| None` | `None` | OAuth 2.1 configuration |
-| `include_operations` | `list[str] \| None` | `None` | Whitelist of operation names to expose |
-| `exclude_operations` | `list[str] \| None` | `None` | Blacklist of operation names to suppress |
-| `include_tags` | `list[str] \| None` | `None` | Only expose routes with these OpenAPI tags |
-| `exclude_tags` | `list[str] \| None` | `None` | Suppress routes with these OpenAPI tags |
+| `base_path` | `str` | `"/mcp"` | URL prefix for the MCP Streamable HTTP endpoint |
+| `include_in_schema` | `bool` | `False` | Include MCP routes in OpenAPI |
+| `name` | `str \| None` | `None` | Server name; defaults to OpenAPI title |
+| `guards` | `list[Any] \| None` | `None` | Litestar guards applied to the MCP router |
+| `allowed_origins` | `list[str] \| None` | `None` | Restrict accepted `Origin` headers |
+| `include_operations` | `list[str] \| None` | `None` | Only expose matching operation names |
+| `exclude_operations` | `list[str] \| None` | `None` | Exclude matching operation names |
+| `include_tags` | `list[str] \| None` | `None` | Only expose routes with matching OpenAPI tags |
+| `exclude_tags` | `list[str] \| None` | `None` | Exclude routes with matching OpenAPI tags |
+| `auth` | `MCPAuthConfig \| None` | `None` | OAuth protected-resource metadata |
+| `tasks` | `bool \| MCPTaskConfig` | `False` | Enable experimental in-memory MCP task support |
 
-### Default Route Discovery
-
-| HTTP Method | Default MCP Type |
-| --- | --- |
-| `GET` | resource |
-| `POST` / `PUT` / `PATCH` / `DELETE` | tool |
-
-Override per route with decorators (below).
-
-### `@mcp_tool` — explicit tool
+### Route Marking
 
 ```python
-from litestar import post
-from litestar_mcp import mcp_tool
+from litestar import get, post
 
-@mcp_tool("create_order")
-@post("/orders")
-async def create_order(data: OrderCreate) -> Order: ...
+
+@get("/products", mcp_resource="product_list")
+async def list_products() -> list[dict]: ...
+
+
+@post("/cart/items", mcp_tool="add_to_cart")
+async def add_to_cart(data: CartItem) -> Cart: ...
+
+
+@get("/products/{product_id:int}", mcp_resource_template="shop://products/{product_id}")
+async def get_product(product_id: int) -> dict: ...
 ```
 
-The string argument sets the MCP tool name. Omit it to use the route's `name` attribute.
-
-### `@mcp_resource` — explicit resource
+Use structured metadata when the agent needs sharper tool selection:
 
 ```python
-from litestar import get
-from litestar_mcp import mcp_resource
-
-@mcp_resource("orders_list")
-@get("/orders", name="list_orders")
-async def list_orders() -> list[Order]: ...
+@post(
+    "/reports",
+    mcp_tool="generate_report",
+    mcp_description="Generate a report for an existing account.",
+    mcp_when_to_use="Use after the user has confirmed the account and date range.",
+    mcp_returns="A report id and queued status.",
+)
+async def generate_report(data: ReportRequest) -> ReportQueued: ...
 ```
 
-### `opt` dict (no decorator import)
+### Excluding Routes
 
 ```python
-@get("/internal/health", opt={"mcp_exclude": True})
-async def health_check() -> dict: ...
-
-@post("/orders", opt={"mcp_tool_name": "place_order"})
-async def create_order(data: OrderCreate) -> Order: ...
+@get("/internal/metrics", opt={"mcp_exclude": True})
+async def metrics() -> dict: ...
 ```
 
-| `opt` key | Type | Description |
-| --- | --- | --- |
-| `mcp_exclude` | `bool` | Exclude this route from MCP entirely |
-| `mcp_tool_name` | `str` | Override MCP tool name |
-| `mcp_resource_name` | `str` | Override MCP resource name; implies resource type |
-
-### JSON-RPC Methods
-
-| Method | Description |
-| --- | --- |
-| `initialize` | Handshake; returns server name, version, capabilities |
-| `ping` | Health check; returns `pong` |
-| `resources/list` | List all discoverable MCP resources |
-| `resources/read` | Read (call) a specific resource by URI |
-| `tools/list` | List all discoverable MCP tools |
-| `tools/call` | Invoke a tool by name with arguments |
-
-### Example JSON-RPC Call
+### JSON-RPC Call
 
 ```json
-POST /mcp/
-Content-Type: application/json
-
 {
   "jsonrpc": "2.0",
   "id": 1,
   "method": "tools/call",
   "params": {
-    "name": "create_order",
+    "name": "add_to_cart",
     "arguments": { "product_id": 42, "quantity": 3 }
-  }
-}
-```
-
-Response:
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "content": [{ "type": "text", "text": "{\"id\": 99, \"status\": \"pending\"}" }]
   }
 }
 ```
 
 ### Built-in OpenAPI Resource
 
-`LitestarMCP` automatically exposes the Litestar OpenAPI schema as an MCP resource:
+`LitestarMCP` exposes the app OpenAPI schema as:
 
-- **URI**: `openapi://schema`
-- **MIME type**: `application/json`
-- **Content**: Full OpenAPI 3.x schema from `/schema/openapi.json`
+- URI: `litestar://openapi`
+- MIME type: `application/json`
+- Method: `resources/read`
 
-AI agents read this resource to understand the full API surface before calling tools.
+### Auth
 
-### OAuth 2.1 Auth
+Authentication is a Litestar middleware concern. Apps with existing auth middleware get `request.user` / `request.auth` before tool handlers run.
 
-```python
-from litestar_mcp import MCPConfig, OAuthConfig
-
-config = MCPConfig(
-    name="My Secured API",
-    auth=OAuthConfig(
-        issuer="https://auth.example.com",
-        client_id="mcp-client",
-        scopes=["read", "write"],
-    ),
-)
-```
-
-PKCE is enforced. Token validation uses the issuer's JWKS endpoint.
-
-### Guard-based Auth (simpler)
+For OIDC-backed MCP endpoints, pair `MCPAuthConfig` metadata with token validation:
 
 ```python
-config = MCPConfig(
-    name="My API",
-    guards=[requires_api_key],
+from litestar import Litestar
+from litestar.middleware import DefineMiddleware
+from litestar_mcp import LitestarMCP, MCPAuthBackend, MCPConfig, OIDCProviderConfig
+from litestar_mcp.auth import MCPAuthConfig
+
+
+app = Litestar(
+    route_handlers=[...],
+    plugins=[
+        LitestarMCP(
+            MCPConfig(
+                auth=MCPAuthConfig(
+                    issuer="https://company.okta.com",
+                    audience="api://mcp-tools",
+                )
+            )
+        )
+    ],
+    middleware=[
+        DefineMiddleware(
+            MCPAuthBackend,
+            providers=[
+                OIDCProviderConfig(
+                    issuer="https://company.okta.com",
+                    audience="api://mcp-tools",
+                )
+            ],
+            user_resolver=lambda claims, app: MyUser(sub=claims["sub"]),
+        )
+    ],
 )
 ```
-
-### Filtering
-
-```python
-config = MCPConfig(
-    name="Public API",
-    include_tags=["public"],
-    exclude_operations=["admin:delete_user", "admin:list_users"],
-)
-```
-
-`include_operations` / `exclude_operations` match against route `name` attributes.
 
 <workflow>
 
@@ -203,23 +191,19 @@ pip install litestar-mcp
 
 ### Step 2: Decide What to Expose
 
-List the routes that should be callable by AI agents. Use OpenAPI tags to group them (e.g., `tags=["public"]`). Routes that touch admin operations, internal metrics, or sensitive data should NOT be exposed.
+List only the routes that should be callable by AI clients. Mark those routes with `mcp_tool=`, `mcp_resource=`, or `mcp_resource_template=`. Do not rely on route method defaults.
 
 ### Step 3: Add the Plugin
 
-Wire `LitestarMCP(MCPConfig(name=...))` into `Litestar(plugins=[...])`. Set `include_tags` or `include_operations` to start with an explicit allowlist.
+Wire `LitestarMCP(MCPConfig(name=...))` into `Litestar(plugins=[...])`. Use `include_tags` or `include_operations` when you need a second allowlist.
 
-### Step 4: Annotate Per-Route (optional)
+### Step 4: Add Auth
 
-For routes that need explicit MCP names or type overrides, use `@mcp_tool("name")`, `@mcp_resource("name")`, or `opt={"mcp_tool_name": "..."}`.
+For public endpoints, configure bearer-token validation and `MCPAuthConfig` metadata. For internal deployments, use `guards=[...]` or existing app auth middleware.
 
-### Step 5: Add Auth
+### Step 5: Verify
 
-For public-facing MCP endpoints, set `OAuthConfig`. For internal use, set `guards=[...]` with API-key or session-based guards.
-
-### Step 6: Verify
-
-Hit `POST /mcp/` with a `tools/list` request. Confirm only intended routes appear. Hit `tools/call` for a sample mutation; confirm input validation works.
+Hit `POST /mcp` with `tools/list` and `resources/list`. Confirm only marked routes appear. Call one representative tool and read one representative resource.
 
 </workflow>
 
@@ -227,14 +211,13 @@ Hit `POST /mcp/` with a `tools/list` request. Confirm only intended routes appea
 
 ## Guardrails
 
-- **Default to allowlists, not blocklists** — `include_tags` is safer than `exclude_*`. Adding a new route shouldn't accidentally expose it to AI.
-- **Never expose admin / destructive routes by default** — use `opt={"mcp_exclude": True}` or filter by tag.
-- **Prefer resources for idempotent reads** — AI agents may call resources speculatively during reasoning. Tools have side effects; gate them behind explicit confirmation.
-- **Tool argument validation runs against the OpenAPI request schema** — keep DTOs precise; loose `dict[str, Any]` schemas let agents pass anything.
-- **Use `OAuthConfig` for public MCP endpoints** — JSON-RPC over HTTP is reachable from anywhere; raw API keys leak.
-- **Pin `base_path`** — default `/mcp` is fine but document if changed.
-- **Don't expose internal metrics, debug, or system routes** — `opt={"mcp_exclude": True}` or `exclude_tags=["internal"]`.
-- **Guard the MCP controller with the same Guards as your normal API** if it shares user context.
+- **Mark routes explicitly** - unmarked routes should not appear in MCP clients.
+- **Default to allowlists** - `include_tags` / `include_operations` prevent accidental exposure when route sets grow.
+- **Never expose admin or destructive routes by default** - require a human-confirmation workflow before any irreversible operation.
+- **Prefer resources for read-only reference data** - agents may read resources speculatively.
+- **Keep DTOs precise** - loose `dict[str, Any]` request schemas produce weak tool contracts.
+- **Use `MCPAuthConfig` plus token validation for public MCP** - metadata alone does not authenticate requests.
+- **Set `allowed_origins` for browser-accessible MCP clients** - leave it `None` only for trusted server-to-server deployments.
 
 </guardrails>
 
@@ -245,13 +228,13 @@ Hit `POST /mcp/` with a `tools/list` request. Confirm only intended routes appea
 Before delivering an MCP integration, verify:
 
 - [ ] `LitestarMCP` is in `app.plugins`
-- [ ] `MCPConfig.name` is meaningful (used in agent UIs)
-- [ ] An allowlist (`include_tags` or `include_operations`) is set, not a pure blocklist
-- [ ] Admin / internal routes are excluded
-- [ ] Auth is configured (`auth=OAuthConfig` or `guards=[...]`)
-- [ ] `POST /mcp/` `tools/list` returns only intended routes
-- [ ] All exposed handlers are `async def` and return JSON-serializable types
-- [ ] Tool arg schemas (DTOs) are precise — no loose `dict[str, Any]`
+- [ ] Exposed routes use `mcp_tool=`, `mcp_resource=`, or `mcp_resource_template=`
+- [ ] Admin / internal routes use `opt={"mcp_exclude": True}` or are outside the allowlist
+- [ ] Auth is configured for the deployment boundary
+- [ ] `POST /mcp` `tools/list` returns only intended tools
+- [ ] `POST /mcp` `resources/list` includes only intended resources plus `litestar://openapi`
+- [ ] Exposed handlers are `async def` and return JSON-serializable types
+- [ ] Tool argument DTOs are specific enough for generated schemas
 
 </validation>
 
@@ -259,50 +242,49 @@ Before delivering an MCP integration, verify:
 
 ## Example
 
-**Task:** Expose product listing as a resource and "add to cart" as a tool. Hide internal metrics.
+**Task:** Expose product listing as a resource and add-to-cart as a tool. Hide internal metrics.
 
 ```python
 from litestar import Litestar, get, post
-from litestar_mcp import LitestarMCP, MCPConfig, mcp_tool, mcp_resource
+from litestar_mcp import LitestarMCP, MCPConfig
 
-@mcp_resource("product_list")
-@get("/products", name="list_products", tags=["public"])
+
+@get("/products", mcp_resource="product_list", tags=["public"])
 async def list_products() -> list[dict]:
     return [{"id": 1, "name": "Widget"}]
 
-@mcp_tool("add_to_cart")
-@post("/cart/items", name="cart:add", tags=["public"])
+
+@post("/cart/items", mcp_tool="add_to_cart", tags=["public"])
 async def add_to_cart(data: CartItem) -> Cart: ...
+
 
 @get("/internal/metrics", opt={"mcp_exclude": True})
 async def metrics() -> dict: ...
 
+
 app = Litestar(
     route_handlers=[list_products, add_to_cart, metrics],
-    plugins=[LitestarMCP(MCPConfig(
-        name="E-Commerce API",
-        include_tags=["public"],
-    ))],
+    plugins=[
+        LitestarMCP(
+            MCPConfig(
+                name="E-Commerce API",
+                include_tags=["public"],
+            )
+        )
+    ],
 )
 ```
 
 </example>
 
----
+## References Index
 
-## Notes
-
-- `tools/call` arguments are validated against the route's OpenAPI request schema before dispatch.
-- Response content is serialized to JSON string and wrapped in MCP `TextContent`.
-- `LitestarMCP` does not affect normal HTTP routing — all existing endpoints continue to work unchanged.
-- Use `exclude_operations` or `opt={"mcp_exclude": True}` to keep internal/admin routes hidden from MCP clients.
-
-## Cross-References
-
-- **[litestar](../litestar/SKILL.md)** — Litestar app, Guards, OpenAPI, plugin lifecycle.
+- Use this skill for route marking, Streamable HTTP endpoint behavior, MCP auth metadata, and verification requests.
+- Use [litestar-auth-guards](../litestar-auth-guards/SKILL.md) when auth logic lives in normal Litestar guards or middleware.
 
 ## Official References
 
+- <https://docs.litestar-mcp.litestar.dev/>
 - <https://github.com/litestar-org/litestar-mcp>
 - <https://modelcontextprotocol.io/>
 - <https://spec.modelcontextprotocol.io/>

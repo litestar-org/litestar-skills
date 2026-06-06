@@ -158,7 +158,7 @@ Filters are passed as positional args between the SQL statement and any keyword 
 
 ## `create_filter_dependencies()` — wiring filters into Litestar DI
 
-`create_filter_dependencies` from `sqlspec.extensions.litestar.providers` generates a Litestar `dependencies` dict that injects composable filter objects into route handlers automatically. Handlers receive the assembled `list[FilterTypes]` via `Dependency(skip_validation=True)`.
+`create_filter_dependencies` from `sqlspec.extensions.litestar.providers` generates a Litestar `dependencies` dict that injects composable filter objects into route handlers automatically. Handlers receive the assembled `list[FilterTypes]` via `SkipValidation[list[FilterTypes]]` (Litestar ≥ 2.23; replaces the deprecated `Dependency(skip_validation=True)`).
 
 ```python
 from sqlspec.extensions.litestar.providers import create_filter_dependencies
@@ -168,9 +168,7 @@ Full config example (adapted from `litestar-sqlstack/src/sqlstack/domain/account
 
 ```python
 from litestar import get
-from litestar.params import Dependency
 from sqlspec.extensions.litestar.providers import create_filter_dependencies
-from typing import Annotated
 from uuid import UUID
 
 from app.schemas import Order
@@ -193,9 +191,8 @@ dependencies = create_filter_dependencies({
 from dishka.integrations.litestar import FromDishka as Inject, inject
 from litestar import get
 from litestar.pagination import OffsetPagination
-from litestar.params import Dependency
+from litestar.params import SkipValidation  # Litestar >= 2.23
 from sqlspec.core.filters import FilterTypes
-from typing import Annotated
 
 from app.domains.orders.services import OrderService
 from app.schemas import Order
@@ -205,7 +202,7 @@ from app.schemas import Order
 @inject
 async def list_orders(
     orders_service: Inject[OrderService],
-    filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
+    filters: SkipValidation[list[FilterTypes]],
 ) -> OffsetPagination[Order]:
     return await orders_service.list_orders(*filters)
 ```
@@ -216,9 +213,8 @@ async def list_orders(
 from litestar import get
 from litestar.di import Provide
 from litestar.pagination import OffsetPagination
-from litestar.params import Dependency
+from litestar.params import SkipValidation  # Litestar >= 2.23
 from sqlspec.core.filters import FilterTypes
-from typing import Annotated
 
 from app.domains.orders.services import OrderService
 from app.schemas import Order
@@ -233,7 +229,7 @@ from app.schemas import Order
 )
 async def list_orders(
     orders_service: OrderService,
-    filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
+    filters: SkipValidation[list[FilterTypes]],
 ) -> OffsetPagination[Order]:
     return await orders_service.list_orders(*filters)
 ```

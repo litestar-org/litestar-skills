@@ -32,13 +32,13 @@ PositiveInt = Annotated[int, Meta(gt=0)]
 NonNegInt = Annotated[int, Meta(ge=0)]
 Probability = Annotated[float, Meta(ge=0.0, le=1.0)]
 Percentage = Annotated[float, Meta(ge=0.0, le=100.0)]
-Price = Annotated[float, Meta(gt=0.0, multiple_of=0.01)]
+PriceCents = Annotated[int, Meta(ge=0, multiple_of=1)]
 Port = Annotated[int, Meta(ge=1, le=65535)]
 Rating = Annotated[int, Meta(ge=1, le=5)]
 
 class Product(msgspec.Struct, kw_only=True):
     id: PositiveInt
-    price: Price
+    price_cents: PriceCents
     stock: NonNegInt
     rating: Rating = 3
 ```
@@ -212,7 +212,7 @@ Rating      = Annotated[int, Meta(ge=1, le=5)]
 
 Probability  = Annotated[float, Meta(ge=0.0, le=1.0)]
 Percentage   = Annotated[float, Meta(ge=0.0, le=100.0)]
-Price        = Annotated[float, Meta(gt=0.0, multiple_of=0.01)]
+PriceCents   = Annotated[int, Meta(ge=0, multiple_of=1)]
 
 NonEmptyStr  = Annotated[str, Meta(min_length=1)]
 ShortStr     = Annotated[str, Meta(min_length=1, max_length=255)]

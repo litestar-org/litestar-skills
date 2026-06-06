@@ -7,8 +7,6 @@ Litestar is heavily optimized for `msgspec`. DTOs provide data mapping, validati
 Canonical apps define a shared base in `app/lib/schema.py` so every DTO ships camelCase on the wire while staying snake_case in Python:
 
 ```python
-from __future__ import annotations
-
 import msgspec
 
 
@@ -16,18 +14,12 @@ class CamelizedBaseStruct(msgspec.Struct, rename="camel"):
     """Base Struct: snake_case in Python, camelCase on the wire."""
 
     def to_dict(self) -> dict:
-        return {
-            f: getattr(self, f)
-            for f in self.__struct_fields__
-            if getattr(self, f, None) is not msgspec.UNSET
-        }
+        return msgspec.to_builtins(self)
 ```
 
 Subclasses inherit the rename:
 
 ```python
-from __future__ import annotations
-
 from datetime import datetime
 from uuid import UUID
 
@@ -48,18 +40,17 @@ class UserCreate(CamelizedBaseStruct):
     password: str
 ```
 
-## `Meta(rename=...)` per-field
+## `msgspec.field(name=...)` per-field
 
-For finer control (e.g. matching a legacy field name), use `msgspec.field` with `Meta`:
+For finer control (e.g. matching a legacy field name), use `msgspec.field(name=...)`:
 
 ```python
 import msgspec
-from typing import Annotated
 
 
 class LegacyUser(CamelizedBaseStruct):
     id: UUID
-    legacy_id: Annotated[str, msgspec.Meta(extra={"rename": "legacy_user_id"})]
+    legacy_id: str = msgspec.field(name="legacy_user_id")
 ```
 
 ## DTOs from existing classes — `MsgspecDTO` / `DataclassDTO`
@@ -100,9 +91,37 @@ async def get_user(user_id: int) -> User:
 | `exclude={"password_hash", ...}` | Drop fields from input/output |
 | `include={"id", "name"}` | Whitelist (mutually exclusive with `exclude`) |
 | `rename_fields={"name": "full_name"}` | Per-field rename |
-| `rename_strategy="camel"` | Bulk rename: `camel`, `pascal`, `kebab`, `upper`, `lower` |
+| `rename_strategy="camel"` | Bulk rename: `camel`, `pascal`, `upper`, `lower`, or a custom callable |
 | `partial=True` | All fields optional (PATCH endpoints) |
 | `max_nested_depth=N` | Cap nested DTO recursion |
+
+## Request Body Markers (Litestar ≥ 2.23)
+
+Declare the request body media type with the generic body markers from `litestar.params` instead of `Annotated[T, Body(media_type=RequestEncodingType.…)]`:
+
+```python
+from litestar import post
+from litestar.params import JSONBody, MultipartBody, URLEncodedBody  # Litestar >= 2.23
+
+
+@post("/orders")
+async def create_order(data: JSONBody[OrderCreate]) -> Order: ...
+
+
+@post("/upload")
+async def upload(data: MultipartBody[UploadForm]) -> Receipt: ...
+
+
+@post("/login")
+async def login(data: URLEncodedBody[Credentials]) -> Token: ...
+```
+
+| Marker | Media type | Old form |
+| --- | --- | --- |
+| `JSONBody[T]` | `application/json` (default) | `Annotated[T, Body()]` |
+| `MsgPackBody[T]` | `application/x-msgpack` | `Body(media_type=RequestEncodingType.MESSAGEPACK)` |
+| `MultipartBody[T]` | `multipart/form-data` | `Body(media_type=RequestEncodingType.MULTI_PART)` |
+| `URLEncodedBody[T]` | `application/x-www-form-urlencoded` | `Body(media_type=RequestEncodingType.URL_ENCODED)` |
 
 ## msgspec vs DataclassDTO
 

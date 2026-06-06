@@ -2,6 +2,8 @@
 
 Build a project-local exception hierarchy that rolls up to a single `ApplicationError` base, register handlers on the app, and let exceptions bubble. Handlers never catch — the app-level handler maps cleanly to HTTP.
 
+Litestar's native HTTP exception responses follow Problem Details semantics (RFC 9457). Keep a custom envelope only when the project has an explicit API contract that differs from Problem Details.
+
 ## Hierarchy
 
 ```text
@@ -72,6 +74,19 @@ def application_exception_handler(request: Request, exc: ApplicationError) -> Re
     return Response(content=body, status_code=exc.status_code)
 ```
 
+If the project wants standard Problem Details, raise Litestar `HTTPException` subclasses directly at framework boundaries and put extension members in `extra`:
+
+```python
+from litestar.exceptions import HTTPException
+
+
+raise HTTPException(
+    status_code=409,
+    detail="Email address is already registered.",
+    extra={"code": "email_conflict"},
+)
+```
+
 ## Registration
 
 ```python
@@ -88,7 +103,7 @@ You may register multiple handlers for different bases. Litestar dispatches to t
 ## Anti-patterns
 
 - Inline `try` / `except` in handler bodies. Let exceptions bubble.
-- Raising `litestar.exceptions.HTTPException` directly. Always raise a project subclass — keeps the hierarchy stable.
+- Mixing a custom `{detail, statusCode}` envelope with Problem Details in neighboring routes.
 - Mixing transport-layer concerns (HTTP status) into service code. Services raise domain exceptions; the handler maps to status.
 
 ## Cross-references

@@ -1,6 +1,6 @@
 ---
 name: litestar-realtime
-description: "Auto-activate for @websocket, WebSocket, ServerSentEvent, SSE, ChannelsPlugin, ChannelsBackend, stream_pubsub, channel subscriptions, realtime events, or cross-process fan-out. Use when implementing Litestar WebSockets, SSE, Channels, or event publishing. Not for polling-only APIs or frontend socket clients alone."
+description: "Auto-activate for @websocket, websocket_listener, websocket_stream, WebSocket, ServerSentEvent, ChannelsPlugin, AsyncPgChannelsBackend, RedisChannelsPubSubBackend, SQLSpecChannelsBackend, or fan-out. Not for polling APIs."
 ---
 
 # Litestar Realtime

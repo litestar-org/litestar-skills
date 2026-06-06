@@ -33,44 +33,13 @@ async def process_large_file(ctx: dict, *, file_id: int) -> None:
 
 ## @monitored_job Decorator Pattern
 
-A reusable decorator that auto-calculates and refreshes heartbeat intervals for long-running tasks:
+Use `litestar_saq.monitored_job` to auto-calculate and refresh heartbeat intervals for long-running tasks:
 
 ```python
-import asyncio
-import functools
-import time
-from collections.abc import Callable
-from typing import Any
-
-from saq import Queue
+from litestar_saq import monitored_job
 
 
-def monitored_job(heartbeat_fraction: float = 0.3) -> Callable:
-    """Decorator that auto-manages heartbeat for long-running SAQ tasks."""
-    def decorator(func: Callable) -> Callable:
-        @functools.wraps(func)
-        async def wrapper(ctx: dict, **kwargs: Any) -> Any:
-            job = ctx["job"]
-            queue: Queue = ctx["queue"]
-            timeout = job.timeout or 300
-            interval = max(10, int(timeout * heartbeat_fraction))
-
-            async def _heartbeat_loop() -> None:
-                while True:
-                    await asyncio.sleep(interval)
-                    await queue.update(job, heartbeat=time.time())
-
-            task = asyncio.create_task(_heartbeat_loop())
-            try:
-                return await func(ctx, **kwargs)
-            finally:
-                task.cancel()
-
-        return wrapper
-    return decorator
-
-
-@monitored_job(heartbeat_fraction=0.25)
+@monitored_job()
 async def long_running_export(ctx: dict, *, export_id: int) -> dict:
     ...
 ```

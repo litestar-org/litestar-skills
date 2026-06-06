@@ -114,7 +114,7 @@ class OrderService(SQLAlchemyAsyncRepositoryService[OrderModel]):
 async def list_orders(request: Request) -> JSONResponse:
     session = alchemy.get_async_session(request)
     orders_service = OrderService(session=session)
-    results = await orders_service.list()
+    results = await orders_service.get_many()
     return JSONResponse([{"id": str(o.id), "total": o.total_cents} for o in results])
 ```
 

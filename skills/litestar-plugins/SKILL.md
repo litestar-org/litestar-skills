@@ -1,6 +1,6 @@
 ---
 name: litestar-plugins
-description: "Auto-activate for Litestar plugins=, InitPluginProtocol, CLIPluginProtocol, SerializationPluginProtocol, OpenAPISchemaPluginProtocol, DomainPlugin, app plugin lists, or first-party plugin composition. Use when wiring Litestar plugins or authoring plugin protocols. Not for installing unrelated Python packages or deployment plugin marketplaces."
+description: "Auto-activate for plugins=, InitPlugin, CLIPluginProtocol, SerializationPluginProtocol, OpenAPISchemaPluginProtocol, DomainPlugin, or app plugin lists. Not for package installation."
 ---
 
 # Litestar Plugins
@@ -11,7 +11,7 @@ Use this skill for plugin composition, first-party plugin setup, plugin protocol
 
 - Prefer first-party Litestar plugins where they exist.
 - Keep plugin configuration near app setup or settings modules.
-- Use plugin protocols for reusable framework integration.
+- Use `InitPlugin` for reusable app initialization; keep protocol names for legacy code and non-init hooks.
 - Keep domain routes and plugin lifecycle concerns separated.
 
 ## Quick Reference

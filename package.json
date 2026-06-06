@@ -1,6 +1,6 @@
 {
   "name": "litestar-skills",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
   "main": ".opencode/plugins/litestar.js",
   "type": "module",
@@ -27,8 +27,8 @@
     "mcp"
   ],
   "devDependencies": {
-    "markdownlint-cli2": "^0.22.0",
-    "oxlint": "^1.60.0"
+    "markdownlint-cli2": "^0.22.1",
+    "oxlint": "^1.68.0"
   },
   "scripts": {
     "lint:js": "oxlint",

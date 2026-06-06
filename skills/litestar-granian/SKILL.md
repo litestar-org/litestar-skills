@@ -1,6 +1,6 @@
 ---
 name: litestar-granian
-description: "Auto-activate for litestar_granian imports, GranianPlugin, GranianConfig, granian CLI commands, worker/thread tuning, HTTP/2, SSL, backpressure, or ASGI server config in a Litestar app. Use when serving Litestar with Granian in development or production. Not for FastAPI, Django, non-Litestar apps, or uvicorn-specific configuration."
+description: "Auto-activate for litestar_granian, GranianPlugin, granian CLI, workers, threads, HTTP/2, SSL, backpressure, or ASGI server config. Not for uvicorn settings."
 ---
 
 # litestar-granian

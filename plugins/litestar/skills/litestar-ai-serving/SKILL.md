@@ -1,6 +1,6 @@
 ---
 name: litestar-ai-serving
-description: "Auto-activate for Google ADK, LlmAgent, Runner, SQLSpecSessionService, Vertex AI, agent chat endpoints, streaming AI responses, tool-calling endpoints, or Litestar-hosted model workflows. Use when serving AI agents or model-backed workflows from Litestar. Not for offline ML training or non-Litestar agent servers."
+description: "Auto-activate for Google ADK, LlmAgent, Runner, SQLSpecSessionService, Vertex AI, SSE agent chats, tool calls, or Litestar model workflows. Not for offline ML training."
 ---
 
 # Litestar AI Serving

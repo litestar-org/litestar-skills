@@ -210,8 +210,8 @@ instance = await repo.get(id)                          # Raises NotFoundError
 instance = await repo.get_one_or_none(email="x@y.com") # Returns None
 
 # List
-results = await repo.list()
-results, count = await repo.list_and_count(*filters)
+results = await repo.get_many()
+results, count = await repo.get_many_and_count(*filters)
 
 # Update
 instance = await repo.update(model_instance)

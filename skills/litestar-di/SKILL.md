@@ -1,14 +1,15 @@
 ---
 name: litestar-di
-description: "Auto-activate for Provide, dependencies=, dependency maps, litestar.di, scoped providers, Dishka FromDishka, Inject, provider modules, or request/session/app scope wiring. Use when wiring Litestar dependencies, service factories, app state dependencies, or external DI integration. Not for plain function parameters or unrelated IoC containers."
+description: "Auto-activate for Provide, NamedDependency, SkipValidation, Dependency(skip_validation=True), dependencies=, litestar.di, Dishka FromDishka, Inject, or providers. Not for plain parameters."
 ---
 
 # Litestar Dependency Injection
 
-Use this skill for `Provide`, dependency maps, provider factories, request-scoped resources, and Dishka integration.
+Use this skill for `Provide`, `NamedDependency` / `SkipValidation` (Litestar ≥ 2.23), dependency maps, provider factories, request-scoped resources, and Dishka integration.
 
 ## Code Style Rules
 
+- Prefer `NamedDependency[T]` and `SkipValidation[T]` (≥ 2.23) over `Annotated[T, Dependency()]` / `Dependency(skip_validation=True)`; `params.Dependency` is deprecated (removed in 3.0).
 - Use Litestar dependency maps for simple and medium apps.
 - Use Dishka when the project needs explicit scopes and provider modules.
 - Keep provider names stable and descriptive.

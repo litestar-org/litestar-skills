@@ -6,7 +6,7 @@
 
 ## Status
 
-**v0.1.4 — early access.** Multi-host plumbing, 28 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
+**v0.2.0 — early access.** Multi-host plumbing, 28 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
 
 **Breaking host identity note:** host-facing marketplace, plugin, extension, managed-config, and skill namespace IDs are `litestar`. Existing installs under `litestar-skills` should be removed and reinstalled; no alias is shipped. The Python package and repository remain `litestar-skills`.
 
@@ -105,7 +105,7 @@ mkdir -p .agents/skills
 cp -r /tmp/litestar-skills/skills/* .agents/skills/
 ```
 
-Compatible-bundle tier — the repo does not promise dedicated OpenClaw wrapper support, but the generic skills work unmodified.
+OpenClaw consumes the shipped generic Agent Skills tree and `AGENTS.md`; no OpenClaw-specific wrapper is shipped.
 
 ### Cursor
 

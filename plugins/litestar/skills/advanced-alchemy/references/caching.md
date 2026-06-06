@@ -130,7 +130,7 @@ class UserService(SQLAlchemyAsyncRepositoryService[User]):
 
 # These calls are automatically cached:
 user = await user_service.get(user_id)        # Cache hit or DB + populate
-users = await user_service.list()              # Version-keyed list cache
+users = await user_service.get_many()          # Version-keyed list cache
 await user_service.update(user_id, data=...)   # Auto-invalidates on commit
 ```
 

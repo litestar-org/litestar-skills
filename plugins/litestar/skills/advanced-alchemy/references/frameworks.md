@@ -88,7 +88,7 @@ async def provide_user_service(
 async def list_users(
     service: UserService = Depends(provide_user_service),
 ) -> list[dict]:
-    results = await service.list()
+    results = await service.get_many()
     return [{"id": str(r.id), "email": r.email} for r in results]
 
 
@@ -162,7 +162,7 @@ from sqlalchemy.orm import Session
 def list_users():
     session: Session = alchemy.get_sync_session()
     service = UserService(session=session)
-    results = service.list()  # Sync operations in Flask
+    results = service.get_many()  # Sync operations in Flask
     return [{"id": str(r.id), "email": r.email} for r in results]
 ```
 
@@ -209,7 +209,7 @@ async def list_users(request):
     from starlette.responses import JSONResponse
     session = request.state.session
     service = UserService(session=session)
-    results = await service.list()
+    results = await service.get_many()
     return JSONResponse([{"id": str(r.id)} for r in results])
 
 
@@ -255,7 +255,7 @@ from sanic.request import Request
 async def list_users(request: Request):
     session = request.ctx.session
     service = UserService(session=session)
-    results = await service.list()
+    results = await service.get_many()
     return json([{"id": str(r.id), "email": r.email} for r in results])
 ```
 

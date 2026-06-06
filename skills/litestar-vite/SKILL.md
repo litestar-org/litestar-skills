@@ -1,13 +1,13 @@
 ---
 name: litestar-vite
-description: "Auto-activate for litestar_vite imports, VitePlugin, ViteConfig, PathConfig, RuntimeConfig, TypeGenConfig, InertiaConfig, vite.config.ts, astro.config.mjs with litestar-vite-plugin/astro, litestar assets, HMR, or generated route/schema assets. Use when wiring a Vite frontend with Litestar across SPA, template, HTMX/Jinja, Inertia, SSR, SSG, or external Angular CLI modes. Not for Webpack, Rollup, Parcel, or plain Vite outside Litestar."
+description: "Auto-activate for litestar_vite, VitePlugin, ViteConfig, PathConfig, RuntimeConfig, TypeGenConfig, InertiaConfig, vite.config.ts, HMR, typegen, assets, or modes. Not for plain Vite."
 ---
 
 # litestar-vite
 
 `litestar-vite` is the first-party plugin that connects a [Vite](https://vite.dev/) frontend build pipeline to a Litestar backend. It handles dev-server proxying, HMR coordination, manifest resolution for production assets, and (optionally) end-to-end type generation from Litestar OpenAPI to TypeScript.
 
-The reference apps use `spa`, `template`, `hybrid`, `ssr`, `ssg`, and `external` modes. HTMX is a template-mode app with `HTMXPlugin()` layered in. Inertia is one `VitePlugin` configured with `ViteConfig(inertia=InertiaConfig(...))`; the plugin wires the internal Inertia integration from that config.
+The reference apps use `spa`, `template`, `htmx`, `hybrid` / `inertia`, `framework` / `ssr` / `ssg`, and `external` modes. Inertia is one `VitePlugin` configured with `ViteConfig(inertia=InertiaConfig(...))`; the plugin wires the internal Inertia integration from that config.
 
 The plugin pairs with the npm package [`litestar-vite-plugin`](https://www.npmjs.com/package/litestar-vite-plugin) on the JS side. Both must agree on `input`, `bundleDir`, `hotFile`, and asset URL.
 
@@ -67,20 +67,20 @@ export default defineConfig({
 | --- | --- | --- |
 | `spa` | React, Vue, Svelte, or Analog-powered Angular SPA with a Litestar JSON API backend | `dev_mode=True` proxies to Vite; manifest in prod |
 | `template` | Server-rendered Jinja2/Mako pages with Vite-bundled JS/CSS sprinkles | `TemplateConfig` + template helpers resolve dev/prod URLs |
-| `template` + `HTMXPlugin()` | HTMX hypermedia with Jinja templates and Vite-bundled assets | Add `litestar-htmx`; use `hx-*` and `ls-*` attributes |
-| `hybrid` (Inertia) | Inertia.js routes returning JS page components | `ViteConfig(inertia=InertiaConfig(...))` on a single `VitePlugin` |
-| `ssr` | Nuxt or SvelteKit SSR | JS framework owns rendering; Litestar provides/proxies API |
-| `ssg` | Astro static generation | `astro.config.mjs` imports `litestar-vite-plugin/astro` |
+| `htmx` | HTMX hypermedia with Jinja templates and Vite-bundled assets | Add `litestar-htmx`; use `hx-*` and `ls-*` attributes |
+| `hybrid` / `inertia` | Inertia.js routes returning JS page components | `ViteConfig(inertia=InertiaConfig(...))` on a single `VitePlugin` |
+| `framework` / `ssr` | Nuxt or SvelteKit SSR | JS framework owns rendering; Litestar provides/proxies API |
+| `framework` / `ssg` | Astro static generation | `astro.config.mjs` imports `litestar-vite-plugin/astro` |
 | `external` | Angular CLI or another external dev/build process | Litestar coordinates URLs/types while the external tool owns build |
 
 Decision tree:
 
 - Need full SPA with client-side routing → **spa**
 - Server-rendered HTML, sprinkle Vite-bundled JS → **template**
-- HTMX-driven hypermedia with Vite assets → **template + HTMXPlugin**
-- Server-side routing + JS page components, shared data → **hybrid (Inertia)** (see `../litestar-inertia/SKILL.md`)
-- Already using Nuxt or SvelteKit → **ssr**
-- Building an Astro site → **ssg**
+- HTMX-driven hypermedia with Vite assets → **htmx + HTMXPlugin**
+- Server-side routing + JS page components, shared data → **hybrid / inertia** (see `../litestar-inertia/SKILL.md`)
+- Already using Nuxt or SvelteKit → **framework** (`ssr` alias is accepted)
+- Building an Astro site → **framework** (`ssg` alias is accepted)
 - Using Angular CLI rather than the Analog Vite example → **external**
 
 ### `VitePlugin` config (Python)
@@ -307,7 +307,8 @@ export default defineConfig({
 ### Inertia integration
 
 ```python
-from litestar_vite import InertiaConfig, PathConfig, TypeGenConfig, ViteConfig, VitePlugin
+from litestar_vite import PathConfig, TypeGenConfig, ViteConfig, VitePlugin
+from litestar_vite.inertia import InertiaConfig
 
 vite = VitePlugin(
     config=ViteConfig(
@@ -325,7 +326,7 @@ See `../litestar-inertia/SKILL.md` for client adapter setup.
 
 ### HTMX integration
 
-For HTMX + Jinja, use `ViteConfig(mode="template", ...)`, Litestar `TemplateConfig`, and `HTMXPlugin()`. Vite handles JS/CSS bundling; Litestar returns partial HTML enriched with `hx-*` attributes. See `../litestar-htmx/SKILL.md`.
+For HTMX + Jinja, use `ViteConfig(mode="htmx", ...)`, Litestar `TemplateConfig`, and `HTMXPlugin()`. Vite handles JS/CSS bundling; Litestar returns partial HTML enriched with `hx-*` attributes. See `../litestar-htmx/SKILL.md`.
 
 <workflow>
 
@@ -333,7 +334,7 @@ For HTMX + Jinja, use `ViteConfig(mode="template", ...)`, Litestar `TemplateConf
 
 ### Step 1: Pick the Mode
 
-Run the decision tree above. Most apps want `spa`, `template`, or `hybrid`. Lock the choice before configuring — switching mode mid-project rewires paths, assets, and TypeGen output.
+Run the decision tree above. Most apps want `spa`, `template`, `htmx`, or `hybrid`. Lock the choice before configuring — switching mode mid-project rewires paths, assets, and TypeGen output.
 
 ### Step 2: Install
 
@@ -361,7 +362,7 @@ For SPA / Inertia projects, set `types=TypeGenConfig(...)`. Re-run `litestar ass
 ### Step 6: Wire Templates (template / HTMX modes)
 
 Use `vite_hmr()` and `vite()` in your base template.
-For HTMX, register `HTMXPlugin()` and keep `ViteConfig(mode="template", ...)`.
+For HTMX, register `HTMXPlugin()` and keep `ViteConfig(mode="htmx", ...)`.
 
 ### Step 7: Verify HMR
 
@@ -396,8 +397,8 @@ For HTMX, register `HTMXPlugin()` and keep `ViteConfig(mode="template", ...)`.
 
 Before delivering a `litestar-vite` integration, verify:
 
-- [ ] Mode (`spa` / `template` / `hybrid` / `ssr` / `ssg` / `external`) is explicit
-- [ ] HTMX apps use `mode="template"` with `HTMXPlugin()`
+- [ ] Mode (`spa` / `template` / `htmx` / `hybrid` / `framework` / `external`) is explicit
+- [ ] HTMX apps use `mode="htmx"` with `HTMXPlugin()`
 - [ ] Inertia apps put `InertiaConfig` on `ViteConfig` and register one `VitePlugin`
 - [ ] `ViteConfig.paths.bundle_dir` and `vite.config.ts` `bundleDir` match
 - [ ] `ViteConfig.paths.hot_file` and `vite.config.ts` `hotFile` match

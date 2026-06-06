@@ -109,6 +109,8 @@ Don't try to wire factories into `add_all` directly — the session lifecycle ge
 ## SAQ task payload generation
 
 ```python
+import msgspec
+
 from polyfactory.factories.msgspec_factory import MsgspecFactory
 from polyfactory.pytest_plugin import register_fixture
 
@@ -123,7 +125,7 @@ class EmailJobPayloadFactory(MsgspecFactory[EmailJobPayload]):
 @pytest.mark.anyio
 async def test_email_task(email_job_payload_factory, queue) -> None:
     payload = email_job_payload_factory.build()
-    job = await queue.enqueue("send_email", **payload.__dict__)
+    job = await queue.enqueue("send_email", **msgspec.to_builtins(payload))
     assert job.status == "queued"
 ```
 

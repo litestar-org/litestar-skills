@@ -8,28 +8,37 @@ SQLSpec provides adapter-specific storage implementations for three integration 
 
 ## ADK Store Implementations
 
-Each production adapter provides an `adk/store.py` module implementing the `ObjectStoreProtocol` for use with ADK (Agent Development Kit) workflows:
+Each production adapter provides an `adk` package with session/event and memory stores for Google ADK workflows:
 
 ```python
+from sqlspec.adapters.asyncpg import AsyncpgConfig
+from sqlspec.adapters.asyncpg.adk import AsyncpgADKMemoryStore, AsyncpgADKStore
+
 config = AsyncpgConfig(
     connection_config={"dsn": "postgresql://localhost/app"},
     extension_config={
         "adk": {
-            "store_table": "adk_objects",
-            "auto_create": True,
+            "session_table": "adk_sessions",
+            "events_table": "adk_events",
+            "memory_table": "adk_memory_entries",
+            "memory_use_fts": True,
         }
     },
 )
+
+session_store = AsyncpgADKStore(config)
+memory_store = AsyncpgADKMemoryStore(config)
+await session_store.ensure_tables()
+await memory_store.ensure_tables()
 ```
 
 ### Available ADK Stores
 
-Every production adapter (all 15 excluding `mock`) provides its own ADK store implementation. The store handles:
+Every ADK-supported adapter provides its own store implementation. The stores handle:
 
-- Object persistence with JSON serialization
-- Key-based retrieval and listing
-- TTL-based expiration
-- Adapter-specific optimizations (e.g., JSONB on PostgreSQL, JSON functions on SQLite)
+- Session rows and event history for `SQLSpecSessionService`
+- Memory rows for `SQLSpecMemoryService` / `SQLSpecSyncMemoryService`
+- Adapter-specific JSON, FTS, and transaction optimizations
 
 ---
 
@@ -122,10 +131,12 @@ config = AsyncpgConfig(
             "backend": "listen_notify",
             "channel": "app_events",
         },
-        # ADK store configuration
+        # ADK session/event and memory stores
         "adk": {
-            "store_table": "adk_objects",
-            "auto_create": True,
+            "session_table": "adk_sessions",
+            "events_table": "adk_events",
+            "memory_table": "adk_memory_entries",
+            "memory_use_fts": True,
         },
     },
 )

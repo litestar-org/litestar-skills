@@ -1,15 +1,15 @@
-# Plugins (`InitPluginProtocol`, lifecycle, ecosystem)
+# Plugins (`InitPlugin`, lifecycle, ecosystem)
 
-Plugins are the canonical way to extend Litestar — first-party plugins compose into `Litestar(plugins=[...])`, and you can author your own with `InitPluginProtocol` / `CLIPluginProtocol`.
+Plugins are the canonical way to extend Litestar — first-party plugins compose into `Litestar(plugins=[...])`, and you can author your own with `InitPlugin` / `CLIPluginProtocol`.
 
-## Custom Plugin (`InitPluginProtocol`)
+## Custom Plugin (`InitPlugin`)
 
 ```python
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from litestar.plugins import InitPluginProtocol
+from litestar.plugins import InitPlugin
 from litestar.config.app import AppConfig
 
 
@@ -19,7 +19,7 @@ class MyPluginConfig:
     api_key: str | None = None
 
 
-class MyPlugin(InitPluginProtocol):
+class MyPlugin(InitPlugin):
     __slots__ = ("config",)
 
     def __init__(self, config: MyPluginConfig | None = None) -> None:
@@ -38,7 +38,7 @@ class MyPlugin(InitPluginProtocol):
 
 | Hook | Protocol | When |
 | --- | --- | --- |
-| `on_app_init(app_config)` | `InitPluginProtocol` | App boot, before `Litestar.__init__` finishes |
+| `on_app_init(app_config)` | `InitPlugin` | App boot, before `Litestar.__init__` finishes |
 | `on_cli_init(cli)` | `CLIPluginProtocol` | When the `litestar` CLI builds its Click group |
 | Lifespan startup/shutdown | Register via `app_config.lifespan.append(...)` | App start / stop |
 
@@ -62,7 +62,7 @@ These plugins ship as separate packages and have their own SKILLs in this repo. 
 | `litestar-granian` | `../../litestar-granian/SKILL.md` | Granian ASGI server (replaces uvicorn CLI) |
 | `litestar-saq` | `../../litestar-saq/SKILL.md` | SAQ task queues + cron + workers |
 | `litestar-vite` | `../../litestar-vite/SKILL.md` | Vite frontend integration, TypeGen, Inertia |
-| `litestar-mcp` | `../../litestar-mcp/SKILL.md` | MCP tools/resources over JSON-RPC 2.0 |
+| `litestar-mcp` | `../../litestar-mcp/SKILL.md` | MCP tools/resources over Streamable HTTP + JSON-RPC 2.0 |
 | `litestar-email` | `../../litestar-email/SKILL.md` | Email backends (SMTP, Resend, SendGrid, Mailgun) |
 | `advanced-alchemy` | `../../advanced-alchemy/SKILL.md` | Repository/Service patterns, audit base |
 | `litestar-asyncpg` | (not yet) | Direct AsyncPG pool lifespan |

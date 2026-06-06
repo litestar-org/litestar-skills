@@ -1,6 +1,6 @@
 ---
 name: litestar
-description: "Auto-activate for litestar.toml, [tool.litestar], pyproject.toml with a litestar dependency, or app creation with Litestar(). Use when orienting a Litestar project, choosing the right Litestar subskill, or scaffolding app-level structure. Not for focused routing, DTO, auth, DI, data, settings, exceptions, middleware, plugin, realtime, AI, deployment, or testing work - use the narrower skill."
+description: "Auto-activate for litestar.toml, [tool.litestar], pyproject.toml Litestar deps, or Litestar() app setup. Not for focused routing, DTO, auth, DI, data, settings, middleware, realtime, deployment, or testing."
 ---
 
 # Litestar Routing Hub

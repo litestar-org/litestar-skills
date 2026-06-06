@@ -24,7 +24,7 @@ from sqlspec.extensions.starlette import SQLSpecPlugin
 sqlspec = SQLSpec()
 sqlspec.add_config(
     AsyncpgConfig(
-        pool_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
+        connection_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
         extension_config={
             "starlette": {
                 "commit_mode": "autocommit",
@@ -42,7 +42,7 @@ Three things to note:
 
 1. `SQLSpecPlugin(sqlspec, app)` is the eager form — the plugin introspects the registry and wires the app immediately. The two-step form `SQLSpecPlugin(sqlspec)` followed by `db_plugin.init_app(app)` is equivalent and is the shape you want when constructing the plugin at module scope and attaching it inside a factory.
 2. The `extension_config["starlette"]` dict carries framework settings — `commit_mode`, `session_key`, `connection_key`, `pool_key`, and the optional correlation / sqlcommenter toggles. Defaults are the same per-config (one registered config produces one middleware stack).
-3. FastAPI's `SQLSpecPlugin` subclasses this Starlette plugin, so FastAPI reads the same `"starlette"` key in `extension_config` — this is intentional, not a typo.
+3. FastAPI's `SQLSpecPlugin` has its own `extension_config["fastapi"]` block. Declare both `"starlette"` and `"fastapi"` only when the same config must be reused in both host integrations.
 
 ## Lifecycle
 
@@ -120,7 +120,7 @@ from sqlspec.adapters.asyncpg import AsyncpgConfig
 sqlspec = SQLSpec()
 sqlspec.add_config(
     AsyncpgConfig(
-        pool_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
+        connection_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
         extension_config={
             "starlette": {
                 "commit_mode": "autocommit",
@@ -271,7 +271,7 @@ from sqlspec.extensions.starlette import SQLSpecPlugin
 sqlspec = SQLSpec()
 sqlspec.add_config(
     AsyncpgConfig(
-        pool_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
+        connection_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
         extension_config={
             "starlette": {
                 "commit_mode": "autocommit",

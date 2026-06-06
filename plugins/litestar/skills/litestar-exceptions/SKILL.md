@@ -1,6 +1,6 @@
 ---
 name: litestar-exceptions
-description: "Auto-activate for exception_handlers, HTTPException, ApplicationError, NotFoundError, ConflictError, ValidationException, PermissionDeniedException, RFC 7807 responses, or domain-to-HTTP error mapping. Use when designing Litestar exception hierarchies, handlers, or error responses. Not for client-side errors or generic Python exception cleanup."
+description: "Auto-activate for exception_handlers, HTTPException, ApplicationError, NotFoundError, ValidationException, PermissionDeniedException, RFC 9457, or domain error mapping. Not for client-side errors."
 ---
 
 # Litestar Exceptions

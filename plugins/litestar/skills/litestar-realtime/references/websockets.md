@@ -245,18 +245,18 @@ Register the plugin in your application plugins list. The `ChannelsPlugin` insta
 
 ### Backend options — pick the branch for your stack
 
-There are four supported Channels backends. Pick based on what's already in the project's dependency graph — do not introduce Redis just for Channels if the stack is PostgreSQL-only, and do not use a PG-LISTEN backend if Redis is already present for cache / SAQ / sessions.
+Pick a Channels backend based on what's already in the project's dependency graph — do not introduce Redis just for Channels if the stack is PostgreSQL-only, and do not use a PG-LISTEN backend if Redis is already present for cache / SAQ / sessions.
 
 | Backend | Pick when | Avoid when |
 | --- | --- | --- |
 | `MemoryChannelsBackend` | Dev / tests / single-process CLIs; no persistence needed | Multi-process deploys (workers do not share state) |
 | `RedisChannelsPubSubBackend` | Redis is already in the stack (SAQ+Redis, cache, sessions) | The project is PostgreSQL-only and Redis would be purely for Channels |
-| `sqlspec` PG `LISTEN` / `NOTIFY` backend | Project is `sqlspec` + PostgreSQL; SAQ runs on PG; no Redis | Project uses `advanced-alchemy` (prefer its session-aware backend) or Redis is already present |
-| `advanced-alchemy` session-aware backend | Project is `advanced-alchemy` + PostgreSQL; reuse the same engine / session factory | Project is `sqlspec` or has an independent Redis broker |
+| `AsyncPgChannelsBackend` / `PsycoPgChannelsBackend` | Litestar app already depends on `asyncpg` or `psycopg` and only needs ephemeral PostgreSQL `LISTEN` / `NOTIFY` | Durable queue/history semantics are required |
+| `SQLSpecChannelsBackend` | Project already uses SQLSpec events and wants a Channels backend over SQLSpec's `AsyncEventChannel` | The app does not use SQLSpec's events extension |
 
 **Anti-patterns:**
 
-- Dropping in the `SQLAlchemy`-based Channels backend when the project is `sqlspec`-only — drags an ORM dep into a project that explicitly avoided one.
+- Dropping in ORM-backed realtime infrastructure when the project is `sqlspec`-only — drags an ORM dep into a project that explicitly avoided one.
 - Wiring a PG-LISTEN backend when Redis is already handling SAQ queues and session cache — pay the connection overhead twice for no gain.
 - Forcing Redis as a "canonical" Channels backend when the deploy target is a single Postgres + app image (extra infra, extra failure surface).
 
@@ -296,21 +296,49 @@ app = Litestar(plugins=[channels])
 
 Auto-creates a WS handler at `/ws/{channel}` that relays published messages.
 
-### Branch C — `sqlspec` PG `LISTEN` / `NOTIFY` backend
+### Branch C — Litestar PostgreSQL `LISTEN` / `NOTIFY` backend
 
-Use when the project is `sqlspec` + PostgreSQL and you want Channels without introducing Redis. The sqlspec extension for Litestar Channels reuses the same Postgres connection pool. See [`../../sqlspec/SKILL.md`](../../sqlspec/SKILL.md) for the extension config.
+Use when the app already depends on `asyncpg` or `psycopg` and only needs ephemeral cross-process fan-out.
 
 ```python
-from sqlspec.extensions.litestar.channels import SQLSpecChannelsBackend
+from litestar.channels import ChannelsPlugin
+from litestar.channels.backends.asyncpg import AsyncPgChannelsBackend
+
 
 channels = ChannelsPlugin(
-    backend=SQLSpecChannelsBackend(config=sqlspec_config),
+    backend=AsyncPgChannelsBackend(dsn=settings.database_url),
     arbitrary_channels_allowed=True,
     create_ws_route_handlers=True,
 )
 ```
 
-`SQLSpecChannelsBackend` accepts any sqlspec config that exposes a Postgres-compatible adapter; it sets up `LISTEN` / `NOTIFY` on the same connection pool used by your queries.
+Use `PsycoPgChannelsBackend(pg_dsn=...)` instead when the project standardizes on psycopg.
+
+### Branch D — SQLSpec events backend
+
+Use when the project already uses SQLSpec's events extension and you want Channels without introducing Redis. The SQLSpec adapter wraps an `AsyncEventChannel`, so configure event behavior in `extension_config["events"]`. See [`../../sqlspec/SKILL.md`](../../sqlspec/SKILL.md) for SQLSpec config patterns.
+
+```python
+from sqlspec import SQLSpec
+from sqlspec.adapters.asyncpg import AsyncpgConfig
+from sqlspec.extensions.litestar.channels import SQLSpecChannelsBackend
+
+spec = SQLSpec()
+config = spec.add_config(
+    AsyncpgConfig(
+        connection_config={"dsn": settings.database_url},
+        extension_config={"events": {"backend": "listen_notify"}},
+    )
+)
+
+channels = ChannelsPlugin(
+    backend=SQLSpecChannelsBackend(spec.event_channel(config)),
+    arbitrary_channels_allowed=True,
+    create_ws_route_handlers=True,
+)
+```
+
+`SQLSpecChannelsBackend` accepts an `AsyncEventChannel`. Use `channel_prefix=` for multi-app databases and `poll_interval=` when the selected SQLSpec event backend polls.
 
 ### Channel Naming Patterns
 
@@ -547,7 +575,7 @@ Quick-reference scope ACL:
 
 ## Cross-Process Publishing
 
-The Channels plugin gives you `channels.wait_published(channel, data)` — usable from SAQ workers, background tasks, shell scripts, or any module that can import your app's channels instance. The **same channel backend** (Redis) is shared across the Litestar app, SAQ workers, and out-of-process scripts. Any of them can publish; only WS subscribers receive.
+The Channels plugin gives you `await channels.wait_published(data, channels)` — usable from SAQ workers, background tasks, shell scripts, or any module that can import your app's channels instance. The same backend is shared across the Litestar app, workers, and out-of-process scripts. Any of them can publish; only subscribed WS clients receive.
 
 ### From a SAQ Worker
 
@@ -565,8 +593,8 @@ async def import_finished_job(ctx: Context, *, workspace_id: str, job_id: str) -
 
     # Broadcast to all WS clients subscribed to this workspace
     await channels.wait_published(
-        f"workspace:{workspace_id}",
         {"type": "import.finished", "jobId": job_id},
+        f"workspace:{workspace_id}",
     )
 ```
 
@@ -587,7 +615,7 @@ async def main() -> None:
     backend = RedisChannelsPubSubBackend(redis=Redis.from_url("redis://localhost:6379/0"))
     channels = ChannelsPlugin(backend=backend, channels=[], arbitrary_channels_allowed=True)
     async with channels:                          # lifespan context — opens pub/sub
-        await channels.wait_published("notifications", {"type": "deploy.finished"})
+        await channels.wait_published({"type": "deploy.finished"}, "notifications")
 
 
 asyncio.run(main())
@@ -624,7 +652,7 @@ class SqlExecutionLogObserver:
 
 ## WS-vs-Channels Decision Matrix
 
-"Broker" below means whatever pub/sub backend the project is on: Redis, PostgreSQL LISTEN/NOTIFY via sqlspec, advanced-alchemy session-aware, or in-memory for dev.
+"Broker" below means whatever pub/sub backend the project is on: Redis, PostgreSQL LISTEN/NOTIFY via AsyncPg/PsycoPg, SQLSpec events, or in-memory for dev.
 
 | Use case | Plain WS + hand-rolled broker | Channels plugin |
 | --- | --- | --- |
@@ -634,7 +662,7 @@ class SqlExecutionLogObserver:
 | Dynamic channel names (`workspace:{uuid}`) | ✓ — any string is a channel | ✓ — via `arbitrary_channels_allowed=True` |
 | Auto-generated `/ws/{channel}` handlers | — | ✓ |
 | Per-connection auth and state | ✓ — write your own | ✓ — via `@websocket` + `channels.start_subscription` |
-| Multi-process / multi-node deployments | ✓ if you wire the broker explicitly | ✓ — built in (Redis / PG / AA backends) |
+| Multi-process / multi-node deployments | ✓ if you wire the broker explicitly | ✓ — built in (Redis / PG / SQLSpec backends) |
 
 Canonical apps use the hand-rolled path for simple single-stream cases and Channels for broader pub/sub where multiple consumers + backlog tolerance matter. Don't run both in parallel for the same channel namespace — pick one. **Channels backend choice is orthogonal to this matrix** — see "Backend options" above for how to pick the backend based on your data-access stack.
 

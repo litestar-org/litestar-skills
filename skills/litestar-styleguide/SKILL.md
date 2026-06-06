@@ -1,6 +1,6 @@
 ---
 name: litestar-styleguide
-description: "Use when authoring or reviewing Litestar skill content, Python examples, TypeScript examples, shared style rules, PEP 604 unions, async I/O, Google docstrings, ruff/mypy/pyright tooling, pytest conventions, or CI/CD rules. Not for framework-specific implementation guidance - use the individual focused skill."
+description: "Use when authoring Litestar skill content, Python/TypeScript examples, PEP 604, async I/O, Google docstrings, ruff/mypy/pyright, pytest, or CI rules. Not for focused Litestar APIs."
 ---
 
 # litestar-styleguide

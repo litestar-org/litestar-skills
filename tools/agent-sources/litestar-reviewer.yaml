@@ -8,7 +8,7 @@
 # CI fails if any of the generated files have hand edits (drift detection).
 
 name: litestar-reviewer
-description: 'Reviews Litestar code against first-party conventions, adapting to the project''s stack: msgspec or Pydantic DTOs, Guards, Provide or Dishka DI, advanced-alchemy or sqlspec services, first-party paginated responses, custom exception hierarchies, dataclass or pydantic-settings Settings, async-all-I/O, domain-clustered Controllers, Granian-first, SAQ or custom PG-native background workers, camelCase wire format. Use when reviewing PRs, code quality checks, or pre-merge validation in Litestar projects.'
+description: 'Use when reviewing Litestar PRs/code for stack-aware DTOs, guards, DI, data services, pagination, settings, async I/O, plugins, and wire format. Not for non-Litestar reviews.'
 # Canonical tool names. Each host serializer maps these to the right per-host name:
 #   read -> Read / read_file / read
 #   grep -> Grep / grep_search / grep
@@ -83,14 +83,14 @@ body: |
 
   11. **Return types** — explicit annotations on all handler return values.
 
-  12. **`from __future__ import annotations`** — present in consumer modules that use modern annotation syntax; ABSENT from modules whose types are introspected at runtime by decorator-driven registries. These include:
-      - `msgspec.Struct` subclasses (msgspec reads types at class-creation time)
+  12. **`from __future__ import annotations`** — present in consumer modules that use modern annotation syntax; ABSENT from modules whose runtime registries cannot resolve postponed annotations. These include:
+      - shared `msgspec.Struct` base modules consumed by runtime tools that do not resolve forward references
       - Dishka `@provide` providers and `Inject[T]` sites
       - SAQ `@task` / `CronJob` registrations
       - Google ADK `Tool` definitions and callback registries
       - Litestar DI `Provide()` factories and DTO model introspection
 
-     Flag `from __future__ import annotations` anywhere a decorator-driven registry reads the module's annotations.
+     Flag `from __future__ import annotations` where a decorator-driven registry reads the module's annotations without resolving postponed types.
 
   ## Severity levels
 

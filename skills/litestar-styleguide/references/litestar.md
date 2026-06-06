@@ -43,6 +43,59 @@ class ItemController(Controller):
         return await service.create(data)
 ```
 
+## Typed Markers (Litestar ≥ 2.23)
+
+Litestar 2.22–2.23 added generic marker aliases that replace the verbose `Annotated[T, Parameter()]` / `Annotated[T, Body()]` / `Annotated[T, Dependency()]` forms. **Prefer the markers** — the underlying `params.Dependency`/`DependencyKwarg` are deprecated and removed in 3.0. These examples assume `litestar>=2.23`.
+
+```python
+from litestar import get, post
+from litestar.di import NamedDependency
+from litestar.params import (
+    FromCookie,
+    FromHeader,
+    FromPath,
+    FromQuery,
+    JSONBody,
+    MultipartBody,
+    SkipValidation,
+)
+
+
+# Request parameters (2.22): FromQuery / FromPath / FromHeader / FromCookie
+@get("/items/{item_id:int}")
+async def get_item(item_id: FromPath[int], q: FromQuery[str | None] = None) -> Item:
+    return await fetch_item(item_id, q)
+
+
+# Request body (2.23): JSONBody / MsgPackBody / MultipartBody / URLEncodedBody
+@post("/upload")
+async def upload(data: MultipartBody[UploadDTO]) -> Receipt: ...
+
+
+# Dependency injection (2.23):
+#   NamedDependency[T]   replaces  Annotated[T, Dependency()]
+#   SkipValidation[T]    replaces  Annotated[T, Dependency(skip_validation=True)]
+@get("/users")
+async def list_users(
+    users_service: UserService,
+    filters: SkipValidation[list[FilterTypes]],
+) -> OffsetPagination[User]:
+    rows, total = await users_service.get_many_and_count(*filters)
+    return users_service.to_schema(rows, total, filters=filters, schema_type=User)
+```
+
+Migration map (old → new):
+
+| Old (deprecated/verbose) | New marker (≥ 2.23) |
+| --- | --- |
+| `Annotated[T, Parameter()]` query param | `FromQuery[T]` |
+| `Annotated[T, Parameter()]` path param | `FromPath[T]` |
+| `Annotated[T, Body(media_type=RequestEncodingType.MULTI_PART)]` | `MultipartBody[T]` |
+| `Annotated[T, Body(media_type=RequestEncodingType.URL_ENCODED)]` | `URLEncodedBody[T]` |
+| `Annotated[T, Dependency()]` | `NamedDependency[T]` |
+| `Annotated[T, Dependency(skip_validation=True)]` | `SkipValidation[T]` |
+| `field: T = Parameter(...)` (default-marker form) | `field: Annotated[T, Parameter(...)]` (removed in 3.0) |
+
 ## Dependency Injection
 
 ### Litestar Native DI
@@ -98,22 +151,23 @@ async def list_users(service: Inject[UserService]) -> list[User]:
 ## Middleware
 
 ```python
-from litestar.middleware import AbstractMiddleware
-from litestar.types import ASGIApp, Receive, Scope, Send
 from litestar.enums import ScopeType
+from litestar.middleware import ASGIMiddleware
+from litestar.types import ASGIApp, Receive, Scope, Send
 
-class TimingMiddleware(AbstractMiddleware):
-    scopes = {ScopeType.HTTP}
-    exclude = ["health", "metrics"]
+class TimingMiddleware(ASGIMiddleware):
+    scopes = (ScopeType.HTTP,)
+    exclude_path_pattern = ("health", "metrics")
 
-    async def __call__(
+    async def handle(
         self,
         scope: Scope,
         receive: Receive,
-        send: Send
+        send: Send,
+        next_app: ASGIApp,
     ) -> None:
         start = time.perf_counter()
-        await self.app(scope, receive, send)
+        await next_app(scope, receive, send)
         duration = time.perf_counter() - start
         logger.info(f"Request took {duration:.3f}s")
 ```
@@ -181,7 +235,7 @@ async def get_item(item_id: int) -> Item:
 ## Plugin Development
 
 ```python
-from litestar.plugins import InitPluginProtocol
+from litestar.plugins import InitPlugin
 from litestar.config.app import AppConfig
 from dataclasses import dataclass
 
@@ -190,7 +244,7 @@ class MyPluginConfig:
     enabled: bool = True
     api_key: str | None = None
 
-class MyPlugin(InitPluginProtocol):
+class MyPlugin(InitPlugin):
     __slots__ = ("config",)
 
     def __init__(self, config: MyPluginConfig | None = None) -> None:
@@ -208,7 +262,7 @@ class MyPlugin(InitPluginProtocol):
 from litestar_vite import ViteConfig, VitePlugin, PathConfig, TypeGenConfig
 
 vite_config = ViteConfig(
-    mode="spa",  # spa, template, hybrid, ssr, ssg, external
+    mode="spa",  # spa, template, htmx, hybrid, inertia, framework, external
     paths=PathConfig(
         resource_dir="src",
         bundle_dir="dist",
@@ -227,7 +281,8 @@ app = Litestar(plugins=[VitePlugin(config=vite_config)])
 ## Inertia Integration
 
 ```python
-from litestar_vite import InertiaConfig, ViteConfig, VitePlugin
+from litestar_vite import ViteConfig, VitePlugin
+from litestar_vite.inertia import InertiaConfig
 from litestar_vite.inertia import InertiaResponse
 
 app = Litestar(
@@ -265,6 +320,8 @@ litestar assets status         # Check integration status
 - `from __future__ import annotations` is a **library-author guardrail, not a consumer rule**. Application code (handlers, services, tests — the Litestar apps you're building) MAY and typically SHOULD use it. Avoid it only in modules that define runtime-introspected types: `msgspec.Struct` subclasses, SQLAlchemy 2.0 `Mapped[...]` models, Dishka `@provide` providers, SAQ `@task` / `CronJob` registrations, Google ADK tool definitions.
 - Use Google-style docstrings
 - All I/O operations should be async
+- Import template engines and integrations from `litestar.plugins.*`, not `litestar.contrib.*` (`litestar.contrib.{jinja,mako,minijinja,opentelemetry}` are deprecated since 2.22 and removed in 3.0). Import the repository/service base from `advanced_alchemy`, not the deprecated `litestar.repository`.
+- Prefer the typed markers (`FromQuery`/`FromPath`/`JSONBody`/`MultipartBody`/`NamedDependency`/`SkipValidation`) over `Annotated[..., Parameter()/Body()/Dependency()]`; `params.Dependency` is deprecated (removed in 3.0). See [Typed Markers](#typed-markers-litestar--223).
 
 ## Anti-Patterns
 

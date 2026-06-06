@@ -1,6 +1,6 @@
 ---
 name: litestar-deployment
-description: "Auto-activate for Dockerfile, docker-compose.yml, railway.json, railway.toml, Procfile, cloudbuild.yaml, app.yaml, service.yaml, deploy.sh, systemd units, Kubernetes manifests, Terraform, or granian/litestar run in deployment context. Use when deploying Litestar apps to containers, Railway, Cloud Run, GKE, systemd, or CI/CD release targets. Not for non-Litestar Python apps or build artifact packaging alone."
+description: "Auto-activate for Dockerfile, compose, Railway, Cloud Run, GKE, systemd, Kubernetes, Terraform, deploy scripts, or granian/litestar run at runtime. Not for packaging artifacts."
 ---
 
 # Litestar Deployment

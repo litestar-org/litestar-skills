@@ -1,6 +1,6 @@
 ---
 name: litestar-middleware
-description: "Auto-activate for AbstractMiddleware, DefineMiddleware, MiddlewareProtocol, middleware=, CORSConfig, CSRFConfig, AllowedHostsConfig, CompressionConfig, request IDs, auth middleware, or ASGI scope filtering. Use when configuring Litestar middleware or cross-cutting request behavior. Not for route-level business logic or frontend middleware."
+description: "Auto-activate for ASGIMiddleware, DefineMiddleware, middleware=, CORSConfig, CSRFConfig, AllowedHostsConfig, CompressionConfig, request IDs, or ASGI scopes. Not for route logic."
 ---
 
 # Litestar Middleware
@@ -58,9 +58,9 @@ Use this skill for built-in middleware config, custom ASGI middleware, request l
 ## Example
 
 ```python
-from litestar.middleware import DefineMiddleware
+from litestar.middleware import ASGIMiddleware
 
-middleware = [DefineMiddleware(RequestIDMiddleware)]
+middleware = [RequestIDMiddleware()]
 ```
 
 </example>

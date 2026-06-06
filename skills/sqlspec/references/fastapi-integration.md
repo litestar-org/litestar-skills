@@ -22,9 +22,9 @@ from sqlspec.extensions.fastapi import SQLSpecPlugin
 sqlspec = SQLSpec()
 sqlspec.add_config(
     AsyncpgConfig(
-        pool_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
+        connection_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
         extension_config={
-            "starlette": {
+            "fastapi": {
                 "commit_mode": "autocommit",
                 "session_key": "db_session",
             }
@@ -38,7 +38,7 @@ db_plugin = SQLSpecPlugin(sqlspec, app)
 
 Key observations:
 
-1. The config lives under `extension_config["starlette"]` — **not** `extension_config["fastapi"]`. The FastAPI plugin inherits from the Starlette plugin and reuses its settings extractor, so both frameworks read the same block. This is intentional (one place to tune per-framework settings when switching between plain Starlette and FastAPI).
+1. The config lives under `extension_config["fastapi"]`. Starlette apps use `extension_config["starlette"]`; declare both blocks only when the same adapter config is shared by both integrations.
 2. `SQLSpecPlugin(sqlspec, app)` eagerly wires the plugin: it registers the lifespan and adds the commit-mode middleware. The two-step form `plugin = SQLSpecPlugin(sqlspec); plugin.init_app(app)` works the same; use it when you build the registry at module scope and attach the plugin inside a factory.
 3. The plugin is the handle you pass around your application — most downstream code only needs `db_plugin.provide_session()` and `db_plugin.provide_filters(...)`.
 
@@ -75,9 +75,9 @@ from sqlspec.adapters.asyncpg import AsyncpgConfig
 sqlspec = SQLSpec()
 sqlspec.add_config(
     AsyncpgConfig(
-        pool_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
+        connection_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
         extension_config={
-            "starlette": {
+            "fastapi": {
                 "commit_mode": "autocommit",
                 "connection_key": "db_connection",
                 "session_key": "db_session",
@@ -88,7 +88,7 @@ sqlspec.add_config(
 )
 ```
 
-The keys the plugin reads from `extension_config["starlette"]`:
+The keys the plugin reads from `extension_config["fastapi"]`:
 
 | Key | Default | Purpose |
 | --- | --- | --- |
@@ -326,9 +326,9 @@ sqlspec = SQLSpec()
 
 sqlspec.add_config(
     AsyncpgConfig(
-        pool_config={"dsn": "postgresql://app:app@primary:5432/orders"},
+        connection_config={"dsn": "postgresql://app:app@primary:5432/orders"},
         extension_config={
-            "starlette": {
+            "fastapi": {
                 "commit_mode": "autocommit",
                 "connection_key": "primary_connection",
                 "session_key": "primary_session",
@@ -341,7 +341,7 @@ sqlspec.add_config(
     SqliteConfig(
         connection_config={"database": "/var/lib/app/reports.sqlite"},
         extension_config={
-            "starlette": {
+            "fastapi": {
                 "commit_mode": "manual",
                 "connection_key": "reports_connection",
                 "session_key": "reports_session",
@@ -410,9 +410,9 @@ from sqlspec.extensions.fastapi import FilterConfig, SQLSpecPlugin
 sqlspec = SQLSpec()
 sqlspec.add_config(
     AsyncpgConfig(
-        pool_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
+        connection_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
         extension_config={
-            "starlette": {
+            "fastapi": {
                 "commit_mode": "autocommit",
                 "session_key": "db_session",
                 "pool_key": "db_pool",

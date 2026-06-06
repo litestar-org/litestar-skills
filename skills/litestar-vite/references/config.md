@@ -5,10 +5,11 @@ Full reference for the Python `ViteConfig` family and the JS-side `vite.config.t
 ## ViteConfig
 
 ```python
-from litestar_vite import InertiaConfig, PathConfig, RuntimeConfig, TypeGenConfig, ViteConfig
+from litestar_vite import PathConfig, RuntimeConfig, TypeGenConfig, ViteConfig
+from litestar_vite.inertia import InertiaConfig
 
 ViteConfig(
-    mode="spa",                          # spa | template | hybrid | ssr | ssg | external
+    mode="spa",                          # spa | template | htmx | hybrid | framework | external
     paths=PathConfig(...),
     runtime=RuntimeConfig(...),
     types=TypeGenConfig(...),            # presence enables type generation

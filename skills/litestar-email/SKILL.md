@@ -1,6 +1,6 @@
 ---
 name: litestar-email
-description: "Auto-activate for litestar_email imports, EmailPlugin, EmailConfig, EmailService, EmailMessage, SMTPConfig, ResendConfig, SendGridConfig, MailgunConfig, or InMemoryConfig. Use when sending transactional email from Litestar, choosing an email backend, testing email flows, or injecting EmailService. Not for non-Litestar email SDK usage or marketing campaign platforms."
+description: "Auto-activate for litestar_email, EmailPlugin, EmailConfig, EmailService, EmailMessage, SMTPConfig, ResendConfig, SendGridConfig, MailgunConfig, SESConfig, or InMemoryBackend. Not for marketing platforms."
 ---
 
 # litestar-email
@@ -13,7 +13,9 @@ Backends:
 - `ResendConfig` — Resend HTTP API
 - `SendGridConfig` — SendGrid HTTP API
 - `MailgunConfig` — Mailgun HTTP API
-- `InMemoryConfig` — for tests; captures messages in an `outbox` list
+- `SESConfig` — Amazon SES API v2
+- `backend="memory"` / `InMemoryBackend` — for tests; captures messages in `InMemoryBackend.outbox`
+- `backend="console"` — for local development; prints messages
 
 ## Code Style Rules
 
@@ -28,9 +30,9 @@ Backends:
 ```bash
 pip install litestar-email
 # Optional extras for specific backends:
-pip install litestar-email[resend]
-pip install litestar-email[sendgrid]
-pip install litestar-email[mailgun]
+pip install litestar-email[smtp]
+pip install litestar-email[ses]
+pip install litestar-email[aiohttp]
 ```
 
 ### Basic Setup
@@ -56,7 +58,7 @@ app = Litestar(plugins=[EmailPlugin(config=EmailConfig(
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `backend` | `BackendConfig` | One of `SMTPConfig`, `ResendConfig`, `SendGridConfig`, `MailgunConfig`, `InMemoryConfig` |
+| `backend` | `str \| BackendConfig` | One of `"console"`, `"memory"`, `SMTPConfig`, `ResendConfig`, `SendGridConfig`, `MailgunConfig`, `SESConfig` |
 | `from_email` | `str` | Default sender address |
 | `from_name` | `str \| None` | Optional display name |
 
@@ -99,17 +101,20 @@ from litestar_email import MailgunConfig
 MailgunConfig(api_key="key-xxxxxxxxxx", domain="mg.example.com", region="us")
 ```
 
-#### InMemoryConfig (testing)
+#### Memory backend (testing)
 
 ```python
-from litestar_email import InMemoryConfig
-InMemoryConfig()
-# Stores sent messages in memory; inspect via email_service.outbox
+from litestar_email import EmailConfig
+from litestar_email.backends import InMemoryBackend
+
+InMemoryBackend.clear()
+config = EmailConfig(backend="memory", from_email="test@example.com")
+# Stores sent messages in memory; inspect InMemoryBackend.outbox
 ```
 
 ### Dependency Injection
 
-`EmailPlugin.on_app_init` registers `EmailService` automatically.
+`EmailPlugin.on_app_init` registers an `EmailService` dependency as `mailer` by default. Override `email_service_dependency_key` if the project already standardizes on another parameter name.
 
 ```python
 from litestar import post
@@ -117,10 +122,10 @@ from litestar_email import EmailService, EmailMessage
 
 @post("/send-notification")
 async def send_notification(
-    email_service: EmailService,
+    mailer: EmailService,
     data: NotificationRequest,
 ) -> dict:
-    await email_service.send_message(EmailMessage(
+    await mailer.send_message(EmailMessage(
         to=[data.recipient],
         subject="Notification",
         body="You have a new notification.",
@@ -158,8 +163,8 @@ msg = EmailMultiAlternatives(
     to=["user@example.com"],
     subject="Welcome",
     body="Welcome to our platform.",
+    html_body="<p>Welcome to our platform.</p>",
 )
-msg.attach_alternative("<p>Welcome to our platform.</p>", "text/html")
 await email_service.send_message(msg)
 ```
 
@@ -205,13 +210,13 @@ async def main():
 from litestar.template import TemplateEngineProtocol
 
 async def send_welcome(
-    email_service: EmailService,
+    mailer: EmailService,
     template_engine: TemplateEngineProtocol,
     user: User,
 ) -> None:
     html = template_engine.render("emails/welcome.html", {"user": user})
     text = template_engine.render("emails/welcome.txt", {"user": user})
-    await email_service.send_message(EmailMessage(
+    await mailer.send_message(EmailMessage(
         to=[user.email],
         subject="Welcome!",
         body=text,
@@ -231,7 +236,8 @@ async def send_welcome(
 | Modern transactional API | `ResendConfig` (preferred for new projects) |
 | Existing SendGrid contract | `SendGridConfig` |
 | Mailgun account | `MailgunConfig` |
-| Any test environment | `InMemoryConfig` |
+| Any test environment | `backend="memory"` / `InMemoryBackend` |
+| AWS-native transactional mail | `SESConfig` |
 
 ### Step 2: Configure Plugin
 
@@ -259,9 +265,9 @@ await task_queues.get("default").enqueue(
 )
 ```
 
-### Step 6: Test with InMemoryConfig
+### Step 6: Test with InMemoryBackend
 
-In test config, swap `backend=InMemoryConfig()`. Assert against `email_service.outbox`.
+In test config, swap `backend="memory"`. Clear and assert against `InMemoryBackend.outbox`.
 
 </workflow>
 
@@ -269,14 +275,14 @@ In test config, swap `backend=InMemoryConfig()`. Assert against `email_service.o
 
 ## Guardrails
 
-- **Use `InMemoryConfig` in all test environments** — no real network calls; provides an `outbox` for assertions.
+- **Use `backend="memory"` in all test environments** — no real network calls; `InMemoryBackend.outbox` captures messages for assertions.
 - **Background-queue email sends** — use `litestar-saq` for transactional email. SMTP can be slow; blocking handlers degrades p99.
 - **Set `from_email` at the plugin level** — overriding per message is for exceptions, not the default.
 - **Use `Resend` or `SendGrid` for high-volume transactional** — direct SMTP scales poorly past ~100/s.
 - **Never log passwords/API keys** — sanitize `EmailConfig.backend` before structlog dumps.
 - **Validate recipient addresses at the API boundary** — invalid addresses cause backend errors and waste retries.
 - **Set timeouts** — `SMTPConfig.timeout` defaults are usually fine; tune if your SMTP host is slow.
-- **Don't ship `[resend]` / `[sendgrid]` extras you don't use** — they pull in HTTP client deps.
+- **Don't ship unused extras** — `[smtp]`, `[ses]`, and `[aiohttp]` are opt-in dependencies.
 
 </guardrails>
 
@@ -287,12 +293,12 @@ In test config, swap `backend=InMemoryConfig()`. Assert against `email_service.o
 Before delivering email-sending code, verify:
 
 - [ ] `EmailPlugin` is in `app.plugins`
-- [ ] Backend is appropriate for env (`InMemoryConfig` in tests, real backend in dev/prod)
+- [ ] Backend is appropriate for env (`backend="memory"` in tests, real backend in dev/prod)
 - [ ] `from_email` is configured at the `EmailConfig` level
-- [ ] Handler injects `EmailService` via DI (no module-level instance)
+- [ ] Handler injects `EmailService` via DI, usually as `mailer`
 - [ ] `EmailMessage` is constructed with required `to` and `subject`
 - [ ] Slow / retry-able sends are queued via `litestar-saq` instead of blocking the request
-- [ ] Tests assert against `email_service.outbox`
+- [ ] Tests assert against `InMemoryBackend.outbox`
 - [ ] Secrets (`password`, `api_key`) come from env / settings, not hard-coded
 
 </validation>
@@ -301,17 +307,17 @@ Before delivering email-sending code, verify:
 
 ## Example
 
-**Task:** Welcome-email flow that queues a SAQ task to send via Resend; test asserts via InMemoryConfig.
+**Task:** Welcome-email flow that queues a SAQ task to send via Resend; test asserts via `InMemoryBackend`.
 
 ```python
 # app/config/email.py
-from litestar_email import EmailConfig, ResendConfig, InMemoryConfig
+from litestar_email import EmailConfig, ResendConfig
 from app.lib.settings import get_settings
 
 def get_email_config() -> EmailConfig:
     settings = get_settings()
     if settings.env == "test":
-        return EmailConfig(backend=InMemoryConfig(), from_email="test@example.com")
+        return EmailConfig(backend="memory", from_email="test@example.com")
     return EmailConfig(
         backend=ResendConfig(api_key=settings.resend.api_key),
         from_email=settings.email.from_email,
@@ -366,11 +372,14 @@ class AccountController(Controller):
 ```python
 # tests/test_accounts.py
 async def test_account_creation_queues_welcome_email(client, email_service):
+    from litestar_email.backends import InMemoryBackend
+
+    InMemoryBackend.clear()
     resp = await client.post("/api/accounts", json={"email": "alice@example.com", "name": "Alice"})
     assert resp.status_code == 201
     # After SAQ flush in test:
-    assert len(email_service.outbox) == 1
-    assert email_service.outbox[0].subject == "Welcome, Alice!"
+    assert len(InMemoryBackend.outbox) == 1
+    assert InMemoryBackend.outbox[0].subject == "Welcome, Alice!"
 ```
 
 </example>

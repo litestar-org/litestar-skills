@@ -1,6 +1,6 @@
 ---
 name: advanced-alchemy
-description: "Auto-activate for alembic/, alembic.ini, advanced_alchemy imports, SQLAlchemyAsyncRepositoryService, SQLAlchemyAsyncConfig, UUIDAuditBase, repository_type, service_class, or web framework Advanced Alchemy extensions. Use when working with Advanced Alchemy ORM models, repositories, services, Alembic migrations, filters, pagination, framework session wiring, custom types, caching, replicas, or file storage. Not for raw SQLAlchemy without Advanced Alchemy abstractions."
+description: "Auto-activate for advanced_alchemy imports, alembic/, SQLAlchemyAsyncRepositoryService, SQLAlchemyAsyncConfig, repository_type, service_class, filters, or storage. Not for raw SQLAlchemy."
 ---
 
 # Advanced Alchemy
@@ -56,7 +56,7 @@ Advanced Alchemy is NOT a raw ORM — it is a **service/repository layer** built
 | Service | Purpose |
 | --- | --- |
 | `SQLAlchemyAsyncRepositoryService[Model]` | Full CRUD with lifecycle hooks |
-| `SQLAlchemyAsyncRepositoryReadService[Model]` | Read-only (list, get, count, exists) |
+| `SQLAlchemyAsyncRepositoryReadService[Model]` | Read-only (get_many, get, count, exists) |
 
 Key lifecycle hooks: `to_model_on_create`, `to_model_on_update`, `to_model_on_upsert`.
 
@@ -75,7 +75,7 @@ Key lifecycle hooks: `to_model_on_create`, `to_model_on_update`, `to_model_on_up
 `SQLAlchemyAsyncRepositoryService` is the primary service base class. Key behaviors:
 
 - **Dict-to-model conversion**: pass raw `dict` to `create()`, `update()`, `upsert()` — the service converts via `to_model_on_create` / `to_model_on_update` lifecycle hooks before persistence
-- **Bulk operations**: `add_many(data)`, `update_many(data)`, `delete_many(filters)` — batched in a single transaction; prefer over calling single-row methods in a loop
+- **Bulk operations**: `create_many(data)`, `update_many(data)`, `upsert_many(data)`, `delete_many(item_ids)` — batched in a single transaction; prefer over calling single-row methods in a loop
 - **Lifecycle hooks**: `to_model_on_create`, `to_model_on_update`, `to_model_on_upsert` — override to transform input data, hash passwords, normalize strings, etc.
 
 ## Mixins

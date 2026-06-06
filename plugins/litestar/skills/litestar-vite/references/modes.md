@@ -1,6 +1,6 @@
 # litestar-vite — Modes & Supported Frameworks
 
-`litestar-vite` reference apps cover SPA, template, Inertia hybrid, SSR, SSG, and external-build shapes. Pick one shape per project — switching mid-project rewires the asset pipeline, template helpers, and TypeGen output paths.
+`litestar-vite` reference apps cover SPA, template, HTMX, Inertia hybrid, framework, and external-build shapes. Pick one shape per project — switching mid-project rewires the asset pipeline, template helpers, and TypeGen output paths.
 
 ## Decision Matrix
 
@@ -8,10 +8,10 @@
 | --- | --- |
 | Full client-side routing + SPA (JSON API backend) | **spa** |
 | Server-rendered HTML with Vite-bundled JS/CSS sprinkles | **template** |
-| HTMX hypermedia with Vite-bundled assets | **template** + `HTMXPlugin()` |
-| Server routes returning JS page components (Inertia.js) | **hybrid** |
-| Already using Nuxt / SvelteKit | **ssr** |
-| Building with Astro | **ssg** |
+| HTMX hypermedia with Vite-bundled assets | **htmx** + `HTMXPlugin()` |
+| Server routes returning JS page components (Inertia.js) | **hybrid** / **inertia** |
+| Already using Nuxt / SvelteKit | **framework** (`ssr` alias accepted) |
+| Building with Astro | **framework** (`ssg` alias accepted) |
 | Using Angular CLI instead of the Analog Vite example | **external** |
 
 ---
@@ -27,14 +27,14 @@ Each row is a **tested, shipping example** in the canonical [`litestar-vite/exam
 | **Vue 3** | spa | [`vue/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/vue) | `@vitejs/plugin-vue` | Composition API + `<script setup>`. |
 | **Svelte** | spa | [`svelte/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/svelte) | `@sveltejs/vite-plugin-svelte` | Svelte 5 runes. |
 | **Angular** | spa | [`angular/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/angular) | `@analogjs/vite-plugin-angular` | Requires `resolve.mainFields: ["module"]`; Angular plugin must be first in `plugins` array. See `angular-cli/` for Angular-CLI workflow. |
-| **Nuxt (Vue SSR)** | ssr | [`nuxt/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/nuxt) | Nuxt's own Vite setup | Litestar proxies API; Nuxt owns rendering. Type output → `./app/generated`. |
-| **SvelteKit** | ssr | [`sveltekit/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/sveltekit) | SvelteKit's own Vite setup | Framework owns rendering; Litestar is the API. |
-| **Astro** | ssg | [`astro/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/astro) | **`litestar-vite-plugin/astro`** (different import!) | Uses Astro's own `astro.config.mjs`; `apiProxy` points at Litestar. No `vite.config.ts` needed. |
+| **Nuxt (Vue SSR)** | framework (`ssr`) | [`nuxt/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/nuxt) | Nuxt's own Vite setup | Litestar proxies API; Nuxt owns rendering. Type output → `./app/generated`. |
+| **SvelteKit** | framework (`ssr`) | [`sveltekit/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/sveltekit) | SvelteKit's own Vite setup | Framework owns rendering; Litestar is the API. |
+| **Astro** | framework (`ssg`) | [`astro/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/astro) | **`litestar-vite-plugin/astro`** (different import!) | Uses Astro's own `astro.config.mjs`; `apiProxy` points at Litestar. No `vite.config.ts` needed. |
 | **Inertia + React** | hybrid | [`react-inertia/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/react-inertia) | `@vitejs/plugin-react` | Server routing via `component=` route handlers. See [`../../litestar-inertia/SKILL.md`](../../litestar-inertia/SKILL.md). |
 | **Inertia + React + Jinja** | hybrid | [`react-inertia-jinja/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/react-inertia-jinja) | `@vitejs/plugin-react` | Inertia with Jinja root template (useful for auth-guarded vs public shells). |
 | **Inertia + Vue** | hybrid | [`vue-inertia/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/vue-inertia) | `@vitejs/plugin-vue` | Server routing + Vue page components. |
 | **Inertia + Vue + Jinja** | hybrid | [`vue-inertia-jinja/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/vue-inertia-jinja) | `@vitejs/plugin-vue` | Inertia + Jinja root template. |
-| **HTMX + Jinja** | template | [`jinja-htmx/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/jinja-htmx) | (none framework-specific) | Jinja `TemplateConfig` + `VitePlugin(mode="template")` + Litestar `HTMXPlugin` + client-side `ls-*` JSON templating. |
+| **HTMX + Jinja** | htmx | [`jinja-htmx/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/jinja-htmx) | (none framework-specific) | Jinja `TemplateConfig` + `VitePlugin(mode="htmx")` + Litestar `HTMXPlugin` + client-side `ls-*` JSON templating. |
 
 ### Outside Shipped Examples
 
@@ -89,7 +89,7 @@ Template helpers (available when `template_config` is set + `VitePlugin` is regi
 
 ```python
 from litestar_vite import ViteConfig, VitePlugin, PathConfig
-from litestar.contrib.jinja import JinjaTemplateEngine
+from litestar.plugins.jinja import JinjaTemplateEngine
 from litestar.template.config import TemplateConfig
 
 vite = VitePlugin(config=ViteConfig(
@@ -121,9 +121,9 @@ Base template layout:
 
 ## HTMX + Template Mode
 
-The canonical HTMX example is **template mode + HTMX patterns**:
+The canonical HTMX example is **HTMX mode + HTMX patterns**:
 
-- `ViteConfig(mode="template", ...)`
+- `ViteConfig(mode="htmx", ...)`
 - `HTMXPlugin()` registered alongside `VitePlugin`
 - Templates use `hx-*` attributes for server-driven interactivity
 
@@ -185,7 +185,7 @@ Single-item variant (properties accessible directly via prototype inheritance):
 ### Server-side HTMX partials
 
 ```python
-from litestar_htmx.response import HTMXTemplate
+from litestar.plugins.htmx import HTMXTemplate
 
 @get("/fragments/book/{book_id:int}")
 async def book_fragment(self, book_id: int) -> Template:
@@ -253,7 +253,8 @@ See [`../../litestar-htmx/SKILL.md`](../../litestar-htmx/SKILL.md) for the full 
 ```python
 from litestar import Controller, Litestar, get
 from litestar.middleware.session.client_side import CookieBackendConfig
-from litestar_vite import InertiaConfig, PathConfig, TypeGenConfig, ViteConfig, VitePlugin
+from litestar_vite import PathConfig, TypeGenConfig, ViteConfig, VitePlugin
+from litestar_vite.inertia import InertiaConfig
 
 
 class PageController(Controller):
@@ -289,16 +290,15 @@ See [`../../litestar-inertia/SKILL.md`](../../litestar-inertia/SKILL.md) for the
 
 For JS-side frameworks that own rendering or build orchestration:
 
-- **Nuxt** — Vue SSR, `mode="ssr"`
-- **SvelteKit** — Svelte SSR, `mode="ssr"`
-- **Astro** — content-first SSG with islands, `mode="ssg"`
+- **Nuxt** — Vue SSR, `mode="framework"`
+- **SvelteKit** — Svelte SSR, `mode="framework"`
+- **Astro** — content-first SSG with islands, `mode="framework"`
 - **Angular CLI** — external dev/build process, `mode="external"`
 
 Litestar defers rendering to the JS tool and proxies or serves the API:
 
 ```python
-ViteConfig(mode="ssr", ...)
-ViteConfig(mode="ssg", ...)
+ViteConfig(mode="framework", ...)
 ViteConfig(mode="external", ...)
 ```
 

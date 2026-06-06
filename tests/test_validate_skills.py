@@ -138,6 +138,25 @@ class TestValidateSkill:
         violations = mod.validate_skill(skill)
         assert any("process summary" in v.message.lower() for v in violations)
 
+    def test_aggregate_description_budget_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        mod.MAX_SKILL_DESCRIPTION_TOTAL_CHARS = 100
+        skills = [
+            _write_skill(
+                tmp_path,
+                f"skill-{index}",
+                description=(
+                    "Auto-activate for demo imports and config files. "
+                    "Use when validating aggregate skill budgets. "
+                    "Not for production guidance."
+                ),
+            )
+            for index in range(2)
+        ]
+        violations = mod.validate_skill_description_budget(skills)
+        assert any("description budget" in v.message.lower() for v in violations)
+
     def test_name_mismatch_yields_violation(self, tmp_path: Path) -> None:
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
@@ -218,8 +237,7 @@ class TestValidateCommand:
             "InertiaConfig",
             "one `VitePlugin",
             'component="PageName"',
-            'mode="ssr"',
-            'mode="ssg"',
+            'mode="framework"',
             'mode="external"',
             "litestar-vite-plugin/astro",
         ):

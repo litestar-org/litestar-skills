@@ -133,10 +133,10 @@ class UserSecret(UUIDAuditBase):
     __tablename__ = "user_secret"
 
     api_key: Mapped[str] = mapped_column(
-        EncryptedString(backend=FernetBackend(key="your-fernet-key")),
+        EncryptedString(key="your-fernet-key", backend=FernetBackend),
     )
     notes: Mapped[str | None] = mapped_column(
-        EncryptedText(backend=FernetBackend(key="your-fernet-key")),
+        EncryptedText(key="your-fernet-key", backend=FernetBackend),
         default=None,
     )
 ```

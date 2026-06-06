@@ -1,6 +1,6 @@
 ---
 name: litestar-build
-description: "Auto-activate for uv build, hatch build, pyapp, Hatchling force-include, bundled frontend assets, PyApp onefile binaries, GitHub Actions build matrices, PYAPP_* env vars, cargo-zigbuild, or python-build-standalone. Use when packaging Litestar apps as wheels, onefile binaries, release artifacts, or asset-bundled distributions. Not for runtime deployment - use litestar-deployment."
+description: "Auto-activate for uv build, hatch build, PyApp, PYAPP_*, wheel assets, GitHub release matrices, cargo-zigbuild, or python-build-standalone. Not for runtime deployment."
 ---
 
 # litestar-build
