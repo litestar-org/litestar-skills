@@ -1,11 +1,11 @@
 ---
 name: litestar-htmx
-description: "Auto-activate for litestar_htmx imports, HTMXPlugin, HTMXRequest, HTMXTemplate, TriggerEvent, PushUrl, HXLocation, hx-* attributes in Litestar templates, or partial HTML responses. Use when building HTMX-powered Litestar handlers, templates, and server-triggered client events. Not for full SPA routing or non-Litestar HTMX apps."
+description: "Auto-activate for litestar.plugins.htmx, litestar_htmx, HTMXPlugin, HTMXRequest, HTMXTemplate, TriggerEvent, hx-* attributes, or partial HTML. Not for full SPA routing."
 ---
 
 # litestar-htmx
 
-Litestar has first-party HTMX support in `litestar_htmx`. It exposes `HTMXPlugin`, `HTMXRequest` (request-side helpers), `HTMXTemplate` (template response with HTMX headers), and HTMX-specific response objects (`TriggerEvent`, `Reswap`, `Retarget`, `PushUrl`, `HXLocation`, `ClientRedirect`, `ClientRefresh`).
+Litestar has first-party HTMX support in `litestar.plugins.htmx`. It exposes `HTMXPlugin`, `HTMXRequest` (request-side helpers), `HTMXTemplate` (template response with HTMX headers), and HTMX-specific response objects (`TriggerEvent`, `Reswap`, `Retarget`, `PushUrl`, `HXLocation`, `ClientRedirect`, `ClientRefresh`).
 
 This skill is **Litestar-specific**. For generic HTMX `hx-*` attributes and patterns that aren't Litestar-bound, refer directly to <https://htmx.org/docs/>.
 
@@ -25,7 +25,7 @@ This skill is **Litestar-specific**. For generic HTMX `hx-*` attributes and patt
 
 ```python
 from litestar import get
-from litestar_htmx import HTMXRequest
+from litestar.plugins.htmx import HTMXRequest
 
 @get("/items")
 async def list_items(request: HTMXRequest) -> ...:
@@ -48,7 +48,7 @@ Wire it into the app:
 
 ```python
 from litestar import Litestar
-from litestar_htmx import HTMXPlugin
+from litestar.plugins.htmx import HTMXPlugin
 
 app = Litestar(route_handlers=[...], plugins=[HTMXPlugin()])
 ```
@@ -63,7 +63,7 @@ from litestar.response import Template
 
 @get("/items")
 async def list_items() -> Template:
-    items = await item_service.list()
+    items = await item_service.get_many()
     return Template(template_name="partials/item_list.html", context={"items": items})
 ```
 
@@ -94,7 +94,7 @@ For HTMX-targeted endpoints, the template is a fragment (no `<html>` / `<body>`)
 Example: trigger a custom event after a successful save:
 
 ```python
-from litestar_htmx import TriggerEvent
+from litestar.plugins.htmx import TriggerEvent
 
 @post("/items")
 async def create_item(data: ItemCreate) -> TriggerEvent:
@@ -284,7 +284,7 @@ assert "<ul" in resp.text
 
 ## Guardrails
 
-- **Use `litestar_htmx`**, not generic ASGI patterns — the plugin integrates with Litestar's lifecycle, OpenAPI, and DI.
+- **Use `litestar.plugins.htmx`**, not generic ASGI patterns — the plugin integrates with Litestar's lifecycle, OpenAPI, and DI. Treat `litestar_htmx` imports as legacy project signals.
 - **Register `HTMXPlugin()`** at the app level — handlers shouldn't construct `HTMXRequest` ad-hoc.
 - **Return partial HTML for HTMX-targeted routes** — never return a full layout to an `hx-get` target.
 - **Use `Template` (Litestar response) — never string-concat HTML** — XSS risk and template caching benefits.
@@ -322,7 +322,7 @@ Before delivering Litestar + HTMX code, verify:
 # app/domain/items/controllers.py
 from litestar import Controller, get, post
 from litestar.response import Template
-from litestar_htmx import HTMXRequest, TriggerEvent
+from litestar.plugins.htmx import HTMXRequest, TriggerEvent
 
 
 class ItemController(Controller):
@@ -330,13 +330,13 @@ class ItemController(Controller):
 
     @get("/")
     async def index(self) -> Template:
-        items = await item_service.list()
+        items = await item_service.get_many()
         return Template("pages/items.html", context={"items": items})
 
     @get("/list")
     async def list_partial(self, request: HTMXRequest) -> Template:
         """Partial used by hx-get on initial load and after create."""
-        items = await item_service.list()
+        items = await item_service.get_many()
         return Template("partials/item_list.html", context={"items": items})
 
     @post("/")

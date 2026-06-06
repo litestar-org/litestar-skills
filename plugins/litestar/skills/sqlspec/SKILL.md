@@ -1,6 +1,6 @@
 ---
 name: sqlspec
-description: "Auto-activate for sqlspec imports, SQLSpec, SQLFileLoader, driver adapters, query builders, named SQL files, filters, pagination, Arrow, framework extensions, ADK stores, data dictionary introspection, or observability hooks. Use when working with direct SQL through sqlspec across Litestar, FastAPI, Flask, or Starlette. Not for ORM-specific repository patterns or raw driver usage without sqlspec."
+description: "Auto-activate for sqlspec, SQLSpec, SQLFileLoader, drivers, query builders, named SQL, filters, pagination, Arrow, framework extensions, ADK stores, data dictionary, or observers. Not for ORM repositories."
 ---
 
 # SQLSpec Skill

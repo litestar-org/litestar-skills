@@ -136,7 +136,6 @@ from advanced_alchemy.types.encrypted_string import FernetBackend
 
 # Generate a key: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ENCRYPTION_KEY = "your-fernet-key-here"
-fernet = FernetBackend(key=ENCRYPTION_KEY)
 
 
 class UserSecret(UUIDAuditBase):
@@ -144,12 +143,12 @@ class UserSecret(UUIDAuditBase):
 
     # Short encrypted value
     api_key: Mapped[str] = mapped_column(
-        EncryptedString(backend=fernet),
+        EncryptedString(key=ENCRYPTION_KEY, backend=FernetBackend),
     )
 
     # Long encrypted text
     private_notes: Mapped[str | None] = mapped_column(
-        EncryptedText(backend=fernet),
+        EncryptedText(key=ENCRYPTION_KEY, backend=FernetBackend),
         default=None,
     )
 ```
@@ -159,14 +158,12 @@ class UserSecret(UUIDAuditBase):
 ```python
 from advanced_alchemy.types.encrypted_string import PGCryptoBackend
 
-pg_backend = PGCryptoBackend(key="your-encryption-key")
-
 
 class SecureRecord(UUIDAuditBase):
     __tablename__ = "secure_record"
 
     secret: Mapped[str] = mapped_column(
-        EncryptedString(backend=pg_backend),
+        EncryptedString(key="your-encryption-key", backend=PGCryptoBackend),
     )
 ```
 
@@ -251,40 +248,20 @@ class Document(UUIDAuditBase):
 
 ### Backend Configuration
 
-StoredObject uses `obstore` for cloud storage. Configure backends at application startup:
+Register storage backends at application startup. `ObstoreBackend` is the preferred backend when `advanced-alchemy[obstore]` is installed; use `FSSpecBackend` for protocols that need fsspec.
 
 ```python
-from advanced_alchemy.types.file_object import StorageBackend, FileObject
+from advanced_alchemy.types.file_object import storages
+from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
+from obstore.store import LocalStore, S3Store
 
-# S3 backend
-s3_storage = StorageBackend(
-    key="documents",
-    backend="s3",
-    options={
-        "bucket": "my-bucket",
-        "region": "us-east-1",
-        "access_key_id": "...",
-        "secret_access_key": "...",
-    },
-)
-
-# GCS backend
-gcs_storage = StorageBackend(
-    key="uploads",
-    backend="gcs",
-    options={
-        "bucket": "my-gcs-bucket",
-        "service_account_path": "/path/to/credentials.json",
-    },
-)
-
-# Local filesystem backend
-local_storage = StorageBackend(
+local_storage = ObstoreBackend(
     key="local",
-    backend="file",
-    options={
-        "root": "/var/data/uploads",
-    },
+    fs=LocalStore(prefix="/var/data/uploads"),
+)
+s3_storage = ObstoreBackend(
+    key="documents",
+    fs=S3Store(bucket="my-bucket", region="us-east-1"),
 )
 ```
 
@@ -293,8 +270,7 @@ local_storage = StorageBackend(
 ```python
 from advanced_alchemy.types.file_object import storages
 
-# Register during app startup — `storages` is a module-level `StorageRegistry`
-# singleton; `register_backend` is a method on it.
+# Register during app startup.
 storages.register_backend(s3_storage)
 storages.register_backend(local_storage)
 ```
@@ -307,7 +283,7 @@ file_obj = FileObject(
     filename="report.pdf",
     content_type="application/pdf",
     backend="documents",  # matches the StorageBackend key
-    data=file_bytes,
+    content=file_bytes,
 )
 
 document = Document(title="Q4 Report", file=file_obj)

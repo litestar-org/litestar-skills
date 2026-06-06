@@ -1,6 +1,6 @@
 ---
 name: litestar-saq
-description: "Auto-activate for litestar_saq imports, SAQPlugin, SAQConfig, QueueConfig, TaskQueues, CronJob, litestar workers run, background jobs, scheduled jobs, or SAQ web UI. Use when adding first-party SAQ background work to Litestar. Not for Celery, RQ, Dramatiq, raw SAQ outside Litestar, or custom PostgreSQL-native queues unless explicitly chosen."
+description: "Auto-activate for litestar_saq, SAQPlugin, SAQConfig, QueueConfig, TaskQueues, CronJob, litestar workers run, background jobs, schedules, or SAQ web UI. Not for Celery/RQ/Dramatiq."
 ---
 
 # litestar-saq
@@ -8,7 +8,7 @@ description: "Auto-activate for litestar_saq imports, SAQPlugin, SAQConfig, Queu
 `litestar-saq` is the first-party plugin that integrates [SAQ (Simple Async Queue)](https://github.com/tobymao/saq) with Litestar. It provides:
 
 - `SAQPlugin` — registers queues, workers, lifespan management, and DI for `TaskQueues`
-- `SAQConfig` / `QueueConfig` — declarative queue + worker configuration
+- `SAQConfig` / `QueueConfig` — declarative plugin, queue, worker, broker, and OpenTelemetry configuration
 - `litestar workers run` — CLI to start workers in-process or as a separate process
 - Optional web UI mounted under the Litestar app
 - DI injection of `TaskQueues` into route handlers for ergonomic enqueueing
@@ -39,12 +39,13 @@ def create_saq_plugin() -> SAQPlugin:
     settings = get_settings()
     return SAQPlugin(
         config=SAQConfig(
-            dsn=settings.redis.url,              # redis://... — Redis broker
             use_server_lifespan=True,            # workers run inside web process by default
             web_enabled=settings.saq.web_enabled,
+            enable_otel=None,                    # auto-detect if OpenTelemetry is installed and configured
             queue_configs=[
                 QueueConfig(
                     name="default",
+                    dsn=settings.redis.url,      # redis://... — Redis broker
                     tasks=["app.domain.system.tasks.send_email"],
                     scheduled_tasks=[
                         CronJob(
@@ -69,12 +70,12 @@ def create_saq_plugin_pg() -> SAQPlugin:
     settings = get_settings()
     return SAQPlugin(
         config=SAQConfig(
-            dsn=settings.database.url,           # postgresql+asyncpg://... — PG broker
             use_server_lifespan=True,
             web_enabled=settings.saq.web_enabled,
             queue_configs=[
                 QueueConfig(
                     name="default",
+                    dsn=settings.database.url,   # postgresql://... — PG broker
                     tasks=["app.domain.system.tasks.send_email"],
                 ),
             ],
@@ -150,6 +151,18 @@ async def send_email(ctx: dict, *, recipient: str, subject: str, body: str) -> N
     await email_service.send(recipient, subject, body)
 ```
 
+For long-running work, decorate the task with `monitored_job()` so heartbeats are sent while the task runs:
+
+```python
+from litestar_saq import monitored_job
+
+
+@monitored_job()
+async def rebuild_index(ctx: dict, *, index_name: str) -> dict[str, str]:
+    await run_rebuild(index_name)
+    return {"status": "complete"}
+```
+
 ### Enqueue from a Handler (DI of TaskQueues)
 
 ```python
@@ -219,11 +232,11 @@ pip install litestar-saq
 
 ### Step 2: Define Queues
 
-Build `QueueConfig` instances for each logical queue (`"default"`, `"emails"`, `"reports"`). Reference task functions by dotted path; the plugin imports them at startup.
+Build `QueueConfig` instances for each logical queue (`"default"`, `"emails"`, `"reports"`). Put the broker `dsn` on each `QueueConfig`. Reference task functions by dotted path; the plugin imports them at startup.
 
 ### Step 3: Configure Plugin
 
-Wrap `QueueConfig`s in `SAQConfig` with the broker DSN. Pick Redis (`redis://...`) when Redis is already in the stack; pick PostgreSQL (`postgresql+asyncpg://...`) when the project is PG-only. Both brokers are fully supported — see Plugin Setup above for both patterns. Set `use_server_lifespan=True` so workers run inside the web process by default. Toggle `web_enabled` for the introspection UI.
+Wrap `QueueConfig`s in `SAQConfig`. Pick Redis (`redis://...`) when Redis is already in the stack; pick PostgreSQL (`postgresql://...`) when the project is PG-only. Both brokers are fully supported — see Plugin Setup above for both patterns. Set `use_server_lifespan=True` so workers run inside the web process by default. Toggle `web_enabled` for the introspection UI and `enable_otel` for tracing.
 
 ### Step 4: Define Tasks
 
@@ -254,7 +267,7 @@ For production: `litestar workers run --process` separately from `litestar run`.
 
 - **Use `litestar-saq`, not raw SAQ, in Litestar apps** — the plugin handles DI, lifespan, CLI, and the web UI. Raw SAQ misses all of that.
 - **Always set `timeout`** on tasks and CronJobs — default is no timeout; a hung task pins a worker slot forever.
-- **Use `heartbeat`** for jobs that run longer than ~30s, otherwise SAQ may mark them stuck and re-queue.
+- **Use `monitored_job()` or `heartbeat`** for jobs that run longer than ~30s, otherwise SAQ may mark them stuck and re-queue.
 - **Inject `TaskQueues` via DI** — don't import a global queue inside handlers. The plugin owns the queue lifecycle.
 - **Use `CronJob` for scheduled work** — not external cron. CronJobs participate in retries, timeouts, and observability.
 - **Use `key=` for deduplication** — same logical job (per-user sync, per-resource refresh) should not stack.
@@ -273,10 +286,12 @@ Before delivering Litestar + SAQ code, verify:
 
 - [ ] `SAQPlugin` is in `app.plugins`
 - [ ] `SAQConfig.use_server_lifespan` is set explicitly
+- [ ] Each `QueueConfig` has a broker `dsn` or `broker_instance`
 - [ ] Each `QueueConfig` lists tasks by dotted path; the imports resolve
 - [ ] All tasks have `ctx: dict` as the first positional arg, keyword-only params after `*`
 - [ ] Every task has `timeout` set
 - [ ] Long-running jobs (>30s) have `heartbeat` set
+- [ ] Long-running task functions use `monitored_job()` when they need automatic heartbeats
 - [ ] CronJobs have `timeout` and a sensible `cron` expression
 - [ ] Handlers enqueue via injected `TaskQueues`, not module globals
 - [ ] Job dedup uses `key=` where applicable
@@ -301,12 +316,12 @@ def create_saq_plugin() -> SAQPlugin:
     settings = get_settings()
     return SAQPlugin(
         config=SAQConfig(
-            dsn=settings.redis.url,          # Redis broker — swap for settings.database.url in PG-only stacks
             use_server_lifespan=True,
             web_enabled=settings.saq.web_enabled,
             queue_configs=[
                 QueueConfig(
                     name="default",
+                    dsn=settings.redis.url,  # Redis broker — swap for settings.database.url in PG-only stacks
                     tasks=[
                         "app.domain.system.tasks.send_email",
                         "app.domain.system.tasks.cleanup_sessions",

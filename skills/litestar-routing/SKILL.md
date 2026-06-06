@@ -1,6 +1,6 @@
 ---
 name: litestar-routing
-description: "Auto-activate for Controller classes, Router, route decorators, @get/@post/@put/@patch/@delete, route_handler, path params, app/domain modules, or DomainPlugin layout. Use when designing Litestar routes, handlers, Controller grouping, Router composition, or domain folders. Not for non-Litestar routing or frontend routers."
+description: "Auto-activate for Controller, Router, @get/@post/@put/@patch/@delete, route_handler, path params, app/domain modules, or DomainPlugin layout. Not for frontend routers."
 ---
 
 # Litestar Routing

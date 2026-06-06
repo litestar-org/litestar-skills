@@ -1,6 +1,6 @@
 ---
 name: litestar-settings
-description: "Auto-activate for get_env, dataclass settings, pydantic_settings, BaseSettings, lru_cache settings factories, app.state settings, LITESTAR_APP, env var parsing, or typed app config. Use when defining Litestar settings, config factories, env loading, or settings injection. Not for frontend environment variables or deployment secrets management alone."
+description: "Auto-activate for get_env, dataclass settings, pydantic_settings, BaseSettings, lru_cache config factories, app.state settings, LITESTAR_APP, or env parsing. Not for frontend env."
 ---
 
 # Litestar Settings

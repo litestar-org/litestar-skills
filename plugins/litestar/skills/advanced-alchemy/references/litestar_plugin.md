@@ -117,7 +117,7 @@ from litestar.params import Parameter
 
 @get("/users")
 async def list_users(user_service: UserService) -> list[m.User]:
-    return await user_service.list()
+    return await user_service.get_many()
 
 
 @get("/users/{user_id:uuid}")
@@ -152,7 +152,7 @@ from litestar import get, post, patch
 
 @get("/users", return_dto=UserReadDTO)
 async def list_users(user_service: UserService) -> list[m.User]:
-    return await user_service.list()
+    return await user_service.get_many()
 
 
 @post("/users", dto=UserCreateDTO, return_dto=UserReadDTO)

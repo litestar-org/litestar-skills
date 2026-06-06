@@ -53,12 +53,12 @@ class CustomerFactory(DataclassFactory[Customer]):
 
 Session-scoped factories are common for read-only test data shared across many tests. Function-scoped is the default and the right choice when factories produce data that flows into a database with per-test cleanup.
 
-## Cross-fixture wiring with `Fixture(...)`
+## Cross-model wiring
 
-When one factory's field should pull from another *registered* factory's fixture (rather than its underlying class), use `Fixture(OtherFactory)`:
+When one factory's field should use another factory, prefer default factory registration:
 
 ```python
-from polyfactory import Fixture
+from polyfactory import Use
 from polyfactory.factories import DataclassFactory
 from polyfactory.pytest_plugin import register_fixture
 
@@ -66,15 +66,16 @@ from polyfactory.pytest_plugin import register_fixture
 @register_fixture
 class CustomerFactory(DataclassFactory[Customer]):
     __model__ = Customer
+    __set_as_default_factory_for_type__ = True
 
 
 @register_fixture
 class OrderFactory(DataclassFactory[Order]):
     __model__ = Order
-    customer = Fixture(CustomerFactory)
+    customer = Use(CustomerFactory.build)
 ```
 
-`Fixture(CustomerFactory)` resolves through pytest's fixture machinery — meaning customers produced inside `OrderFactory.build()` go through whatever overrides, mocks, or session-scoped data the customer fixture provides for the current test. This is the right choice when the customer fixture is being patched in a specific test; using `Use(CustomerFactory.build)` instead bypasses fixture overrides.
+Use `__set_as_default_factory_for_type__ = True` when the same nested factory should be used broadly. Use `Use(CustomerFactory.build)` when one parent factory needs an explicit local override.
 
 ## Function-decorator form
 

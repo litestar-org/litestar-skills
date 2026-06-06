@@ -5,7 +5,7 @@
 | Service | Use Case |
 | --- | --- |
 | `SQLAlchemyAsyncRepositoryService` | Full CRUD service with lifecycle hooks |
-| `SQLAlchemyAsyncRepositoryReadService` | Read-only variant (list, get, count, exists) |
+| `SQLAlchemyAsyncRepositoryReadService` | Read-only variant (get_many, get, count, exists) |
 
 ```python
 from advanced_alchemy.service import (
@@ -97,10 +97,10 @@ user = await service.get_one_or_none(id=user_id)           # Returns None
 user = await service.get_one_or_none(email="test@example.com")
 
 # List
-users = await service.list()
+users = await service.get_many()
 
 # List with pagination
-users, count = await service.list_and_count(LimitOffset(limit=20, offset=0))
+users, count = await service.get_many_and_count(LimitOffset(limit=20, offset=0))
 
 # Update
 user = await service.update({"name": "New Name"}, item_id=user_id)
@@ -128,14 +128,14 @@ from advanced_alchemy.filters import (
 )
 
 # Combining filters
-users, count = await service.list_and_count(
+users, count = await service.get_many_and_count(
     LimitOffset(limit=20, offset=0),
     OrderBy(field_name="created_at", sort_order="desc"),
     SearchFilter(field_name="name", value="John", ignore_case=True),
 )
 
 # Collection filter (IN clause)
-users = await service.list(
+users = await service.get_many(
     CollectionFilter(field_name="id", values=[id1, id2, id3]),
 )
 ```
@@ -151,7 +151,7 @@ class UserService(SQLAlchemyAsyncRepositoryService[m.User]):
             SearchFilter(field_name="is_active", value=True),
         ]
         custom_filters.extend(filters)
-        return await self.list(*custom_filters)
+        return await self.get_many(*custom_filters)
 ```
 
 ## Pagination Pattern
@@ -168,7 +168,7 @@ async def list_users(
     offset: int = 0,
 ) -> OffsetPagination[UserSchema]:
     filters = [LimitOffset(limit=limit, offset=offset)]
-    results, total = await service.list_and_count(*filters)
+    results, total = await service.get_many_and_count(*filters)
     return service.to_schema(results, total, filters=filters, schema_type=UserSchema)
 ```
 

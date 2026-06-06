@@ -1,4 +1,4 @@
-description = "Scaffold a new domain module in a Litestar app — controllers, schemas, services, guards, jobs, events — with proper wiring, route registration, and stack-appropriate patterns"
+description = "Use when adding a Litestar domain module with controllers, schemas, services, guards, jobs, events, routes, or stack-specific wiring. Not for new apps."
 prompt = """
 # Scaffold a new Litestar domain
 
@@ -149,16 +149,16 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlspec.service import SQLSpecAsyncService
+from app.lib.service import SQLSpecAsyncService
 
 from app.domain.{name}.schemas import {Resource}
 
 
 class {Resource}Service(SQLSpecAsyncService):
     async def list_and_count(self, *filters) -> tuple[list[{Resource}], int]:
-        return await self.driver.select_and_count(
+        return await self.driver.select_with_total(
             "SELECT * FROM {resources}",
-            filters=filters,
+            *filters,
             schema_type={Resource},
         )
 
@@ -213,8 +213,12 @@ from __future__ import annotations
 from uuid import UUID
 
 from litestar import Controller, get, post, patch, delete
-from advanced_alchemy.extensions.litestar import create_filter_dependencies
+from litestar.params import Dependency, Parameter
+from msgspec import to_builtins
+from advanced_alchemy.extensions.litestar.providers import create_service_dependencies
+from advanced_alchemy.filters import FilterTypes
 from advanced_alchemy.service import OffsetPagination
+from typing import Annotated
 
 from app.domain.{name}.schemas import {Resource}, {Resource}Create, {Resource}Update
 from app.domain.{name}.services import {Resource}Service
@@ -226,23 +230,29 @@ class {Resource}Controller(Controller):
     path = "/api/{name}"
     {guards_line}
     tags = ["{Resource}s"]
-    dependencies = create_filter_dependencies({{
-        "id_filter": "UUID",
-        "pagination_type": "limit_offset",
-        "pagination_size": 20,
-        {search_fields}
-    }})
+    dependencies = create_service_dependencies(
+        {Resource}Service,
+        key="{resource}_service",
+        filters={{
+            "id_filter": UUID,
+            "pagination_type": "limit_offset",
+            "pagination_size": 20,
+            {search_fields}
+        }},
+    )
 
     @get("/")
     async def list_{resources}(
-        self, {resource}_service: {Resource}Service, filters: list,
+        self,
+        {resource}_service: {Resource}Service,
+        filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
     ) -> OffsetPagination[{Resource}]:
-        results, total = await {resource}_service.list_and_count(*filters)
+        results, total = await {resource}_service.get_many_and_count(*filters)
         return {resource}_service.to_schema(results, total, filters=filters, schema_type={Resource})
 
     @get("/{{item_id:uuid}}")
     async def get_{resource}(
-        self, item_id: UUID, {resource}_service: {Resource}Service,
+        self, item_id: Annotated[UUID, Parameter()], {resource}_service: {Resource}Service,
     ) -> {Resource}:
         db_obj = await {resource}_service.get_one_or_none(id=item_id)
         if db_obj is None:
@@ -253,19 +263,19 @@ class {Resource}Controller(Controller):
     async def create_{resource}(
         self, data: {Resource}Create, {resource}_service: {Resource}Service,
     ) -> {Resource}:
-        db_obj = await {resource}_service.create(data.to_dict())
+        db_obj = await {resource}_service.create(to_builtins(data))
         return {resource}_service.to_schema(db_obj, schema_type={Resource})
 
     @patch("/{{item_id:uuid}}")
     async def update_{resource}(
-        self, item_id: UUID, data: {Resource}Update, {resource}_service: {Resource}Service,
+        self, item_id: Annotated[UUID, Parameter()], data: {Resource}Update, {resource}_service: {Resource}Service,
     ) -> {Resource}:
-        db_obj = await {resource}_service.update({{**data.to_dict(), "id": item_id}})
+        db_obj = await {resource}_service.update({{**to_builtins(data), "id": item_id}})
         return {resource}_service.to_schema(db_obj, schema_type={Resource})
 
     @delete("/{{item_id:uuid}}")
     async def delete_{resource}(
-        self, item_id: UUID, {resource}_service: {Resource}Service,
+        self, item_id: Annotated[UUID, Parameter()], {resource}_service: {Resource}Service,
     ) -> None:
         await {resource}_service.delete(item_id)
 ```
@@ -278,7 +288,11 @@ from __future__ import annotations
 from uuid import UUID
 
 from litestar import Controller, get, post, patch, delete
-from sqlspec.filters import LimitOffsetFilter, OrderByFilter
+from litestar.params import Dependency, Parameter
+from msgspec import to_builtins
+from sqlspec.core.filters import FilterTypes
+from sqlspec.extensions.litestar.providers import create_filter_dependencies
+from typing import Annotated
 
 from app.domain.{name}.schemas import {Resource}, {Resource}Create, {Resource}Update
 from app.domain.{name}.services import {Resource}Service
@@ -290,20 +304,26 @@ class {Resource}Controller(Controller):
     path = "/api/{name}"
     {guards_line}
     tags = ["{Resource}s"]
+    dependencies = create_filter_dependencies({{
+        "pagination_type": "limit_offset",
+        "pagination_size": 20,
+        "sort_field": "created_at",
+        "sort_order": "desc",
+        {search_fields}
+    }})
 
     @get("/")
     async def list_{resources}(
         self,
         {resource}_service: {Resource}Service,
-        limit_offset: LimitOffsetFilter,
-        order_by: OrderByFilter,
+        filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
     ) -> list[{Resource}]:
-        rows, _total = await {resource}_service.list_and_count(limit_offset, order_by)
+        rows, _total = await {resource}_service.list_and_count(*filters)
         return rows
 
     @get("/{{item_id:uuid}}")
     async def get_{resource}(
-        self, item_id: UUID, {resource}_service: {Resource}Service,
+        self, item_id: Annotated[UUID, Parameter()], {resource}_service: {Resource}Service,
     ) -> {Resource}:
         row = await {resource}_service.get_one_or_none(item_id)
         if row is None:
@@ -314,7 +334,7 @@ class {Resource}Controller(Controller):
     async def create_{resource}(
         self, data: {Resource}Create, {resource}_service: {Resource}Service,
     ) -> {Resource}:
-        return await {resource}_service.create(data.__dict__)
+        return await {resource}_service.create(to_builtins(data))
 ```
 
 ### `controllers/_{resource}.py` — Branch C: raw SQLAlchemy + `provide` DI

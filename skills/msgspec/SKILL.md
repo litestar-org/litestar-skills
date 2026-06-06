@@ -1,6 +1,6 @@
 ---
 name: msgspec
-description: "Auto-activate for msgspec imports, msgspec.Struct, msgspec.Meta, msgspec.json, msgspec.msgpack, tagged unions, enc_hook, dec_hook, or convert(). Use when defining msgspec models, serialization codecs, validation constraints, discriminated unions, or Litestar DTO data shapes. Not for Pydantic, dataclasses, attrs, or ORM models unless converting at a boundary."
+description: "Auto-activate for msgspec, Struct, Meta, msgspec.json, msgspec.msgpack, tagged unions, enc_hook, dec_hook, convert(), or Litestar DTO shapes. Not for Pydantic/ORM models."
 ---
 
 # msgspec Skill
@@ -10,7 +10,7 @@ msgspec is a high-performance Python library for serialization, deserialization,
 ## Code Style Rules
 
 - Use PEP 604 for unions: `T | None` (not `Optional[T]`)
-- **`from __future__ import annotations` rule** — Modules that **define** `msgspec.Struct` subclasses (library-like — runtime introspected) must NOT use `from __future__ import annotations`. Consumer modules that only *use* Structs (handlers, services, tests) MAY and typically SHOULD use it. Canonical Litestar apps use future annotations in 100+ consumer files without breaking msgspec.
+- **`from __future__ import annotations` rule** — Library/shared modules that define runtime-introspected `msgspec.Struct` subclasses should avoid postponed annotations unless the consuming tool resolves them. Consumer modules that only use Structs MAY use future annotations.
 - Always annotate all fields; msgspec requires type annotations
 - Use `kw_only=True` for Structs with more than 2 fields
 
@@ -308,7 +308,7 @@ Test round-trip encode/decode. Confirm `ValidationError` is raised for constrain
 - **Prefer `Meta` constraints over manual validation** -- zero runtime overhead; constraints are checked during decode, not after.
 - **Use `gc=False` for short-lived, non-circular objects** -- eliminates GC overhead for hot-path objects like request/response shapes.
 - **Tagged unions for polymorphism** -- faster than manual dispatch and eliminates `isinstance` chains.
-- **`from __future__ import annotations` rule** — Libraries that define runtime-introspected types (advanced-alchemy models, sqlspec configs, msgspec Structs, dishka providers) avoid `from __future__ import annotations`. Consumer applications MAY and typically SHOULD use it — canonical Litestar apps use it in 100+ files. The restriction applies only to the module that *defines* the Struct, not to handler/service/test modules that *use* it.
+- **`from __future__ import annotations` rule** — Library/shared modules that define runtime-introspected types (advanced-alchemy models, sqlspec configs, msgspec Structs, dishka providers) avoid postponed annotations unless their consumers resolve them. Consumer applications MAY use it. The restriction applies only to modules that define introspected types, not handler/service/test modules that use them.
 - **Use `strict=False` only at trust boundaries** -- lax coercion is useful for converting legacy dicts but can mask type errors in internal code.
 - **Prefer `sqlspec.utils.serializers.to_json` when sqlspec is in-stack** — its built-in enc_hook covers UUID, datetime, Enum, Decimal, Pydantic, msgspec.Struct, dataclasses, and attrs in one import. Hand-rolling is only needed when sqlspec is not a dependency.
 
@@ -321,7 +321,7 @@ Test round-trip encode/decode. Confirm `ValidationError` is raised for constrain
 Before delivering msgspec code, verify:
 
 - [ ] All Struct fields have explicit type annotations
-- [ ] If this module defines runtime-introspected types (msgspec.Struct, etc.), no `from __future__ import annotations`. Consumer modules may use it.
+- [ ] If this library/shared module defines runtime-introspected types, avoid `from __future__ import annotations` unless all consumers resolve postponed annotations. Consumer modules may use it.
 - [ ] Encoder/Decoder instances are module-level singletons (not created per-request)
 - [ ] API-boundary Structs use `forbid_unknown_fields=True`
 - [ ] Numeric/string constraints use `Meta` (not manual `if` checks)
@@ -339,7 +339,7 @@ Before delivering msgspec code, verify:
 **Task:** Define an event system with tagged unions, constraints, and JSON serialization.
 
 ```python
-from __future__ import annotations  # DO NOT DO THIS in modules that DEFINE msgspec.Struct (library-like) -- consumer handler/service modules MAY use future annotations safely
+# Library/shared modules that define runtime-introspected Structs usually avoid postponed annotations.
 ```
 
 ```python

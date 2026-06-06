@@ -1,4 +1,4 @@
-description = "Review Litestar code against first-party conventions and canonical patterns"
+description = "Use when reviewing Litestar code for stack-aware first-party conventions. Not for non-Litestar reviews."
 prompt = """
 # Litestar Code Review
 
@@ -22,7 +22,7 @@ Apply the project's existing stack to each criterion — flag a violation only w
 10. **Plugin usage** — first-party plugins used where available? Check against the project's picked stack: Granian or uvicorn (the one the project chose), SAQ with Redis or Postgres broker (matching the project), litestar-vite if there's a frontend, litestar-mcp, litestar-email, etc.
 11. **Return types** — all handlers have explicit return type annotations?
 12. **`from __future__ import annotations`** — present in consumer app modules? Absent from library-introspected modules?
-13. **Match-your-stack hygiene** — no forced-path language inside the project's own docs / READMEs (e.g., "use X, not Y" where both are valid alternatives). Decision points to check: data access (`advanced-alchemy` / `sqlspec` / raw SA), DI (`Provide` / Dishka), background tasks (SAQ + Redis / SAQ + PostgreSQL), Channels backend (Memory / Redis / PG LISTEN / session-aware), settings (`@dataclass` / `pydantic_settings`), serialization (`msgspec` / Pydantic), ASGI server (Granian / uvicorn), deployment target, caching, migrations, logging. Flag any doc that recommends one path as "canonical" while silently dismissing a valid alternative.
+13. **Match-your-stack hygiene** — no forced-path language inside the project's own docs / READMEs (e.g., "use X, not Y" where both are valid alternatives). Decision points to check: data access (`advanced-alchemy` / `sqlspec` / raw SA), DI (`Provide` / Dishka), background tasks (SAQ + Redis / SAQ + PostgreSQL), Channels backend (Memory / Redis / AsyncPg / PsycoPg / SQLSpec events), settings (`@dataclass` / `pydantic_settings`), serialization (`msgspec` / Pydantic), ASGI server (Granian / uvicorn), deployment target, caching, migrations, logging. Flag any doc that recommends one path as "canonical" while silently dismissing a valid alternative.
 
 ## Process
 

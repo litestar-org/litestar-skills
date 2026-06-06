@@ -145,14 +145,14 @@ async def _notify_worker(self, event: str, data: str) -> None:
 
 ## `WorkerPlugin` (Litestar integration)
 
-`WorkerPlugin` implements `InitPluginProtocol`.
+`WorkerPlugin` implements `InitPlugin`.
 
 ```python
-from litestar.plugins import InitPluginProtocol
+from litestar.plugins import InitPlugin
 from litestar.config.app import AppConfig
 
 
-class WorkerPlugin(InitPluginProtocol):
+class WorkerPlugin(InitPlugin):
     def __init__(
         self,
         *,

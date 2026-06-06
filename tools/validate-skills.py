@@ -27,7 +27,7 @@ Exit 0 on clean; exit 1 with a per-file violation list otherwise.
 import json
 import re
 import sys
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
 from typing import Any, NamedTuple, cast
 
@@ -71,6 +71,7 @@ CODEX_AGENTS_DIR = REPO_ROOT / ".codex" / "agents"
 SHIPPED_ROOT_FILES = ("AGENTS.md", "CONTRIBUTING.md", "README.md", "GEMINI.md")
 
 MAX_DESCRIPTION_CHARS = 1024
+MAX_SKILL_DESCRIPTION_TOTAL_CHARS = 6500
 
 REQUIRED_SECTIONS = ("workflow", "guardrails", "validation", "example")
 SKILL_DESCRIPTION_PREFIX_PATTERN = re.compile(r"^(?:Auto-activate for|Use when)\b")
@@ -284,6 +285,32 @@ def validate_skill(path: Path) -> list[Violation]:
         if not resolved.exists():
             violations.append(Violation(path, body_start, f"broken link target: {target}"))
     return violations
+
+
+def validate_skill_description_budget(skill_paths: Sequence[Path]) -> list[Violation]:
+    """Keep aggregate skill frontmatter small enough for Codex context budgets."""
+    total = 0
+    for path in skill_paths:
+        text = path.read_text(encoding="utf-8")
+        try:
+            fm, _body_start, _body = extract_frontmatter(text)
+        except ValueError:
+            continue
+        desc = fm.get("description")
+        if isinstance(desc, str):
+            total += len(desc)
+    if total <= MAX_SKILL_DESCRIPTION_TOTAL_CHARS:
+        return []
+    return [
+        Violation(
+            SKILLS_DIR,
+            None,
+            (
+                f"skill description budget {total} > {MAX_SKILL_DESCRIPTION_TOTAL_CHARS}; "
+                "shorten SKILL.md frontmatter descriptions"
+            ),
+        )
+    ]
 
 
 def validate_command(path: Path) -> list[Violation]:
@@ -774,6 +801,7 @@ def main() -> int:
         all_violations.extend(validate_hook_manifest(hook_path, hook_host))
     for skill_path in skills:
         all_violations.extend(validate_skill(skill_path))
+    all_violations.extend(validate_skill_description_budget(skills))
     for cmd_path in commands:
         all_violations.extend(validate_command(cmd_path))
     for agent_path in gemini_agents:

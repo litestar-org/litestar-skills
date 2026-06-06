@@ -18,7 +18,7 @@ import msgspec
 
 class BaseStruct(msgspec.Struct):
     def to_dict(self) -> dict[str, Any]:
-        return {f: getattr(self, f) for f in self.__struct_fields__ if getattr(self, f, None) != msgspec.UNSET}
+        return msgspec.to_builtins(self)
 
 
 class CamelizedBaseStruct(BaseStruct, rename="camel"):
@@ -41,8 +41,7 @@ class Tag(CamelizedBaseStruct):
 ```
 
 `rename="camel"` serializes `snake_case` field names as `camelCase` JSON keys automatically.
-No `from __future__ import annotations` — modules that define `msgspec.Struct` subclasses
-must not use it (runtime introspection breaks).
+Library/shared modules that define runtime-introspected `msgspec.Struct` subclasses usually avoid postponed annotations unless the consuming tool resolves them. Consumer modules that import/use these structs MAY use future annotations freely.
 
 ## to_json — pick the branch that matches your stack
 

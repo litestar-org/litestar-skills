@@ -160,7 +160,7 @@ with primary_context():
     # All queries in this block hit the primary,
     # even reads that would normally go to a replica.
     user = await repo.get(user_id)
-    orders = await order_repo.list()
+    orders = await order_repo.get_many()
 ```
 
 Use this when you need read-your-writes consistency for a specific code path.
@@ -177,7 +177,7 @@ with replica_context():
     # Temporarily allow reads to go to replicas,
     # even though a write happened above.
     # WARNING: may see stale data
-    all_users = await repo.list()
+    all_users = await repo.get_many()
 ```
 
 ### Route to a Named Group
@@ -187,7 +187,7 @@ from advanced_alchemy.routing import use_bind_group
 
 with use_bind_group("analytics"):
     # All operations use the "analytics" engine group
-    report_data = await analytics_repo.list()
+    report_data = await analytics_repo.get_many()
 ```
 
 ### Reset Routing State

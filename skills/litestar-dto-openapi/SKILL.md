@@ -1,6 +1,6 @@
 ---
 name: litestar-dto-openapi
-description: "Auto-activate for MsgspecDTO, DTOConfig, litestar.dto, OpenAPIConfig, request body schemas, response DTOs, schema_extra, RequestEncodingType, or /schema output. Use when shaping Litestar DTOs, OpenAPI schemas, wire names, request encoding, or response models. Not for persistence models alone or non-Litestar API schema tools."
+description: "Auto-activate for MsgspecDTO, DTOConfig, litestar.dto, OpenAPIConfig, response DTOs, schema_extra, RequestEncodingType, or /schema. Not for persistence models alone."
 ---
 
 # Litestar DTO and OpenAPI

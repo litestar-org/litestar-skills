@@ -75,14 +75,14 @@
         { "type": "python_import", "module": "litestar.exceptions" },
         { "type": "python_regex", "pattern": "\\bexception_handlers\\s*=|\\bHTTPException\\b|\\b(?:NotFoundException|ValidationException|InternalServerException|PermissionDeniedException)\\b|\\b(?:ApplicationError|NotFoundError|ConflictError)\\b" }
       ],
-      "reminder": "Exception handling signals found. Use `litestar:litestar-exceptions` for domain exception hierarchies, HTTP translation, handler registration, and RFC 7807-style responses."
+      "reminder": "Exception handling signals found. Use `litestar:litestar-exceptions` for domain exception hierarchies, HTTP translation, handler registration, and RFC 9457 Problem Details responses."
     },
     {
       "skill": "litestar-middleware",
       "priority": 95,
       "signals": [
         { "type": "python_import", "module": "litestar.middleware" },
-        { "type": "python_regex", "pattern": "\\b(?:AbstractMiddleware|DefineMiddleware|MiddlewareProtocol|RequestMiddlewareProtocol)\\b|\\bmiddleware\\s*=|\\b(?:CORSConfig|CSRFConfig|AllowedHostsConfig|CompressionConfig)\\b" }
+        { "type": "python_regex", "pattern": "\\b(?:ASGIMiddleware|AbstractMiddleware|DefineMiddleware|MiddlewareProtocol|RequestMiddlewareProtocol)\\b|\\bmiddleware\\s*=|\\b(?:CORSConfig|CSRFConfig|AllowedHostsConfig|CompressionConfig)\\b" }
       ],
       "reminder": "Middleware signals found. Use `litestar:litestar-middleware` for middleware ordering, built-in config middleware, custom ASGI middleware, and request lifecycle concerns."
     },
@@ -91,7 +91,7 @@
       "priority": 95,
       "signals": [
         { "type": "python_import", "module": "litestar.plugins" },
-        { "type": "python_regex", "pattern": "\\b(?:InitPluginProtocol|CLIPluginProtocol|SerializationPluginProtocol|OpenAPISchemaPluginProtocol)\\b|\\bplugins\\s*=\\s*\\[" }
+        { "type": "python_regex", "pattern": "\\b(?:InitPlugin|InitPluginProtocol|CLIPluginProtocol|SerializationPluginProtocol|OpenAPISchemaPluginProtocol)\\b|\\bplugins\\s*=\\s*\\[" }
       ],
       "reminder": "Plugin signals found. Use `litestar:litestar-plugins` for first-party and custom plugin protocols, init hooks, CLI registration, serialization plugins, and startup wiring."
     },
@@ -193,7 +193,7 @@
         { "type": "pyproject_dep", "name": "litestar-mcp" },
         { "type": "python_import", "module": "litestar_mcp" }
       ],
-      "reminder": "Project uses litestar-mcp. Use the `litestar:litestar-mcp` skill for LitestarMCP / MCPConfig and exposing route handlers as MCP tools/resources via JSON-RPC 2.0."
+      "reminder": "Project uses litestar-mcp. Use the `litestar:litestar-mcp` skill for LitestarMCP / MCPConfig and exposing explicit `mcp_tool=` / `mcp_resource=` routes over Streamable HTTP."
     },
     {
       "skill": "litestar-email",
@@ -230,7 +230,7 @@
         { "type": "pyproject_dep", "name": "polyfactory" },
         { "type": "python_import", "module": "polyfactory" }
       ],
-      "reminder": "Project uses polyfactory. Use the `litestar:polyfactory` skill for typed mock-data factories: pick the right base (`ModelFactory` Pydantic / `DataclassFactory` / `MsgspecFactory` / `AttrsFactory` / `SQLAlchemyFactory`), customize fields with `Use(...)` / `Fixture(...)`, register fixtures via `@register_fixture`, and parametrize over `coverage()` for discriminated unions. Pairs with `litestar:litestar-testing` for the request side."
+      "reminder": "Project uses polyfactory. Use the `litestar:polyfactory` skill for typed mock-data factories: pick the right base (`ModelFactory` Pydantic / `DataclassFactory` / `MsgspecFactory` / `AttrsFactory` / `SQLAlchemyFactory`), customize fields with `Use(...)`, register default factories for nested types, and parametrize over `coverage()` for discriminated unions. Pairs with `litestar:litestar-testing` for the request side."
     },
     {
       "skill": "litestar-build",

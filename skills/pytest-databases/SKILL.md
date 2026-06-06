@@ -1,6 +1,6 @@
 ---
 name: pytest-databases
-description: "Auto-activate for pytest_databases imports, conftest.py database fixtures, Docker-backed PostgreSQL/MySQL/SQLite/Oracle tests, or integration-test database lifecycle. Use when configuring pytest database containers and fixtures. Not for mocked databases or non-pytest test frameworks."
+description: "Auto-activate for pytest_databases, Docker DB fixtures, PostgreSQL/pgvector/AlloyDB Omni/MySQL/Oracle/MSSQL/CockroachDB/Yugabyte/MongoDB/GizmoSQL/Redis/Spanner/BigQuery/Azurite/MinIO tests. Not for mocked DBs."
 ---
 
 # pytest-databases
@@ -78,7 +78,7 @@ import pytest
 pytest_plugins = ["pytest_databases.docker.postgres"]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_user_insert(postgres_service, postgres_connection):
     await postgres_connection.execute(
         "INSERT INTO users (email) VALUES ($1)", "alice@example.com"

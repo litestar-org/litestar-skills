@@ -2,7 +2,7 @@
 
 ## Overview
 
-Advanced Alchemy provides a composable filter and pagination system that integrates with the repository and service layers. Filters are passed as positional arguments to `list()` and `list_and_count()` methods.
+Advanced Alchemy provides a composable filter and pagination system that integrates with the repository and service layers. Filters are passed as positional arguments to `get_many()` and `get_many_and_count()` methods.
 
 ```python
 from advanced_alchemy.filters import (
@@ -33,7 +33,7 @@ from advanced_alchemy.filters import FilterTypes
 
 
 async def list_items(self, *filters: FilterTypes) -> list[Model]:
-    return await self.service.list(*filters)
+    return await self.service.get_many(*filters)
 ```
 
 ---
@@ -48,7 +48,7 @@ To filter by a list of primary key values, use `CollectionFilter` with `field_na
 from advanced_alchemy.filters import CollectionFilter
 
 # Get specific records by ID
-results = await service.list(
+results = await service.get_many(
     CollectionFilter(field_name="id", values=[id1, id2, id3]),
 )
 ```
@@ -61,12 +61,12 @@ Filter where a column's value is in a given collection (`IN` clause on any field
 from advanced_alchemy.filters import CollectionFilter
 
 # Filter by status
-results = await service.list(
+results = await service.get_many(
     CollectionFilter(field_name="status", values=["active", "pending"]),
 )
 
 # Filter by multiple IDs on a non-PK field
-results = await service.list(
+results = await service.get_many(
     CollectionFilter(field_name="team_id", values=[team1_id, team2_id]),
 )
 ```
@@ -78,7 +78,7 @@ Inverse of `CollectionFilter` — excludes rows where the field value is in the 
 ```python
 from advanced_alchemy.filters import NotInCollectionFilter
 
-results = await service.list(
+results = await service.get_many(
     NotInCollectionFilter(field_name="status", values=["archived", "deleted"]),
 )
 ```
@@ -91,12 +91,12 @@ Text search on a column using SQL `LIKE` / `ILIKE`.
 from advanced_alchemy.filters import SearchFilter
 
 # Case-insensitive search (default)
-results = await service.list(
+results = await service.get_many(
     SearchFilter(field_name="name", value="john", ignore_case=True),
 )
 
 # Case-sensitive search
-results = await service.list(
+results = await service.get_many(
     SearchFilter(field_name="email", value="@example.com", ignore_case=False),
 )
 ```
@@ -111,7 +111,7 @@ Inverse of `SearchFilter` — excludes rows matching the pattern (`NOT LIKE`).
 ```python
 from advanced_alchemy.filters import NotInSearchFilter
 
-results = await service.list(
+results = await service.get_many(
     NotInSearchFilter(field_name="email", value="@test.com", ignore_case=True),
 )
 ```
@@ -125,7 +125,7 @@ from datetime import datetime, timezone
 from advanced_alchemy.filters import BeforeAfter
 
 # Records created in a date range
-results = await service.list(
+results = await service.get_many(
     BeforeAfter(
         field_name="created_at",
         before=datetime(2025, 12, 31, tzinfo=timezone.utc),
@@ -134,7 +134,7 @@ results = await service.list(
 )
 
 # Only "before" — omit "after" by passing None
-results = await service.list(
+results = await service.get_many(
     BeforeAfter(field_name="expires_at", before=datetime.now(timezone.utc), after=None),
 )
 ```
@@ -148,7 +148,7 @@ Like `BeforeAfter` but uses inclusive inequality (`>=` and `<=`).
 ```python
 from advanced_alchemy.filters import OnBeforeAfter
 
-results = await service.list(
+results = await service.get_many(
     OnBeforeAfter(
         field_name="scheduled_at",
         on_or_before=datetime(2025, 12, 31, tzinfo=timezone.utc),
@@ -165,12 +165,12 @@ To filter on the `created_at` and `updated_at` audit columns provided by `*Audit
 from advanced_alchemy.filters import BeforeAfter
 
 # Records created after a date
-results = await service.list(
+results = await service.get_many(
     BeforeAfter(field_name="created_at", before=None, after=datetime(2025, 6, 1, tzinfo=timezone.utc)),
 )
 
 # Records updated before a date
-results = await service.list(
+results = await service.get_many(
     BeforeAfter(field_name="updated_at", before=datetime(2025, 1, 1, tzinfo=timezone.utc), after=None),
 )
 ```
@@ -183,12 +183,12 @@ Sort results by a column.
 from advanced_alchemy.filters import OrderBy
 
 # Sort by creation date descending
-results = await service.list(
+results = await service.get_many(
     OrderBy(field_name="created_at", sort_order="desc"),
 )
 
 # Sort by name ascending (default)
-results = await service.list(
+results = await service.get_many(
     OrderBy(field_name="name", sort_order="asc"),
 )
 ```
@@ -203,12 +203,12 @@ Pagination via limit and offset.
 from advanced_alchemy.filters import LimitOffset
 
 # Page 1 (first 20 records)
-results, total = await service.list_and_count(
+results, total = await service.get_many_and_count(
     LimitOffset(limit=20, offset=0),
 )
 
 # Page 2
-results, total = await service.list_and_count(
+results, total = await service.get_many_and_count(
     LimitOffset(limit=20, offset=20),
 )
 ```
@@ -228,7 +228,7 @@ from advanced_alchemy.filters import (
     BeforeAfter,
 )
 
-results, total = await service.list_and_count(
+results, total = await service.get_many_and_count(
     # Text search
     SearchFilter(field_name="name", value="acme", ignore_case=True),
     # Status filter
@@ -266,7 +266,7 @@ async def list_users(
     offset: int = 0,
 ) -> OffsetPagination[UserSchema]:
     filters = [LimitOffset(limit=limit, offset=offset)]
-    results, total = await user_service.list_and_count(*filters)
+    results, total = await user_service.get_many_and_count(*filters)
     return user_service.to_schema(
         results, total, filters=filters, schema_type=UserSchema,
     )
@@ -286,7 +286,7 @@ Advanced Alchemy ships `OffsetPagination` out of the box. For cursor-style pagin
 ```python
 from advanced_alchemy.filters import BeforeAfter, LimitOffset, OrderBy
 
-results = await service.list(
+results = await service.get_many(
     BeforeAfter(field_name="created_at", before=None, after=last_seen_created_at),
     OrderBy(field_name="created_at", sort_order="asc"),
     LimitOffset(limit=page_size, offset=0),
@@ -332,7 +332,7 @@ async def list_users(
     user_service: UserService,
     filters: list[FilterTypes],
 ) -> OffsetPagination[UserSchema]:
-    results, total = await user_service.list_and_count(*filters)
+    results, total = await user_service.get_many_and_count(*filters)
     return user_service.to_schema(
         results, total, filters=filters, schema_type=UserSchema,
     )
@@ -361,7 +361,7 @@ class UserController(Controller):
         user_service: UserService,
         filters: list[FilterTypes],
     ) -> OffsetPagination[UserSchema]:
-        results, total = await user_service.list_and_count(*filters)
+        results, total = await user_service.get_many_and_count(*filters)
         return user_service.to_schema(
             results, total, filters=filters, schema_type=UserSchema,
         )
@@ -396,7 +396,7 @@ def recent_items_filter(days: int = 30) -> list[FilterTypes]:
 class UserService(SQLAlchemyAsyncRepositoryService[m.User]):
     async def list_active(self, *extra_filters: FilterTypes) -> list[m.User]:
         filters = [*active_users_filter(), *extra_filters]
-        return await self.list(*filters)
+        return await self.get_many(*filters)
 ```
 
 ---

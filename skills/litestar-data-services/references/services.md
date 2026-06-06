@@ -45,7 +45,7 @@ class UserService(SQLAlchemyAsyncRepositoryService[User]):
 | `get_one(**kwargs)` | Fetch one by field filters; raises if missing |
 | `get_one_or_none(**kwargs)` | Fetch one or `None` |
 | `list(*filters, **kwargs)` | Plain list, no pagination metadata |
-| `list_and_count(*filters, **kwargs)` | Returns `(rows, total)` — pair with `to_schema` for `OffsetPagination[T]` |
+| `get_many_and_count(*filters, **kwargs)` | Returns `(rows, total)` — pair with `to_schema` for `OffsetPagination[T]` |
 | `create(data)` | Insert; `data` may be dict / dataclass / Struct |
 | `update(data, **kwargs)` | Update by id (in `data`) or by `**kwargs` filters |
 | `upsert(data, match_fields=[...])` | Insert-or-update on natural keys |
@@ -61,7 +61,7 @@ class UserService(SQLAlchemyAsyncRepositoryService[User]):
 return service.to_schema(db_user, schema_type=User)
 
 # List with pagination metadata (returns OffsetPagination[T])
-results, total = await service.list_and_count(*filters)
+results, total = await service.get_many_and_count(*filters)
 return service.to_schema(results, total, filters=filters, schema_type=User)
 
 # List without pagination
@@ -100,7 +100,7 @@ class UserService(SQLAlchemyAsyncRepositoryService[User]):
 ```python  # pragma: legacy-example
 from __future__ import annotations
 
-from sqlspec.service import SQLSpecAsyncService  # project-defined — see callout above
+from app.lib.service import SQLSpecAsyncService
 
 from app.schemas import Post
 
@@ -109,7 +109,7 @@ class PostService(SQLSpecAsyncService):
     async def list_and_count(self, *filters) -> tuple[list[Post], int]:
         return await self.driver.select_with_total(
             "SELECT * FROM posts WHERE tenant_id = :tid",
-            filters=filters,
+            *filters,
             schema_type=Post,
         )
 

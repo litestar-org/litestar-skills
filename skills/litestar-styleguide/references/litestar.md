@@ -98,22 +98,23 @@ async def list_users(service: Inject[UserService]) -> list[User]:
 ## Middleware
 
 ```python
-from litestar.middleware import AbstractMiddleware
-from litestar.types import ASGIApp, Receive, Scope, Send
 from litestar.enums import ScopeType
+from litestar.middleware import ASGIMiddleware
+from litestar.types import ASGIApp, Receive, Scope, Send
 
-class TimingMiddleware(AbstractMiddleware):
-    scopes = {ScopeType.HTTP}
-    exclude = ["health", "metrics"]
+class TimingMiddleware(ASGIMiddleware):
+    scopes = (ScopeType.HTTP,)
+    exclude_path_pattern = ("health", "metrics")
 
-    async def __call__(
+    async def handle(
         self,
         scope: Scope,
         receive: Receive,
-        send: Send
+        send: Send,
+        next_app: ASGIApp,
     ) -> None:
         start = time.perf_counter()
-        await self.app(scope, receive, send)
+        await next_app(scope, receive, send)
         duration = time.perf_counter() - start
         logger.info(f"Request took {duration:.3f}s")
 ```
@@ -181,7 +182,7 @@ async def get_item(item_id: int) -> Item:
 ## Plugin Development
 
 ```python
-from litestar.plugins import InitPluginProtocol
+from litestar.plugins import InitPlugin
 from litestar.config.app import AppConfig
 from dataclasses import dataclass
 
@@ -190,7 +191,7 @@ class MyPluginConfig:
     enabled: bool = True
     api_key: str | None = None
 
-class MyPlugin(InitPluginProtocol):
+class MyPlugin(InitPlugin):
     __slots__ = ("config",)
 
     def __init__(self, config: MyPluginConfig | None = None) -> None:
@@ -208,7 +209,7 @@ class MyPlugin(InitPluginProtocol):
 from litestar_vite import ViteConfig, VitePlugin, PathConfig, TypeGenConfig
 
 vite_config = ViteConfig(
-    mode="spa",  # spa, template, hybrid, ssr, ssg, external
+    mode="spa",  # spa, template, htmx, hybrid, inertia, framework, external
     paths=PathConfig(
         resource_dir="src",
         bundle_dir="dist",
@@ -227,7 +228,8 @@ app = Litestar(plugins=[VitePlugin(config=vite_config)])
 ## Inertia Integration
 
 ```python
-from litestar_vite import InertiaConfig, ViteConfig, VitePlugin
+from litestar_vite import ViteConfig, VitePlugin
+from litestar_vite.inertia import InertiaConfig
 from litestar_vite.inertia import InertiaResponse
 
 app = Litestar(

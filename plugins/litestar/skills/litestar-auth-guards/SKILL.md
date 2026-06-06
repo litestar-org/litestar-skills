@@ -1,6 +1,6 @@
 ---
 name: litestar-auth-guards
-description: "Auto-activate for guards=, Guard, ASGIConnection, BaseRouteHandler, connection.user, PermissionDeniedException, JWT auth, OAuth2, role checks, tenant checks, or WebSocket auth. Use when implementing Litestar authentication, authorization, Guards, or permission boundaries. Not for business validation or frontend route protection."
+description: "Auto-activate for guards=, Guard, ASGIConnection, JWTAuth, JWTCookieAuth, SessionAuth, role or tenant checks, or WebSocket auth. Not for frontend route protection."
 ---
 
 # Litestar Auth and Guards

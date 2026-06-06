@@ -8,7 +8,7 @@ For full litestar-vite reference see `../../litestar-vite/SKILL.md`.
 from litestar import Litestar
 from litestar.contrib.jinja import JinjaTemplateEngine
 from litestar.template.config import TemplateConfig
-from litestar_htmx import HTMXPlugin
+from litestar.plugins.htmx import HTMXPlugin
 from litestar_vite import ViteConfig, VitePlugin, PathConfig
 
 vite_config = ViteConfig(

@@ -105,7 +105,7 @@ mkdir -p .agents/skills
 cp -r /tmp/litestar-skills/skills/* .agents/skills/
 ```
 
-Compatible-bundle tier — the repo does not promise dedicated OpenClaw wrapper support, but the generic skills work unmodified.
+OpenClaw consumes the shipped generic Agent Skills tree and `AGENTS.md`; no OpenClaw-specific wrapper is shipped.
 
 ### Cursor
 

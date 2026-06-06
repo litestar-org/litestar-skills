@@ -1,4 +1,4 @@
-description = "Configure a Litestar project — settings approach, library integration, plugin wiring, environment management"
+description = "Use when Litestar settings, ecosystem libraries, plugins, .env, env vars, or secrets config are in scope. Not for app scaffolds."
 prompt = """
 # Configure a Litestar Project
 
@@ -149,7 +149,7 @@ Present this menu:
 1. **litestar-granian** — Granian ASGI server
 2. **litestar-saq** — Async task queue (Redis or Postgres backend)
 3. **litestar-vite** — Frontend build (React / Vue / Svelte / HTMX / Inertia / Angular / Astro)
-4. **litestar-mcp** — MCP tools/resources over JSON-RPC 2.0
+4. **litestar-mcp** — MCP tools/resources over Streamable HTTP + JSON-RPC 2.0
 5. **litestar-email** — Email (SMTP / SendGrid / Resend / Mailgun / InMemory)
 6. **litestar-htmx** — HTMX integration (HTMXRequest, hx-ext="litestar" templating)
 7. **advanced-alchemy** — SQLAlchemy ORM + Repository Service + OffsetPagination + Alembic
@@ -170,7 +170,7 @@ For each selected library:
 
 - **litestar-vite**: ask which frontend framework; scaffold the matching `vite.config.ts` from `skills/litestar-vite/references/modes.md`
 - **litestar-saq**: ask for queue backend (Redis or Postgres); configure `QueueConfig` with the chosen DSN; add `use_server_lifespan=True`
-- **litestar-mcp**: show which routes are now MCP-exposed and how to test with `POST /mcp/`
+- **litestar-mcp**: show which routes are marked with `mcp_tool=` / `mcp_resource=` and how to test with `POST /mcp`
 - **advanced-alchemy**: if no models exist yet, scaffold an example domain using `/litestar:new-domain`
 - **sqlspec**: ask which database adapter (asyncpg, psycopg, oracledb, duckdb, etc.); scaffold the adapter config
 - **pytest-databases**: add to `[project.optional-dependencies.test]`, create `tests/conftest.py` with fixtures
@@ -191,17 +191,17 @@ For users structuring their `server/` module, show these canonical patterns:
 
 ### A) `ApplicationCore` Plugin (from `litestar-fullstack`)
 
-The app's core wiring lives in a single `InitPluginProtocol` class. This class:
+The app's core wiring lives in a single `InitPlugin` class. This class:
 - Sets `debug`, `openapi_config`, `cors_config`, `session_config`
 - Registers all plugins (structlog, granian, alchemy, vite, saq, email, domain)
 - Adds exception handlers, signature namespace types, middleware
-- Implements `CLIPluginProtocol` to register CLI command groups
+- Implements `CLIPluginProtocol` when it also needs to register CLI command groups
 
 ```python
-from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
+from litestar.plugins import CLIPluginProtocol, InitPlugin
 
 
-class ApplicationCore(InitPluginProtocol, CLIPluginProtocol):
+class ApplicationCore(InitPlugin, CLIPluginProtocol):
     def on_app_init(self, app_config: AppConfig) -> AppConfig:
         settings = get_settings()
         app_config.debug = settings.app.DEBUG
@@ -228,10 +228,10 @@ Then in `asgi.py`: `app = Litestar(plugins=[ApplicationCore()])` — one plugin 
 Automatically discovers and registers controllers, services, schemas, signals, and repositories from `domain/*/` subpackages — no manual imports needed:
 
 ```python
-from litestar.plugins import InitPluginProtocol
+from litestar.plugins import InitPlugin
 
 
-class DomainPlugin(InitPluginProtocol):
+class DomainPlugin(InitPlugin):
     def on_app_init(self, app_config: AppConfig) -> AppConfig:
         controllers = discover_domain_controllers(["app.domain"])
         schemas = discover_domain_schemas(["app.domain"])

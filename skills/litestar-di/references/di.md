@@ -36,13 +36,33 @@ app = Litestar(
 )
 ```
 
-Resolution scopes:
+Dependency declaration layers:
 
 - **app** (default for `Litestar(dependencies=...)`)
 - **router** / **controller** (declared at that level)
 - **route handler** (declared on the decorator)
 
 Same-name lookups walk inward — handler-level overrides controller, controller overrides app.
+
+## Typed Dependency Parameters
+
+Name handler parameters after dependency keys. Use `Dependency(skip_validation=True)` when the value is assembled by a trusted dependency provider such as a filter aggregate.
+
+```python
+from typing import Annotated
+
+from litestar.params import Dependency
+
+
+async def list_users(
+    users_service: UserService,
+    filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
+) -> OffsetPagination[User]:
+    rows, total = await users_service.get_many_and_count(*filters)
+    return users_service.to_schema(rows, total, filters=filters, schema_type=User)
+```
+
+When the dependency key must differ from the parameter name, prefer renaming the parameter to match the key. Keep alias wrappers out of portable skill examples until the target Litestar release exposes them.
 
 ## Dishka (`FromDishka as Inject[T]`)
 

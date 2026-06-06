@@ -51,7 +51,7 @@ from sqlspec.adapters.asyncpg import AsyncpgConfig
 from sqlspec.adapters.duckdb import DuckDBConfig
 
 primary = AsyncpgConfig(
-    pool_config={"dsn": "postgresql://app:app@primary:5432/orders"},
+    connection_config={"dsn": "postgresql://app:app@primary:5432/orders"},
     extension_config={
         "starlette": {
             "commit_mode": "autocommit",
@@ -63,7 +63,7 @@ primary = AsyncpgConfig(
 )
 
 analytics = DuckDBConfig(
-    pool_config={"database": "/var/lib/app/analytics.duckdb"},
+    connection_config={"database": "/var/lib/app/analytics.duckdb"},
     extension_config={
         "starlette": {
             "commit_mode": "manual",
@@ -114,12 +114,12 @@ from sqlspec.adapters.asyncpg import AsyncpgConfig
 from sqlspec.adapters.psycopg import PsycopgSyncConfig
 
 primary = AsyncpgConfig(
-    pool_config={"dsn": "postgresql://app:app@primary:5432/orders"},
+    connection_config={"dsn": "postgresql://app:app@primary:5432/orders"},
     extension_config={"starlette": {"commit_mode": "autocommit",
                                      "session_key": "primary_session"}},
 )
 analytics = PsycopgSyncConfig(
-    pool_config={"conninfo": "postgresql://reader:reader@warehouse:5432/analytics"},
+    connection_config={"conninfo": "postgresql://reader:reader@warehouse:5432/analytics"},
     extension_config={"starlette": {"commit_mode": "manual",
                                      "session_key": "analytics_session"}},
 )
@@ -135,11 +135,11 @@ The middleware registered for each config respects that config's flavor — asyn
 
 Each adapter config owns its own pool. Pools are *not* shared across configs even when they target the same physical database — registering the same Postgres DSN under two different configs produces two independent pools, doubling the connection footprint. To share a pool, share the config instance.
 
-Per-pool sizing belongs in each config's `pool_config`:
+Per-pool sizing belongs in each config's `connection_config`:
 
 ```python
 primary = AsyncpgConfig(
-    pool_config={
+    connection_config={
         "dsn": "postgresql://app:app@primary:5432/orders",
         "min_size": 5,
         "max_size": 20,
@@ -149,7 +149,7 @@ primary = AsyncpgConfig(
 )
 
 analytics = AsyncpgConfig(
-    pool_config={
+    connection_config={
         "dsn": "postgresql://reader:reader@warehouse:5432/analytics",
         "min_size": 1,
         "max_size": 5,
@@ -159,7 +159,7 @@ analytics = AsyncpgConfig(
 )
 ```
 
-The exact `pool_config` keys are adapter-specific (asyncpg uses `min_size` / `max_size`, psycopg uses `min_size` / `max_size`, OracleDB uses `min` / `max`, etc. — see [adapters.md](./adapters.md)). Sizing each pool independently is the correct posture; the registry does not enforce a global cap.
+The exact `connection_config` keys are adapter-specific (asyncpg uses `min_size` / `max_size`, psycopg uses `min_size` / `max_size`, OracleDB uses `min` / `max`, etc. — see [adapters.md](./adapters.md)). Sizing each pool independently is the correct posture; the registry does not enforce a global cap.
 
 ## Sync Bridge
 
@@ -171,7 +171,7 @@ from sqlspec.adapters.psycopg import PsycopgSyncConfig
 from sqlspec.adapters.sqlite import SqliteConfig
 
 primary = PsycopgSyncConfig(
-    pool_config={"conninfo": "postgresql://app:app@primary:5432/orders"},
+    connection_config={"conninfo": "postgresql://app:app@primary:5432/orders"},
     extension_config={"starlette": {"commit_mode": "autocommit",
                                      "session_key": "primary_session"}},
 )

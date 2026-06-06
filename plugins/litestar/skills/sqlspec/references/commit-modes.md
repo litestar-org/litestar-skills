@@ -74,7 +74,7 @@ Unlike advanced-alchemy, SQLSpec lets you override individual status codes in ei
 from sqlspec.adapters.asyncpg import AsyncpgConfig
 
 config = AsyncpgConfig(
-    pool_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
+    connection_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
     extension_config={
         "starlette": {
             "commit_mode": "autocommit",
@@ -105,7 +105,7 @@ from sqlspec import SQLSpec
 from sqlspec.adapters.asyncpg import AsyncpgConfig
 
 config = AsyncpgConfig(
-    pool_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
+    connection_config={"dsn": "postgresql://app:app@localhost:5432/orders"},
     extension_config={
         "starlette": {
             "commit_mode": "autocommit",
@@ -131,7 +131,7 @@ from sqlspec import SQLSpec
 from sqlspec.adapters.psycopg import PsycopgSyncConfig
 
 config = PsycopgSyncConfig(
-    pool_config={"conninfo": "postgresql://app:app@localhost:5432/orders"},
+    connection_config={"conninfo": "postgresql://app:app@localhost:5432/orders"},
     extension_config={
         "starlette": {"commit_mode": "autocommit"},
     },

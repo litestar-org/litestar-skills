@@ -1,11 +1,11 @@
 # Async Testing with pytest (anyio)
 
-Litestar uses **anyio**, not `asyncio` directly. Tests must use `@pytest.mark.anyio`, not `@pytest.mark.asyncio`.
+Litestar supports AnyIO for async tests. Prefer `@pytest.mark.anyio` in Litestar projects so tests can run under the same async abstraction used by the framework.
 
 ## Setup
 
 ```bash
-uv add --dev anyio pytest-anyio
+uv add --dev anyio pytest
 ```
 
 ```python
@@ -161,9 +161,9 @@ Catch these in CI:
 filterwarnings = ["error::RuntimeWarning"]
 ```
 
-### Mixing pytest-asyncio and pytest-anyio
+### Mixing pytest-asyncio and AnyIO
 
-Litestar requires anyio. Do **not** install `pytest-asyncio` — it conflicts. If your project history includes `pytest-asyncio`, remove it and migrate `@pytest.mark.asyncio` → `@pytest.mark.anyio`.
+Do not enable both plugins in automatic mode. If your project already uses `pytest-asyncio`, keep modes explicit and do not mix `@pytest.mark.asyncio` and `@pytest.mark.anyio` in the same test module. New Litestar tests should use `@pytest.mark.anyio`.
 
 ### Fixture Scope
 
@@ -192,9 +192,9 @@ async with AsyncTestClient(app=app) as client:
 
 Without this, plugin lifespans (Vite, SAQ, SQLAlchemy session pool) never start.
 
-### `create_test_client`
+### `create_test_client` / `create_async_test_client`
 
-For one-off tests with a tiny ad-hoc app, use `create_test_client`:
+For one-off sync tests with a tiny ad-hoc app, use `create_test_client`:
 
 ```python
 from litestar.testing import create_test_client
@@ -204,9 +204,21 @@ from litestar import get
 async def handler() -> dict:
     return {"ok": True}
 
+def test_inline_app():
+    with create_test_client([handler]) as client:
+        resp = client.get("/")
+        assert resp.status_code == 200
+```
+
+For async client tests, use `create_async_test_client`:
+
+```python
+from litestar.testing import create_async_test_client
+
+
 @pytest.mark.anyio
-async def test_inline_app():
-    async with create_test_client([handler]) as client:
+async def test_inline_async_app():
+    async with create_async_test_client([handler]) as client:
         resp = await client.get("/")
         assert resp.status_code == 200
 ```

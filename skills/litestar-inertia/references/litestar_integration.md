@@ -7,7 +7,8 @@ For full litestar-vite reference, see `../../litestar-vite/SKILL.md`.
 ```python
 from litestar import Litestar, get
 from litestar.middleware.session.client_side import CookieBackendConfig
-from litestar_vite import InertiaConfig, PathConfig, TypeGenConfig, ViteConfig, VitePlugin
+from litestar_vite import PathConfig, TypeGenConfig, ViteConfig, VitePlugin
+from litestar_vite.inertia import InertiaConfig
 from litestar_vite.inertia import InertiaResponse
 
 session_backend = CookieBackendConfig(secret=b"development-only-secret-32-chars")

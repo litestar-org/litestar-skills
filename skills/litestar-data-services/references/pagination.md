@@ -4,13 +4,13 @@ Never hand-roll `limit` / `offset` query params inside a handler. The canonical 
 
 ## Pick the branch for your stack
 
-- **`advanced-alchemy`** → `OffsetPagination[T]` + `create_filter_dependencies` (covered in full below). Controller declares the filter set declaratively; `list_and_count` + `to_schema` synthesize the response envelope.
+- **`advanced-alchemy`** → `OffsetPagination[T]` + `create_service_dependencies` / `create_filter_dependencies` (covered in full below). Controller declares the service and filter set declaratively; `get_many_and_count` + `to_schema` synthesize the response envelope.
 - **`sqlspec`** → `LimitOffsetFilter` + `OrderByFilter` applied to the driver call. See [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md) for `*filters` composition and [`../../sqlspec/references/filters.md`](../../sqlspec/references/filters.md) for filter types.
 - **raw SQLAlchemy** → apply `.limit()` / `.offset()` on a Core statement and return a hand-rolled pagination envelope (summary below).
 
 ## Branch A — `advanced-alchemy` pagination
 
-Use `create_filter_dependencies` from `advanced_alchemy.extensions.litestar.providers` to declare the filter set on the Controller; pair `list_and_count` with `to_schema` for the response envelope.
+Use `create_service_dependencies` from `advanced_alchemy.extensions.litestar.providers` when the Controller also needs the service dependency, or `create_filter_dependencies` when service DI is already handled elsewhere. Pair `get_many_and_count` with `to_schema` for the response envelope.
 
 ```python
 from __future__ import annotations
@@ -21,7 +21,7 @@ from uuid import UUID
 from litestar import Controller, get
 from litestar.params import Dependency, Parameter
 
-from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
+from advanced_alchemy.extensions.litestar.providers import create_service_dependencies
 from advanced_alchemy.filters import FilterTypes
 from advanced_alchemy.service import OffsetPagination
 
@@ -34,18 +34,22 @@ class UserController(Controller):
     path = "/api/users"
     tags = ["Users"]
     guards = [requires_superuser]
-    dependencies = create_filter_dependencies({
-        "id_filter": UUID,
-        "id_field": "id",
-        "pagination_type": "limit_offset",
-        "pagination_size": 20,
-        "search": "name,email",
-        "search_ignore_case": True,
-        "sort_field": "created_at",
-        "sort_order": "desc",
-        "created_at": True,
-        "updated_at": True,
-    })
+    dependencies = create_service_dependencies(
+        UserService,
+        key="users_service",
+        filters={
+            "id_filter": UUID,
+            "id_field": "id",
+            "pagination_type": "limit_offset",
+            "pagination_size": 20,
+            "search": "name,email",
+            "search_ignore_case": True,
+            "sort_field": "created_at",
+            "sort_order": "desc",
+            "created_at": True,
+            "updated_at": True,
+        },
+    )
 
     @get("/", operation_id="ListUsers", name="ListUsers", summary="List Users")
     async def list_users(
@@ -53,14 +57,14 @@ class UserController(Controller):
         users_service: UserService,
         filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
     ) -> OffsetPagination[User]:
-        results, total = await users_service.list_and_count(*filters)
+        results, total = await users_service.get_many_and_count(*filters)
         return users_service.to_schema(results, total, filters=filters, schema_type=User)
 
     @get("/{user_id:uuid}", operation_id="GetUser")
     async def get_user(
         self,
         users_service: UserService,
-        user_id: Annotated[UUID, Parameter(title="User ID")],
+        user_id: Annotated[UUID, Parameter()],
     ) -> User:
         db_user = await users_service.get(user_id)
         return users_service.to_schema(db_user, schema_type=User)
@@ -81,7 +85,7 @@ The DTO `T` is whatever you pass to `schema_type=`. Clients page by setting `?cu
 
 ### Filter field catalog
 
-`create_filter_dependencies` accepts a dict mapping filter names to config:
+`create_service_dependencies(..., filters={...})` and `create_filter_dependencies({...})` accept the same filter config keys:
 
 | Key | Type | Purpose |
 | --- | --- | --- |
@@ -96,11 +100,11 @@ The DTO `T` is whatever you pass to `schema_type=`. Clients page by setting `?cu
 | `created_at` | bool | Add `?createdBefore=` / `?createdAfter=` filters |
 | `updated_at` | bool | Add `?updatedBefore=` / `?updatedAfter=` filters |
 
-### `list_and_count` + `to_schema` workflow
+### `get_many_and_count` + `to_schema` workflow
 
 ```python
 # 1. Service returns raw rows + total count
-results, total = await users_service.list_and_count(*filters)
+results, total = await users_service.get_many_and_count(*filters)
 
 # 2. to_schema wraps in OffsetPagination[T]
 return users_service.to_schema(
@@ -187,7 +191,7 @@ No free filter DI, no automatic envelope. Consider graduating to `advanced-alche
 
 ## Cross-references
 
-- Repository service methods (advanced-alchemy `list_and_count`, `to_schema`): [services.md](services.md)
+- Repository service methods (advanced-alchemy `get_many_and_count`, `to_schema`): [services.md](services.md)
 - DTO definitions for `schema_type`: [dto.md](../../litestar-dto-openapi/references/dto.md)
 - Controller class structure: [routing.md](../../litestar-routing/references/routing.md)
 - Sibling skills: [`../../sqlspec/SKILL.md`](../../sqlspec/SKILL.md), [`../../advanced-alchemy/SKILL.md`](../../advanced-alchemy/SKILL.md)

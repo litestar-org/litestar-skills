@@ -44,7 +44,7 @@ Memory and artifact modules ship their own converter helpers (`sqlspec.extension
 
 ## Per-Adapter Store Implementations
 
-Fourteen adapters ship a concrete `adk/store.py`: `asyncpg`, `psycopg`, `psqlpy`, `cockroach_asyncpg`, `cockroach_psycopg`, `oracledb`, `sqlite`, `aiosqlite`, `duckdb`, `asyncmy`, `pymysql`, `mysqlconnector`, `spanner`, `adbc`. Each contains both `<Adapter>ADKStore` (session/event) and `<Adapter>ADKMemoryStore` (memory).
+Production adapters ship concrete ADK stores from their `sqlspec.adapters.<adapter>.adk` package: `asyncpg`, `psycopg`, `psqlpy`, `cockroach_asyncpg`, `cockroach_psycopg`, `oracledb`, `sqlite`, `aiosqlite`, `duckdb`, `aiomysql`, `asyncmy`, `pymysql`, `mysqlconnector`, `spanner`, and `adbc`. Each contains both `<Adapter>ADKStore` (session/event) and `<Adapter>ADKMemoryStore` (memory).
 
 Representative storage strategies:
 
@@ -52,7 +52,7 @@ Representative storage strategies:
 | --- | --- | --- |
 | `asyncpg` / `psycopg` | `JSONB` | GIN index on state, `FILLFACTOR 80` for HOT updates, FK cascade delete |
 | `cockroach_asyncpg` / `cockroach_psycopg` | `JSONB` | Same surface as Postgres; tuned for Cockroach's MVCC |
-| `oracledb` | `JSON` native (21c+), `BLOB` + `IS JSON` check (12c–20c), raw `BLOB` otherwise | Version-aware; `JSONStorageType` enum in `sqlspec.adapters.oracledb.adk.store` |
+| `oracledb` | `JSON` native (21c+), `BLOB` + `IS JSON` check (12c–20c), raw `BLOB` otherwise | Version-aware; `JSONStorageType` enum in the Oracle ADK package |
 | `spanner` | JSON (`param_types.JSON`) or STRING fallback | Uses Spanner transactions; `param_types.JSON` when available |
 | `duckdb` | `JSON` | Single-file analytics; syncs via sync driver |
 | `sqlite` / `aiosqlite` | `TEXT` with JSON1 functions | Local dev; small footprint |
@@ -78,7 +78,7 @@ The [oracledb-vertexai-demo](https://github.com/cofin/oracledb-vertexai-demo) ca
 from typing import TYPE_CHECKING
 
 from sqlspec.adapters.oracledb import OracleAsyncConfig
-from sqlspec.adapters.oracledb.adk.store import OracleAsyncADKStore
+from sqlspec.adapters.oracledb.adk import OracleAsyncADKStore
 from sqlspec.extensions.adk import SQLSpecSessionService
 
 if TYPE_CHECKING:
@@ -120,7 +120,7 @@ The ADK `Runner` then takes this `service` wherever it needs a `BaseSessionServi
 
 ```python
 from sqlspec.adapters.asyncpg import AsyncpgConfig
-from sqlspec.adapters.asyncpg.adk.store import AsyncpgADKStore
+from sqlspec.adapters.asyncpg.adk import AsyncpgADKStore
 from sqlspec.extensions.adk import SQLSpecSessionService
 
 

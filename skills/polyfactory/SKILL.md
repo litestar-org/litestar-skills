@@ -1,6 +1,6 @@
 ---
 name: polyfactory
-description: "Auto-activate for polyfactory imports, ModelFactory, DataclassFactory, MsgspecFactory, AttrsFactory, Use, Fixture, register_fixture, polyfactory.pytest_plugin, __random_seed__, or coverage(). Use when generating typed mock data for tests or pytest fixtures. Not for production seeding or property-based testing."
+description: "Auto-activate for polyfactory, ModelFactory, DataclassFactory, MsgspecFactory, AttrsFactory, Use, register_fixture, pytest plugin, __random_seed__, or coverage(). Not for production seeding."
 ---
 
 # polyfactory
@@ -128,26 +128,27 @@ def test_order_total(order_factory: OrderFactory) -> None:
 
 `@register_fixture` turns the class into a pytest fixture (snake-cased class name). The factory itself is still importable as `OrderFactory` for use outside fixtures.
 
-### Cross-referencing fixtures
+### Cross-model relationships
 
 ```python
 import pytest
-from polyfactory import Fixture
+from polyfactory import Use
 from polyfactory.pytest_plugin import register_fixture
 
 
 @register_fixture
 class CustomerFactory(DataclassFactory[Customer]):
     __model__ = Customer
+    __set_as_default_factory_for_type__ = True
 
 
 @register_fixture
 class OrderFactory(DataclassFactory[Order]):
     __model__ = Order
-    customer = Fixture(CustomerFactory)  # pull from the customer fixture
+    customer = Use(CustomerFactory.build)  # explicit local override
 ```
 
-`Fixture(OtherFactory)` forwards to another registered factory, making cross-model wiring explicit.
+`__set_as_default_factory_for_type__ = True` lets Polyfactory populate nested `Customer` fields with `CustomerFactory`. Use `Use(CustomerFactory.build)` when one parent factory needs an explicit local override.
 
 <workflow>
 
@@ -171,7 +172,7 @@ For factories used in many tests, decorate with `@register_fixture` and consume 
 
 ### Step 5: Wire cross-model relationships
 
-Set `__set_as_default_factory_for_type__ = True` on a base factory and let nested fields be populated automatically, or use `Fixture(OtherFactory)` to forward to a registered fixture explicitly.
+Set `__set_as_default_factory_for_type__ = True` on a base factory and let nested fields be populated automatically, or use `Use(OtherFactory.build)` for a local relationship override.
 
 ### Step 6: Pin determinism only when needed
 
@@ -205,7 +206,7 @@ Before delivering polyfactory code, verify:
 - [ ] Fields overridden in the factory match what the test asserts on; fields the test does not care about are left for randomization.
 - [ ] If the test asserts on exact values, `__random_seed__` is set; otherwise it is not.
 - [ ] `@register_fixture` is used for factories shared across more than ~2 test files; one-offs call `.build()` inline.
-- [ ] Cross-model relationships use `__set_as_default_factory_for_type__` or `Fixture(OtherFactory)` (not manual nesting in `Use(...)`).
+- [ ] Cross-model relationships use `__set_as_default_factory_for_type__` or `Use(OtherFactory.build)`.
 - [ ] Factory module avoids `from __future__ import annotations` if and only if it co-defines runtime-introspected model classes.
 
 </validation>
@@ -259,7 +260,7 @@ The factory provides a fully-populated, validation-passing `OrderCreatedEvent`; 
 For detailed guides, refer to the following documents in `references/`:
 
 - **[Factories](references/factories.md)** — Per-backend factory bases (Pydantic / dataclass / msgspec / attrs / TypedDict / ODM), randomization control (`__random_seed__`, `__faker__`, `__allow_none_optionals__`), `__set_as_default_factory_for_type__` defaults, dynamic factories via `Factory.create_factory`, `coverage()` for discriminated unions.
-- **[Pytest integration](references/pytest-integration.md)** — `@register_fixture`, `Fixture(...)` cross-references, fixture scoping, the `polyfactory.pytest_plugin` module, async fixtures, and the difference between class-decorator and function-decorator forms.
+- **[Pytest integration](references/pytest-integration.md)** — `@register_fixture`, fixture scoping, the `polyfactory.pytest_plugin` module, async fixtures, and the difference between class-decorator and function-decorator forms.
 - **[Litestar patterns](references/litestar-patterns.md)** — Using factories with `TestClient` / `AsyncTestClient`, parametrizing handler tests via `coverage()`, integrating with `litestar-testing` fixtures, msgspec DTOs, advanced-alchemy model factories, and SAQ task payload generation.
 
 ---

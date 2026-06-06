@@ -1,6 +1,6 @@
 ---
 name: litestar-inertia
-description: "Auto-activate for litestar_vite.inertia, InertiaConfig, component= route handlers, @inertia, @inertiajs/react, @inertiajs/vue3, @inertiajs/svelte, createInertiaApp, useForm, usePage, Link, router, or resources/js/pages. Use when wiring Inertia.js with Litestar and litestar-vite for React, Vue, or Svelte server-driven SPAs. Not for JSON-API-only SPAs, HTMX apps, or non-Litestar backends."
+description: "Auto-activate for litestar_vite.inertia, InertiaConfig, component=, @inertia, @inertiajs/*, createInertiaApp, useForm, usePage, Link, router, or pages/. Not for HTMX."
 ---
 
 # Litestar + Inertia.js Integration
@@ -91,7 +91,8 @@ from __future__ import annotations
 from litestar import Litestar
 from litestar.middleware.session.client_side import CookieBackendConfig
 from litestar_granian import GranianPlugin
-from litestar_vite import InertiaConfig, PathConfig, TypeGenConfig, ViteConfig, VitePlugin
+from litestar_vite import PathConfig, TypeGenConfig, ViteConfig, VitePlugin
+from litestar_vite.inertia import InertiaConfig
 
 from app.domain.accounts.schemas import CurrentUser
 from app.lib.settings import get_settings
