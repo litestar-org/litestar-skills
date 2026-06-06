@@ -33,7 +33,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --extra dev
+          uv sync --extra dev --extra validation
           bun install
           uv tool install prek
 
