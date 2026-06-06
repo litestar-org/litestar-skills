@@ -27,8 +27,8 @@
     "mcp"
   ],
   "devDependencies": {
-    "markdownlint-cli2": "^0.22.0",
-    "oxlint": "^1.60.0"
+    "markdownlint-cli2": "^0.22.1",
+    "oxlint": "^1.68.0"
   },
   "scripts": {
     "lint:js": "oxlint",

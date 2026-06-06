@@ -46,6 +46,7 @@ validation = [
   "argon2-cffi>=23.1",  # advanced_alchemy.types.password_hash.argon2 imports argon2 at module load
   "dishka>=1.4",
   "flask>=3.0",        # advanced_alchemy.extensions.flask imports flask at module load
+  "litestar[jinja]>=2.23",  # skill samples use 2.22/2.23 markers (FromQuery/JSONBody/NamedDependency/SkipValidation) and litestar.plugins.jinja
   "litestar-granian>=0.10",
   "litestar-saq>=0.5",
   "sanic[ext]>=24.6",  # advanced_alchemy.extensions.sanic imports sanic_ext at module load
