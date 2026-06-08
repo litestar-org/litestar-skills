@@ -8,7 +8,7 @@
 #
 # Usage:
 #   tools/install.sh [--dry-run] [--force] [--only <host>] [--skip <host>]
-#   curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/v0.2.0/tools/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/v0.2.1/tools/install.sh | bash
 #
 # Hosts:
 #   claude     Claude Code        (prints instructions + optional settings edit)
@@ -20,7 +20,7 @@
 
 set -euo pipefail
 
-VERSION="0.2.0"
+VERSION="0.2.1"
 REPO_URL="https://github.com/litestar-org/litestar-skills"
 REPO_SLUG="litestar-org/litestar-skills"
 MARKETPLACE_NAME="litestar"

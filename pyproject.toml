@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "litestar-skills"
-version = "0.2.0"
+version = "0.2.1"
 description = "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -154,7 +154,7 @@ exclude_lines = [
 # bump-my-version — atomic multi-manifest version sync
 # ============================================================
 [tool.bumpversion]
-current_version = "0.2.0"
+current_version = "0.2.1"
 commit = false
 tag = false
 tag_name = "v{new_version}"
