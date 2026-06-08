@@ -7,7 +7,7 @@
           {
             "name": "litestar-session-start",
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\"",
+            "command": "r=\"${CLAUDE_PLUGIN_ROOT:-}\"; [ -n \"$r\" ] || r=\"$(ls -d \"$HOME\"/.claude/plugins/marketplaces/litestar \"$HOME\"/.claude/plugins/marketplaces/*/plugins/litestar 2>/dev/null | head -n1)\"; r=\"${r:-.}\"; CLAUDE_PLUGIN_ROOT=\"${r%/}\" bash \"${r%/}/hooks/session-start.sh\"",
             "description": "Inject project-aware Litestar skill reminders into the session context.",
             "async": false
           }

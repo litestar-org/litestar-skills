@@ -74,6 +74,16 @@ def fake_codex_home(tmp_path: Path) -> Path:
     return home
 
 
+@pytest.fixture
+def fake_claude_home(tmp_path: Path) -> Path:
+    """A HOME whose Claude marketplace install mirrors the real hooks payload."""
+    home = tmp_path / "home"
+    install = home / ".claude" / "plugins" / "marketplaces" / "litestar"
+    install.mkdir(parents=True)
+    (install / "hooks").symlink_to(HOOKS_DIR)
+    return home
+
+
 def test_codex_command_resolves_without_plugin_root(litestar_project: Path, fake_codex_home: Path) -> None:
     """Codex injects no plugin-root var: the command must locate the installed script and exit 0."""
     result = _run_command(
@@ -96,6 +106,31 @@ def test_codex_command_prefers_plugin_root_when_set(litestar_project: Path) -> N
         overrides={"PLUGIN_ROOT": str(REPO_ROOT)},
     )
     assert result.returncode == 0, f"codex command exited {result.returncode}: {result.stderr!r}"
+    out = cast("dict[str, Any]", json.loads(result.stdout))
+    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+
+
+def test_claude_command_uses_plugin_root_when_set(litestar_project: Path) -> None:
+    """Non-regression: the guaranteed CLAUDE_PLUGIN_ROOT path must keep working verbatim."""
+    result = _run_command(
+        _command_for("claude"),
+        cwd=litestar_project,
+        overrides={"CLAUDE_PLUGIN_ROOT": str(REPO_ROOT)},
+    )
+    assert result.returncode == 0, f"claude command exited {result.returncode}: {result.stderr!r}"
+    out = cast("dict[str, Any]", json.loads(result.stdout))
+    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert "litestar:litestar" in out["hookSpecificOutput"]["additionalContext"]
+
+
+def test_claude_command_resolves_with_empty_plugin_root(litestar_project: Path, fake_claude_home: Path) -> None:
+    """claude-code#27145: CLAUDE_PLUGIN_ROOT can be empty at SessionStart — must not exit 127."""
+    result = _run_command(
+        _command_for("claude"),
+        cwd=litestar_project,
+        overrides={"CLAUDE_PLUGIN_ROOT": "", "HOME": str(fake_claude_home)},
+    )
+    assert result.returncode == 0, f"claude command exited {result.returncode}: {result.stderr!r}"
     out = cast("dict[str, Any]", json.loads(result.stdout))
     assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
 
