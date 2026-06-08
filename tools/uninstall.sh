@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-VERSION="0.2.0"
+VERSION="0.2.1"
 PLUGIN_NAME="litestar"
 REPO_SLUG="litestar-org/litestar-skills"
 
