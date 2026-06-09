@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "litestar-skills"
-version = "0.2.1"
+version = "0.3.0"
 description = "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -48,6 +48,7 @@ validation = [
   "flask>=3.0",        # advanced_alchemy.extensions.flask imports flask at module load
   "litestar[jinja,jwt]>=2.23",  # skill samples use 2.22/2.23 markers (FromQuery/JSONBody/NamedDependency/SkipValidation), litestar.plugins.jinja, and litestar.security.jwt
   "litestar-granian>=0.10",
+  "litestar-mcp>=0.7",  # litestar-mcp skill samples import LitestarMCP/MCPConfig/MCPAuthBackend/OIDCProviderConfig/mcp_prompt
   "litestar-saq>=0.5",
   "sanic[ext]>=24.6",  # advanced_alchemy.extensions.sanic imports sanic_ext at module load
   "sqlspec[adk,asyncpg,performance,psycopg]>=0.13",
@@ -154,7 +155,7 @@ exclude_lines = [
 # bump-my-version — atomic multi-manifest version sync
 # ============================================================
 [tool.bumpversion]
-current_version = "0.2.1"
+current_version = "0.3.0"
 commit = false
 tag = false
 tag_name = "v{new_version}"

@@ -1413,6 +1413,20 @@ wheels = [
 ]
 
 [[package]]
+name = "litestar-mcp"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "litestar", extra = ["jwt"] },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4b/30/83febd2e92fce22d8ab79423dda6ee6d8abfaeaea9d09126ed900ed16d93/litestar_mcp-0.7.0.tar.gz", hash = "sha256:3166c05380d97b9287f3b6019b3699d5aea0102910f908bfa2186838639bc7ca", size = 538275, upload-time = "2026-06-07T15:45:58.978Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b3/03/10e602456c18fc36a20efc9caabd68567bcaf04f79bc8ae6a24538c0bda2/litestar_mcp-0.7.0-py3-none-any.whl", hash = "sha256:39ba575932057770e5471690c23a97f39e538478cf0e839e4b4ba24567c8c751", size = 81309, upload-time = "2026-06-07T15:45:57.513Z" },
+]
+
+[[package]]
 name = "litestar-saq"
 version = "0.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1427,7 +1441,7 @@ wheels = [
 
 [[package]]
 name = "litestar-skills"
-version = "0.2.1"
+version = "0.3.0"
 source = { editable = "." }
 
 [package.optional-dependencies]
@@ -1449,6 +1463,7 @@ validation = [
     { name = "flask" },
     { name = "litestar", extra = ["jinja", "jwt"] },
     { name = "litestar-granian" },
+    { name = "litestar-mcp" },
     { name = "litestar-saq" },
     { name = "pytest-databases" },
     { name = "sanic", extra = ["ext"] },
@@ -1464,6 +1479,7 @@ requires-dist = [
     { name = "flask", marker = "extra == 'validation'", specifier = ">=3.0" },
     { name = "litestar", extras = ["jinja", "jwt"], marker = "extra == 'validation'", specifier = ">=2.23" },
     { name = "litestar-granian", marker = "extra == 'validation'", specifier = ">=0.10" },
+    { name = "litestar-mcp", marker = "extra == 'validation'", specifier = ">=0.7" },
     { name = "litestar-saq", marker = "extra == 'validation'", specifier = ">=0.5" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1.380" },
