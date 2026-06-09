@@ -5,9 +5,9 @@ description: "Auto-activate for litestar_mcp, LitestarMCP, MCPConfig, MCPAuthCon
 
 # litestar-mcp
 
-`litestar-mcp` exposes explicitly marked Litestar route handlers as [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools and resources over MCP Streamable HTTP and JSON-RPC 2.0.
+`litestar-mcp` exposes explicitly marked Litestar route handlers as [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools, resources, and prompts over MCP Streamable HTTP and JSON-RPC 2.0.
 
-Mark routes with `mcp_tool="name"` or `mcp_resource="name"` directly on Litestar route decorators. Do not use the removed `@mcp_tool` / `@mcp_resource` decorator API or `opt={"mcp_tool_name": ...}` wrappers.
+Mark routes by passing `mcp_tool="name"`, `mcp_resource="name"`, or `mcp_prompt="name"` directly to the Litestar route decorator — Litestar funnels unknown kwargs into `handler.opt`, so no `opt={...}` wrapper is needed. The `@mcp_tool` / `@mcp_resource` / `@mcp_prompt` decorators (importable from `litestar_mcp`) still exist and are worth reaching for when you need the extra fields they expose — `output_schema`, `annotations`, `scopes`, `task_support`, prompt `arguments`. There is no `opt={"mcp_tool_name": ...}` form and no `mcp_exclude` key; neither is read. To hide a route, simply leave it unmarked (discovery is opt-in).
 
 ## Code Style Rules
 
@@ -58,10 +58,11 @@ The default MCP surface is:
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /mcp` | Server-Sent Events stream when requested by the client |
-| `POST /mcp` | JSON-RPC endpoint for `initialize`, `ping`, `tools/*`, `resources/*`, and optional task methods |
+| `POST /mcp` | JSON-RPC endpoint for `initialize`, `ping`, `tools/*`, `resources/*`, `prompts/*`, `completion/complete`, and optional task methods |
+| `DELETE /mcp` | Terminate the current MCP session |
 | `GET /.well-known/mcp-server.json` | MCP server manifest |
 | `GET /.well-known/agent-card.json` | Agent card metadata |
-| `GET /.well-known/oauth-protected-resource` | OAuth protected-resource metadata when auth is configured |
+| `GET /.well-known/oauth-protected-resource` | OAuth protected-resource metadata (always registered; populated from `auth`) |
 
 ### MCPConfig
 
@@ -78,6 +79,14 @@ The default MCP surface is:
 | `exclude_tags` | `list[str] \| None` | `None` | Exclude routes with matching OpenAPI tags |
 | `auth` | `MCPAuthConfig \| None` | `None` | OAuth protected-resource metadata |
 | `tasks` | `bool \| MCPTaskConfig` | `False` | Enable experimental in-memory MCP task support |
+| `list_page_size` | `int` | `100` | Page size for `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list` (clients page via opaque cursors) |
+| `opt_keys` | `MCPOptKeys` | `MCPOptKeys()` | Rename the `handler.opt` keys the plugin reads (e.g. to avoid collisions) |
+| `session_store` | `Store \| None` | `None` | Litestar `Store` backing MCP sessions; defaults to an in-memory store |
+| `session_max_idle_seconds` | `float` | `3600.0` | Idle timeout before an MCP session is evicted |
+| `sse_max_streams` | `int` | `10000` | Max concurrent SSE streams |
+| `sse_max_idle_seconds` | `float` | `3600.0` | Idle timeout for an SSE stream |
+
+> Filters (`include_tags` / `exclude_tags` / `include_operations` / `exclude_operations`) gate what is **advertised** in `tools/list` / `resources/list` / `prompts/list`. As of `litestar-mcp` 0.7.0 they do **not** gate `tools/call` / `resources/read` ([cofin/litestar-mcp#62](https://github.com/cofin/litestar-mcp/issues/62)), so they are an advertisement filter, not an access boundary — use `guards` / auth to actually restrict invocation.
 
 ### Route Marking
 
@@ -93,8 +102,34 @@ async def list_products() -> list[dict]: ...
 async def add_to_cart(data: CartItem) -> Cart: ...
 
 
-@get("/products/{product_id:int}", mcp_resource_template="shop://products/{product_id}")
+@get(
+    "/products/{product_id:int}",
+    mcp_resource="product",
+    mcp_resource_template="shop://products/{product_id}",
+)
 async def get_product(product_id: int) -> dict: ...
+
+
+@get("/products/{product_id:int}/blurb", mcp_prompt="product_blurb")
+async def product_blurb(product_id: int) -> str:
+    """Write a short marketing blurb for a product."""
+    ...
+```
+
+`mcp_resource_template` only takes effect alongside `mcp_resource` — the resource supplies the name the template binds to. A handler can expose more than one MCP role (a tool and a resource) at once; the description-override keys (`mcp_description` vs `mcp_resource_description`) are kind-specific so each surface can carry its own prose.
+
+Register prompts not bound to a route with the `@mcp_prompt` decorator plus `LitestarMCP(prompts=[...])`:
+
+```python
+from litestar_mcp import LitestarMCP, mcp_prompt
+
+
+@mcp_prompt("summarize", description="Summarize a document for the user.")
+def summarize(text: str) -> str:
+    return f"Summarize the following:\n\n{text}"
+
+
+app = Litestar(plugins=[LitestarMCP(prompts=[summarize])])
 ```
 
 Use structured metadata when the agent needs sharper tool selection:
@@ -110,12 +145,16 @@ Use structured metadata when the agent needs sharper tool selection:
 async def generate_report(data: ReportRequest) -> ReportQueued: ...
 ```
 
-### Excluding Routes
+### Hiding Routes
+
+Discovery is opt-in: a handler that carries no `mcp_*` marker never appears in MCP. There is no per-route exclude flag — `opt={"mcp_exclude": True}` is ignored.
 
 ```python
-@get("/internal/metrics", opt={"mcp_exclude": True})
+@get("/internal/metrics")  # unmarked — never exposed to MCP clients
 async def metrics() -> dict: ...
 ```
+
+To drop *marked* routes from discovery in bulk, use the `MCPConfig` filters (`exclude_tags` / `exclude_operations`, or an `include_tags` / `include_operations` allowlist). Remember these gate advertisement only ([cofin/litestar-mcp#62](https://github.com/cofin/litestar-mcp/issues/62)) — enforce real access control with `guards` or auth.
 
 ### JSON-RPC Call
 
@@ -191,7 +230,7 @@ pip install litestar-mcp
 
 ### Step 2: Decide What to Expose
 
-List only the routes that should be callable by AI clients. Mark those routes with `mcp_tool=`, `mcp_resource=`, or `mcp_resource_template=`. Do not rely on route method defaults.
+List only the routes that should be callable by AI clients. Mark those routes with `mcp_tool=`, `mcp_resource=`, or `mcp_prompt=` (add `mcp_resource_template=` next to `mcp_resource=` for templated resources). There are no method-based defaults — unmarked routes are never exposed.
 
 ### Step 3: Add the Plugin
 
@@ -212,7 +251,7 @@ Hit `POST /mcp` with `tools/list` and `resources/list`. Confirm only marked rout
 ## Guardrails
 
 - **Mark routes explicitly** - unmarked routes should not appear in MCP clients.
-- **Default to allowlists** - `include_tags` / `include_operations` prevent accidental exposure when route sets grow.
+- **Default to allowlists for discovery** - `include_tags` / `include_operations` keep the advertised tool set small as route counts grow, but they only filter discovery — pair them with `guards` / auth, which actually gate invocation.
 - **Never expose admin or destructive routes by default** - require a human-confirmation workflow before any irreversible operation.
 - **Prefer resources for read-only reference data** - agents may read resources speculatively.
 - **Keep DTOs precise** - loose `dict[str, Any]` request schemas produce weak tool contracts.
@@ -229,7 +268,7 @@ Before delivering an MCP integration, verify:
 
 - [ ] `LitestarMCP` is in `app.plugins`
 - [ ] Exposed routes use `mcp_tool=`, `mcp_resource=`, or `mcp_resource_template=`
-- [ ] Admin / internal routes use `opt={"mcp_exclude": True}` or are outside the allowlist
+- [ ] Admin / internal routes are left unmarked, or kept outside `include_*` / inside `exclude_*` — with `guards` or auth enforcing access
 - [ ] Auth is configured for the deployment boundary
 - [ ] `POST /mcp` `tools/list` returns only intended tools
 - [ ] `POST /mcp` `resources/list` includes only intended resources plus `litestar://openapi`
@@ -258,7 +297,7 @@ async def list_products() -> list[dict]:
 async def add_to_cart(data: CartItem) -> Cart: ...
 
 
-@get("/internal/metrics", opt={"mcp_exclude": True})
+@get("/internal/metrics")  # unmarked — stays out of MCP
 async def metrics() -> dict: ...
 
 
@@ -284,8 +323,8 @@ app = Litestar(
 
 ## Official References
 
-- <https://docs.litestar-mcp.litestar.dev/>
-- <https://github.com/litestar-org/litestar-mcp>
+- <https://cofin.github.io/litestar-mcp/>
+- <https://github.com/cofin/litestar-mcp>
 - <https://modelcontextprotocol.io/>
 - <https://spec.modelcontextprotocol.io/>
 
