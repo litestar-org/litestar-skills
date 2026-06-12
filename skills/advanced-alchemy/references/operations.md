@@ -15,7 +15,8 @@ from advanced_alchemy.operations import OnConflictUpsert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 async def upsert_order(session: AsyncSession, order_table, values: dict) -> None:
-    dialect_name = session.bind.dialect.name
+    bind = session.bind if session.bind is not None else session.get_bind()
+    dialect_name = bind.dialect.name
     if not OnConflictUpsert.supports_native_upsert(dialect_name):
         raise RuntimeError(f"native upsert unsupported for {dialect_name}")
     stmt = OnConflictUpsert.create_upsert(
