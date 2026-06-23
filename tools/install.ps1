@@ -209,7 +209,7 @@ ahead of time and skip the first command.
 }
 
 # ------ Antigravity CLI ------------------------------------------------------
-function New-AntigravityPayload {
+function Initialize-AntigravityPayload {
     $stage = Join-Path ([System.IO.Path]::GetTempPath()) 'litestar-antigravity-plugin'
     Invoke-Step "Preparing Antigravity payload at $stage" {
         if (Test-Path $stage) {
@@ -261,7 +261,7 @@ function Install-AntigravityCli {
         }
     }
 
-    $payload = New-AntigravityPayload
+    $payload = Initialize-AntigravityPayload
     Invoke-Step "agy plugin install $payload" {
         & agy plugin install $payload
         if ($LASTEXITCODE -ne 0) {
