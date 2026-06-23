@@ -7,7 +7,7 @@
           {
             "name": "litestar-session-start",
             "type": "command",
-            "command": "r=\"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-}}\"; if [ -n \"$r\" ] && [ ! -f \"${r%/}/hooks/session-start.sh\" ]; then r=\"\"; fi; if [ -z \"$r\" ]; then for d in \"$HOME\"/.claude/plugins/marketplaces/litestar \"$HOME\"/.claude/plugins/marketplaces/*/plugins/litestar; do [ -f \"$d/hooks/session-start.sh\" ] && r=\"$d\" && break; done; fi; if [ -z \"$r\" ] && [ -f ./hooks/session-start.sh ]; then r=\".\"; fi; [ -n \"$r\" ] || exit 0; CLAUDE_PLUGIN_ROOT=\"${r%/}\" bash \"${r%/}/hooks/session-start.sh\"",
+            "command": "r=\"${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-}}\"; if [ -n \"$r\" ] && [ ! -f \"${r%/}/hooks/session-start.sh\" ]; then r=\"\"; fi; if [ -z \"$r\" ] && [ -d \"$HOME/.claude/plugins/marketplaces\" ]; then r=\"$(find -L \"$HOME/.claude/plugins/marketplaces\" -path \"*/litestar/hooks/session-start.sh\" -type f -print 2>/dev/null | sed 's#/hooks/session-start.sh$##' | head -n 1)\"; fi; if [ -z \"$r\" ] && [ -f ./hooks/session-start.sh ]; then r=\".\"; fi; [ -n \"$r\" ] || exit 0; CLAUDE_PLUGIN_ROOT=\"${r%/}\" bash \"${r%/}/hooks/session-start.sh\"",
             "description": "Inject project-aware Litestar skill reminders into the session context.",
             "async": false
           }
