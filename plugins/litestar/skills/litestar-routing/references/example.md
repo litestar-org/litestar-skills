@@ -78,6 +78,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from litestar import Controller, Request, get, post, patch, delete
+from litestar.di import NamedDependency
 from litestar.params import FromPath, SkipValidation  # Litestar >= 2.23
 from msgspec import to_builtins
 from advanced_alchemy.extensions.litestar.providers import create_service_dependencies
@@ -110,9 +111,9 @@ class TaskController(Controller):
     @get("/")
     async def list_tasks(
         self,
-        tasks_service: TaskService,
+        tasks_service: NamedDependency[TaskService],
         request: Request,
-        filters: SkipValidation[list[FilterTypes]],
+        filters: NamedDependency[SkipValidation[list[FilterTypes]]],
     ) -> OffsetPagination[Task]:
         results, total = await tasks_service.get_many_and_count(
             *filters, owner_id=request.user.id,
@@ -121,7 +122,10 @@ class TaskController(Controller):
 
     @get("/{task_id:uuid}")
     async def get_task(
-        self, task_id: FromPath[UUID], tasks_service: TaskService, request: Request,
+        self,
+        task_id: FromPath[UUID],
+        tasks_service: NamedDependency[TaskService],
+        request: Request,
     ) -> Task:
         db_task = await tasks_service.get_one_or_none(id=task_id, owner_id=request.user.id)
         if db_task is None:
@@ -130,7 +134,10 @@ class TaskController(Controller):
 
     @post("/")
     async def create_task(
-        self, data: TaskCreate, tasks_service: TaskService, request: Request,
+        self,
+        data: TaskCreate,
+        tasks_service: NamedDependency[TaskService],
+        request: Request,
     ) -> Task:
         db_task = await tasks_service.create({**to_builtins(data), "owner_id": request.user.id})
         # Broadcast to the user's WS channel (from request context)
@@ -143,7 +150,7 @@ class TaskController(Controller):
     @patch("/{task_id:uuid}")
     async def update_task(
         self, task_id: FromPath[UUID], data: TaskUpdate,
-        tasks_service: TaskService, request: Request,
+        tasks_service: NamedDependency[TaskService], request: Request,
     ) -> Task:
         db_task = await tasks_service.update(
             {**to_builtins(data), "id": task_id},
@@ -153,7 +160,10 @@ class TaskController(Controller):
 
     @delete("/{task_id:uuid}")
     async def delete_task(
-        self, task_id: FromPath[UUID], tasks_service: TaskService, request: Request,
+        self,
+        task_id: FromPath[UUID],
+        tasks_service: NamedDependency[TaskService],
+        request: Request,
     ) -> None:
         await tasks_service.delete(task_id, owner_id=request.user.id)
 ```

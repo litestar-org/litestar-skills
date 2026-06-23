@@ -24,15 +24,7 @@ If you have the repo cloned and want Codex to pick up your local changes:
 codex plugin marketplace add /path/to/litestar-skills
 ```
 
-Codex auto-discovers the marketplace at `.agents/plugins/marketplace.json` and loads the generated package under `plugins/litestar/`.
-
-## Option 3: User-level clone
-
-```bash
-git clone https://github.com/litestar-org/litestar-skills ~/.codex/plugins/litestar
-```
-
-Codex auto-discovers plugins under `~/.codex/plugins/`. Provided for environments where `codex plugin marketplace add` is unavailable.
+Codex reads the marketplace at `.agents/plugins/marketplace.json` and loads the generated package under `plugins/litestar/`.
 
 ## Custom agents
 
@@ -40,16 +32,23 @@ Codex custom agents live in `.codex/agents/*.toml` (pure TOML; tools inherited f
 
 The four host-dialect agent files are generated from canonical YAML sources at `tools/agent-sources/<name>.yaml`. Run `make agents` after editing the source.
 
+## Skill and command names
+
+Codex surfaces installed skills by displayed name. In `$`-trigger Codex surfaces, force the Litestar hub with `$litestar:litestar` and focused skills with `$litestar:<skill-name>` (for example `$litestar:litestar-routing`). Natural-language requests also work.
+
+Codex plugins do not currently expose plugin-defined `/litestar:*` slash commands. Treat the shipped `commands/litestar/*.toml` files as host payload for slash-command-capable harnesses and as canonical prompts the `litestar` skill can follow in Codex.
+
 ## Updating
 
 ```bash
 codex plugin marketplace upgrade litestar
 ```
 
-For Option 3:
+To reinstall after a local package change:
 
 ```bash
-cd ~/.codex/plugins/litestar && git pull
+codex plugin remove litestar@litestar
+codex plugin add litestar@litestar
 ```
 
 ## Verification

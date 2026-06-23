@@ -9,7 +9,7 @@ description: "Auto-activate for litestar_vite.inertia, InertiaConfig, component=
 
 | Layer | Library | Role |
 | --- | --- | --- |
-| Client SPA | [`@inertiajs/react`](https://inertiajs.com) / `@inertiajs/vue3` / `@inertiajs/svelte` | Page resolution, forms, navigation, shared data access |
+| Client SPA | [`@inertiajs/react`](https://inertiajs.com) / `@inertiajs/vue3` / `@inertiajs/svelte` | Page resolution, forms, navigation, shared data access; generated templates target Inertia v3 |
 | Frontend build | [`vite`](https://vitejs.dev) | Bundling, HMR, dev server, production build |
 | Python bridge | [`litestar-vite`](../litestar-vite/SKILL.md) | `VitePlugin` + `InertiaConfig`, asset manifest, type generation, page-props codec |
 | Server framework | [`litestar`](../litestar/SKILL.md) | Routes, Controllers, Guards, DI, DTOs — returning Inertia responses |
@@ -32,6 +32,7 @@ This skill covers that integration end-to-end. For anything that's purely about 
 - **PEP 604 unions, `from __future__ import annotations`** in consumer Python modules — standard Litestar rules apply
 - **TypeScript typed pages** — generate page-props types via `litestar-vite`'s TypeGen, never hand-roll
 - **Forms via `useForm`** — never a plain `<form onSubmit>`. `useForm` handles CSRF, errors, submission state, and navigation in one call
+- **CSRF via Litestar state** — configure Litestar `CSRFConfig`; generated clients use `csrfHeaders()` from `litestar-vite-plugin/helpers` so `cookie_httponly=True` works.
 - **Shared data for auth + flash**, never page-specific. Static page props go in `InertiaConfig.extra_static_page_props`; session-backed props go in `extra_session_page_props`; request-time flashes use `share(request, ...)`.
 - **camelCase on the wire** — Python msgspec Structs use `Meta(rename="camel")`, JS consumes `camelCase` directly
 - **Partial reloads** over full-page reloads when only a subset of props changes (`router.reload({ only: ['notifications'] })`)
@@ -240,9 +241,9 @@ Before shipping an Inertia-integrated Litestar app:
 # app/domain/projects/controllers.py
 from __future__ import annotations
 
-from litestar import Controller, get, post
+from litestar import Controller, Request, get, post
 from litestar.exceptions import ValidationException
-from litestar_vite.inertia import back
+from litestar_vite.inertia import InertiaBack
 
 from app.domain.accounts.guards import requires_active_user
 from app.domain.projects.schemas import Project, ProjectCreate
@@ -261,15 +262,14 @@ class ProjectsController(Controller):
 
     @post("/")
     async def create(
-        self, data: ProjectCreate, projects_service: ProjectService, request,
-    ) -> None:
+        self, data: ProjectCreate, projects_service: ProjectService, request: Request,
+    ) -> InertiaBack:
         # Validation
         if await projects_service.exists(name=data.name, owner_id=request.user.id):
             raise ValidationException(extra={"name": "You already have a project with this name."})
 
         await projects_service.create(data.to_dict(), owner_id=request.user.id)
-        # `back()` redirects Inertia back to the previous page with flash data intact
-        return back()
+        return InertiaBack(request)
 ```
 
 ```tsx
@@ -310,8 +310,8 @@ export default function ProjectsIndex() {
 
 ## References Index
 
-- **[Inertia Protocol & Client](references/protocol.md)** — Protocol v2, request/response shape, React/Vue/Svelte adapter setup, `useForm`, `usePage`, `router`, partial reloads, lazy props, SSR
-- **[Litestar Backend Integration](references/litestar_integration.md)** — `InertiaConfig`, `component=` route handlers, shared props, `back()`, validation errors, type generation, SSR server
+- **[Inertia Protocol & Client](references/protocol.md)** — Protocol v3, request/response shape, React/Vue/Svelte adapter setup, `useForm`, `usePage`, `router`, partial reloads, lazy props, SSR
+- **[Litestar Backend Integration](references/litestar_integration.md)** — `InertiaConfig`, `component=` route handlers, shared props, redirect responses, validation errors, type generation, SSR server
 
 ## Cross-Skill References
 
@@ -326,9 +326,9 @@ The canonical Litestar + Inertia stack lives at [`litestar-fullstack-inertia`](h
 
 ## Official References
 
-- Inertia.js v2 docs: <https://inertiajs.com/docs/v2>
-- Upgrade guide v1 → v2: <https://inertiajs.com/docs/v2/getting-started/upgrade-guide>
-- Client-side setup: <https://inertiajs.com/docs/v2/installation/client-side-setup>
+- Inertia.js v3 docs: <https://inertiajs.com/docs/v3>
+- Inertia v2/v3 support and upgrade guide: <https://litestar-org.github.io/litestar-vite/frameworks/inertia/upgrade-guide.html>
+- Client-side setup: <https://inertiajs.com/docs/v3/installation/client-side-setup>
 - Release notes: <https://github.com/inertiajs/inertia/releases>
 - `litestar-vite` Inertia docs: <https://litestar-org.github.io/litestar-vite/inertia/>
 - `litestar-vite` Inertia API: <https://litestar-org.github.io/litestar-vite/reference/inertia/>

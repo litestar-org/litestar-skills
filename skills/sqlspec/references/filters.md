@@ -142,6 +142,7 @@ rows, total = await db_session.select_with_total(
 Use `create_filter_dependencies()` from `sqlspec.extensions.litestar.providers` to generate Litestar dependency injection parameters from a `FilterConfig` mapping:
 
 ```python
+from litestar.di import NamedDependency
 from litestar.params import SkipValidation  # Litestar >= 2.23
 from sqlspec.extensions.litestar.providers import create_filter_dependencies
 
@@ -157,8 +158,8 @@ filter_deps = create_filter_dependencies({
 # Use in a Litestar route handler
 @get("/users", dependencies=filter_deps)
 async def list_users(
-    db_session: AsyncpgDriver,
-    filters: SkipValidation[list[StatementFilter]],
+    db_session: NamedDependency[AsyncpgDriver],
+    filters: NamedDependency[SkipValidation[list[StatementFilter]]],
 ) -> OffsetPagination[User]:
     rows, total = await db_session.select_with_total(
         sql.select("*").from_("users"),

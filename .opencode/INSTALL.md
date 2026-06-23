@@ -31,7 +31,7 @@ ln -sf ~/.config/opencode/litestar/.opencode/plugins/litestar.js \
        ~/.config/opencode/plugins/litestar.js
 ```
 
-No npm publish yet — install path stays git+symlink. The plugin reuses the same `hooks/lib/detect-env.js` detection library that powers Claude / Codex / Cursor / Gemini hooks, so the reminder text is identical across all five hosts.
+No npm publish yet — install path stays git+symlink. The plugin reuses the same `hooks/lib/detect-env.js` detection library that powers the Claude / Codex / Cursor hook shims, so the reminder text is identical across supported hook hosts.
 
 ## Updating
 

@@ -2,7 +2,7 @@
 
 Reads ``tools/agent-sources/*.yaml`` and writes the four host dialects:
 
-* ``agents/<name>.md``                    — Gemini CLI: YAML-list ``tools``
+* ``agents/<name>.md``                    — Antigravity CLI: YAML-list ``tools``
 * ``.claude-plugin/agents/<name>.md``     — Claude Code: comma-string ``tools``
 * ``.opencode/agents/<name>.md``          — OpenCode: dict ``tools`` + ``mode: subagent``
 * ``.codex/agents/<name>.toml``           — Codex CLI: pure TOML, no ``tools``
@@ -25,7 +25,8 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SOURCES_DIR = REPO_ROOT / "tools" / "agent-sources"
-GEMINI_DIR = REPO_ROOT / "agents"
+AGENTS_DIR = REPO_ROOT / "agents"
+ANTIGRAVITY_DIR = AGENTS_DIR
 CLAUDE_DIR = REPO_ROOT / ".claude-plugin" / "agents"
 OPENCODE_DIR = REPO_ROOT / ".opencode" / "agents"
 CODEX_DIR = REPO_ROOT / ".codex" / "agents"
@@ -33,10 +34,10 @@ CODEX_DIR = REPO_ROOT / ".codex" / "agents"
 # Canonical-tool -> per-host name. Each canonical tool MUST have an entry here;
 # missing entries fail the generator.
 TOOL_MAP: dict[str, dict[str, str]] = {
-    "read": {"gemini": "read_file", "claude": "Read", "opencode": "read"},
-    "grep": {"gemini": "grep_search", "claude": "Grep", "opencode": "grep"},
-    "glob": {"gemini": "glob", "claude": "Glob", "opencode": "glob"},
-    "bash": {"gemini": "run_shell_command", "claude": "Bash", "opencode": "bash"},
+    "read": {"antigravity": "view_file", "claude": "Read", "opencode": "read"},
+    "grep": {"antigravity": "grep_search", "claude": "Grep", "opencode": "grep"},
+    "glob": {"antigravity": "find_by_name", "claude": "Glob", "opencode": "glob"},
+    "bash": {"antigravity": "run_command", "claude": "Bash", "opencode": "bash"},
 }
 
 
@@ -52,7 +53,7 @@ def _quote_yaml_description(description: str) -> str:
     """Render a description string as YAML, preserving the existing single-quoted shape.
 
     The on-disk frontmatter uses double-quoted strings; we mirror that for the
-    Gemini/Claude/OpenCode markdown variants. The description itself contains
+    Antigravity/Claude/OpenCode markdown variants. The description itself contains
     apostrophes ("project's"), so we double-quote and escape any embedded ``"``.
     """
     escaped = description.replace("\\", "\\\\").replace('"', '\\"')
@@ -69,9 +70,9 @@ def _map_tool(canonical: str, host: str) -> str:
     return TOOL_MAP[canonical][host]
 
 
-def _render_gemini(name: str, description: str, tools: list[str], body: str) -> str:
-    """Gemini CLI: YAML list of tool names (read_file / grep_search / glob / run_shell_command)."""
-    tools_yaml = "\n".join(f"  - {_map_tool(t, 'gemini')}" for t in tools)
+def _render_antigravity(name: str, description: str, tools: list[str], body: str) -> str:
+    """Antigravity CLI: markdown subagent template using documented tool names."""
+    tools_yaml = "\n".join(f"  - {_map_tool(t, 'antigravity')}" for t in tools)
     return (
         f"---\nname: {name}\ndescription: {_quote_yaml_description(description)}\ntools:\n{tools_yaml}\n---\n\n{body}\n"
     )
@@ -132,7 +133,7 @@ def _generate(source_path: Path, *, check_only: bool) -> bool:
     body = str(data["body"]).rstrip("\n")
 
     targets = {
-        GEMINI_DIR / f"{name}.md": _render_gemini(name, description, tools, body),
+        ANTIGRAVITY_DIR / f"{name}.md": _render_antigravity(name, description, tools, body),
         CLAUDE_DIR / f"{name}.md": _render_claude(name, description, tools, body),
         OPENCODE_DIR / f"{name}.md": _render_opencode(name, description, tools, body),
         CODEX_DIR / f"{name}.toml": _render_codex(name, description, body),

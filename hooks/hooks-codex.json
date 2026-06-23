@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "r=\"${PLUGIN_ROOT:-${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}}\"; [ -n \"$r\" ] || r=\"$(ls -d \"$HOME\"/.codex/plugins/cache/*/litestar/*/ 2>/dev/null | sort -V | tail -n1)\"; r=\"${r:-.}\"; CODEX_PLUGIN_ROOT=\"${r%/}\" bash \"${r%/}/hooks/session-start.sh\"",
+            "command": "r=\"${PLUGIN_ROOT:-${CODEX_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}}\"; if [ -n \"$r\" ] && [ ! -f \"${r%/}/hooks/session-start.sh\" ]; then r=\"\"; fi; if [ -z \"$r\" ] && [ -d \"$HOME/.codex/plugins/cache\" ]; then r=\"$(find -L \"$HOME/.codex/plugins/cache\" -path \"*/litestar/*/hooks/session-start.sh\" -type f -print 2>/dev/null | sed 's#/hooks/session-start.sh$##' | tail -n 1)\"; fi; if [ -z \"$r\" ] && [ -f ./hooks/session-start.sh ]; then r=\".\"; fi; [ -n \"$r\" ] || exit 0; CODEX_PLUGIN_ROOT=\"${r%/}\" bash \"${r%/}/hooks/session-start.sh\"",
             "timeout": 30,
             "description": "Inject project-aware Litestar skill reminders into the Codex CLI session context."
           }

@@ -34,14 +34,14 @@ class Event(UUIDAuditBase):
     scheduled_at: Mapped[datetime] = mapped_column(DateTimeUTC)
 ```
 
-- Always pass timezone-aware datetimes when writing; naive datetimes are assumed UTC
-- Reads always return `datetime` with `tzinfo=timezone.utc`
+- Always pass timezone-aware datetimes when writing; naive datetimes raise `TypeError`
+- Reads always return `datetime` with `tzinfo=timezone.utc`, including backends that store naive UTC internally
 
 ---
 
 ## GUID
 
-Cross-database UUID type. Uses native `UUID` column on PostgreSQL. Falls back to `CHAR(32)` storing hex on other backends (SQLite, MySQL, Oracle).
+Cross-database UUID type. Uses native UUID columns where the dialect supports them, Oracle `RAW(16)`, and binary or hex storage on backends without native UUID support.
 
 ```python
 from advanced_alchemy.types import GUID
@@ -53,6 +53,7 @@ class Token(UUIDAuditBase):
 ```
 
 - Transparent round-trip: you always work with Python `uuid.UUID` objects
+- Oracle stores UUIDs as `RAW(16)`; do not document or migrate new Oracle schemas as `CHAR(32)`
 - The AA base classes (`UUIDBase`, `UUIDAuditBase`, etc.) already use `GUID` for their `id` column
 
 ---
@@ -216,11 +217,13 @@ class Account(UUIDAuditBase):
 # Writing — plain text is automatically hashed
 account = Account(email="user@example.com", password="my-secret-password")
 
-# Verifying — compare plain text against the stored hash
-from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+# Verifying — use the stored PasswordHash wrapper
+is_valid = account.password.verify("my-secret-password")
 
-hasher = Argon2Hasher()
-is_valid = hasher.verify("my-secret-password", account.password)
+# Rehashing — persist the replacement hash when the backend policy changed
+is_valid, new_hash = account.password.verify_and_update("my-secret-password")
+if is_valid and new_hash is not None:
+    account.password = new_hash
 ```
 
 ---
@@ -342,12 +345,12 @@ stmt = (
 
 ## TOTP and One-Time Codes
 
-Added in 1.11 for authentication flows. `TOTPSecret` is an `EncryptedString` subtype that stores a TOTP shared secret encrypted at rest; pair it with `TOTPProvider` / `generate_totp_secret` to issue and verify codes. `OneTimeCode` / `HashedOneTimeCode` (+ `generate_one_time_code`) store single-use codes (email/SMS verification) hashed like a password.
+Added in 1.11 for authentication flows. `TOTPSecret` is an `EncryptedString` subtype that stores a TOTP shared secret encrypted at rest; pair it with `TOTPProvider` / `generate_totp_secret` to issue and verify codes. `OneTimeCode` is the SQLAlchemy column type for single-use codes (email/SMS verification); loaded values expose the `HashedOneTimeCode` verification wrapper.
 
 ```python
 from advanced_alchemy.types import (
     TOTPSecret,
-    HashedOneTimeCode,
+    OneTimeCode,
     generate_totp_secret,
     generate_one_time_code,
 )
@@ -356,8 +359,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class Account(UUIDBase):
     totp_secret: Mapped[str | None] = mapped_column(TOTPSecret(key=ENCRYPTION_KEY), default=None)
-    # writes a plaintext code; the column hashes it. Verify with the column's verify helper.
-    email_code: Mapped[str | None] = mapped_column(HashedOneTimeCode, default=None)
+    # writes a plaintext code; the column hashes it. Loaded values verify through HashedOneTimeCode.
+    email_code: Mapped[str | None] = mapped_column(OneTimeCode, default=None)
 ```
 
 ## Type Compatibility Matrix
@@ -365,7 +368,7 @@ class Account(UUIDBase):
 | Type | PostgreSQL | SQLite | MySQL | Oracle |
 | --- | --- | --- | --- | --- |
 | `DateTimeUTC` | `TIMESTAMP WITH TIME ZONE` | `DATETIME` | `DATETIME` | `TIMESTAMP WITH TIME ZONE` |
-| `GUID` | `UUID` (native) | `CHAR(32)` | `CHAR(32)` | `CHAR(32)` |
+| `GUID` | `UUID` (native) | `CHAR(32)` / `BINARY(16)` | `CHAR(32)` / `BINARY(16)` | `RAW(16)` |
 | `JsonB` | `JSONB` (native) | `JSON` | `JSON` | `JSON` |
 | `ORA_JSONB` | `JSONB` | `JSON` | `JSON` | `JSON` (Oracle-optimized) |
 | `BigIntIdentity` | `BIGSERIAL` | `INTEGER` | `BIGINT AUTO_INCREMENT` | `NUMBER(19)` |

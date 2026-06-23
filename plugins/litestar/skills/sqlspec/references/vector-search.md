@@ -16,11 +16,11 @@ This reference documents the **Oracle** path in full (sourced from `oracledb-ver
 
 Cosine distance is converted to similarity via `1 - VECTOR_DISTANCE(..., COSINE)` so that higher values mean more similar. Canonical source: `oracledb-vertexai-demo/src/py/app/domain/products/services/services.py:L42–53`.
 
-`SQLSpecAsyncService` is a project-defined base from the canonical apps — copy it from [`oracledb-vertexai-demo/src/py/app/lib/service.py`](https://github.com/cofin/oracledb-vertexai-demo) into `app/lib/service.py`. It wraps an `AsyncDriverAdapterBase` with helpers like `paginate`, `get_or_404`, and `begin_transaction`.
+`SQLSpecAsyncService` ships upstream in `sqlspec.service`. Use it for services that wrap an async driver with helpers like `paginate`, `get_one`, `exists`, and `begin_transaction`.
 
-```python  # pragma: legacy-example
+```python
 from typing import Any
-from app.lib.service import SQLSpecAsyncService
+from sqlspec.service import SQLSpecAsyncService
 
 
 class VectorSearchService(SQLSpecAsyncService):

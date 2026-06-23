@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import cast
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -46,20 +48,21 @@ def test_claude_marketplace_does_not_include_codex_policy() -> None:
 
 def test_host_facing_plugin_identity_is_litestar() -> None:
     """Host manifests should expose a clean `litestar` plugin/marketplace identity."""
+    antigravity_path = REPO_ROOT / "plugin.json"
     claude_marketplace_path = REPO_ROOT / ".claude-plugin" / "marketplace.json"
     claude_plugin_path = REPO_ROOT / ".claude-plugin" / "plugin.json"
     codex_marketplace_path = REPO_ROOT / ".agents" / "plugins" / "marketplace.json"
     codex_plugin_path = REPO_ROOT / ".codex-plugin" / "plugin.json"
-    gemini_path = REPO_ROOT / "gemini-extension.json"
     cursor_path = REPO_ROOT / ".cursor-plugin" / "plugin.json"
 
+    antigravity = json.loads(antigravity_path.read_text(encoding="utf-8"))
     claude_marketplace = json.loads(claude_marketplace_path.read_text(encoding="utf-8"))
     claude_plugin = json.loads(claude_plugin_path.read_text(encoding="utf-8"))
     codex_marketplace = json.loads(codex_marketplace_path.read_text(encoding="utf-8"))
     codex_plugin = json.loads(codex_plugin_path.read_text(encoding="utf-8"))
-    gemini = json.loads(gemini_path.read_text(encoding="utf-8"))
     cursor = json.loads(cursor_path.read_text(encoding="utf-8"))
 
+    assert antigravity["name"] == "litestar"
     assert claude_marketplace["name"] == "litestar"
     assert claude_marketplace["plugins"][0]["name"] == "litestar"
     assert claude_plugin["name"] == "litestar"
@@ -67,7 +70,6 @@ def test_host_facing_plugin_identity_is_litestar() -> None:
     assert codex_marketplace["plugins"][0]["name"] == "litestar"
     assert codex_marketplace["plugins"][0]["source"]["path"] == "./plugins/litestar"
     assert codex_plugin["name"] == "litestar"
-    assert gemini["name"] == "litestar"
     assert cursor["name"] == "litestar"
 
 
@@ -75,6 +77,23 @@ def test_python_distribution_remains_litestar_skills() -> None:
     """The clean host identity break does not rename the Python package."""
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert '\nname = "litestar-skills"\n' in pyproject
+
+
+def test_ci_smoke_harness_targets_current_host_artifacts() -> None:
+    """CI smoke tests must validate shipped host artifacts, not removed manifests."""
+    workflow_path = REPO_ROOT / ".github" / "workflows" / "test.yml"
+    workflow_text = workflow_path.read_text(encoding="utf-8")
+    workflow = yaml.safe_load(workflow_text)
+
+    smoke = workflow["jobs"]["smoke-test"]
+    assert {"host": "antigravity-cli", "install_name": "antigravity"} in smoke["strategy"]["matrix"]["include"]
+    assert "gemini-extension.json" not in workflow_text
+    assert "install_name: gemini" not in workflow_text
+
+    manifest_step = next(step for step in smoke["steps"] if step.get("name") == "Verify plugin manifest parses")
+    manifest_command = manifest_step["run"]
+    assert "json.load(open('plugin.json'))" in manifest_command
+    assert "agents/litestar-reviewer.md" in manifest_command
 
 
 def test_codex_plugin_manifest_agents_is_string() -> None:

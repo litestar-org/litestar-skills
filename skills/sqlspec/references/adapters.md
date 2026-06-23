@@ -5,14 +5,16 @@
 | Adapter | Registry Key | Dialect | Parameter Style | JSON Strategy | Async | Type Converter |
 | --- | --- | --- | --- | --- | --- | --- |
 | ADBC | `"adbc"` | dynamic | varies by driver | `helper` | No | Arrow-native |
+| AioMySQL | `"aiomysql"` | `mysql` | QMARK input (`?`) → PYFORMAT execution (`%s`) | `helper` | Yes | MySQL native |
 | AioSQLite | `"aiosqlite"` | `sqlite` | QMARK (`?`) | `helper` | Yes | Python stdlib |
+| Arrow ODBC | `"arrow_odbc"` | dynamic | QMARK (`?`) | `helper` | No | Arrow-native |
 | AsyncMy | `"asyncmy"` | `mysql` | PYFORMAT (`%s`) | `helper` | Yes | MySQL native |
 | AsyncPG | `"asyncpg"` | `postgres` | NUMERIC (`$1`) | `driver` | Yes | asyncpg codecs |
 | BigQuery | `"bigquery"` | `bigquery` | NAMED_AT (`@name`) | `helper` | Yes | BQ type mapping |
 | CockroachDB Asyncpg | `"cockroach_asyncpg"` | `postgres` | NUMERIC (`$1`) | `driver` | Yes | asyncpg codecs |
 | CockroachDB Psycopg | `"cockroach_psycopg"` | `postgres` | PYFORMAT (`%s`) | `helper` | Yes | psycopg adapt |
 | DuckDB | `"duckdb"` | `duckdb` | QMARK (`?`) | `helper` | No | Arrow-native |
-| Mock | `"mock"` | configurable | QMARK (`?`) | `helper` | Both | SQLite fallback |
+| MSSQL Python | `"mssql_python"` | `tsql` | QMARK (`?`) | `helper` | Both | SQL Server native |
 | MysqlConnector | `"mysql_connector"` | `mysql` | PYFORMAT (`%s`) | `helper` | No | MySQL native |
 | OracleDB | `"oracledb"` | `oracle` | NAMED_COLON (`:name`) | `helper` | Both | Oracle DB API |
 | PSQLPy | `"psqlpy"` | `postgres` | NUMERIC (`$1`) | `helper` | Yes | Rust-backed |
@@ -44,7 +46,6 @@ Each adapter MUST override `_connection_in_transaction()`. The detection method 
 | Spanner | Session-level transaction tracking |
 | ADBC | Always `False` (explicit BEGIN, no introspection) |
 | PSQLPy | Connection status enum check |
-| Mock | Delegates to underlying SQLite |
 
 ```python
 class MyAdapterDriver(SyncDriverAdapterBase):
@@ -114,7 +115,8 @@ Each adapter's `core.py` module exports these helpers:
 
 ### Testing
 
-- **mock**: Transpiles any dialect SQL into SQLite `:memory:`. Ideal for unit testing without database infrastructure.
+- **sqlite / aiosqlite**: Use for local integration tests that need a real SQL engine.
+- **driver fakes**: Use project-local fakes for unit tests that should not exercise SQLSpec's adapter layer.
 
 ---
 

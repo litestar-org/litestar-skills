@@ -1,8 +1,8 @@
 # Canonical source for the litestar-reviewer agent.
 # Edited by hand. Run `make agents` to regenerate the four host dialects:
-#   agents/litestar-reviewer.md                    (Gemini CLI — YAML list of tools)
+#   agents/litestar-reviewer.md                    (Antigravity CLI — YAML list of documented tool names)
 #   .claude-plugin/agents/litestar-reviewer.md     (Claude Code — comma-string of PascalCase tools)
-#   .opencode/agents/litestar-reviewer.md          (OpenCode  — dict of tool: bool, plus mode: subagent)
+#   .opencode/agents/litestar-reviewer.md          (OpenCode — dict of tool: bool, plus mode: subagent)
 #   .codex/agents/litestar-reviewer.toml           (Codex CLI — pure TOML, no tools field)
 #
 # CI fails if any of the generated files have hand edits (drift detection).
@@ -10,10 +10,10 @@
 name: litestar-reviewer
 description: 'Use when reviewing Litestar PRs/code for stack-aware DTOs, guards, DI, data services, pagination, settings, async I/O, plugins, and wire format. Not for non-Litestar reviews.'
 # Canonical tool names. Each host serializer maps these to the right per-host name:
-#   read -> Read / read_file / read
-#   grep -> Grep / grep_search / grep
-#   glob -> Glob / glob / glob
-#   bash -> Bash / run_shell_command / bash
+#   read -> view_file / Read / read
+#   grep -> grep_search / Grep / grep
+#   glob -> find_by_name / Glob / glob
+#   bash -> run_command / Bash / bash
 tools:
   - read
   - grep

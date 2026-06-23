@@ -12,7 +12,7 @@ Primary source: <https://developers.google.com/knowledge/mcp>.
 | Tools | `search_documents`, `get_documents`, `answer_query` (preview — may change) |
 | Indexed domains | Firebase, Google Cloud, Android, Google Maps |
 | Coverage | Publicly visible pages only; English-only |
-| Supported hosts (Google-documented) | Gemini CLI, Gemini Code Assist, Claude Code, Cursor, GitHub Copilot, Windsurf, Google Antigravity |
+| Supported hosts (Google-documented) | Antigravity CLI, Google Antigravity, Claude Code, Cursor, GitHub Copilot, Windsurf |
 
 ## Auth
 
@@ -38,15 +38,11 @@ claude mcp add google-dev-knowledge --transport http \
   --header "X-Goog-Api-Key: YOUR_API_KEY"
 ```
 
-**Gemini CLI:**
+**Antigravity CLI:**
 
-```bash
-gemini mcp add -t http -H "X-Goog-Api-Key: YOUR_API_KEY" \
-  google-developer-knowledge \
-  https://developerknowledge.googleapis.com/mcp --scope user
-```
+Configure global MCP servers in `~/.gemini/antigravity-cli/mcp_config.json` or workspace-local servers under the active project's `.agents/` configuration, using the same URL and `X-Goog-Api-Key` header.
 
-Other documented hosts (Cursor, GitHub Copilot, Windsurf, Antigravity) follow each host's generic MCP add flow with the same URL + header.
+Other documented hosts (Cursor, GitHub Copilot, Windsurf, Google Antigravity) follow each host's generic MCP add flow with the same URL + header.
 
 ## When to use it
 
@@ -62,6 +58,6 @@ Rule of thumb: if the question references Firebase, Cloud Run, GKE, BigQuery, Al
 
 ## Not shipped
 
-This repo **does not** ship an MCP manifest that hardcodes the server or an API key. Users opt in per-host using the commands above. No `.claude-plugin/mcp.json`, no `gemini-extension.json` MCP block, no `.opencode/mcp.toml` entries reference this server.
+This repo **does not** ship an MCP manifest that hardcodes the server or an API key. Users opt in per-host using the commands above. No `.claude-plugin/mcp.json`, no Antigravity `mcp_config.json`, no `.opencode/mcp.toml` entries reference this server.
 
 Rationale: the MCP server requires a user-provided GCP API key; bundling a manifest would either hardcode a secret or ship broken defaults. The opt-in reference-file pattern matches how this repo handles other optional integrations.

@@ -9,7 +9,7 @@ from litestar import Litestar, get
 from litestar.middleware.session.client_side import CookieBackendConfig
 from litestar_vite import PathConfig, TypeGenConfig, ViteConfig, VitePlugin
 from litestar_vite.inertia import InertiaConfig
-from litestar_vite.inertia import InertiaResponse
+from litestar_vite.inertia import InertiaRedirect, InertiaResponse
 
 session_backend = CookieBackendConfig(secret=b"development-only-secret-32-chars")
 
@@ -34,6 +34,7 @@ app = Litestar(
 ## Inertia Response Helpers
 
 ```python
+from litestar import Request, get
 from litestar_vite.inertia import (
     InertiaResponse,
     share, lazy, defer, merge, flash, error,
@@ -43,8 +44,7 @@ from litestar_vite.inertia import (
 @get("/users")
 async def users_page() -> InertiaResponse:
     return InertiaResponse(
-        "Users/Index",
-        props={
+        content={
             "users": await fetch_users(),
             "stats": defer(lambda: fetch_stats()),
         },
@@ -53,7 +53,7 @@ async def users_page() -> InertiaResponse:
 @get("/dashboard")
 async def dashboard(request: Request) -> InertiaResponse:
     share(request, "auth", {"user": request.user})
-    return InertiaResponse("Dashboard", props={...})
+    return InertiaResponse(content={...})
 ```
 
 ## Vite Config
@@ -94,9 +94,9 @@ createInertiaApp({
   setup({ el, App, props }) {
     const cleanProps = unwrapPageProps(props)
     if (el.hasChildNodes()) {
-      hydrateRoot(el, <App {...props} />)
+      hydrateRoot(el, <App {...cleanProps} />)
     } else {
-      createRoot(el).render(<App {...props} />)
+      createRoot(el).render(<App {...cleanProps} />)
     }
   },
 })
@@ -105,7 +105,7 @@ createInertiaApp({
 ## Generated Page-Props Types
 
 ```ts
-// resources/generated/inertia-pages.d.ts (auto-generated)
+// resources/generated/page-props.ts (auto-generated)
 declare module "@inertiajs/react" {
   interface PageProps {
     auth: { user: User | null }
@@ -122,25 +122,26 @@ export default function Dashboard() {
 }
 ```
 
-## Inertia v2 Features
+## Inertia v3 Features
 
 ```python
 # Precognition (form validation preview)
-from litestar_vite.inertia import precognition
+from litestar import Request, get, post
+from litestar_vite.inertia import InertiaRedirect, precognition
 
 @post("/users")
 @precognition
-async def create_user(data: CreateUserDTO) -> InertiaResponse:
+async def create_user(request: Request, data: CreateUserDTO) -> InertiaRedirect:
     user = await save_user(data)
-    return InertiaResponse.redirect("/users")
+    return InertiaRedirect(request, "/users")
 
 # History encryption
 inertia_config = InertiaConfig(encrypt_history=True)
 
 # Clear history on sensitive pages
-@get("/login")
+@get("/login", component="Auth/Login")
 async def login_page() -> InertiaResponse:
-    return InertiaResponse("Auth/Login", clear_history=True)
+    return InertiaResponse(content={}, clear_history=True)
 ```
 
 ## CLI

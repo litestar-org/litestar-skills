@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "name": "litestar-session-start",
+            "type": "command",
+            "command": "r=\"${ANTIGRAVITY_PLUGIN_ROOT:-${PLUGIN_ROOT:-${AGY_PLUGIN_ROOT:-}}}\"; h=\"${HOME:-}\"; if [ -n \"$r\" ] && [ ! -f \"${r%/}/hooks/session-start.sh\" ]; then r=\"\"; fi; if [ -z \"$r\" ] && [ -n \"$h\" ] && [ -f \"${h%/}/.gemini/config/plugins/litestar/hooks/session-start.sh\" ]; then r=\"${h%/}/.gemini/config/plugins/litestar\"; fi; if [ -z \"$r\" ] && [ -f ./hooks/session-start.sh ]; then r=\".\"; fi; [ -n \"$r\" ] || exit 0; ANTIGRAVITY_PLUGIN_ROOT=\"${r%/}\" PLUGIN_ROOT=\"${r%/}\" bash \"${r%/}/hooks/session-start.sh\"",
+            "timeout": 30,
+            "description": "Inject project-aware Litestar skill reminders into the Antigravity CLI session context."
+          }
+        ]
+      }
+    ]
+  }
+}

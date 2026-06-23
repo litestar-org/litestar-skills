@@ -2,10 +2,10 @@
 name: litestar-reviewer
 description: "Use when reviewing Litestar PRs/code for stack-aware DTOs, guards, DI, data services, pagination, settings, async I/O, plugins, and wire format. Not for non-Litestar reviews."
 tools:
-  - read_file
+  - view_file
   - grep_search
-  - glob
-  - run_shell_command
+  - find_by_name
+  - run_command
 ---
 
 # Litestar Code Reviewer

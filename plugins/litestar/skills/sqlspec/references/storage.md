@@ -80,7 +80,6 @@ config = AsyncpgConfig(
     extension_config={
         "litestar": {
             "commit_mode": "autocommit",
-            "session_store": True,
             "session_table": "sessions",
             "session_ttl": 3600,
         }
@@ -118,7 +117,6 @@ config = AsyncpgConfig(
         # Litestar framework integration
         "litestar": {
             "commit_mode": "autocommit",
-            "session_store": True,
             "session_table": "sessions",
             "correlation_header": "x-request-id",
         },

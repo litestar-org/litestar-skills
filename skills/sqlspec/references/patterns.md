@@ -2,15 +2,11 @@
 
 ## Service Layer Pattern
 
-`SQLSpecAsyncService` is a thin **project-defined** base class used by the canonical Litestar + SQLSpec apps to wrap a `sqlspec.driver.AsyncDriverAdapterBase` with helpers like `paginate`, `get_or_404`, `exists`, and `begin_transaction`. It is *not* part of upstream `sqlspec`; copy it into your project's `lib/service.py` from the canonical reference app:
+`SQLSpecAsyncService` ships upstream in `sqlspec.service`. Use it as the base class for app services that wrap an async driver with helpers like `paginate`, `get_one`, `exists`, and `begin_transaction`.
 
-> Source: [`litestar-sqlstack/src/sqlstack/lib/service.py`](https://github.com/cofin/litestar-sqlstack) — also used in [`oracledb-vertexai-demo`](https://github.com/cofin/oracledb-vertexai-demo).
-
-Once the base class lives in your codebase, services consume it like this:
-
-```python  # pragma: legacy-example
-from app.lib.service import SQLSpecAsyncService
+```python
 from sqlspec.core.filters import OffsetPagination
+from sqlspec.service import SQLSpecAsyncService
 
 
 class UserService(SQLSpecAsyncService):
@@ -23,7 +19,7 @@ class UserService(SQLSpecAsyncService):
         )
 
     async def get_user(self, user_id: str) -> User:
-        return await self.get_or_404(
+        return await self.get_one(
             "SELECT * FROM users WHERE id = $1",
             user_id,
             schema_type=User,
@@ -52,7 +48,7 @@ class UserService(SQLSpecAsyncService):
 | Method | Returns | Description |
 | --- | --- | --- |
 | `paginate()` | `OffsetPagination[T]` | Paginated query with total count |
-| `get_or_404()` | `T` | Single row or raise `NotFoundError` |
+| `get_one()` | `T` | Single row or raise `NotFoundError` |
 | `exists()` | `bool` | Check if any row matches |
 | `begin_transaction()` | context manager | Explicit transaction scope |
 
@@ -102,7 +98,7 @@ Use the query builder for INSERT ... ON CONFLICT:
 from sqlspec import sql
 
 query = (
-    sql.insert()
+    sql.insert("users")
     .columns("id", "name", "email", "updated_at")
     .values(id=1, name="Alice", email="alice@example.com", updated_at="now()")
     .on_conflict("id")

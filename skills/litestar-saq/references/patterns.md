@@ -1,6 +1,6 @@
 # SAQ Advanced Patterns
 
-> **See also:** [PostgreSQL-Native Queue (no SAQ)](postgresql-native.md) — `TaskService + WorkerPlugin` pattern with `FOR UPDATE SKIP LOCKED`, `pg_notify`, and execution-target routing when SAQ is not wanted.
+> **See also:** [Sidecar Worker Pattern](postgres-native-sidecar-worker.md) — `TaskService + Worker + WorkerSidecar + WorkerPlugin` pattern for project-owned schemas, same-transaction outbox semantics, frontend channel updates, and execution-target routing.
 
 ## Heartbeat Management
 
@@ -18,17 +18,16 @@ await queue.enqueue(
 )
 ```
 
-For tasks where duration is variable, manually trigger heartbeat updates from within the task:
+For tasks where duration is variable, prefer `monitored_job()` so the plugin's `HeartbeatManager` batches heartbeat updates. Use manual queue updates only when you need full control:
 
 ```python
 async def process_large_file(ctx: dict, *, file_id: int) -> None:
     job = ctx["job"]
-    queue: Queue = ctx["queue"]
 
     for chunk in read_chunks(file_id):
         await process_chunk(chunk)
-        # Manually extend the heartbeat after each chunk
-        await queue.update(job, heartbeat=time.time())
+        # Manually touch the job heartbeat after each chunk
+        await job.update()
 ```
 
 ## @monitored_job Decorator Pattern
@@ -50,17 +49,17 @@ async def long_running_export(ctx: dict, *, export_id: int) -> dict:
 from saq import Job, Status
 
 async def get_failed_jobs(queue: Queue) -> list[Job]:
-    return await queue.jobs(status=Status.FAILED)
+    return [job async for job in queue.iter_jobs(statuses=[Status.FAILED])]
 
 async def retry_job(queue: Queue, job_id: str) -> None:
     job = await queue.job(job_id)
     if job and job.status == Status.FAILED:
-        await queue.retry(job)
+        await job.retry("manual retry")
 
 async def retry_all_failed(queue: Queue) -> int:
-    failed = await queue.jobs(status=Status.FAILED)
+    failed = [job async for job in queue.iter_jobs(statuses=[Status.FAILED])]
     for job in failed:
-        await queue.retry(job)
+        await job.retry("manual retry")
     return len(failed)
 ```
 
@@ -105,7 +104,7 @@ Fan-out:
 async def fan_out_coordinator(ctx: dict, *, batch_ids: list[int]) -> None:
     queue: Queue = ctx["queue"]
     results = await asyncio.gather(*[
-        queue.apply("process_item", item_id=item_id, timeout=60)
+        queue.apply("process_item", item_id=item_id)
         for item_id in batch_ids
     ])
 ```
@@ -120,11 +119,12 @@ low = Queue.from_url("redis://localhost", name="low")
 In a Litestar app with `litestar-saq`:
 
 ```python
+from litestar_saq import QueueConfig, SAQConfig
+
 SAQConfig(
-    dsn=...,
     queue_configs=[
-        QueueConfig(name="high", tasks=[...]),
-        QueueConfig(name="low",  tasks=[...]),
+        QueueConfig(name="high", dsn=settings.redis.url, tasks=[...]),
+        QueueConfig(name="low", dsn=settings.redis.url, tasks=[...]),
     ],
 )
 ```
@@ -158,11 +158,29 @@ Use Postgres when:
 - Durable persistence required
 - Want SQL-queryable job history
 - No Redis in infra
-- Need transactional enqueue (enqueue inside a DB transaction)
+- Need SQL-backed queue storage
 
 ```python
-queue = Queue.from_url("postgresql+asyncpg://user:pass@localhost/mydb")
+queue = Queue.from_url("postgresql://user:pass@localhost/mydb")
 ```
+
+In `litestar-saq`, put the PostgreSQL DSN on `QueueConfig` and install the `psycopg` extra:
+
+```python
+from litestar_saq import QueueConfig
+
+QueueConfig(
+    name="default",
+    dsn="postgresql://user:pass@localhost/mydb",
+    broker_options={
+        "jobs_table": "saq_jobs",
+        "stats_table": "saq_stats",
+        "manage_pool_lifecycle": True,
+    },
+)
+```
+
+Multi-process workers must be able to rebuild brokers in child processes. Prefer `dsn` over `broker_instance`; if you pass a live `broker_instance`, also provide `dsn` or run without child worker processes.
 
 | Aspect | Redis | Postgres |
 | --- | --- | --- |

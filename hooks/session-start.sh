@@ -6,9 +6,8 @@
 # Hosts:
 #   CLAUDE_PLUGIN_ROOT  -> Claude Code  -> hookSpecificOutput.additionalContext
 #   CODEX_PLUGIN_ROOT   -> Codex CLI    -> hookSpecificOutput.additionalContext
+#   ANTIGRAVITY_PLUGIN_ROOT -> Antigravity CLI -> hookSpecificOutput.additionalContext
 #   CURSOR_PLUGIN_ROOT  -> Cursor       -> additional_context
-#   (Gemini)            -> Gemini CLI   -> hookSpecificOutput.additionalContext + systemMessage
-#                          (detected via GEMINI_CLI / GEMINI_EXTENSION_NAME or extensionPath)
 #   (none of the above) -> Unknown      -> additional_context (Cursor-shape fallback)
 
 set -euo pipefail
@@ -35,10 +34,10 @@ if [[ -n "${CLAUDE_PLUGIN_ROOT:-}" ]]; then
     host="claude"
 elif [[ -n "${CODEX_PLUGIN_ROOT:-}" ]]; then
     host="codex"
+elif [[ -n "${ANTIGRAVITY_PLUGIN_ROOT:-}" || -n "${AGY_PLUGIN_ROOT:-}" ]]; then
+    host="antigravity"
 elif [[ -n "${CURSOR_PLUGIN_ROOT:-}" ]]; then
     host="cursor"
-elif [[ -n "${GEMINI_CLI:-}${GEMINI_EXTENSION_NAME:-}" ]]; then
-    host="gemini"
 fi
 
 _session_python=""
@@ -49,13 +48,8 @@ host = sys.argv[1]
 data = json.loads(sys.argv[2])
 context = data.get("context", "")
 
-if host in ("claude", "codex"):
+if host in ("claude", "codex", "antigravity"):
     out = {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context}}
-elif host == "gemini":
-    out = {
-        "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context},
-        "systemMessage": context,
-    }
 else:
     # cursor + unknown share the same shape
     out = {"additional_context": context}
@@ -67,8 +61,6 @@ else
     case "$host" in
         claude|codex)
             printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":""}}\n' ;;
-        gemini)
-            printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":""},"systemMessage":""}\n' ;;
         *)
             printf '{"additional_context":""}\n' ;;
     esac

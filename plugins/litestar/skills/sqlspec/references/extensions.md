@@ -63,8 +63,7 @@ config = AsyncpgConfig(
     extension_config={
         "litestar": {
             "commit_mode": "autocommit",
-            "session_store": True,         # Enable session store
-            "session_table": "sessions",   # Table name (default: "sessions")
+            "session_table": "sessions",   # Table name (default: "litestar_session")
             "session_ttl": 3600,           # TTL in seconds
         }
     },

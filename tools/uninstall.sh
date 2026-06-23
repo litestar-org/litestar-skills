@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # litestar-skills — multi-host uninstaller
 #
-# Reverses tools/install.sh. Removes symlinks, clones, and marketplace
-# entries for hosts we auto-installed. Prints revert instructions for
+# Reverses tools/install.sh. Removes host plugin registrations, symlinks,
+# legacy clones, and marketplace entries for hosts we auto-installed. Prints revert instructions for
 # hosts where install was instruction-only (claude/cursor/vscode).
 
 set -euo pipefail
 
-VERSION="0.3.0"
+VERSION="0.4.0"
 PLUGIN_NAME="litestar"
 REPO_SLUG="litestar-org/litestar-skills"
 
@@ -56,7 +56,7 @@ Options:
   --version            Print version.
   --help               Print this message.
 
-Hosts: claude, gemini, codex, opencode, cursor, vscode
+Hosts: claude, antigravity, codex, opencode, cursor, vscode
 USAGE
 }
 
@@ -105,23 +105,23 @@ STATUSES=()
 # Per-host uninstallers
 # =============================================================================
 
-uninstall_gemini() {
-    should_uninstall gemini || return 0
-    if ! has_cli gemini; then
-        STATUSES+=("gemini:cli-not-found")
+uninstall_antigravity() {
+    should_uninstall antigravity || return 0
+    if ! has_cli agy; then
+        STATUSES+=("antigravity:cli-not-found")
         return 0
     fi
-    log_info "${BOLD}Uninstalling from Gemini CLI...${NC}"
-    if gemini extensions list 2>/dev/null | grep -q "$PLUGIN_NAME"; then
-        run gemini extensions uninstall "$PLUGIN_NAME" || {
-            STATUSES+=("gemini:failed")
+    log_info "${BOLD}Uninstalling from Antigravity CLI...${NC}"
+    if agy plugin list 2>/dev/null | grep -q "$PLUGIN_NAME"; then
+        run agy plugin uninstall "$PLUGIN_NAME" || {
+            STATUSES+=("antigravity:failed")
             return 0
         }
-        log_ok "Gemini extension removed"
-        STATUSES+=("gemini:removed")
+        log_ok "Antigravity plugin removed"
+        STATUSES+=("antigravity:removed")
     else
-        log_info "Extension not installed"
-        STATUSES+=("gemini:not-present")
+        log_info "Plugin not installed"
+        STATUSES+=("antigravity:not-present")
     fi
 }
 
@@ -130,6 +130,13 @@ uninstall_codex() {
     log_info "${BOLD}Uninstalling from Codex CLI...${NC}"
     local target="${HOME}/.codex/plugins/${PLUGIN_NAME}"
     local marketplace="${HOME}/.agents/plugins/marketplace.json"
+
+    if has_cli codex; then
+        run codex plugin remove "${PLUGIN_NAME}@${PLUGIN_NAME}" >/dev/null 2>&1 || true
+        run codex plugin marketplace remove "$PLUGIN_NAME" >/dev/null 2>&1 || true
+    else
+        log_info "Codex CLI not found; cleaning legacy local files only."
+    fi
 
     if [ -d "$target" ]; then
         run rm -rf "$target"
@@ -151,7 +158,7 @@ with open(path, "w") as f:
 PYEOF
         fi
     fi
-    log_ok "Codex plugin removed from ${target}"
+    log_ok "Codex plugin registration removed; legacy path cleaned if present"
     STATUSES+=("codex:removed")
 }
 
@@ -270,7 +277,7 @@ main() {
     echo "${BOLD}litestar-skills uninstaller v${VERSION}${NC}"
     echo ""
 
-    uninstall_gemini
+    uninstall_antigravity
     uninstall_codex
     uninstall_opencode
     uninstall_claude

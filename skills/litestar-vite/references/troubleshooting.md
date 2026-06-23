@@ -16,7 +16,7 @@ See `hmr.md` for the full debug checklist. Quick summary:
 
 - Hot file path mismatch between Python and JS configs
 - Vite not actually running (check `litestar run` logs)
-- CORS / port mismatch
+- CORS / port mismatch in direct mode
 - Missing `vite_hmr()` in template
 
 ## Type Generation Fails
@@ -25,7 +25,7 @@ See `hmr.md` for the full debug checklist. Quick summary:
 | --- | --- | --- |
 | `routes.ts` empty | Handlers missing `name=` parameter | Add `name=` to handlers; route names come from there |
 | `schemas.ts` missing types | DTO not registered with OpenAPI | Ensure handler return type or `dto=` parameter exposes the schema |
-| `inertia-pages.json` empty | Pages use generic JSON responses | Use Inertia response helpers from `litestar_vite.inertia` |
+| `inertia-pages.json` empty | Pages use generic JSON responses | Use `component=` handlers or Inertia response helpers from `litestar_vite.inertia` |
 | CI diff after re-gen | Local types out of date | `litestar assets generate-types` then commit |
 
 ## Build Errors
@@ -42,7 +42,7 @@ See `hmr.md` for the full debug checklist. Quick summary:
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | Page renders as JSON, not HTML | `ViteConfig.inertia` missing or route lacks `component=` / Inertia response helper | Add `InertiaConfig(...)` to `ViteConfig`; set `mode="hybrid"` when explicit mode is needed |
-| Type errors on page props | `inertia-pages.json` stale | Re-run `litestar assets generate-types` |
+| Type errors on page props | `inertia-pages.json` / `page-props.ts` stale | Re-run `litestar assets generate-types` |
 | First-load works, navigations break | `root_template` missing Inertia head tags | Use Inertia layout pattern in `base.html` |
 
 ## Performance
@@ -56,7 +56,7 @@ See `hmr.md` for the full debug checklist. Quick summary:
 ## When in Doubt
 
 ```bash
-litestar --app app:app assets status
+litestar --app app:app assets doctor --runtime-checks
 ```
 
-Reports current mode, paths, manifest status, hot-file presence.
+Reports configuration drift, manifest status, hot-file presence, and runtime reachability. Use `litestar --app app:app assets status` for read-only status output.

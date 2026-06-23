@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "litestar-skills"
-version = "0.3.0"
+version = "0.4.0"
 description = "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,7 +12,7 @@ license = { text = "MIT" }
 authors = [
   { name = "Cody Fincher", email = "cofin@litestar.dev" },
 ]
-keywords = ["litestar", "skills", "agent", "ai", "claude", "gemini", "codex", "opencode", "cursor", "mcp"]
+keywords = ["litestar", "skills", "agent", "ai", "claude", "antigravity", "codex", "opencode", "cursor", "mcp"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
@@ -72,11 +72,10 @@ include = [
   "mcp-servers",
   "templates",
   "hooks",
+  "plugin.json",
   ".claude-plugin",
   ".codex-plugin",
   ".cursor-plugin",
-  "gemini-extension.json",
-  "GEMINI.md",
   "AGENTS.md",
   "README.md",
   "LICENSE",
@@ -155,7 +154,7 @@ exclude_lines = [
 # bump-my-version — atomic multi-manifest version sync
 # ============================================================
 [tool.bumpversion]
-current_version = "0.3.0"
+current_version = "0.4.0"
 commit = false
 tag = false
 tag_name = "v{new_version}"
@@ -199,11 +198,6 @@ replace = '"version": "{new_version}"'
 
 [[tool.bumpversion.files]]
 filename = ".agents/plugins/marketplace.json"
-search = '"version": "{current_version}"'
-replace = '"version": "{new_version}"'
-
-[[tool.bumpversion.files]]
-filename = "gemini-extension.json"
 search = '"version": "{current_version}"'
 replace = '"version": "{new_version}"'
 

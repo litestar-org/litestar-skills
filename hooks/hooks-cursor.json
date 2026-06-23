@@ -4,7 +4,7 @@
     "sessionStart": [
       {
         "name": "litestar-session-start",
-        "command": "r=\"${CURSOR_PLUGIN_ROOT:-.}\"; CURSOR_PLUGIN_ROOT=\"${r%/}\" bash \"${r%/}/hooks/session-start.sh\"",
+        "command": "r=\"${CURSOR_PLUGIN_ROOT:-${PLUGIN_ROOT:-}}\"; if [ -n \"$r\" ] && [ ! -f \"${r%/}/hooks/session-start.sh\" ]; then r=\"\"; fi; if [ -z \"$r\" ] && [ -f ./hooks/session-start.sh ]; then r=\".\"; fi; [ -n \"$r\" ] || exit 0; CURSOR_PLUGIN_ROOT=\"${r%/}\" bash \"${r%/}/hooks/session-start.sh\"",
         "description": "Inject project-aware Litestar skill reminders into the Cursor session context."
       }
     ]

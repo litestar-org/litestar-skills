@@ -1,7 +1,7 @@
 {
   "name": "litestar",
   "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": {
     "name": "Cody Fincher",
     "email": "cofin@litestar.dev"
@@ -12,6 +12,5 @@
   "keywords": ["litestar", "skills", "agent", "ai", "sqlspec", "advanced-alchemy", "granian", "msgspec", "dishka", "mcp"],
   "skills": ["./skills/"],
   "commands": ["./commands/"],
-  "agents": ["./.claude-plugin/agents/litestar-reviewer.md"],
-  "hooks": "./hooks/hooks-claude.json"
+  "agents": ["./.claude-plugin/agents/litestar-reviewer.md"]
 }

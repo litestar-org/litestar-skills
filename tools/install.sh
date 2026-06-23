@@ -2,25 +2,25 @@
 # litestar-skills — multi-host installer
 #
 # Installs litestar-skills for supported AI CLI tools. Hosts with CLIs
-# (gemini, codex, opencode) get automated installs; hosts without
+# (antigravity, codex, opencode) get automated installs; hosts without
 # (claude, cursor, vscode) get printed instructions since their plugin
 # model requires in-app interaction the shell can't automate.
 #
 # Usage:
 #   tools/install.sh [--dry-run] [--force] [--only <host>] [--skip <host>]
-#   curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/v0.3.0/tools/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/v0.4.0/tools/install.sh | bash
 #
 # Hosts:
 #   claude     Claude Code        (prints instructions + optional settings edit)
-#   gemini     Gemini CLI         (auto: gemini extensions install)
-#   codex      OpenAI Codex CLI   (auto: clone to ~/.codex/plugins/)
-#   opencode   OpenCode.ai        (auto: clone + symlink plugin)
+#   antigravity Antigravity CLI   (auto: stage payload + agy plugin install)
+#   codex      OpenAI Codex CLI   (auto: codex plugin marketplace add + plugin add)
+#   opencode   OpenCode.ai        (auto: clone + symlink JS plugin on Unix)
 #   cursor     Cursor IDE         (prints instructions)
 #   vscode     VS Code / Copilot  (prints instructions)
 
 set -euo pipefail
 
-VERSION="0.3.0"
+VERSION="0.4.0"
 REPO_URL="https://github.com/litestar-org/litestar-skills"
 REPO_SLUG="litestar-org/litestar-skills"
 MARKETPLACE_NAME="litestar"
@@ -58,7 +58,6 @@ FORCE=0
 ONLY_HOSTS=()
 SKIP_HOSTS=()
 UPDATE_CLAUDE_SETTINGS=0
-ANTIGRAVITY_SYMLINK=0
 
 usage() {
     cat <<USAGE
@@ -73,19 +72,14 @@ Options:
   --skip <host>         Skip the named host (repeatable).
   --claude-settings     Also update ~/.claude/settings.json to whitelist
                         this repo in extraKnownMarketplaces (opt-in).
-  --antigravity-symlink Create .agent -> .agents symlink in \$PWD so Google
-                        Antigravity (singular .agent) discovers skills
-                        installed under .agents/skills/. Opt-in only —
-                        community workaround, not a Google-blessed
-                        integration. Skipped if .agent already exists.
   --version             Print version and exit.
   --help                Print this message.
 
-Hosts: claude, gemini, codex, opencode, cursor, vscode
+Hosts: claude, antigravity, codex, opencode, cursor, vscode
 
 Examples:
   $(basename "$0")                            # install for every detected host
-  $(basename "$0") --only gemini --only codex
+  $(basename "$0") --only antigravity --only codex
   $(basename "$0") --dry-run                  # preview without changes
   $(basename "$0") --skip opencode --force    # overwrite, except OpenCode
 
@@ -100,7 +94,6 @@ while [ $# -gt 0 ]; do
         --only)             ONLY_HOSTS+=("$2"); shift 2 ;;
         --skip)             SKIP_HOSTS+=("$2"); shift 2 ;;
         --claude-settings)  UPDATE_CLAUDE_SETTINGS=1; shift ;;
-        --antigravity-symlink) ANTIGRAVITY_SYMLINK=1; shift ;;
         --version)          echo "$VERSION"; exit 0 ;;
         --help|-h)          usage; exit 0 ;;
         *)                  log_error "Unknown argument: $1"; usage; exit 2 ;;
@@ -173,7 +166,7 @@ probe_hosts() {
     log_info "${BOLD}Detecting installed CLIs...${NC}"
     local detected=()
     has_cli claude   && detected+=("claude")   || true
-    has_cli gemini   && detected+=("gemini")   || true
+    has_cli agy      && detected+=("antigravity") || true
     has_cli codex    && detected+=("codex")    || true
     has_cli opencode && detected+=("opencode") || true
     has_cli cursor   && detected+=("cursor")   || true
@@ -190,38 +183,56 @@ probe_hosts() {
 # Per-host installers
 # =============================================================================
 
-# ------ Gemini CLI ----------------------------------------------------------
-install_gemini() {
-    should_install gemini || return 0
-    if ! has_cli gemini; then
-        log_info "Gemini CLI not found — skipping."
-        STATUSES+=("gemini:not-installed")
+# ------ Antigravity CLI -----------------------------------------------------
+prepare_antigravity_payload() {
+    ANTIGRAVITY_PAYLOAD="${CACHE_DIR}/antigravity-plugin"
+    run rm -rf "$ANTIGRAVITY_PAYLOAD"
+    run mkdir -p "$ANTIGRAVITY_PAYLOAD/agents"
+    run cp "${PROJECT_ROOT}/plugin.json" "${ANTIGRAVITY_PAYLOAD}/plugin.json"
+    run cp "${PROJECT_ROOT}/hooks.json" "${ANTIGRAVITY_PAYLOAD}/hooks.json"
+    run cp -R "${PROJECT_ROOT}/skills" "${ANTIGRAVITY_PAYLOAD}/skills"
+    run cp -R "${PROJECT_ROOT}/commands" "${ANTIGRAVITY_PAYLOAD}/commands"
+    run cp -R "${PROJECT_ROOT}/hooks" "${ANTIGRAVITY_PAYLOAD}/hooks"
+    run cp "${PROJECT_ROOT}"/agents/*.md "${ANTIGRAVITY_PAYLOAD}/agents/"
+}
+
+install_antigravity() {
+    should_install antigravity || return 0
+    if ! has_cli agy; then
+        log_info "Antigravity CLI not found — skipping."
+        STATUSES+=("antigravity:not-installed")
         return 0
     fi
-    log_info "${BOLD}Installing for Gemini CLI...${NC}"
+    log_info "${BOLD}Installing for Antigravity CLI...${NC}"
 
-    # Check if already installed
     local already=0
-    if gemini extensions list 2>/dev/null | grep -q "$PLUGIN_NAME"; then
+    if agy plugin list 2>/dev/null | grep -q "$PLUGIN_NAME"; then
         already=1
     fi
 
     if [ "$already" -eq 1 ]; then
-        log_info "Extension already installed — updating"
-        run gemini extensions update "$PLUGIN_NAME" || {
-            log_warn "Update failed; try uninstall + reinstall"
-            STATUSES+=("gemini:update-failed")
+        if [ "$FORCE" -eq 0 ]; then
+            log_info "Antigravity plugin already installed — use --force to reinstall."
+            STATUSES+=("antigravity:already-installed")
             return 0
-        }
-    else
-        run gemini extensions install "$REPO_URL" --auto-update || {
-            log_error "Gemini install failed"
-            STATUSES+=("gemini:failed")
+        fi
+        run agy plugin uninstall "$PLUGIN_NAME" || {
+            log_error "Antigravity uninstall before reinstall failed"
+            STATUSES+=("antigravity:failed")
             return 0
         }
     fi
-    log_ok "Gemini CLI: installed"
-    STATUSES+=("gemini:installed")
+
+    local ANTIGRAVITY_PAYLOAD
+    prepare_antigravity_payload
+
+    run agy plugin install "$ANTIGRAVITY_PAYLOAD" || {
+        log_error "Antigravity install failed"
+        STATUSES+=("antigravity:failed")
+        return 0
+    }
+    log_ok "Antigravity CLI: installed from staged payload ${ANTIGRAVITY_PAYLOAD}"
+    STATUSES+=("antigravity:installed")
 }
 
 # ------ Codex CLI -----------------------------------------------------------
@@ -229,49 +240,38 @@ install_codex() {
     should_install codex || return 0
     log_info "${BOLD}Installing for Codex CLI...${NC}"
 
-    local target="${HOME}/.codex/plugins/${PLUGIN_NAME}"
-    local marketplace="${HOME}/.agents/plugins/marketplace.json"
+    if ! has_cli codex; then
+        log_info "Codex CLI not found — skipping."
+        STATUSES+=("codex:not-installed")
+        return 0
+    fi
 
-    run mkdir -p "${HOME}/.codex/plugins" "${HOME}/.agents/plugins"
+    if [ "$FORCE" -eq 1 ]; then
+        run codex plugin remove "${PLUGIN_NAME}@${MARKETPLACE_NAME}" >/dev/null 2>&1 || true
+        run codex plugin marketplace remove "$MARKETPLACE_NAME" >/dev/null 2>&1 || true
+    fi
 
-    if [ -d "$target/.git" ]; then
-        if [ "$FORCE" -eq 0 ]; then
-            log_info "Already present at ${target} — pulling latest"
-        fi
-        run git -C "$target" fetch --quiet
-        run git -C "$target" reset --hard origin/HEAD --quiet
+    if codex plugin marketplace list --json 2>/dev/null | grep -q "\"name\": \"${MARKETPLACE_NAME}\""; then
+        log_info "Codex marketplace ${MARKETPLACE_NAME} already configured."
     else
-        if [ -e "$target" ] && [ "$FORCE" -eq 0 ]; then
-            log_warn "${target} exists but is not a git repo. Use --force to overwrite."
-            STATUSES+=("codex:path-conflict")
+        run codex plugin marketplace add "$PROJECT_ROOT" || {
+            log_error "Codex marketplace add failed"
+            STATUSES+=("codex:failed")
             return 0
-        fi
-        [ -e "$target" ] && run rm -rf "$target"
-        run git clone --quiet --depth 1 "$REPO_URL" "$target"
+        }
     fi
 
-    # Register in marketplace.json (merge if exists)
-    if [ "$DRY_RUN" -eq 1 ]; then
-        printf "%s Register %s in %s\n" "${YELLOW}[dry-run]${NC}" "$PLUGIN_NAME" "$marketplace"
+    if codex plugin list --json 2>/dev/null | grep -q "\"pluginId\": \"${PLUGIN_NAME}@${MARKETPLACE_NAME}\""; then
+        log_info "Codex plugin ${PLUGIN_NAME}@${MARKETPLACE_NAME} already installed."
     else
-        python3 - "$marketplace" "$target" <<'PYEOF'
-import json, sys, os
-path, plugin_path = sys.argv[1], sys.argv[2]
-data = {"name": "litestar", "plugins": []}
-if os.path.exists(path):
-    try:
-        with open(path) as f: data = json.load(f)
-    except Exception: pass
-data.setdefault("name", "litestar")
-plugins = data.setdefault("plugins", [])
-plugins = [p for p in plugins if p.get("name") != "litestar"]
-plugins.append({"name": "litestar", "source": plugin_path})
-data["plugins"] = plugins
-os.makedirs(os.path.dirname(path), exist_ok=True)
-with open(path, "w") as f: json.dump(data, f, indent=2)
-PYEOF
+        run codex plugin add "${PLUGIN_NAME}@${MARKETPLACE_NAME}" || {
+            log_error "Codex plugin add failed"
+            STATUSES+=("codex:failed")
+            return 0
+        }
     fi
-    log_ok "Codex CLI: installed at ${target} (includes .codex/agents/litestar-reviewer.toml)"
+
+    log_ok "Codex CLI: installed ${PLUGIN_NAME}@${MARKETPLACE_NAME} from ${PROJECT_ROOT}"
     STATUSES+=("codex:installed")
 }
 
@@ -394,32 +394,6 @@ VSCODE_INSTRUCTIONS
     STATUSES+=("vscode:instructions-printed")
 }
 
-# ------ Google Antigravity (opt-in workspace symlink) -----------------------
-install_antigravity_symlink() {
-    # Opt-in workaround: Antigravity reads `.agent/skills/` (singular) while
-    # this repo + Claude/OpenCode/VS Code all use `.agents/skills/` (plural).
-    # When the user passes --antigravity-symlink and `$PWD/.agents/skills`
-    # exists, point `.agent` at `.agents`. This is a user-side workaround,
-    # not a Google-blessed integration; the warning below labels it as such.
-    if [ "$ANTIGRAVITY_SYMLINK" -eq 0 ]; then
-        return 0
-    fi
-    log_info "${BOLD}Antigravity workspace symlink...${NC}"
-    if [ ! -d "${PWD}/.agents/skills" ]; then
-        log_warn "No .agents/skills/ in $PWD — install skills there first, then re-run with --antigravity-symlink"
-        STATUSES+=("antigravity:no-skills-dir")
-        return 0
-    fi
-    if [ -e "${PWD}/.agent" ] || [ -L "${PWD}/.agent" ]; then
-        log_warn ".agent already exists in $PWD — refusing to overwrite (remove it manually if intentional)"
-        STATUSES+=("antigravity:path-conflict")
-        return 0
-    fi
-    run ln -s .agents "${PWD}/.agent"
-    log_warn "Created .agent -> .agents symlink (community workaround; not a Google-blessed integration)"
-    STATUSES+=("antigravity:symlinked")
-}
-
 # =============================================================================
 # Summary
 # =============================================================================
@@ -430,12 +404,12 @@ print_summary() {
         host="${entry%%:*}"
         status="${entry#*:}"
         case "$status" in
-            installed|instructions-printed|symlinked)
+            installed|instructions-printed)
                 printf "  %s %-12s %s\n" "$OK" "$host" "$status" ;;
             not-installed)
                 printf "  %s %-12s %s\n" "$INFO" "$host" "CLI not present; skipped" ;;
-            no-skills-dir)
-                printf "  %s %-12s %s\n" "$INFO" "$host" "no .agents/skills/ in PWD; skipped" ;;
+            already-installed)
+                printf "  %s %-12s %s\n" "$INFO" "$host" "$status" ;;
             *-failed|*-conflict)
                 printf "  %s %-12s %s\n" "$ERROR" "$host" "$status" ;;
             *)
@@ -463,14 +437,12 @@ main() {
     probe_hosts
     echo ""
 
-    install_gemini
+    install_antigravity
     install_codex
     install_opencode
     install_claude
     install_cursor
     install_vscode
-    install_antigravity_symlink
-
     print_summary
 
     # Exit code: 0 if all ok, 1 if any failed

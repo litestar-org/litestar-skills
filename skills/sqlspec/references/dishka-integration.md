@@ -159,11 +159,12 @@ class AppSingletonsProvider(Provider):
 
 ## Handler injection pattern
 
-Handlers declare injected services via `Inject[ServiceType]` and receive filter lists via `SkipValidation[list[FilterTypes]]` (Litestar ≥ 2.23; replaces the deprecated `Dependency(skip_validation=True)`). The `@inject` decorator (from `dishka.integrations.litestar`) activates resolution. Adapted from `litestar-sqlstack/src/sqlstack/domain/accounts/controllers/_user.py:L26–53`.
+Handlers declare injected services via `Inject[ServiceType]` and receive filter lists via `NamedDependency[SkipValidation[list[FilterTypes]]]` (Litestar ≥ 2.24; replaces implicit DI and the deprecated `Dependency(skip_validation=True)`). The `@inject` decorator (from `dishka.integrations.litestar`) activates Dishka resolution.
 
 ```python
 from dishka.integrations.litestar import inject
 from litestar import get
+from litestar.di import NamedDependency
 from litestar.pagination import OffsetPagination
 from litestar.params import SkipValidation  # Litestar >= 2.23
 from sqlspec.core.filters import FilterTypes
@@ -190,7 +191,7 @@ dependencies = create_filter_dependencies({
 @inject
 async def list_orders(
     orders_service: Inject[OrderService],
-    filters: SkipValidation[list[FilterTypes]],
+    filters: NamedDependency[SkipValidation[list[FilterTypes]]],
 ) -> OffsetPagination[Order]:
     return await orders_service.list_orders(*filters)
 ```

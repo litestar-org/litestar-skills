@@ -14,6 +14,7 @@ the command bytes is caught here before it ships.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, cast
@@ -24,28 +25,46 @@ from tests.hooks._subproc import bash_executable, subprocess_env
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 HOOKS_DIR = REPO_ROOT / "hooks"
+PACKAGE_HOOKS_DIR = REPO_ROOT / "plugins" / "litestar" / "hooks"
 
 # Manifest filename + the JSON event key per host.
 MANIFESTS = {
-    "claude": ("hooks-claude.json", "SessionStart"),
-    "codex": ("hooks-codex.json", "SessionStart"),
-    "cursor": ("hooks-cursor.json", "sessionStart"),
+    "antigravity": (REPO_ROOT / "hooks.json", "SessionStart"),
+    "claude": (HOOKS_DIR / "hooks.json", "SessionStart"),
+    "codex": (HOOKS_DIR / "hooks-codex.json", "SessionStart"),
+    "cursor": (HOOKS_DIR / "hooks-cursor.json", "sessionStart"),
+}
+
+PACKAGE_MANIFESTS = {
+    "claude": (PACKAGE_HOOKS_DIR / "hooks.json", "SessionStart"),
+    "codex": (PACKAGE_HOOKS_DIR / "hooks-codex.json", "SessionStart"),
+    "cursor": (PACKAGE_HOOKS_DIR / "hooks-cursor.json", "sessionStart"),
 }
 
 
-def _command_for(host: str) -> str:
-    filename, event = MANIFESTS[host]
-    data = cast("dict[str, Any]", json.loads((HOOKS_DIR / filename).read_text(encoding="utf-8")))
+def _command_from_manifest(path: Path, event: str) -> str:
+    data = cast("dict[str, Any]", json.loads(path.read_text(encoding="utf-8")))
     matcher = data["hooks"][event][0]
     # Claude/Codex nest a "hooks" array under the matcher; Cursor puts "command" on the matcher directly.
     entry = matcher["hooks"][0] if "hooks" in matcher else matcher
     return cast("str", entry["command"])
 
 
+def _command_for(host: str) -> str:
+    path, event = MANIFESTS[host]
+    return _command_from_manifest(path, event)
+
+
 def _run_command(command: str, *, cwd: Path, overrides: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    return _run_command_with_shell(command, shell_executable=bash_executable(), cwd=cwd, overrides=overrides)
+
+
+def _run_command_with_shell(
+    command: str, *, shell_executable: str, cwd: Path, overrides: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
     env = subprocess_env(overrides={"PWD": str(cwd), **overrides})
     return subprocess.run(
-        [bash_executable(), "-c", command],
+        [shell_executable, "-c", command],
         capture_output=True,
         text=True,
         env=env,
@@ -68,7 +87,7 @@ def litestar_project(tmp_path: Path) -> Path:
 def fake_codex_home(tmp_path: Path) -> Path:
     """A HOME whose Codex install cache mirrors the real hooks payload (newest version)."""
     home = tmp_path / "home"
-    cache = home / ".codex" / "plugins" / "cache" / "litestar" / "litestar" / "0.2.1"
+    cache = home / ".codex" / "plugins" / "cache" / "litestar" / "litestar" / "0.3.1"
     cache.mkdir(parents=True)
     (cache / "hooks").symlink_to(HOOKS_DIR)
     return home
@@ -79,6 +98,16 @@ def fake_claude_home(tmp_path: Path) -> Path:
     """A HOME whose Claude marketplace install mirrors the real hooks payload."""
     home = tmp_path / "home"
     install = home / ".claude" / "plugins" / "marketplaces" / "litestar"
+    install.mkdir(parents=True)
+    (install / "hooks").symlink_to(HOOKS_DIR)
+    return home
+
+
+@pytest.fixture
+def fake_antigravity_home(tmp_path: Path) -> Path:
+    """A HOME whose Antigravity installed plugin mirrors the real hooks payload."""
+    home = tmp_path / "home"
+    install = home / ".gemini" / "config" / "plugins" / "litestar"
     install.mkdir(parents=True)
     (install / "hooks").symlink_to(HOOKS_DIR)
     return home
@@ -96,6 +125,79 @@ def test_codex_command_resolves_without_plugin_root(litestar_project: Path, fake
     assert "hookSpecificOutput" in out, out
     assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
     assert "litestar:litestar" in out["hookSpecificOutput"]["additionalContext"]
+
+
+@pytest.mark.parametrize(
+    ("host", "path", "event"),
+    [
+        *[(host, path, event) for host, (path, event) in sorted(MANIFESTS.items())],
+        *[(f"codex-package:{host}", path, event) for host, (path, event) in sorted(PACKAGE_MANIFESTS.items())],
+    ],
+)
+def test_hook_commands_noop_when_plugin_root_cannot_be_resolved(
+    host: str,
+    path: Path,
+    event: str,
+    litestar_project: Path,
+    tmp_path: Path,
+) -> None:
+    """A missing host root must not become ./hooks/session-start.sh and exit 127."""
+    result = _run_command(
+        _command_from_manifest(path, event),
+        cwd=litestar_project,
+        overrides={
+            "AGY_PLUGIN_ROOT": "",
+            "ANTIGRAVITY_PLUGIN_ROOT": "",
+            "HOME": str(tmp_path / "empty-home"),
+            "PLUGIN_ROOT": "",
+            "CODEX_PLUGIN_ROOT": "",
+            "CLAUDE_PLUGIN_ROOT": "",
+            "CURSOR_PLUGIN_ROOT": "",
+        },
+    )
+    assert result.returncode == 0, f"{host} command exited {result.returncode}: {result.stderr!r}"
+    assert result.stdout == ""
+
+
+def test_antigravity_command_prefers_plugin_root_when_set(litestar_project: Path) -> None:
+    """Antigravity root hooks.json must use a valid injected plugin root."""
+    result = _run_command(
+        _command_for("antigravity"),
+        cwd=litestar_project,
+        overrides={"PLUGIN_ROOT": str(REPO_ROOT)},
+    )
+    assert result.returncode == 0, f"antigravity command exited {result.returncode}: {result.stderr!r}"
+    out = cast("dict[str, Any]", json.loads(result.stdout))
+    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert "litestar:litestar" in out["hookSpecificOutput"]["additionalContext"]
+
+
+def test_antigravity_command_resolves_installed_plugin_root(
+    litestar_project: Path, fake_antigravity_home: Path
+) -> None:
+    """Antigravity installs plugins under ~/.gemini/config/plugins/<name>."""
+    result = _run_command(
+        _command_for("antigravity"),
+        cwd=litestar_project,
+        overrides={"HOME": str(fake_antigravity_home)},
+    )
+    assert result.returncode == 0, f"antigravity command exited {result.returncode}: {result.stderr!r}"
+    out = cast("dict[str, Any]", json.loads(result.stdout))
+    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert "litestar:litestar" in out["hookSpecificOutput"]["additionalContext"]
+
+
+def test_antigravity_root_hook_command_is_posix_sh_safe(litestar_project: Path) -> None:
+    """Antigravity root hooks.json must parse under /bin/sh."""
+    result = _run_command_with_shell(
+        _command_for("antigravity"),
+        shell_executable="sh",
+        cwd=litestar_project,
+        overrides={"PLUGIN_ROOT": str(REPO_ROOT)},
+    )
+    assert result.returncode == 0, f"antigravity hook command exited {result.returncode}: {result.stderr!r}"
+    out = cast("dict[str, Any]", json.loads(result.stdout))
+    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
 
 
 def test_codex_command_prefers_plugin_root_when_set(litestar_project: Path) -> None:
@@ -133,6 +235,37 @@ def test_claude_command_resolves_with_empty_plugin_root(litestar_project: Path, 
     assert result.returncode == 0, f"claude command exited {result.returncode}: {result.stderr!r}"
     out = cast("dict[str, Any]", json.loads(result.stdout))
     assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+
+
+def test_claude_default_hook_command_is_posix_sh_safe(litestar_project: Path, fake_claude_home: Path) -> None:
+    """Claude loads hooks/hooks.json by default; it must be safe under /bin/sh."""
+    result = _run_command_with_shell(
+        _command_for("claude"),
+        shell_executable="sh",
+        cwd=litestar_project,
+        overrides={"CLAUDE_PLUGIN_ROOT": "", "HOME": str(fake_claude_home)},
+    )
+    assert result.returncode == 0, f"default hook command exited {result.returncode}: {result.stderr!r}"
+    out = cast("dict[str, Any]", json.loads(result.stdout))
+    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert "litestar:litestar" in out["hookSpecificOutput"]["additionalContext"]
+
+
+def test_claude_default_hook_command_is_zsh_safe_when_available(litestar_project: Path, fake_claude_home: Path) -> None:
+    """macOS commonly uses zsh; the default hook must not rely on bash-only parsing."""
+    zsh = shutil.which("zsh")
+    if zsh is None:
+        pytest.skip("zsh is not installed")
+    result = _run_command_with_shell(
+        _command_for("claude"),
+        shell_executable=zsh,
+        cwd=litestar_project,
+        overrides={"CLAUDE_PLUGIN_ROOT": "", "HOME": str(fake_claude_home)},
+    )
+    assert result.returncode == 0, f"claude default hook command exited {result.returncode}: {result.stderr!r}"
+    out = cast("dict[str, Any]", json.loads(result.stdout))
+    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert "litestar:litestar" in out["hookSpecificOutput"]["additionalContext"]
 
 
 def test_cursor_command_uses_plugin_root_not_cwd(litestar_project: Path) -> None:

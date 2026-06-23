@@ -34,6 +34,8 @@ Each row is a **tested, shipping example** in the canonical [`litestar-vite/exam
 | **Inertia + React + Jinja** | hybrid | [`react-inertia-jinja/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/react-inertia-jinja) | `@vitejs/plugin-react` | Inertia with Jinja root template (useful for auth-guarded vs public shells). |
 | **Inertia + Vue** | hybrid | [`vue-inertia/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/vue-inertia) | `@vitejs/plugin-vue` | Server routing + Vue page components. |
 | **Inertia + Vue + Jinja** | hybrid | [`vue-inertia-jinja/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/vue-inertia-jinja) | `@vitejs/plugin-vue` | Inertia + Jinja root template. |
+| **Inertia + Svelte** | hybrid | [`svelte-inertia/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/svelte-inertia) | `@sveltejs/vite-plugin-svelte` | Server routing + Svelte page components. |
+| **Inertia + Svelte + Jinja** | hybrid | [`svelte-inertia-jinja/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/svelte-inertia-jinja) | `@sveltejs/vite-plugin-svelte` | Inertia + Jinja root template. |
 | **HTMX + Jinja** | htmx | [`jinja-htmx/`](https://github.com/litestar-org/litestar-vite/tree/main/examples/jinja-htmx) | (none framework-specific) | Jinja `TemplateConfig` + `VitePlugin(mode="htmx")` + Litestar `HTMXPlugin` + client-side `ls-*` JSON templating. |
 
 ### Outside Shipped Examples

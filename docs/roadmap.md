@@ -20,7 +20,7 @@ Not yet scheduled. Each requires a specific trigger before planning starts.
   2. `openai/skills` — `.curated/` or `.experimental/` subdir depending on reviewer guidance.
   3. `github/awesome-copilot` — broad GitHub discoverability.
   4. `VoltAgent/awesome-agent-skills` — community directory.
-  5. `Piebald-AI/awesome-gemini-cli` — Gemini CLI-focused index.
+  5. Antigravity CLI-focused indexes once stable community directories exist.
   6. `awesome-opencode` — OpenCode-focused index.
 
 ## Deferred (with explicit triggers)
@@ -31,7 +31,7 @@ Each item has a **Status**, a **Rationale**, a **Trigger**, and — where useful
 
 - **Status:** Deferred. Default is no telemetry; the installer and plugin stubs do not phone home.
 - **Rationale:** Privacy-by-default and scope-creep avoidance. Telemetry adds privacy surface area (what we collect, where it goes, how long we retain), dependency surface area (backend + pipeline + retention ops), and distraction (dashboards become the work). An opt-in flow is required to not be obnoxious, and that flow is non-trivial.
-- **Trigger:** A concrete unanswered product question that **cannot** be resolved with GitHub-native signals (stars, forks, issue volume, `gh api .../traffic/clones`, `gh api .../traffic/popular/paths`, Gemini gallery install counter, skills.sh leaderboard position). Example: "Why does skill X activate often but reference Y is rarely fetched?" — activation-funnel questions need event-level data; GitHub traffic does not expose that.
+- **Trigger:** A concrete unanswered product question that **cannot** be resolved with GitHub-native signals (stars, forks, issue volume, `gh api .../traffic/clones`, `gh api .../traffic/popular/paths`, skills.sh leaderboard position). Example: "Why does skill X activate often but reference Y is rarely fetched?" — activation-funnel questions need event-level data; GitHub traffic does not expose that.
 - **Implementation sketch (if triggered):**
   - Opt-in only. Default `LITESTAR_SKILLS_TELEMETRY=0`; never auto-enable.
   - Anonymous. No user identifiers. Host-CLI version, OS, install outcome, timestamp only.
@@ -42,7 +42,7 @@ Each item has a **Status**, a **Rationale**, a **Trigger**, and — where useful
 ### PyPI / npm publishing
 
 - **Status:** Deferred.
-- **Rationale:** No runtime Python or JavaScript package currently ships from this repo. Every artifact is `SKILL.md` + references + hooks; agents fetch via host-native mechanisms (`git clone`, `gh` download, `gemini extensions install`). Nothing needs `pip install` or `npm install`.
+- **Rationale:** No runtime Python or JavaScript package currently ships from this repo. Every artifact is `SKILL.md` + references + hooks; agents fetch via host-native mechanisms (`git clone`, `gh` download, `agy plugin install`, or Codex marketplace install). Nothing needs `pip install` or `npm install`.
 - **Trigger:** A real MCP server, helper CLI, or bundled runtime artifact ships from this repo. Concrete candidates: `litestar-skills-mcp-docs` (Python), a `litestar-skills scaffold` CLI, or a bundled `pipx install litestar-skills`.
 - **Implementation sketch:**
   - **PyPI:** `pyproject.toml` already has hatchling + project metadata. Add `[project.scripts]` entry-point(s) for CLIs; decide package layout (`src/litestar_skills/` PyPI-style). `release.yml` gains `uv build` + `uv publish` via [PyPI Trusted Publishers](https://docs.pypi.org/trusted-publishers/) + GitHub OIDC — no static `PYPI_TOKEN` in secrets. Reference: <https://docs.astral.sh/uv/guides/publish/>.
@@ -53,13 +53,13 @@ Each item has a **Status**, a **Rationale**, a **Trigger**, and — where useful
 - **Status:** Partial. `install.sh --claude-settings` (opt-in) whitelists `litestar-org/litestar-skills` in `~/.claude/settings.json`'s `extraKnownMarketplaces`, which means users only need `/plugin install litestar@litestar` inside Claude Code (no separate `/plugin marketplace add` required). Full headless auto-add is impossible today because `/plugin` is a TUI-only interaction.
 - **Rationale:** `tools/install.sh` runs outside any Claude Code session; it cannot invoke in-session slash commands.
 - **Trigger:** Anthropic ships a `claude plugin marketplace add <repo>` CLI subcommand (or equivalent) callable from outside a session. Less likely alternates: a host-agnostic `agentskills.io`-style config-file protocol, or a new `autoInstallPlugins` settings key that pre-installs rather than only whitelisting.
-- **Monitor:** Claude Code [changelog](https://docs.anthropic.com/en/docs/claude-code/release-notes) and the Claude Code Discord `#plugin-dev` channel. When the subcommand ships, `tools/install.sh` gains a one-line invocation alongside the Gemini path and the README install section collapses from "two-step" to "one-shot".
+- **Monitor:** Claude Code [changelog](https://docs.anthropic.com/en/docs/claude-code/release-notes) and the Claude Code Discord `#plugin-dev` channel. When the subcommand ships, `tools/install.sh` gains a one-line invocation alongside the existing Antigravity, Codex, and OpenCode automation, and the README install section collapses from "two-step" to "one-shot".
 
 ### Passive-registry automation
 
 - **Status:** Manual. Submissions to third-party registries (claudeskills.info, lobehub, awesome-* lists, the curated catalogs above) are filed by hand.
 - **Rationale:** Each passive registry currently requires a different manual flow: web forms (claudeskills.info, lobehub), email (some listings), GitHub PR (curated catalogs). Automating a form-submit site against CAPTCHA is fragile and discouraged. Curated-catalog PRs need human-quality descriptions and screenshots; automation would hurt review quality.
-- **Trigger:** 5+ registries provide CLI submission paths. Today only GitHub topic (for Gemini auto-crawl) and `gh pr create` (for PR-based catalogs) are scriptable.
+- **Trigger:** 5+ registries provide CLI submission paths. Today only GitHub topic metadata and `gh pr create` (for PR-based catalogs) are scriptable.
 - **Implementation sketch (if triggered):** Build a thin wrapper in `tools/submit-registries.sh` dispatching to each registry's CLI; keep the manual fallback for the registries that never get a CLI.
 
 ### Enterprise managed-settings pack

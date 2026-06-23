@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from litestar import Controller, get, post, put, delete
-from litestar.di import Provide
+from litestar.di import NamedDependency, Provide
 from litestar.params import FromPath  # Litestar >= 2.22
 
 
@@ -29,11 +29,15 @@ class ItemController(Controller):
     dependencies = {"service": Provide(get_service)}
 
     @get("/")
-    async def list_items(self, service: ItemService) -> list[Item]:
+    async def list_items(self, service: NamedDependency[ItemService]) -> list[Item]:
         return await service.list_all()
 
     @get("/{item_id:int}")
-    async def get_item(self, item_id: FromPath[int], service: ItemService) -> Item:
+    async def get_item(
+        self,
+        item_id: FromPath[int],
+        service: NamedDependency[ItemService],
+    ) -> Item:
         return await service.get(item_id)
 ```
 

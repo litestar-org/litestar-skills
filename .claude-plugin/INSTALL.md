@@ -15,10 +15,10 @@ The `/plugin` commands run **inside** Claude Code — they cannot be automated f
 
 | Path | Loaded by Claude as |
 | --- | --- |
-| `skills/<name>/SKILL.md` | Skills (description-based auto-activation) |
+| `skills/<name>/SKILL.md` | Skills (description-based auto-activation; manual trigger `/litestar:<name>`) |
 | `commands/<prefix>/<command>.toml` | Slash commands (e.g. `/litestar:new-app`) |
 | `.claude-plugin/agents/<name>.md` | Subagents (PascalCase tool list dialect) |
-| `hooks/hooks-claude.json` → `hooks/session-start.sh` | SessionStart hook injecting Litestar skill reminders |
+| `hooks/hooks.json` → `hooks/session-start.sh` | SessionStart hook injecting Litestar skill reminders |
 
 ## Project-local install (less common)
 
@@ -53,7 +53,7 @@ In a Claude Code session:
 /status
 ```
 
-Should show `litestar` under enabled plugins. Open a Litestar project (one with `litestar` in `pyproject.toml`) and a fresh session — the SessionStart hook injects a context paragraph naming `litestar:litestar` (plus any other detected skills).
+Should show `litestar` under enabled plugins. Open a Litestar project (one with `litestar` in `pyproject.toml`) and a fresh session — the SessionStart hook injects a context paragraph naming `litestar:litestar` (plus any other detected skills). To force a plugin skill manually, use its namespaced slash command such as `/litestar:litestar-routing`.
 
 ## Restricting capabilities
 
