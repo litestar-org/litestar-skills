@@ -91,11 +91,11 @@ class UserReadDTO(SQLAlchemyDTO[m.User]):
 ```python
 from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
-from litestar.di import Provide
+from litestar.di import NamedDependency, Provide
 
 
 async def provide_user_service(
-    db_session: AsyncSession,
+    db_session: NamedDependency[AsyncSession],
 ) -> AsyncGenerator[UserService, None]:
     async with UserService.new(session=db_session) as service:
         yield service
@@ -111,29 +111,27 @@ app = Litestar(
 ### Using in Route Handlers
 
 ```python
-from typing import Annotated
-
 from litestar import get, post, delete
-from litestar.params import Parameter
+from litestar.di import NamedDependency
+from litestar.params import FromPath
 
 
 @get("/users")
-async def list_users(user_service: UserService) -> list[m.User]:
+async def list_users(user_service: NamedDependency[UserService]) -> list[m.User]:
     return await user_service.get_many()
 
 
 @get("/users/{user_id:uuid}")
 async def get_user(
-    user_service: UserService,
-    # 2.x removes the `field = Parameter(...)` default form in 3.0; use Annotated
-    user_id: Annotated[UUID, Parameter(title="User ID")],
+    user_service: NamedDependency[UserService],
+    user_id: FromPath[UUID],
 ) -> m.User:
     return await user_service.get(user_id)
 
 
 @post("/users")
 async def create_user(
-    user_service: UserService,
+    user_service: NamedDependency[UserService],
     data: dict,
 ) -> m.User:
     return await user_service.create(data)
@@ -141,7 +139,7 @@ async def create_user(
 
 @delete("/users/{user_id:uuid}")
 async def delete_user(
-    user_service: UserService,
+    user_service: NamedDependency[UserService],
     user_id: UUID,
 ) -> None:
     await user_service.delete(user_id)
@@ -154,18 +152,18 @@ from litestar import get, post, patch
 
 
 @get("/users", return_dto=UserReadDTO)
-async def list_users(user_service: UserService) -> list[m.User]:
+async def list_users(user_service: NamedDependency[UserService]) -> list[m.User]:
     return await user_service.get_many()
 
 
 @post("/users", dto=UserCreateDTO, return_dto=UserReadDTO)
-async def create_user(user_service: UserService, data: m.User) -> m.User:
+async def create_user(user_service: NamedDependency[UserService], data: m.User) -> m.User:
     return await user_service.create(data)
 
 
 @patch("/users/{user_id:uuid}", dto=UserUpdateDTO, return_dto=UserReadDTO)
 async def update_user(
-    user_service: UserService,
+    user_service: NamedDependency[UserService],
     user_id: UUID,
     data: m.User,
 ) -> m.User:

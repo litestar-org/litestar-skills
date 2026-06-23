@@ -51,8 +51,8 @@ base = loader.get("list-users")
 
 # Filters compose with the base query at execution time
 filters = [
-    SearchFilter(column="name", value="alice"),
-    OrderByFilter(columns=[("created_at", "desc")]),
+    SearchFilter(field_name="name", value="alice"),
+    OrderByFilter(field_name="created_at", sort_order="desc"),
     LimitOffsetFilter(limit=20, offset=0),
 ]
 

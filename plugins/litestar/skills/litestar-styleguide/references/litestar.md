@@ -8,7 +8,7 @@ Async-first Python web framework with dependency injection and plugin architectu
 
 ```python
 from litestar import get, post, put, delete, Controller
-from litestar.di import Provide
+from litestar.di import NamedDependency, Provide
 
 @get("/items/{item_id:int}")
 async def get_item(item_id: int) -> Item:
@@ -27,25 +27,29 @@ class ItemController(Controller):
     dependencies = {"service": Provide(get_service)}
 
     @get("/")
-    async def list_items(self, service: ItemService) -> list[Item]:
+    async def list_items(self, service: NamedDependency[ItemService]) -> list[Item]:
         return await service.list_all()
 
     @get("/{item_id:int}")
-    async def get_item(self, item_id: int, service: ItemService) -> Item:
+    async def get_item(
+        self,
+        item_id: int,
+        service: NamedDependency[ItemService],
+    ) -> Item:
         return await service.get(item_id)
 
     @post("/")
     async def create_item(
         self,
         data: CreateItemDTO,
-        service: ItemService,
+        service: NamedDependency[ItemService],
     ) -> Item:
         return await service.create(data)
 ```
 
 ## Typed Markers (Litestar ≥ 2.23)
 
-Litestar 2.22–2.23 added generic marker aliases that replace the verbose `Annotated[T, Parameter()]` / `Annotated[T, Body()]` / `Annotated[T, Dependency()]` forms. **Prefer the markers** — the underlying `params.Dependency`/`DependencyKwarg` are deprecated and removed in 3.0. These examples assume `litestar>=2.23`.
+Litestar 2.22–2.24 added generic marker aliases that replace verbose `Annotated[T, Parameter()]` / `Annotated[T, Body()]` / `Annotated[T, Dependency()]` forms and implicit source inference. **Prefer the markers** — the underlying `params.Dependency`/`DependencyKwarg` and implicit dependency injection are deprecated and removed in 3.0. These examples assume `litestar>=2.24`.
 
 ```python
 from litestar import get, post
@@ -74,11 +78,11 @@ async def upload(data: MultipartBody[UploadDTO]) -> Receipt: ...
 
 # Dependency injection (2.23):
 #   NamedDependency[T]   replaces  Annotated[T, Dependency()]
-#   SkipValidation[T]    replaces  Annotated[T, Dependency(skip_validation=True)]
+#   NamedDependency[SkipValidation[T]] replaces Dependency(skip_validation=True)
 @get("/users")
 async def list_users(
-    users_service: UserService,
-    filters: SkipValidation[list[FilterTypes]],
+    users_service: NamedDependency[UserService],
+    filters: NamedDependency[SkipValidation[list[FilterTypes]]],
 ) -> OffsetPagination[User]:
     rows, total = await users_service.get_many_and_count(*filters)
     return users_service.to_schema(rows, total, filters=filters, schema_type=User)
@@ -93,8 +97,9 @@ Migration map (old → new):
 | `Annotated[T, Body(media_type=RequestEncodingType.MULTI_PART)]` | `MultipartBody[T]` |
 | `Annotated[T, Body(media_type=RequestEncodingType.URL_ENCODED)]` | `URLEncodedBody[T]` |
 | `Annotated[T, Dependency()]` | `NamedDependency[T]` |
-| `Annotated[T, Dependency(skip_validation=True)]` | `SkipValidation[T]` |
-| `field: T = Parameter(...)` (default-marker form) | `field: Annotated[T, Parameter(...)]` (removed in 3.0) |
+| `Annotated[T, Dependency(skip_validation=True)]` | `NamedDependency[SkipValidation[T]]` |
+| `Parameter(query=...)` / `Parameter(header=...)` | `QueryParameter(name=...)` / `HeaderParameter(name=...)` |
+| `field: T = Parameter(default="x")` | `field: FromQuery[T] = "x"` |
 
 ## Dependency Injection
 
@@ -103,13 +108,14 @@ Migration map (old → new):
 ```python
 from litestar.di import Provide
 from litestar import Litestar
+from litestar.di import NamedDependency
 
 async def get_db_session(state: State) -> AsyncSession:
     return state.db_session
 
 async def get_current_user(
     request: Request,
-    session: AsyncSession
+    session: NamedDependency[AsyncSession],
 ) -> User:
     token = request.headers.get("Authorization")
     return await authenticate(session, token)

@@ -133,7 +133,7 @@ config = AsyncpgConfig(
         "include_extensions": ["litestar"],
     },
     extension_config={
-        "litestar": {"commit_mode": "autocommit", "session_store": True},
+        "litestar": {"commit_mode": "autocommit", "session_table": "litestar_session"},
     },
 )
 
@@ -173,7 +173,7 @@ config = AsyncpgConfig(
         "transactional": True,
     },
     extension_config={
-        "litestar": {"commit_mode": "autocommit", "session_store": True},
+        "litestar": {"commit_mode": "autocommit", "session_table": "litestar_session"},
     },
 )
 ```

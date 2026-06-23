@@ -6,8 +6,9 @@
 
 .DESCRIPTION
     Native Windows installer mirroring tools/install.sh. Auto-installs for
-    Gemini CLI, Codex CLI, and OpenCode (via file copy, not symlink);
-    prints instructions for Claude Code, Cursor, and VS Code.
+    Antigravity CLI via a staged plugin payload, Codex CLI via `codex plugin`
+    marketplace commands, and OpenCode via file copy; prints instructions for
+    Claude Code, Cursor, and VS Code.
 
     PowerShell 7+ only. Uses Get-Command for host detection and Copy-Item
     for OpenCode (Windows symlinks require admin or developer-mode, so the
@@ -17,7 +18,7 @@
 
 .PARAMETER Only
     Install for specific host(s) only. Accepts a comma-separated list or
-    repeated usage. Valid values: claude, gemini, codex, opencode, cursor,
+    repeated usage. Valid values: claude, antigravity, codex, opencode, cursor,
     vscode.
 
 .PARAMETER Skip
@@ -34,13 +35,6 @@
     Also whitelist the repo in $env:APPDATA\Claude\settings.json under
     extraKnownMarketplaces. Opt-in because it edits a host-owned file.
 
-.PARAMETER AntigravitySymlink
-    Create .agent -> .agents symbolic link in $PWD so Google Antigravity
-    (singular .agent) discovers skills installed under .agents/skills/.
-    Opt-in - community workaround, not a Google-blessed integration.
-    Requires Developer Mode or admin rights on Windows for symlink
-    creation. Skipped if .agent already exists.
-
 .EXAMPLE
     pwsh -File tools/install.ps1
     Install for every detected host.
@@ -50,8 +44,8 @@
     Preview without changes.
 
 .EXAMPLE
-    pwsh -File tools/install.ps1 -Only gemini,codex
-    Install only for Gemini CLI and Codex CLI.
+    pwsh -File tools/install.ps1 -Only antigravity,codex
+    Install only for Antigravity CLI and Codex CLI.
 
 .EXAMPLE
     pwsh -File tools/install.ps1 -ClaudeSettings
@@ -65,8 +59,7 @@ param(
     [string[]]$Skip,
     [switch]$DryRun,
     [switch]$Force,
-    [switch]$ClaudeSettings,
-    [switch]$AntigravitySymlink
+    [switch]$ClaudeSettings
 )
 
 $ErrorActionPreference = 'Stop'
@@ -75,7 +68,7 @@ Set-StrictMode -Version Latest
 # =============================================================================
 # Constants
 # =============================================================================
-$script:Version = '0.3.0'
+$script:Version = '0.4.0'
 $script:RepoUrl = 'https://github.com/litestar-org/litestar-skills'
 $script:RepoSlug = 'litestar-org/litestar-skills'
 $script:MarketplaceName = 'litestar'
@@ -215,19 +208,35 @@ ahead of time and skip the first command.
     $script:Statuses.Add('claude:instructions-printed')
 }
 
-# ------ Gemini CLI -----------------------------------------------------------
-function Install-GeminiCli {
-    if (-not (Test-ShouldInstall 'gemini')) { return }
-    if (-not (Test-HostInstalled 'gemini')) {
-        Write-Info 'Gemini CLI not found on PATH - skipping'
-        $script:Statuses.Add('gemini:not-installed')
+# ------ Antigravity CLI ------------------------------------------------------
+function New-AntigravityPayload {
+    $stage = Join-Path ([System.IO.Path]::GetTempPath()) 'litestar-antigravity-plugin'
+    Invoke-Step "Preparing Antigravity payload at $stage" {
+        if (Test-Path $stage) {
+            Remove-Item $stage -Recurse -Force
+        }
+        New-Item -ItemType Directory -Path (Join-Path $stage 'agents') -Force | Out-Null
+        Copy-Item (Join-Path $script:RepoRoot 'plugin.json') (Join-Path $stage 'plugin.json')
+        Copy-Item (Join-Path $script:RepoRoot 'skills') (Join-Path $stage 'skills') -Recurse
+        Copy-Item (Join-Path $script:RepoRoot 'commands') (Join-Path $stage 'commands') -Recurse
+        Get-ChildItem (Join-Path $script:RepoRoot 'agents') -Filter '*.md' -File |
+            Copy-Item -Destination (Join-Path $stage 'agents')
+    }
+    return $stage
+}
+
+function Install-AntigravityCli {
+    if (-not (Test-ShouldInstall 'antigravity')) { return }
+    if (-not (Test-HostInstalled 'agy')) {
+        Write-Info 'Antigravity CLI not found on PATH - skipping'
+        $script:Statuses.Add('antigravity:not-installed')
         return
     }
-    Write-Info 'Installing for Gemini CLI'
+    Write-Info 'Installing for Antigravity CLI'
 
     $already = $false
     try {
-        $existing = & gemini extensions list 2>$null
+        $existing = & agy plugin list 2>$null
         if ($LASTEXITCODE -eq 0 -and $existing -match [regex]::Escape($script:PluginName)) {
             $already = $true
         }
@@ -237,26 +246,32 @@ function Install-GeminiCli {
     }
 
     if ($already) {
-        Invoke-Step "gemini extensions update $script:PluginName" {
-            & gemini extensions update $script:PluginName
-            if ($LASTEXITCODE -ne 0) {
-                Write-Warn 'Gemini update failed; try uninstall + reinstall'
-                $script:Statuses.Add('gemini:update-failed')
-                return
-            }
+        if (-not $Force) {
+            Write-Info 'Antigravity plugin already installed; use -Force to reinstall'
+            $script:Statuses.Add('antigravity:already-installed')
+            return
         }
-    } else {
-        Invoke-Step "gemini extensions install $script:RepoUrl --auto-update" {
-            & gemini extensions install $script:RepoUrl --auto-update
+        Invoke-Step "agy plugin uninstall $script:PluginName" {
+            & agy plugin uninstall $script:PluginName
             if ($LASTEXITCODE -ne 0) {
-                Write-Err 'Gemini install failed'
-                $script:Statuses.Add('gemini:failed')
+                Write-Err 'Antigravity uninstall before reinstall failed'
+                $script:Statuses.Add('antigravity:failed')
                 return
             }
         }
     }
-    Write-Success 'Gemini CLI: installed'
-    $script:Statuses.Add('gemini:installed')
+
+    $payload = New-AntigravityPayload
+    Invoke-Step "agy plugin install $payload" {
+        & agy plugin install $payload
+        if ($LASTEXITCODE -ne 0) {
+            Write-Err 'Antigravity install failed'
+            $script:Statuses.Add('antigravity:failed')
+            return
+        }
+    }
+    Write-Success "Antigravity CLI: installed from staged payload $payload"
+    $script:Statuses.Add('antigravity:installed')
 }
 
 # ------ Codex CLI ------------------------------------------------------------
@@ -264,46 +279,61 @@ function Install-CodexCli {
     if (-not (Test-ShouldInstall 'codex')) { return }
     Write-Info 'Installing for Codex CLI'
 
-    # git is a hard dependency for clone-based install; probe explicitly.
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        Write-Warn 'git not found on PATH - install Git for Windows from https://git-scm.com/download/win'
-        $script:Statuses.Add('codex:failed')
+    if (-not (Test-HostInstalled 'codex')) {
+        Write-Info 'Codex CLI not found on PATH - skipping'
+        $script:Statuses.Add('codex:not-installed')
         return
     }
 
-    $target = Join-Path $env:USERPROFILE '.codex\plugins\litestar'
-    $parentDir = Split-Path $target
+    if ($Force) {
+        Invoke-Step "codex plugin remove $script:PluginName@$script:MarketplaceName" {
+            & codex plugin remove "$script:PluginName@$script:MarketplaceName" *> $null
+        }
+        Invoke-Step "codex plugin marketplace remove $script:MarketplaceName" {
+            & codex plugin marketplace remove $script:MarketplaceName *> $null
+        }
+    }
 
-    if ((Test-Path (Join-Path $target '.git')) -and (-not $Force)) {
-        Invoke-Step "Pulling latest in $target" {
-            & git -C $target fetch --quiet
-            & git -C $target reset --hard origin/HEAD --quiet
-        }
+    $marketplaceExists = $false
+    try {
+        $marketplaces = & codex plugin marketplace list --json 2>$null | ConvertFrom-Json
+        $marketplaceExists = [bool]($marketplaces.marketplaces | Where-Object { $_.name -eq $script:MarketplaceName })
+    } catch {
+        $marketplaceExists = $false
+    }
+    if ($marketplaceExists) {
+        Write-Info "Codex marketplace $script:MarketplaceName already configured."
     } else {
-        if (Test-Path $target) {
-            if ($Force) {
-                Invoke-Step "Removing existing $target" {
-                    Remove-Item $target -Recurse -Force
-                }
-            } else {
-                Write-Warn "$target exists but is not a git repo. Use -Force to overwrite."
-                $script:Statuses.Add('codex:path-conflict')
-                return
-            }
-        }
-        Invoke-Step "Creating $parentDir" {
-            New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
-        }
-        Invoke-Step "git clone --depth 1 $script:RepoUrl $target" {
-            & git clone --quiet --depth 1 $script:RepoUrl $target
+        Invoke-Step "codex plugin marketplace add $script:RepoRoot" {
+            & codex plugin marketplace add $script:RepoRoot
             if ($LASTEXITCODE -ne 0) {
-                Write-Err "git clone failed"
+                Write-Err 'Codex marketplace add failed'
                 $script:Statuses.Add('codex:failed')
                 return
             }
         }
     }
-    Write-Success "Codex CLI: installed at $target (includes .codex/agents/litestar-reviewer.toml)"
+
+    $pluginExists = $false
+    try {
+        $plugins = & codex plugin list --json 2>$null | ConvertFrom-Json
+        $pluginExists = [bool]($plugins.installed | Where-Object { $_.pluginId -eq "$script:PluginName@$script:MarketplaceName" })
+    } catch {
+        $pluginExists = $false
+    }
+    if ($pluginExists) {
+        Write-Info "Codex plugin $script:PluginName@$script:MarketplaceName already installed."
+    } else {
+        Invoke-Step "codex plugin add $script:PluginName@$script:MarketplaceName" {
+            & codex plugin add "$script:PluginName@$script:MarketplaceName"
+            if ($LASTEXITCODE -ne 0) {
+                Write-Err 'Codex plugin add failed'
+                $script:Statuses.Add('codex:failed')
+                return
+            }
+        }
+    }
+    Write-Success "Codex CLI: installed $script:PluginName@$script:MarketplaceName from $script:RepoRoot"
     $script:Statuses.Add('codex:installed')
 }
 
@@ -354,44 +384,6 @@ drop the skills/ tree from this repo into either path for local install.
     $script:Statuses.Add('cursor:instructions-printed')
 }
 
-# ------ Google Antigravity (opt-in workspace symlink) -----------------------
-function Install-AntigravitySymlink {
-    # Opt-in workaround: Antigravity reads `.agent\skills\` (singular) while
-    # this repo + Claude/OpenCode/VS Code all use `.agents\skills\` (plural).
-    # Windows symlinks require Developer Mode or admin rights; Copy-Item is
-    # offered as a fallback when New-Item -ItemType SymbolicLink fails.
-    if (-not $AntigravitySymlink) { return }
-
-    Write-Info 'Antigravity workspace symlink'
-    $skillsDir = Join-Path $PWD '.agents\skills'
-    $target = Join-Path $PWD '.agent'
-
-    if (-not (Test-Path $skillsDir)) {
-        Write-Warn "No .agents\skills\ in $PWD - install skills there first, then re-run with -AntigravitySymlink"
-        $script:Statuses.Add('antigravity:no-skills-dir')
-        return
-    }
-    if (Test-Path $target) {
-        Write-Warn ".agent already exists in $PWD - refusing to overwrite (remove it manually if intentional)"
-        $script:Statuses.Add('antigravity:path-conflict')
-        return
-    }
-
-    Invoke-Step "New-Item -ItemType SymbolicLink -Path $target -Target .agents" {
-        try {
-            New-Item -ItemType SymbolicLink -Path $target -Target '.agents' | Out-Null
-        } catch {
-            Write-Warn "Symlink failed: $($_.Exception.Message). Enable Developer Mode or run as admin, or copy .agents to .agent manually."
-            $script:Statuses.Add('antigravity:symlink-failed')
-            return
-        }
-    }
-    if (Test-Path $target) {
-        Write-Warn 'Created .agent -> .agents symlink (community workaround; not a Google-blessed integration)'
-        $script:Statuses.Add('antigravity:symlinked')
-    }
-}
-
 # ------ VS Code / Copilot (instructions) -------------------------------------
 function Install-VsCode {
     if (-not (Test-ShouldInstall 'vscode')) { return }
@@ -421,7 +413,7 @@ open project natively if you prefer per-project install.
 # =============================================================================
 $script:HostRegistry = [ordered]@{
     'claude'   = @{ Command = 'claude';   Install = { Install-ClaudeCode } }
-    'gemini'   = @{ Command = 'gemini';   Install = { Install-GeminiCli } }
+    'antigravity' = @{ Command = 'agy';   Install = { Install-AntigravityCli } }
     'codex'    = @{ Command = 'codex';    Install = { Install-CodexCli } }
     'opencode' = @{ Command = 'opencode'; Install = { Install-OpenCode } }
     'cursor'   = @{ Command = 'cursor';   Install = { Install-Cursor } }
@@ -456,11 +448,9 @@ function Write-Summary {
         $status = $parts[1]
         switch -Wildcard ($status) {
             'installed'              { Write-Success ("{0,-12} {1}" -f $hostName, $status) }
-            'symlinked'              { Write-Success ("{0,-12} {1}" -f $hostName, $status) }
             'instructions-printed'   { Write-Success ("{0,-12} {1}" -f $hostName, $status) }
             'already-installed'      { Write-Info    ("{0,-12} {1}" -f $hostName, $status) }
             'not-installed'          { Write-Info    ("{0,-12} CLI not present; skipped" -f $hostName) }
-            'no-skills-dir'          { Write-Info    ("{0,-12} no .agents/skills/ in PWD; skipped" -f $hostName) }
             'source-missing'         { Write-Warn    ("{0,-12} {1}" -f $hostName, $status) }
             '*-failed'               { Write-Err     ("{0,-12} {1}" -f $hostName, $status) }
             '*-conflict'             { Write-Err     ("{0,-12} {1}" -f $hostName, $status) }
@@ -499,13 +489,11 @@ function Invoke-Main {
         & $spec.Install
     }
 
-    Install-AntigravitySymlink
-
     Write-Summary
 
     # Exit non-zero if any failure / conflict was recorded
     foreach ($entry in $script:Statuses) {
-        if ($entry -match ':(failed|path-conflict|update-failed|symlink-failed)$') {
+        if ($entry -match ':(failed|path-conflict|update-failed)$') {
             exit 1
         }
     }

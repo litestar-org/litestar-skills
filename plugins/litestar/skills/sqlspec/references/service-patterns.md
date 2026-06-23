@@ -4,19 +4,14 @@ This file is the deep reference for building service classes on top of SQLSpec i
 
 ## The `SQLSpecAsyncService` base
 
-`SQLSpecAsyncService` is a thin driver wrapper that provides a consistent set of service-layer primitives. The base class holds a reference to an `AsyncDriverAdapterBase` instance injected by the DI container and exposes methods for pagination, single-row lookups, existence checks, and transaction control.
-
-`SQLSpecAsyncService` is *not* shipped by `sqlspec` — it is a project-defined base class introduced by the canonical reference apps. Copy the implementation from [`litestar-sqlstack/src/sqlstack/lib/service.py`](https://github.com/cofin/litestar-sqlstack) (also used by [`oracledb-vertexai-demo`](https://github.com/cofin/oracledb-vertexai-demo)) into your project's `lib/service.py`.
-
-Class header (adapted from `litestar-sqlstack/src/sqlstack/lib/service.py:L71`):
+`SQLSpecAsyncService` is an upstream service base in `sqlspec.service`. It holds a driver session injected by the DI container and exposes methods for pagination, single-row lookups, existence checks, and transaction control.
 
 ```python
-from sqlspec.driver import AsyncDriverAdapterBase
+from sqlspec.service import SQLSpecAsyncService
 
 
-class SQLSpecAsyncService:
-    def __init__(self, driver: AsyncDriverAdapterBase) -> None:
-        self.driver = driver
+class OrderService(SQLSpecAsyncService):
+    pass
 ```
 
 ### Core methods
@@ -24,20 +19,20 @@ class SQLSpecAsyncService:
 | Method | Signature sketch | Purpose |
 | --- | --- | --- |
 | `paginate` | `(stmt, /, *filters, schema_type=None, **kw) -> OffsetPagination[T]` | Runs `select_with_total`, extracts `LimitOffsetFilter` from `*filters` |
-| `get_or_404` | `(stmt, *, schema_type=..., error_message=...) -> T` | Single-row lookup; raises HTTP 404 if not found |
+| `get_one` | `(stmt, /, *parameters, schema_type=..., error_message=...) -> T` | Single-row lookup; raises `NotFoundError` if not found |
 | `exists` | `(stmt, *parameters) -> bool` | Returns `True` if any row matches |
 | `begin_transaction` | `() -> AsyncContextManager` | Wraps driver `begin/commit/rollback` in an async context manager |
 | `begin / commit / rollback` | — | Low-level transaction control for manual management |
 
-`paginate` implementation lives at `litestar-sqlstack/src/sqlstack/lib/service.py:L111–142`; it calls `driver.select_with_total(stmt, *filters, schema_type=schema_type)` and uses `driver.find_filter(LimitOffsetFilter, filters)` to extract limit/offset for the `OffsetPagination` result.
+`paginate` calls `session.select_with_total(stmt, *filters, schema_type=schema_type)` and extracts `LimitOffsetFilter` from the passed filters for the `OffsetPagination` result.
 
 ### Subclassing
 
 Extend `SQLSpecAsyncService` for each domain entity:
 
-```python  # pragma: legacy-example
-from app.lib.service import SQLSpecAsyncService
+```python
 from sqlspec.driver import AsyncDriverAdapterBase
+from sqlspec.service import SQLSpecAsyncService
 
 from app.schemas import Order
 
@@ -55,9 +50,9 @@ Canonical usage pattern (adapted from `litestar-sqlstack/src/sqlstack/domain/acc
 
 ```python  # pragma: legacy-example
 from app.lib.db import db_manager
-from app.lib.service import SQLSpecAsyncService
 from app.schemas import Order
 from sqlspec.driver import AsyncDriverAdapterBase
+from sqlspec.service import SQLSpecAsyncService
 
 
 class OrderService(SQLSpecAsyncService):
@@ -72,7 +67,7 @@ class OrderService(SQLSpecAsyncService):
         )
 
     async def get_order(self, order_id: str) -> Order:
-        return await self.get_or_404(
+        return await self.get_one(
             db_manager.get_sql("get-order"),
             order_id=order_id,
             schema_type=Order,
@@ -95,16 +90,16 @@ Decision table:
 | You want | Use |
 | --- | --- |
 | A count or single cell | `select_value` |
-| One mapped object, must exist | `select_one` / `get_or_404` |
+| One mapped object, must exist | `select_one` / `get_one` |
 | One mapped object, may be absent | `select_one_or_none` |
 | List of rows | `select_many` (via driver) or `paginate` (via service) |
 | INSERT/UPDATE/DELETE (no return) | `execute` |
 
-Example method combining `get_or_404` with a named template:
+Example method combining `get_one` with a named template:
 
 ```python
 async def get_order(self, order_id: str) -> Order:
-    return await self.get_or_404(
+    return await self.get_one(
         db_manager.get_sql("get-order"),
         order_id=order_id,
         schema_type=Order,
@@ -158,7 +153,7 @@ Filters are passed as positional args between the SQL statement and any keyword 
 
 ## `create_filter_dependencies()` — wiring filters into Litestar DI
 
-`create_filter_dependencies` from `sqlspec.extensions.litestar.providers` generates a Litestar `dependencies` dict that injects composable filter objects into route handlers automatically. Handlers receive the assembled `list[FilterTypes]` via `SkipValidation[list[FilterTypes]]` (Litestar ≥ 2.23; replaces the deprecated `Dependency(skip_validation=True)`).
+`create_filter_dependencies` from `sqlspec.extensions.litestar.providers` generates a Litestar `dependencies` dict that injects composable filter objects into route handlers automatically. Handlers receive the assembled `list[FilterTypes]` via `NamedDependency[SkipValidation[list[FilterTypes]]]` (Litestar ≥ 2.24; replaces implicit DI and the deprecated `Dependency(skip_validation=True)`).
 
 ```python
 from sqlspec.extensions.litestar.providers import create_filter_dependencies
@@ -190,6 +185,7 @@ dependencies = create_filter_dependencies({
 ```python
 from dishka.integrations.litestar import FromDishka as Inject, inject
 from litestar import get
+from litestar.di import NamedDependency
 from litestar.pagination import OffsetPagination
 from litestar.params import SkipValidation  # Litestar >= 2.23
 from sqlspec.core.filters import FilterTypes
@@ -202,7 +198,7 @@ from app.schemas import Order
 @inject
 async def list_orders(
     orders_service: Inject[OrderService],
-    filters: SkipValidation[list[FilterTypes]],
+    filters: NamedDependency[SkipValidation[list[FilterTypes]]],
 ) -> OffsetPagination[Order]:
     return await orders_service.list_orders(*filters)
 ```
@@ -211,7 +207,7 @@ async def list_orders(
 
 ```python
 from litestar import get
-from litestar.di import Provide
+from litestar.di import NamedDependency, Provide
 from litestar.pagination import OffsetPagination
 from litestar.params import SkipValidation  # Litestar >= 2.23
 from sqlspec.core.filters import FilterTypes
@@ -228,8 +224,8 @@ from app.schemas import Order
     },
 )
 async def list_orders(
-    orders_service: OrderService,
-    filters: SkipValidation[list[FilterTypes]],
+    orders_service: NamedDependency[OrderService],
+    filters: NamedDependency[SkipValidation[list[FilterTypes]]],
 ) -> OffsetPagination[Order]:
     return await orders_service.list_orders(*filters)
 ```
@@ -242,9 +238,11 @@ Enable the Litestar extension in your SQLSpec config to activate session managem
 
 ```python
 from sqlspec import SQLSpec
+from sqlspec.adapters.asyncpg import AsyncpgConfig
 
-db_manager = SQLSpec(
-    ...,
+db_manager = SQLSpec()
+config = AsyncpgConfig(
+    connection_config={"dsn": "postgresql://localhost/app"},
     migration_config={
         "version_table_name": "db_version",
         "script_location": "migrations",
@@ -258,6 +256,7 @@ db_manager = SQLSpec(
         },
     },
 )
+db_manager.add_config(config)
 ```
 
 `include_extensions: ["litestar"]` activates the Litestar extension in the migration pipeline — Alembic will include session-table migrations automatically. (Cited from `litestar-sqlstack/src/sqlstack/lib/settings.py:L148`.)

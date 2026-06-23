@@ -6,9 +6,9 @@
  * hook as of `@opencode-ai/plugin@1.3.x`; system-prompt transformation is
  * the supported context-bootstrap point).
  *
- * Reuses the same detect-env library that powers Claude / Codex / Cursor /
- * Gemini hooks (hooks/lib/detect-env.js), so the reminder text is identical
- * across all five hosts.
+ * Reuses the same detect-env library that powers the Claude / Codex / Cursor
+ * hook shims (hooks/lib/detect-env.js), so the reminder text stays aligned
+ * across supported hook hosts.
  *
  * Honors managed-config: if `ctx.config.managedConfig.disabledPlugins`
  * includes our name, OR `allowedPlugins` is set and excludes us, returns

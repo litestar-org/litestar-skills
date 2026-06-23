@@ -21,7 +21,7 @@ The rest of this SKILL.md covers framework-agnostic topics: base classes, reposi
 
 ## Overview
 
-Advanced Alchemy is NOT a raw ORM — it is a **service/repository layer** built on top of SQLAlchemy 2.0+ with opinionated base classes, audit mixins, and deep framework integrations (Litestar, FastAPI, Flask, Sanic). It provides:
+Advanced Alchemy is NOT a raw ORM — it is a **service/repository layer** built on top of SQLAlchemy 2.0+ with opinionated base classes, audit mixins, and deep framework integrations (Litestar, FastAPI, Flask, Starlette, Sanic). It provides:
 
 - **Base models** with automatic `id`, `created_at`, `updated_at` fields
 - **Repository pattern** for type-safe async CRUD

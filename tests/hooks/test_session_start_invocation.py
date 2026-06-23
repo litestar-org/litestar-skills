@@ -14,6 +14,7 @@ the command bytes is caught here before it ships.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, cast
@@ -27,7 +28,7 @@ HOOKS_DIR = REPO_ROOT / "hooks"
 
 # Manifest filename + the JSON event key per host.
 MANIFESTS = {
-    "claude": ("hooks-claude.json", "SessionStart"),
+    "claude": ("hooks.json", "SessionStart"),
     "codex": ("hooks-codex.json", "SessionStart"),
     "cursor": ("hooks-cursor.json", "sessionStart"),
 }
@@ -43,9 +44,15 @@ def _command_for(host: str) -> str:
 
 
 def _run_command(command: str, *, cwd: Path, overrides: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    return _run_command_with_shell(command, shell_executable=bash_executable(), cwd=cwd, overrides=overrides)
+
+
+def _run_command_with_shell(
+    command: str, *, shell_executable: str, cwd: Path, overrides: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
     env = subprocess_env(overrides={"PWD": str(cwd), **overrides})
     return subprocess.run(
-        [bash_executable(), "-c", command],
+        [shell_executable, "-c", command],
         capture_output=True,
         text=True,
         env=env,
@@ -68,7 +75,7 @@ def litestar_project(tmp_path: Path) -> Path:
 def fake_codex_home(tmp_path: Path) -> Path:
     """A HOME whose Codex install cache mirrors the real hooks payload (newest version)."""
     home = tmp_path / "home"
-    cache = home / ".codex" / "plugins" / "cache" / "litestar" / "litestar" / "0.2.1"
+    cache = home / ".codex" / "plugins" / "cache" / "litestar" / "litestar" / "0.3.1"
     cache.mkdir(parents=True)
     (cache / "hooks").symlink_to(HOOKS_DIR)
     return home
@@ -133,6 +140,37 @@ def test_claude_command_resolves_with_empty_plugin_root(litestar_project: Path, 
     assert result.returncode == 0, f"claude command exited {result.returncode}: {result.stderr!r}"
     out = cast("dict[str, Any]", json.loads(result.stdout))
     assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+
+
+def test_claude_default_hook_command_is_posix_sh_safe(litestar_project: Path, fake_claude_home: Path) -> None:
+    """Claude loads hooks/hooks.json by default; it must be safe under /bin/sh."""
+    result = _run_command_with_shell(
+        _command_for("claude"),
+        shell_executable="sh",
+        cwd=litestar_project,
+        overrides={"CLAUDE_PLUGIN_ROOT": "", "HOME": str(fake_claude_home)},
+    )
+    assert result.returncode == 0, f"default hook command exited {result.returncode}: {result.stderr!r}"
+    out = cast("dict[str, Any]", json.loads(result.stdout))
+    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert "litestar:litestar" in out["hookSpecificOutput"]["additionalContext"]
+
+
+def test_claude_default_hook_command_is_zsh_safe_when_available(litestar_project: Path, fake_claude_home: Path) -> None:
+    """macOS commonly uses zsh; the default hook must not rely on bash-only parsing."""
+    zsh = shutil.which("zsh")
+    if zsh is None:
+        pytest.skip("zsh is not installed")
+    result = _run_command_with_shell(
+        _command_for("claude"),
+        shell_executable=zsh,
+        cwd=litestar_project,
+        overrides={"CLAUDE_PLUGIN_ROOT": "", "HOME": str(fake_claude_home)},
+    )
+    assert result.returncode == 0, f"claude default hook command exited {result.returncode}: {result.stderr!r}"
+    out = cast("dict[str, Any]", json.loads(result.stdout))
+    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert "litestar:litestar" in out["hookSpecificOutput"]["additionalContext"]
 
 
 def test_cursor_command_uses_plugin_root_not_cwd(litestar_project: Path) -> None:

@@ -74,12 +74,12 @@ db_config = SQLAlchemyAsyncConfig(
 
 Per-session override via `session.info["enable_file_object_listener"] = False` or `session.info["enable_cache_listener"] = False` is honored at listener-dispatch time.
 
-## Serialization (`advanced_alchemy._serialization`)
+## Serialization (`advanced_alchemy.utils.serialization`)
 
 Library-wide JSON encoder / decoder — msgspec first, orjson fallback, stdlib `json` last. Used by the cache layer (`cache/serializers.py`), fixture loader (`utils/fixtures.py`), and the `JsonB` column type.
 
 ```python
-from advanced_alchemy._serialization import encode_json, decode_json
+from advanced_alchemy.utils.serialization import encode_json, decode_json
 
 payload = encode_json({"id": "abc", "total": 99})  # str
 parsed = decode_json(payload)                        # dict

@@ -8,7 +8,7 @@ Two paths: built-in `Provide()` for small/mid apps, Dishka for enterprise scope 
 from __future__ import annotations
 
 from litestar import Litestar, Request
-from litestar.di import Provide
+from litestar.di import NamedDependency, Provide
 from litestar.datastructures import State
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,12 +17,15 @@ async def provide_session(state: State) -> AsyncSession:
     return state.db_session
 
 
-async def provide_current_user(request: Request, session: AsyncSession) -> User:
+async def provide_current_user(
+    request: Request,
+    db_session: NamedDependency[AsyncSession],
+) -> User:
     token = request.headers.get("Authorization")
-    return await authenticate(session, token)
+    return await authenticate(db_session, token)
 
 
-async def provide_user_service(db_session: AsyncSession) -> UserService:
+async def provide_user_service(db_session: NamedDependency[AsyncSession]) -> UserService:
     return UserService(session=db_session)
 
 
@@ -46,21 +49,22 @@ Same-name lookups walk inward — handler-level overrides controller, controller
 
 ## Typed Dependency Parameters
 
-Name handler parameters after dependency keys. Use `SkipValidation[T]` (Litestar ≥ 2.23) when the value is assembled by a trusted dependency provider such as a filter aggregate — it replaces the deprecated `Dependency(skip_validation=True)` and works on any parameter, not just dependencies.
+Name handler and provider parameters after dependency keys. Use `NamedDependency[T]` for every value resolved from a Litestar dependency map; Litestar 2.24 deprecates implicit dependency injection by matching parameter names alone. Use `NamedDependency[SkipValidation[T]]` when the dependency value is trusted and should bypass validation, such as a generated filter aggregate.
 
 ```python
+from litestar.di import NamedDependency  # Litestar >= 2.23
 from litestar.params import SkipValidation  # Litestar >= 2.23
 
 
 async def list_users(
-    users_service: UserService,
-    filters: SkipValidation[list[FilterTypes]],
+    users_service: NamedDependency[UserService],
+    filters: NamedDependency[SkipValidation[list[FilterTypes]]],
 ) -> OffsetPagination[User]:
     rows, total = await users_service.get_many_and_count(*filters)
     return users_service.to_schema(rows, total, filters=filters, schema_type=User)
 ```
 
-When the dependency key must differ from the parameter name, use `NamedDependency[T]` (Litestar ≥ 2.23, from `litestar.di`) — the supported alias wrapper that replaces `Annotated[T, Dependency()]`:
+The dependency key and parameter name must match. `NamedDependency[T]` (from `litestar.di`) marks the parameter as a dependency value and replaces `Annotated[T, Dependency()]`:
 
 ```python
 from litestar.di import NamedDependency  # Litestar >= 2.23
@@ -70,7 +74,7 @@ async def list_users(db: NamedDependency[AsyncSession]) -> list[User]:  # inject
     ...
 ```
 
-`params.Dependency` / `DependencyKwarg` are deprecated since 2.23 and removed in 3.0; prefer `NamedDependency` and `SkipValidation`.
+`params.Dependency` / `DependencyKwarg` are deprecated since 2.23 and implicit dependency injection is deprecated since 2.24; prefer `NamedDependency` and `NamedDependency[SkipValidation[T]]`.
 
 ## Dishka (`FromDishka as Inject[T]`)
 

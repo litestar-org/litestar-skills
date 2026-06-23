@@ -6,7 +6,7 @@
 
 ## Status
 
-**v0.3.0 — early access.** Multi-host plumbing, 28 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
+**v0.4.0 — early access.** Multi-host plumbing, 28 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
 
 **Breaking host identity note:** host-facing marketplace, plugin, extension, managed-config, and skill namespace IDs are `litestar`. Existing installs under `litestar-skills` should be removed and reinstalled; no alias is shipped. The Python package and repository remain `litestar-skills`.
 
@@ -16,14 +16,36 @@ This repo documents hosts by the artifacts it ships:
 
 | Host | Entry Point |
 | --- | --- |
-| Claude Code | `.claude-plugin/plugin.json` + marketplace metadata |
-| Gemini CLI | `gemini-extension.json` + `agents/*.md` |
+| Claude Code | `.claude-plugin/plugin.json` + marketplace metadata + `.claude-plugin/agents/*.md` |
+| Antigravity CLI | `plugin.json` + `agents/*.md` + `skills/` |
 | Codex CLI | `.codex-plugin/plugin.json` + `.codex/agents/*.toml` |
 | OpenCode | `.opencode/plugins/litestar.js` + `.opencode/agents/*.md` |
 | Cursor | `.cursor-plugin/plugin.json` |
 | VS Code / Copilot | Raw `skills/` path via `chat.skillsLocations` |
-| Google Antigravity | `.agent/skills/` or `~/.gemini/antigravity/skills/` |
 | OpenClaw | `.agents/skills/` + `AGENTS.md` |
+
+## Harness Names And Commands
+
+Different hosts expose the same repo assets with different command surfaces. Keep four names separate:
+
+| Concept | Canonical Value |
+| --- | --- |
+| Plugin / marketplace identity | `litestar` |
+| Skill directory names | `skills/<skill-name>/SKILL.md`, e.g. `skills/litestar-routing/SKILL.md` |
+| Hook and policy namespace | `litestar:<skill-name>`, e.g. `litestar:litestar-routing` |
+| Command files | `commands/litestar/{configure,new-app,new-domain,review}.toml` |
+
+| Harness | Skill Manual Trigger | Command Trigger | Reviewer Agent Trigger |
+| --- | --- | --- | --- |
+| Claude Code | `/litestar:litestar` for the hub skill; `/litestar:litestar-routing` for focused skills. Plugin policy uses `Skill(litestar:<skill-name>)`. | `/litestar:configure`, `/litestar:new-app`, `/litestar:new-domain`, `/litestar:review` | Select `litestar-reviewer` from `.claude-plugin/agents/` where Claude exposes plugin subagents. |
+| Antigravity CLI | Skills load from the `litestar` plugin or `.agents/skills/`; use the displayed skill/template name in Antigravity. | No TOML slash-command surface in the Antigravity plugin schema. Use prompts backed by the skills or reviewer agent. | `litestar-reviewer` from top-level `agents/`. |
+| Codex CLI | Codex surfaces installed skills by displayed name. In `$`-trigger Codex surfaces, force the hub with `$litestar:litestar` and focused skills with `$litestar:<skill-name>`; natural language also works. | Codex plugins do not currently expose plugin-defined `/litestar:*` slash commands. Use natural language such as “Use Litestar review…” and the `litestar` skill router. | `$agent litestar-reviewer` from `.codex/agents/`. |
+| OpenCode | `opencode skill list` shows project-local copied skills; use the displayed skill name in the OpenCode UI. Plugin reminders use `litestar:<skill-name>`. | No TOML command loader in the OpenCode plugin. Use natural-language prompts or project-local command support. | `litestar-reviewer` from `.opencode/agents/`. |
+| Cursor | Skills are discovered from the plugin/rule path; use the displayed skill name in Cursor. | Host command support varies; shipped TOML commands remain under `commands/litestar/`. | No Cursor-specific reviewer dialect shipped. |
+| VS Code / Copilot | Skills are discovered from `chat.skillsLocations`; use the displayed skill name in Copilot Chat. | No shipped command wrapper. | No VS Code-specific reviewer dialect shipped. |
+| OpenClaw | Skills are discovered from `.agents/skills/`; use the displayed skill name. | No shipped command wrapper. | No OpenClaw-specific reviewer dialect shipped. |
+
+Canonical agent source lives in `tools/agent-sources/litestar-reviewer.yaml`; run `make agents` after editing it, then `make sync-codex-package` before `make lint` so the generated Codex package copy stays current.
 
 ## Install
 
@@ -38,13 +60,14 @@ Pick your host and run the one command below. If you use several agents, skip to
 
 The `/plugin` commands run **inside** a Claude Code session — the installer can't automate this part.
 
-### Gemini CLI
+### Antigravity CLI
 
 ```bash
-gemini extensions install https://github.com/litestar-org/litestar-skills --auto-update
+git clone --depth 1 https://github.com/litestar-org/litestar-skills ~/.config/antigravity/litestar
+agy plugin install ~/.config/antigravity/litestar
 ```
 
-Gemini auto-indexes this repo into its [extension gallery](https://geminicli.com/extensions/) via the `gemini-cli-extension` GitHub topic.
+Existing legacy Google CLI extension installs should migrate through Antigravity CLI's plugin import flow; fresh installs use the `plugin.json` path above.
 
 ### Codex CLI
 
@@ -74,26 +97,25 @@ ln -sf ~/.config/opencode/litestar/.opencode/plugins/litestar.js \
 
 Option 2 ships a real `experimental.chat.system.transform` handler that injects targeted Litestar skill reminders into the system prompt and honors managed-config policy. See [`.opencode/INSTALL.md`](.opencode/INSTALL.md).
 
-### Google Antigravity
+### Antigravity workspace skills
 
-Antigravity reads Agent Skills from `.agent/skills/` (**singular** `.agent`, note the naming collision with the plural `.agents/skills/` used by Claude Code / OpenCode / VS Code) or from `~/.gemini/antigravity/skills/` globally. Since this repo ships the plural form, the recommended workspace-scope install is a symlink:
+Antigravity CLI reads workspace skills from `.agents/skills/` and global skills from `~/.gemini/antigravity-cli/skills/`. For skills-only workspace installs:
 
 ```bash
 cd your-project
 git clone --depth 1 https://github.com/litestar-org/litestar-skills /tmp/litestar-skills
 mkdir -p .agents/skills
 cp -r /tmp/litestar-skills/skills/* .agents/skills/
-ln -s .agents .agent       # community workaround — not a Google-blessed integration
 ```
 
 For global installs across all workspaces:
 
 ```bash
-mkdir -p ~/.gemini/antigravity/skills
-cp -r /tmp/litestar-skills/skills/* ~/.gemini/antigravity/skills/
+mkdir -p ~/.gemini/antigravity-cli/skills
+cp -r /tmp/litestar-skills/skills/* ~/.gemini/antigravity-cli/skills/
 ```
 
-See [Antigravity Skills docs](https://antigravity.google/docs/skills). The installer's `--antigravity-symlink` flag (below) automates the workspace symlink when you already have `.agents/skills/` present.
+Use the full plugin install above when you want the reviewer subagent in addition to raw skills.
 
 ### OpenClaw
 
@@ -131,7 +153,7 @@ Then in VS Code `settings.json`:
 
 ### One-shot multi-host installer
 
-Installs for every supported CLI detected on your system. Auto-installs for Gemini CLI, Codex CLI, and OpenCode; prints instructions for Claude Code, Cursor, and VS Code.
+Installs for every supported CLI detected on your system. Auto-installs for Antigravity CLI via a staged payload, Codex CLI via `codex plugin marketplace add` + `codex plugin add`, and OpenCode via the host-specific plugin path; prints instructions for Claude Code, Cursor, and VS Code.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/main/tools/install.sh | bash
@@ -149,7 +171,7 @@ curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/main/t
 curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/main/tools/install.sh | bash -s -- --dry-run
 
 # Install for specific hosts only
-curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/main/tools/install.sh | bash -s -- --only gemini --only codex
+curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/main/tools/install.sh | bash -s -- --only antigravity --only codex
 
 # Also whitelist the Claude Code marketplace in ~/.claude/settings.json
 curl -fsSL https://raw.githubusercontent.com/litestar-org/litestar-skills/main/tools/install.sh | bash -s -- --claude-settings
@@ -172,7 +194,7 @@ pwsh -File tools/install.ps1
 pwsh -File tools/install.ps1 -DryRun
 
 # Install for specific host(s):
-pwsh -File tools/install.ps1 -Only gemini,codex
+pwsh -File tools/install.ps1 -Only antigravity,codex
 ```
 
 If PowerShell 7+ is not installed: `winget install Microsoft.PowerShell`. If Git for Windows is not installed: <https://git-scm.com/download/win>.
@@ -188,11 +210,6 @@ Google publishes an MCP server that returns fresh Firebase / Google Cloud / Andr
 claude mcp add google-dev-knowledge --transport http \
   https://developerknowledge.googleapis.com/mcp \
   --header "X-Goog-Api-Key: YOUR_API_KEY"
-
-# Gemini CLI
-gemini mcp add -t http -H "X-Goog-Api-Key: YOUR_API_KEY" \
-  google-developer-knowledge \
-  https://developerknowledge.googleapis.com/mcp --scope user
 ```
 
 Generate the API key at `https://console.cloud.google.com/apis/credentials` and restrict it to the Developer Knowledge API. Full reference: [`skills/litestar-styleguide/references/google-developer-knowledge-mcp.md`](skills/litestar-styleguide/references/google-developer-knowledge-mcp.md).
@@ -203,7 +220,6 @@ This repo is tagged with GitHub topics so downstream registries and galleries au
 
 | Topic | Downstream effect |
 | --- | --- |
-| `gemini-cli-extension` | Gemini CLI's [extension gallery](https://geminicli.com/extensions/) auto-indexes tagged repos. |
 | `litestar` | Framework discoverability — surfaces in Litestar-ecosystem GitHub searches. |
 | `agent-skills` | Generic agent-skills discoverability for Claude Code / Copilot CLI skill indexes. |
 | `claude-code-plugin` | Claude Code plugin discoverability (e.g., [claudeskills.info](https://claudeskills.info)). |
@@ -231,21 +247,21 @@ Or from a clone: `./tools/uninstall.sh --help`. Same `--only`, `--skip`, `--dry-
 Per-host uninstall:
 
 - **Claude Code**: `/plugin uninstall litestar` inside Claude Code
-- **Gemini CLI**: `gemini extensions uninstall litestar`
-- **Codex CLI**: `rm -rf ~/.codex/plugins/litestar`
+- **Antigravity CLI**: `agy plugin uninstall litestar`
+- **Codex CLI**: `codex plugin remove litestar@litestar && codex plugin marketplace remove litestar`
 - **OpenCode**: `rm ~/.config/opencode/plugins/litestar.js && rm -rf ~/.config/opencode/litestar`
 - **Cursor**: remove the Remote Rule from Settings → Rules
 - **VS Code**: remove the `chat.skillsLocations` entry + delete the clone
 
 ## Troubleshooting
 
-**"No supported CLIs detected"** — none of `claude`, `gemini`, `codex`, `opencode`, `cursor`, or `code` are on `$PATH`. Install at least one and re-run.
+**"No supported CLIs detected"** — none of `claude`, `agy`, `codex`, `opencode`, `cursor`, or `code` are on `$PATH`. Install at least one and re-run.
 
-**Symlink fails on Windows** — run the installer under WSL or Git Bash. Native Windows support is [backlog](https://github.com/litestar-org/litestar-skills).
+**OpenCode symlink fails on Windows** — run the PowerShell installer, which copies the OpenCode plugin entrypoint instead of creating a symlink. The Antigravity, Claude, and Codex install paths do not rely on symlinks.
 
-**Permission denied on `~/.codex/plugins/`** — do NOT run with `sudo`; the installer refuses root. Ensure your user owns `~/.codex/` and `~/.config/`.
+**Codex marketplace add fails** — do NOT run with `sudo`; the installer refuses root. Ensure your user owns `~/.codex/`, `~/.agents/`, and Codex's cache directory.
 
-**Gemini says extension already exists** — the installer upgrades automatically. Use `--force` to re-install from scratch.
+**Antigravity plugin already installed** — re-run the installer with `--force` to uninstall and reinstall the plugin.
 
 **Claude Code can't find the marketplace** — re-run with `--claude-settings` to whitelist, or inside Claude Code manually: `/plugin marketplace add litestar-org/litestar-skills`.
 

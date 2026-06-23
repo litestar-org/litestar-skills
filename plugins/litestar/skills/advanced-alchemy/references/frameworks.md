@@ -343,7 +343,7 @@ alchemy = AdvancedAlchemy(config=[primary, analytics], app=app)
 | Sync sessions | Yes | Yes | Yes | Yes | No |
 | Auto-commit handler | Yes | Yes | Yes | Yes | Yes |
 | DTOs (SQLAlchemyDTO) | Yes | No | No | No | No |
-| Filter dependencies | Yes | Manual | Manual | Manual | Manual |
+| Filter dependencies | Yes | Yes (`provide_filters`) | Manual | Manual | Manual |
 | CLI migrations | Yes (`litestar db`) | `alchemy` CLI | `alchemy` CLI | `alchemy` CLI | `alchemy` CLI |
 | Lifespan integration | Built-in | `plugin.lifespan()` | `init_app()` | `init_app()` | `init_app()` |
 | Multiple databases | Yes | Yes | Yes | Yes | Yes |

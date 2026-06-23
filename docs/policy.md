@@ -2,7 +2,7 @@
 
 Per-host quick reference for restricting what the `litestar` plugin (and any other plugin) can do. Each host has different enforcement primitives — this page documents what each one supports today and what we ship as opinionated defaults.
 
-> **Asymmetry warning.** Claude Code is the only host with a mature allow/ask/deny grammar plus org-level managed settings. Gemini ships denylist-only via `excludeTools`. OpenCode has a tri-state `permission` block. Cursor and Codex have no public deny grammar — restriction is uninstall-only. Don't expect uniform enforcement across hosts.
+> **Asymmetry warning.** Claude Code is the only host here with a mature allow/ask/deny grammar plus org-level managed settings. Antigravity has a host-owned permission engine. OpenCode has a tri-state `permission` block. Cursor and Codex have no public plugin deny grammar — restriction is uninstall-only. Don't expect uniform enforcement across hosts.
 
 ---
 
@@ -108,38 +108,21 @@ Run `/status` in a Claude Code session to inspect the active layers.
 
 ---
 
-## Gemini CLI
+## Antigravity CLI
 
-**Mechanism:** denylist via `excludeTools` in `gemini-extension.json`. There is no allow/ask grammar.
+**Mechanism:** host-owned permission engine. The `litestar` plugin does not ship a policy file or legacy `excludeTools` denylist.
 
-**Syntax:** `tool(arg)` — argument is a glob pattern.
+**Plugin-controlled scope:** static reviewer subagent templates live under top-level `agents/` and declare the Antigravity tool names they need:
 
-**Defaults shipped by the Litestar extension** (`gemini-extension.json`):
-
-```json
-{
-  "excludeTools": [
-    "run_shell_command(sudo)",
-    "run_shell_command(sudo *)",
-    "run_shell_command(sudo;*)",
-    "run_shell_command(* sudo *)",
-    "run_shell_command(*|sudo*)",
-    "run_shell_command(rm -rf /*)",
-    "run_shell_command(rm -rf $HOME*)",
-    "run_shell_command(rm -rf ~*)",
-    "run_shell_command(curl * | sh)",
-    "run_shell_command(curl * | bash)",
-    "run_shell_command(wget * | sh)",
-    "run_shell_command(wget * | bash)",
-    "run_shell_command(*|sh)",
-    "run_shell_command(*|bash)"
-  ]
-}
+```yaml
+tools:
+  - view_file
+  - grep_search
+  - find_by_name
+  - run_command
 ```
 
-**Caveat (important):** `excludeTools` does NOT apply to MCP servers bundled with the extension itself ([gemini-cli #8481](https://github.com/google-gemini/gemini-cli/issues/8481)). Treat it as belt-and-suspenders, not a hard guarantee.
-
-**To extend for your org:** add additional patterns to your project's own `gemini-extension.json` or to user/workspace settings. There's no public managed-settings file analogous to Claude Code's.
+**To restrict `litestar` on Antigravity CLI:** disable or uninstall the plugin with `agy plugin disable litestar` or `agy plugin uninstall litestar`, and use Antigravity's host permission prompts/settings for per-action control. Do not add a legacy extension manifest; fresh Antigravity CLI plugins use root `plugin.json`.
 
 ---
 
@@ -189,7 +172,7 @@ tools:
 
 **Public deny grammar:** none documented as of Codex CLI 0.125. The `interface.capabilities` array on plugin manifests is metadata, not enforcement.
 
-**To restrict `litestar` on Codex:** uninstall the plugin (`codex plugin marketplace remove litestar`) or omit it from your marketplace allowlist. There is no per-plugin tool denylist.
+**To restrict `litestar` on Codex:** uninstall the plugin (`codex plugin remove litestar@litestar`) and remove its marketplace (`codex plugin marketplace remove litestar`), or omit it from your marketplace allowlist. There is no per-plugin tool denylist.
 
 ---
 
@@ -210,7 +193,7 @@ Each host has knobs only the user can flip — there's no plugin-author hook for
 | Claude Code | `.claude/settings.local.json` (per-developer, gitignored) | `permissions.allow`, `permissions.deny` |
 | OpenCode | `opencode.json` | `permission`, `instructions` |
 | Codex | `~/.codex/config.toml` (global) — **DO NOT auto-write**; recommend the trust prompt instead | n/a |
-| Gemini | `.gemini/policies/<name>-overrides.toml`, `.geminiignore` | tool allowlist, ignore allowlist |
+| Antigravity CLI | host settings / permission prompts — **DO NOT auto-write** from this plugin | n/a |
 
 **Critical rules for any merge step**:
 

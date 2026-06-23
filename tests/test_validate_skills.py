@@ -68,15 +68,13 @@ def _patch_roots(mod: Any, tmp_root: Path) -> None:
     mod.SKILLS_DIR = tmp_root / "skills"
     mod.COMMANDS_DIR = tmp_root / "commands"
     mod.AGENTS_DIR = tmp_root / "agents"
+    mod.ANTIGRAVITY_AGENTS_DIR = tmp_root / "agents"
     mod.OPENCODE_AGENTS_DIR = tmp_root / ".opencode" / "agents"
     mod.CLAUDE_AGENTS_DIR = tmp_root / ".claude-plugin" / "agents"
     mod.CODEX_AGENTS_DIR = tmp_root / ".codex" / "agents"
     # Ensure dirs exist so glob returns empty rather than raising.
-    for sub in ("skills", "commands", "agents"):
-        (tmp_root / sub).mkdir(exist_ok=True)
-    (tmp_root / ".opencode" / "agents").mkdir(parents=True, exist_ok=True)
-    (tmp_root / ".claude-plugin" / "agents").mkdir(parents=True, exist_ok=True)
-    (tmp_root / ".codex" / "agents").mkdir(parents=True, exist_ok=True)
+    for sub in ("skills", "commands", "agents", ".opencode/agents", ".claude-plugin/agents", ".codex/agents"):
+        (tmp_root / sub).mkdir(parents=True, exist_ok=True)
 
 
 class TestValidateSkill:
@@ -295,6 +293,60 @@ class TestValidateCommand:
         assert any("parse error" in v.message.lower() for v in violations)
 
 
+class TestValidateAntigravityAgent:
+    def _write_agent(
+        self,
+        root: Path,
+        name: str = "my-agent",
+        description: str = "An agent.",
+        tools: list[str] | None = None,
+        extra: str = "",
+        frontmatter_name: str | None = None,
+    ) -> Path:
+        if tools is None:
+            tools = ["view_file", "grep_search"]
+        agents_dir = root / "agents" / "antigravity"
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        fm_name = frontmatter_name if frontmatter_name is not None else name
+        tools_yaml = "\n".join(f"  - {tool}" for tool in tools)
+        path = agents_dir / f"{name}.md"
+        path.write_text(
+            f'---\nname: {fm_name}\ndescription: "{description}"\ntools:\n{tools_yaml}\n{extra}---\n\n# body\n'
+        )
+        return path
+
+    def test_valid_agent_returns_no_violations(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        path = self._write_agent(tmp_path)
+        violations = mod.validate_antigravity_agent(path)
+        assert violations == []
+
+    def test_bad_tool_key_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        path = self._write_agent(tmp_path, tools=["run_shell_command"])
+        violations = mod.validate_antigravity_agent(path)
+        assert any("tool" in v.message.lower() for v in violations)
+
+    def test_tools_mapping_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        agents_dir = tmp_path / "agents" / "antigravity"
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        path = agents_dir / "x.md"
+        path.write_text('---\nname: x\ndescription: "x"\ntools:\n  read: true\n---\n\nbody\n')
+        violations = mod.validate_antigravity_agent(path)
+        assert any("list" in v.message.lower() for v in violations)
+
+    def test_mode_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        path = self._write_agent(tmp_path, extra="mode: subagent\n")
+        violations = mod.validate_antigravity_agent(path)
+        assert any("mode" in v.message.lower() for v in violations)
+
+
 class TestValidateOpencodeAgent:
     def _write_agent(
         self,
@@ -307,7 +359,7 @@ class TestValidateOpencodeAgent:
     ) -> Path:
         if tools is None:
             tools = {"read": True, "grep": True}
-        agents_dir = root / ".opencode" / "agents"
+        agents_dir = root / "agents" / "opencode"
         agents_dir.mkdir(parents=True, exist_ok=True)
         fm_name = frontmatter_name if frontmatter_name is not None else name
         tools_yaml = "\n".join(f"  {k}: {str(v).lower()}" for k, v in tools.items())
@@ -348,7 +400,7 @@ class TestValidateOpencodeAgent:
     def test_non_bool_tool_value_yields_violation(self, tmp_path: Path) -> None:
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
-        agents_dir = tmp_path / ".opencode" / "agents"
+        agents_dir = tmp_path / "agents" / "opencode"
         agents_dir.mkdir(parents=True, exist_ok=True)
         path = agents_dir / "x.md"
         path.write_text('---\nname: x\ndescription: "x"\nmode: subagent\ntools:\n  read: "yes"\n---\n\nbody\n')
@@ -363,90 +415,39 @@ class TestValidateOpencodeAgent:
         assert any("1025" in v.message for v in violations)
 
 
-class TestValidateGeminiAgent:
-    def _write_agent(
-        self,
-        root: Path,
-        name: str = "my-agent",
-        description: str = "An agent.",
-        tools: list[str] | None = None,
-        mode: str | None = None,
-        frontmatter_name: str | None = None,
-    ) -> Path:
-        if tools is None:
-            tools = ["read_file", "grep_search"]
-        agents_dir = root / "agents"
-        agents_dir.mkdir(parents=True, exist_ok=True)
-        fm_name = frontmatter_name if frontmatter_name is not None else name
-        tools_yaml = "\n".join(f"  - {t}" for t in tools)
-        mode_line = f"mode: {mode}\n" if mode is not None else ""
-        path = agents_dir / f"{name}.md"
+class TestValidateHookManifest:
+    def _write_manifest(self, root: Path, command: str, filename: str = "hooks.json") -> Path:
+        hooks_dir = root / "hooks"
+        hooks_dir.mkdir(parents=True, exist_ok=True)
+        path = hooks_dir / filename
         path.write_text(
-            f'---\nname: {fm_name}\ndescription: "{description}"\n{mode_line}tools:\n{tools_yaml}\n---\n\n# body\n'
+            (
+                "{\n"
+                '  "hooks": {\n'
+                '    "SessionStart": [\n'
+                '      {"hooks": [{"type": "command", "command": '
+                f"{command!r}"
+                "}]}\n"
+                "    ]\n"
+                "  }\n"
+                "}\n"
+            ).replace("'", '"')
         )
         return path
 
-    def test_valid_agent_returns_no_violations(self, tmp_path: Path) -> None:
+    def test_rejects_legacy_google_path_separator_placeholder(self, tmp_path: Path) -> None:
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
-        path = self._write_agent(tmp_path)
-        violations = mod.validate_gemini_agent(path)
-        assert violations == []
+        path = self._write_manifest(tmp_path, "node ${extensionPath}${/}hooks${/}session-start.js")
+        violations = mod.validate_hook_manifest(path, "claude")
+        assert any("${/}" in v.message for v in violations)
 
-    def test_mode_key_rejected(self, tmp_path: Path) -> None:
+    def test_rejects_legacy_google_extension_path_placeholder(self, tmp_path: Path) -> None:
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
-        path = self._write_agent(tmp_path, mode="subagent")
-        violations = mod.validate_gemini_agent(path)
-        assert any("mode" in v.message.lower() for v in violations)
-
-    def test_tools_as_dict_rejected(self, tmp_path: Path) -> None:
-        mod = _load_validator()
-        _patch_roots(mod, tmp_path)
-        agents_dir = tmp_path / "agents"
-        agents_dir.mkdir(parents=True, exist_ok=True)
-        path = agents_dir / "x.md"
-        path.write_text('---\nname: x\ndescription: "x"\ntools:\n  read: true\n---\n\nbody\n')
-        violations = mod.validate_gemini_agent(path)
-        assert any("list" in v.message.lower() for v in violations)
-
-    def test_unknown_tool_yields_violation(self, tmp_path: Path) -> None:
-        mod = _load_validator()
-        _patch_roots(mod, tmp_path)
-        path = self._write_agent(tmp_path, tools=["bogus_tool"])
-        violations = mod.validate_gemini_agent(path)
-        assert any("tool" in v.message.lower() and "registry" in v.message.lower() for v in violations)
-
-    def test_wildcard_tools_accepted(self, tmp_path: Path) -> None:
-        mod = _load_validator()
-        _patch_roots(mod, tmp_path)
-        # Wildcards must be quoted in YAML (`*` at start of a scalar is an alias marker).
-        agents_dir = tmp_path / "agents"
-        agents_dir.mkdir(parents=True, exist_ok=True)
-        path = agents_dir / "wildcards.md"
-        path.write_text(
-            '---\nname: wildcards\ndescription: "w"\ntools:\n  - "*"\n  - "mcp_*"\n  - "mcp_myserver_*"\n---\n\nbody\n'
-        )
-        violations = mod.validate_gemini_agent(path)
-        assert violations == []
-
-    def test_missing_tools_allowed(self, tmp_path: Path) -> None:
-        """Gemini treats omitted `tools:` as 'inherit all parent tools'."""
-        mod = _load_validator()
-        _patch_roots(mod, tmp_path)
-        agents_dir = tmp_path / "agents"
-        agents_dir.mkdir(parents=True, exist_ok=True)
-        path = agents_dir / "my-agent.md"
-        path.write_text('---\nname: my-agent\ndescription: "Test."\n---\n\n# body\n')
-        violations = mod.validate_gemini_agent(path)
-        assert violations == []
-
-    def test_description_too_long_yields_violation(self, tmp_path: Path) -> None:
-        mod = _load_validator()
-        _patch_roots(mod, tmp_path)
-        path = self._write_agent(tmp_path, description="x" * 1025)
-        violations = mod.validate_gemini_agent(path)
-        assert any("1025" in v.message for v in violations)
+        path = self._write_manifest(tmp_path, "node ${extensionPath}/hooks/session-start.js")
+        violations = mod.validate_hook_manifest(path, "claude")
+        assert any("${extensionPath}" in v.message for v in violations)
 
 
 class TestValidateCodexAgent:
@@ -459,7 +460,7 @@ class TestValidateCodexAgent:
         extra: str = "",
         frontmatter_name: str | None = None,
     ) -> Path:
-        agents_dir = root / ".codex" / "agents"
+        agents_dir = root / "agents" / "codex"
         agents_dir.mkdir(parents=True, exist_ok=True)
         fm_name = frontmatter_name if frontmatter_name is not None else name
         path = agents_dir / f"{name}.toml"
@@ -481,7 +482,7 @@ class TestValidateCodexAgent:
 
     def test_top_level_tools_rejected(self, tmp_path: Path) -> None:
         """Codex inherits tools from session config.toml — per-agent tools is a
-        Claude/Gemini/OpenCode dialect leak and must fail."""
+        Claude/OpenCode/Antigravity dialect leak and must fail."""
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
         path = self._write_agent(tmp_path, extra='tools = ["Read"]\n')
@@ -499,7 +500,7 @@ class TestValidateCodexAgent:
     def test_malformed_toml_yields_violation(self, tmp_path: Path) -> None:
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
-        agents_dir = tmp_path / ".codex" / "agents"
+        agents_dir = tmp_path / "agents" / "codex"
         agents_dir.mkdir(parents=True, exist_ok=True)
         path = agents_dir / "bad.toml"
         path.write_text('name = "bad"\ndescription = unterminated\n')
@@ -516,7 +517,7 @@ class TestValidateCodexAgent:
     def test_missing_developer_instructions_yields_violation(self, tmp_path: Path) -> None:
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
-        agents_dir = tmp_path / ".codex" / "agents"
+        agents_dir = tmp_path / "agents" / "codex"
         agents_dir.mkdir(parents=True, exist_ok=True)
         path = agents_dir / "noinst.toml"
         path.write_text('name = "noinst"\ndescription = "An agent."\n')
@@ -680,7 +681,7 @@ class TestIterAllShippedFiles:
         cmd_dir = tmp_path / "commands" / "b"
         cmd_dir.mkdir(parents=True)
         (cmd_dir / "c.toml").write_text("x")
-        agents_dir = tmp_path / "agents"
+        agents_dir = tmp_path / "agents" / "antigravity"
         agents_dir.mkdir(parents=True, exist_ok=True)
         (agents_dir / "r.md").write_text("x")
         (tmp_path / "AGENTS.md").write_text("x")

@@ -48,7 +48,7 @@ def test_no_agent_dialect_drift() -> None:
 @pytest.mark.parametrize(
     ("relative", "must_contain"),
     [
-        ("agents/litestar-reviewer.md", ("read_file", "grep_search", "run_shell_command")),
+        ("agents/litestar-reviewer.md", ("view_file", "grep_search", "find_by_name", "run_command")),
         (".claude-plugin/agents/litestar-reviewer.md", ("Read,", "Grep,", "Glob,", "Bash")),
         (".opencode/agents/litestar-reviewer.md", ("mode: subagent", "read: true", "bash: true")),
         (".codex/agents/litestar-reviewer.toml", ('developer_instructions = """', "name = ")),

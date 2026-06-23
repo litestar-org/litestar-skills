@@ -9,7 +9,7 @@ Use this skill for `Provide`, `NamedDependency` / `SkipValidation` (Litestar ≥
 
 ## Code Style Rules
 
-- Prefer `NamedDependency[T]` and `SkipValidation[T]` (≥ 2.23) over `Annotated[T, Dependency()]` / `Dependency(skip_validation=True)`; `params.Dependency` is deprecated (removed in 3.0).
+- Prefer `NamedDependency[T]` and `NamedDependency[SkipValidation[T]]` (≥ 2.24) over implicit DI / `Annotated[T, Dependency()]` / `Dependency(skip_validation=True)`; `params.Dependency` and implicit dependency injection are deprecated (removed in 3.0).
 - Use Litestar dependency maps for simple and medium apps.
 - Use Dishka when the project needs explicit scopes and provider modules.
 - Keep provider names stable and descriptive.
@@ -59,9 +59,9 @@ Use this skill for `Provide`, `NamedDependency` / `SkipValidation` (Litestar ≥
 ## Example
 
 ```python
-from litestar.di import Provide
+from litestar.di import NamedDependency, Provide
 
-async def provide_user_service(db_session: AsyncSession) -> UserService:
+async def provide_user_service(db_session: NamedDependency[AsyncSession]) -> UserService:
     return UserService(session=db_session)
 
 dependencies = {"users_service": Provide(provide_user_service)}

@@ -7,7 +7,7 @@ description: "Auto-activate for litestar_mcp, LitestarMCP, MCPConfig, MCPAuthCon
 
 `litestar-mcp` exposes explicitly marked Litestar route handlers as [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools, resources, and prompts over MCP Streamable HTTP and JSON-RPC 2.0.
 
-Mark routes by passing `mcp_tool="name"`, `mcp_resource="name"`, or `mcp_prompt="name"` directly to the Litestar route decorator — Litestar funnels unknown kwargs into `handler.opt`, so no `opt={...}` wrapper is needed. The `@mcp_tool` / `@mcp_resource` / `@mcp_prompt` decorators (importable from `litestar_mcp`) still exist and are worth reaching for when you need the extra fields they expose — `output_schema`, `annotations`, `scopes`, `task_support`, prompt `arguments`. There is no `opt={"mcp_tool_name": ...}` form and no `mcp_exclude` key; neither is read. To hide a route, simply leave it unmarked (discovery is opt-in).
+Mark routes by passing `mcp_tool="name"`, `mcp_resource="name"`, or `mcp_prompt="name"` directly to the Litestar route decorator — Litestar funnels unknown kwargs into `handler.opt`, so no `opt={...}` wrapper is needed. The `@mcp_tool` / `@mcp_resource` / `@mcp_prompt` decorators (importable from `litestar_mcp`) still exist and are worth reaching for when you need the extra fields they expose — `output_schema`, `annotations`, `scopes`, `task_support`, prompt `title`, `arguments`, and `icons`. Route opt keys mirror those names (`mcp_prompt_title`, `mcp_prompt_arguments`, `mcp_prompt_icons`). There is no `opt={"mcp_tool_name": ...}` form and no `mcp_exclude` key; neither is read. To hide a route, simply leave it unmarked (discovery is opt-in).
 
 ## Code Style Rules
 
@@ -86,7 +86,7 @@ The default MCP surface is:
 | `sse_max_streams` | `int` | `10000` | Max concurrent SSE streams |
 | `sse_max_idle_seconds` | `float` | `3600.0` | Idle timeout for an SSE stream |
 
-> Filters (`include_tags` / `exclude_tags` / `include_operations` / `exclude_operations`) gate what is **advertised** in `tools/list` / `resources/list` / `prompts/list`. As of `litestar-mcp` 0.7.0 they do **not** gate `tools/call` / `resources/read` ([cofin/litestar-mcp#62](https://github.com/cofin/litestar-mcp/issues/62)), so they are an advertisement filter, not an access boundary — use `guards` / auth to actually restrict invocation.
+> Filters (`include_tags` / `exclude_tags` / `include_operations` / `exclude_operations`) gate both list responses and direct invocation. A filtered tool/resource/template behaves like an unknown name or URI in `tools/call` / `resources/read`; still use `guards` / auth for real access control.
 
 ### Route Marking
 
@@ -154,7 +154,7 @@ Discovery is opt-in: a handler that carries no `mcp_*` marker never appears in M
 async def metrics() -> dict: ...
 ```
 
-To drop *marked* routes from discovery in bulk, use the `MCPConfig` filters (`exclude_tags` / `exclude_operations`, or an `include_tags` / `include_operations` allowlist). Remember these gate advertisement only ([cofin/litestar-mcp#62](https://github.com/cofin/litestar-mcp/issues/62)) — enforce real access control with `guards` or auth.
+To drop *marked* routes in bulk, use the `MCPConfig` filters (`exclude_tags` / `exclude_operations`, or an `include_tags` / `include_operations` allowlist). Filtered tools/resources/templates are absent from list responses and fail direct calls as unknown; enforce real access control with `guards` or auth.
 
 ### JSON-RPC Call
 
@@ -181,6 +181,12 @@ To drop *marked* routes from discovery in bulk, use the `MCPConfig` filters (`ex
 ### Auth
 
 Authentication is a Litestar middleware concern. Apps with existing auth middleware get `request.user` / `request.auth` before tool handlers run.
+
+The supported auth paths are:
+
+- Bring your own Litestar auth middleware; MCP routes inherit it.
+- Use `MCPAuthBackend` with `OIDCProviderConfig`.
+- Build a validator with `create_oidc_validator()` and pass shared JWKS behavior through `JWKSCache` when your app already manages discovery/cache lifetimes.
 
 For OIDC-backed MCP endpoints, pair `MCPAuthConfig` metadata with token validation:
 
@@ -251,7 +257,7 @@ Hit `POST /mcp` with `tools/list` and `resources/list`. Confirm only marked rout
 ## Guardrails
 
 - **Mark routes explicitly** - unmarked routes should not appear in MCP clients.
-- **Default to allowlists for discovery** - `include_tags` / `include_operations` keep the advertised tool set small as route counts grow, but they only filter discovery — pair them with `guards` / auth, which actually gate invocation.
+- **Default to allowlists** - `include_tags` / `include_operations` keep the tool set small and also gate direct invocation; pair them with `guards` / auth for authorization.
 - **Never expose admin or destructive routes by default** - require a human-confirmation workflow before any irreversible operation.
 - **Prefer resources for read-only reference data** - agents may read resources speculatively.
 - **Keep DTOs precise** - loose `dict[str, Any]` request schemas produce weak tool contracts.
@@ -272,6 +278,8 @@ Before delivering an MCP integration, verify:
 - [ ] Auth is configured for the deployment boundary
 - [ ] `POST /mcp` `tools/list` returns only intended tools
 - [ ] `POST /mcp` `resources/list` includes only intended resources plus `litestar://openapi`
+- [ ] Filtered tools/resources/templates fail direct invocation as unknown
+- [ ] Provider-declared query parameters appear in tool `inputSchema` and forward during `tools/call`
 - [ ] Exposed handlers are `async def` and return JSON-serializable types
 - [ ] Tool argument DTOs are specific enough for generated schemas
 

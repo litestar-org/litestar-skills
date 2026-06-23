@@ -17,9 +17,9 @@ All three ADK objects are expensive to construct (model initialisation, client c
 
 ```python
 from dishka import Provider, Scope, provide
-from litestar_adk import OracleAsyncADKStore
-from google.adk.sessions import SQLSpecSessionService
 from sqlspec.adapters.oracledb import OracleAsyncConfig
+from sqlspec.adapters.oracledb.adk import OracleAsyncADKStore
+from sqlspec.extensions.adk import SQLSpecSessionService
 
 from app.domains.chat.services.runner import AIRunner
 
@@ -53,7 +53,7 @@ Note: no `from __future__ import annotations` — Dishka inspects `@provide` sig
 ```python
 from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
-from google.adk.sessions import SQLSpecSessionService
+from sqlspec.extensions.adk import SQLSpecSessionService
 
 from app.domains.chat.tools import search_records_by_vector, get_record_details, classify_intent
 from app.lib.settings import get_settings

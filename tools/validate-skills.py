@@ -13,11 +13,9 @@ enforces:
   resolves relative to the file.
 * ``commands/**/*.toml`` parses as TOML and has top-level ``description`` (str,
   <= 1024 chars) and ``prompt`` (non-empty str).
-* ``agents/*.md`` frontmatter has ``name`` matching filename, ``description``
-  (<= 1024 chars), ``mode`` in {subagent, primary}, and ``tools`` mapping with
-  whitelisted keys and bool values.
+* ``agents/<host>/*`` frontmatter matches the host-specific subagent schema.
 * Shipped content (skills, commands, agents, and the root ``AGENTS.md`` /
-  ``CONTRIBUTING.md`` / ``README.md`` / ``GEMINI.md``) contains no references
+  ``CONTRIBUTING.md`` / ``README.md``) contains no references
   to the framework authoring tree — except the user-install convention path
   (``skills/`` sub-path of the authoring directory), which is whitelisted.
 
@@ -58,17 +56,16 @@ _TOMLDecodeError: type[Exception] = cast(
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILLS_DIR = REPO_ROOT / "skills"
 COMMANDS_DIR = REPO_ROOT / "commands"
-# `agents/` at repo root is Gemini CLI's extension subagents directory.
-# `.opencode/agents/` is OpenCode's project-scoped subagents directory.
-# `.claude-plugin/agents/` is Claude Code's plugin subagents directory.
-# All three hosts use incompatible frontmatter schemas, so each location is
-# validated by its own rules (see `validate_gemini_agent` /
-# `validate_opencode_agent` / `validate_claude_agent`).
 AGENTS_DIR = REPO_ROOT / "agents"
-OPENCODE_AGENTS_DIR = REPO_ROOT / ".opencode" / "agents"
+# All host agent formats use incompatible schemas, so each host-owned location
+# is validated by its own rules. Antigravity reads plugin subagents from the
+# top-level agents/ directory; Claude, OpenCode, and Codex keep their dialects
+# in hidden host package directories so Antigravity does not ingest them.
+ANTIGRAVITY_AGENTS_DIR = AGENTS_DIR
 CLAUDE_AGENTS_DIR = REPO_ROOT / ".claude-plugin" / "agents"
+OPENCODE_AGENTS_DIR = REPO_ROOT / ".opencode" / "agents"
 CODEX_AGENTS_DIR = REPO_ROOT / ".codex" / "agents"
-SHIPPED_ROOT_FILES = ("AGENTS.md", "CONTRIBUTING.md", "README.md", "GEMINI.md")
+SHIPPED_ROOT_FILES = ("AGENTS.md", "CONTRIBUTING.md", "README.md")
 
 MAX_DESCRIPTION_CHARS = 1024
 MAX_SKILL_DESCRIPTION_TOTAL_CHARS = 6500
@@ -146,6 +143,32 @@ _FORBIDDEN_VOCAB_ALLOWLIST: frozenset[str] = frozenset(
 VALID_AGENT_MODES = frozenset({"subagent", "primary"})
 VALID_AGENT_TOOLS = frozenset({"read", "grep", "glob", "bash", "edit", "write", "todoWrite", "webFetch", "webSearch"})
 
+# Antigravity CLI tool names documented in the Hooks "Supported Tools" table.
+VALID_ANTIGRAVITY_TOOLS = frozenset(
+    {
+        "view_file",
+        "write_to_file",
+        "replace_file_content",
+        "multi_replace_file_content",
+        "list_dir",
+        "find_by_name",
+        "grep_search",
+        "search_web",
+        "read_url_content",
+        "run_command",
+        "manage_task",
+        "schedule",
+        "list_permissions",
+        "ask_permission",
+        "invoke_subagent",
+        "define_subagent",
+        "send_message",
+        "manage_subagents",
+        "ask_question",
+        "generate_image",
+    }
+)
+
 # Claude Code subagent tool registry (canonical Claude tool names exposed to
 # subagents — see https://code.claude.com/docs/en/sub-agents).
 VALID_CLAUDE_TOOLS = frozenset(
@@ -162,24 +185,6 @@ VALID_CLAUDE_TOOLS = frozenset(
         "NotebookEdit",
     }
 )
-
-# Gemini CLI subagent tool registry (see docs/core/subagents.md in google-gemini/gemini-cli).
-# Wildcards `*`, `mcp_*`, and `mcp_<server>_*` are also accepted at runtime.
-VALID_GEMINI_TOOLS = frozenset(
-    {
-        "read_file",
-        "grep_search",
-        "glob",
-        "run_shell_command",
-        "list_directory",
-        "web_fetch",
-        "google_web_search",
-        "write_file",
-        "edit",
-        "save_memory",
-    }
-)
-_GEMINI_WILDCARD_PATTERN = re.compile(r"^(?:\*|mcp_[A-Za-z0-9_-]*\*?)$")
 
 # Codex nickname_candidates entries: ASCII letters, digits, spaces, hyphens,
 # underscores only. Per https://developers.openai.com/codex/subagents.
@@ -326,6 +331,42 @@ def validate_command(path: Path) -> list[Violation]:
     return violations
 
 
+def validate_antigravity_agent(path: Path) -> list[Violation]:
+    """Validate an Antigravity CLI subagent template under ``agents/``.
+
+    Antigravity CLI accepts Markdown subagent templates under plugin ``agents/``.
+    The repository uses YAML frontmatter with ``tools`` as a list of documented
+    Antigravity tool names.
+    """
+    violations: list[Violation] = []
+    text = path.read_text(encoding="utf-8")
+    try:
+        fm, _body_start, _body = extract_frontmatter(text)
+    except ValueError as exc:
+        return [Violation(path, 1, str(exc))]
+    expected_name = path.stem
+    if fm.get("name") != expected_name:
+        violations.append(Violation(path, 1, f"name {fm.get('name')!r} != filename stem {expected_name!r}"))
+    violations.extend(_check_description(fm.get("description"), path, 1))
+    if "mode" in fm:
+        violations.append(Violation(path, 1, "mode key not allowed (Antigravity templates do not use OpenCode mode)"))
+    tools = fm.get("tools")
+    if tools is None:
+        return violations
+    if not isinstance(tools, list):
+        violations.append(Violation(path, 1, "tools must be a YAML list of Antigravity tool names"))
+        return violations
+    tools_list = cast("list[object]", tools)
+    for entry in tools_list:
+        if not isinstance(entry, str):
+            type_name = type(entry).__name__
+            violations.append(Violation(path, 1, f"tool entry must be a string, got {type_name}"))
+            continue
+        if entry not in VALID_ANTIGRAVITY_TOOLS:
+            violations.append(Violation(path, 1, f"tool {entry!r} not in Antigravity tool registry"))
+    return violations
+
+
 def validate_opencode_agent(path: Path) -> list[Violation]:
     """Validate an OpenCode subagent file under ``.opencode/agents/``.
 
@@ -363,47 +404,6 @@ def validate_opencode_agent(path: Path) -> list[Violation]:
                         f"tool {key_s!r} value must be bool, got {type_name}",
                     )
                 )
-    return violations
-
-
-def validate_gemini_agent(path: Path) -> list[Violation]:
-    """Validate a Gemini CLI subagent file under ``agents/``.
-
-    Gemini schema: no ``mode`` key (rejected by Gemini's loader), ``tools`` as
-    a list of tool-name strings. Each string must be a known Gemini tool or a
-    wildcard pattern (``*``, ``mcp_*``, ``mcp_<server>_*``).
-    """
-    violations: list[Violation] = []
-    text = path.read_text(encoding="utf-8")
-    try:
-        fm, _body_start, _body = extract_frontmatter(text)
-    except ValueError as exc:
-        return [Violation(path, 1, str(exc))]
-    expected_name = path.stem
-    if fm.get("name") != expected_name:
-        violations.append(Violation(path, 1, f"name {fm.get('name')!r} != filename stem {expected_name!r}"))
-    violations.extend(_check_description(fm.get("description"), path, 1))
-    if "mode" in fm:
-        violations.append(Violation(path, 1, "mode key not allowed (Gemini subagents reject it)"))
-    tools = fm.get("tools")
-    if tools is None:
-        return violations
-    if not isinstance(tools, list):
-        violations.append(Violation(path, 1, "tools must be a list of strings"))
-        return violations
-    # pyright strict requires an explicit cast here even though mypy's
-    # narrowing already gives us list[Any]; silence the redundant-cast warning.
-    tools_list = cast("list[Any]", tools)  # type: ignore[redundant-cast]
-    for entry in tools_list:
-        if not isinstance(entry, str):
-            type_name = type(entry).__name__
-            violations.append(Violation(path, 1, f"tools entry must be a string, got {type_name}"))
-            continue
-        if entry in VALID_GEMINI_TOOLS:
-            continue
-        if _GEMINI_WILDCARD_PATTERN.match(entry):
-            continue
-        violations.append(Violation(path, 1, f"tool {entry!r} not in Gemini tool registry"))
     return violations
 
 
@@ -637,14 +637,14 @@ def iter_commands() -> Iterator[Path]:
         yield from sorted(COMMANDS_DIR.rglob("*.toml"))
 
 
-def iter_gemini_agents() -> Iterator[Path]:
-    if AGENTS_DIR.is_dir():
-        yield from sorted(AGENTS_DIR.glob("*.md"))
-
-
 def iter_opencode_agents() -> Iterator[Path]:
     if OPENCODE_AGENTS_DIR.is_dir():
         yield from sorted(OPENCODE_AGENTS_DIR.glob("*.md"))
+
+
+def iter_antigravity_agents() -> Iterator[Path]:
+    if ANTIGRAVITY_AGENTS_DIR.is_dir():
+        yield from sorted(ANTIGRAVITY_AGENTS_DIR.glob("*.md"))
 
 
 def iter_claude_agents() -> Iterator[Path]:
@@ -670,13 +670,11 @@ def iter_manifests() -> Iterator[Path]:
 
 
 # Per-host hook manifests under hooks/. Names are load-bearing:
-#   hooks.json         -> Gemini CLI auto-discovers this name (do NOT rename)
-#   hooks-claude.json  -> Claude Code (referenced from .claude-plugin/plugin.json)
+#   hooks.json         -> Claude Code default plugin hook file
 #   hooks-cursor.json  -> Cursor (referenced from .cursor-plugin/plugin.json)
 #   hooks-codex.json   -> Codex CLI (referenced from .codex-plugin/plugin.json)
 HOOK_MANIFESTS = {
-    "hooks.json": "gemini",
-    "hooks-claude.json": "claude",
+    "hooks.json": "claude",
     "hooks-cursor.json": "cursor",
     "hooks-codex.json": "codex",
 }
@@ -693,7 +691,7 @@ def iter_hook_manifests() -> Iterator[tuple[Path, str]]:
 
 
 def validate_hook_manifest(path: Path, host: str) -> list[Violation]:
-    """Validate a hooks/hooks-<host>.json (or hooks.json for Gemini auto-discovery).
+    """Validate a hooks/hooks-<host>.json (or hooks.json for Claude auto-discovery).
 
     Enforces:
       * Valid JSON.
@@ -702,6 +700,8 @@ def validate_hook_manifest(path: Path, host: str) -> list[Violation]:
       * No deprecated PreToolUse `decision: "approve"|"block"` (April 2026 schema
         requires `hookSpecificOutput.permissionDecision`).
       * No reference to undocumented `${CLAUDE_PLUGIN_DATA}` env var.
+      * No legacy Google placeholder syntax in manifests that a shell can
+        execute directly before host substitution.
     """
     violations: list[Violation] = []
     try:
@@ -732,6 +732,20 @@ def validate_hook_manifest(path: Path, host: str) -> list[Violation]:
             )
         )
 
+    for placeholder in ("${/}", "${extensionPath}"):
+        if placeholder in text:
+            message = (
+                f"uses deprecated legacy Google placeholder {placeholder}; "
+                "shipped hook commands must parse under /bin/sh"
+            )
+            violations.append(
+                Violation(
+                    path,
+                    1,
+                    message,
+                )
+            )
+
     if re.search(r'"decision"\s*:\s*"(approve|block)"', text):
         violations.append(
             Violation(
@@ -751,8 +765,8 @@ def iter_all_shipped_files() -> Iterator[Path]:
         yield from sorted(SKILLS_DIR.rglob("*.md"))
     if COMMANDS_DIR.is_dir():
         yield from sorted(COMMANDS_DIR.rglob("*.toml"))
-    if AGENTS_DIR.is_dir():
-        yield from sorted(AGENTS_DIR.rglob("*.md"))
+    if ANTIGRAVITY_AGENTS_DIR.is_dir():
+        yield from sorted(ANTIGRAVITY_AGENTS_DIR.rglob("*.md"))
     if OPENCODE_AGENTS_DIR.is_dir():
         yield from sorted(OPENCODE_AGENTS_DIR.rglob("*.md"))
     if CLAUDE_AGENTS_DIR.is_dir():
@@ -789,7 +803,7 @@ def main() -> int:
     all_violations: list[Violation] = []
     skills = list(iter_skills())
     commands = list(iter_commands())
-    gemini_agents = list(iter_gemini_agents())
+    antigravity_agents = list(iter_antigravity_agents())
     opencode_agents = list(iter_opencode_agents())
     claude_agents = list(iter_claude_agents())
     codex_agents = list(iter_codex_agents())
@@ -804,8 +818,8 @@ def main() -> int:
     all_violations.extend(validate_skill_description_budget(skills))
     for cmd_path in commands:
         all_violations.extend(validate_command(cmd_path))
-    for agent_path in gemini_agents:
-        all_violations.extend(validate_gemini_agent(agent_path))
+    for agent_path in antigravity_agents:
+        all_violations.extend(validate_antigravity_agent(agent_path))
     for agent_path in opencode_agents:
         all_violations.extend(validate_opencode_agent(agent_path))
     for agent_path in claude_agents:
@@ -819,7 +833,7 @@ def main() -> int:
         _print_violations(all_violations)
         print(f"\n{len(all_violations)} violation(s)", file=sys.stderr)
         return 1
-    agent_total = len(gemini_agents) + len(opencode_agents) + len(claude_agents) + len(codex_agents)
+    agent_total = len(antigravity_agents) + len(opencode_agents) + len(claude_agents) + len(codex_agents)
     print(
         f"[ OK ] validated {len(skills)} skills, {len(commands)} commands, "
         f"{agent_total} agents, {len(hook_manifests)} hook manifests — no violations"

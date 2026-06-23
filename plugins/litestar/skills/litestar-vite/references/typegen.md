@@ -7,9 +7,11 @@ End-to-end type generation from the Litestar backend to TypeScript.
 | Output | Source | Purpose |
 | --- | --- | --- |
 | `openapi.json` | Litestar OpenAPI schema | Source of truth for SDK + schemas |
+| `routes.json` | Route metadata | JSON consumed by `litestar-vite-plugin` |
 | `routes.ts` | Route registry | Typed URL builder: `route("name", { params })` |
 | `schemas.ts` | Pydantic / msgspec DTOs | Typed models: `components["schemas"]["User"]` |
-| `inertia-pages.json` | Inertia handlers | Page-prop typing for Inertia adapters |
+| `inertia-pages.json` | Inertia handler metadata | JSON consumed by `litestar-vite-plugin` |
+| `page-props.ts` | Inertia page-prop types | Typed props for Inertia page components |
 
 ## Configuration
 
@@ -29,7 +31,8 @@ TypeGenConfig(
 
 ```bash
 litestar assets generate-types     # generate everything enabled
-litestar assets export-routes      # routes.ts only
+litestar assets export-routes      # routes.json metadata
+litestar assets export-routes --typescript  # routes.ts only
 ```
 
 When `types=TypeGenConfig(...)` and `dev_mode=True`, types regenerate on startup.
@@ -78,13 +81,13 @@ Pattern (1) is preferred — diffs surface in PR review.
 
 | Change | Re-trigger needed |
 | --- | --- |
-| Add/change a route handler | yes (`routes.ts`) |
+| Add/change a route handler | yes (`routes.json` and `routes.ts`) |
 | Add/change a Pydantic / msgspec DTO | yes (`schemas.ts`) |
-| Change Inertia handler / page name | yes (`inertia-pages.json`) |
+| Change Inertia handler / page name | yes (`inertia-pages.json` and `page-props.ts`) |
 | Refactor internal modules | no (if no API surface change) |
 
 ## Pitfalls
 
 - **Out-of-date types ⇒ runtime errors**. Always regenerate before `npm run build` in CI.
 - **Frontend imports stale generated/**. Add `.gitignore` if generating in CI; otherwise commit and verify.
-- **Inertia page-prop generation requires page handlers to use Inertia response helpers** — generic JSON handlers won't appear in `inertia-pages.json`.
+- **Inertia page-prop generation requires page handlers to use `component=` or Inertia response helpers** — generic JSON handlers won't appear in `inertia-pages.json`.

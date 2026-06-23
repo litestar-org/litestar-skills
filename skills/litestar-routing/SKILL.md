@@ -60,12 +60,16 @@ Use this skill for route handlers, Controllers, Routers, domain clustering, and 
 
 ```python
 from litestar import Controller, get
+from litestar.di import NamedDependency
 
 class UserController(Controller):
     path = "/users"
 
     @get("/")
-    async def list_users(self, users_service: UserService) -> list[UserRead]:
+    async def list_users(
+        self,
+        users_service: NamedDependency[UserService],
+    ) -> list[UserRead]:
         return await users_service.list_users()
 ```
 

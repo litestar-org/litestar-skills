@@ -34,7 +34,6 @@ $host_ = 'unknown'
 if ($env:CLAUDE_PLUGIN_ROOT)   { $host_ = 'claude'  }
 elseif ($env:CODEX_PLUGIN_ROOT) { $host_ = 'codex'   }
 elseif ($env:CURSOR_PLUGIN_ROOT){ $host_ = 'cursor'  }
-elseif ($env:GEMINI_CLI -or $env:GEMINI_EXTENSION_NAME) { $host_ = 'gemini' }
 
 switch ($host_) {
     { $_ -in 'claude','codex' } {
@@ -43,15 +42,6 @@ switch ($host_) {
                 hookEventName     = 'SessionStart'
                 additionalContext = $context
             }
-        }
-    }
-    'gemini' {
-        $out = [ordered]@{
-            hookSpecificOutput = [ordered]@{
-                hookEventName     = 'SessionStart'
-                additionalContext = $context
-            }
-            systemMessage = $context
         }
     }
     default {

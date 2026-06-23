@@ -64,16 +64,6 @@ def test_cursor_shape(litestar_cwd: Path) -> None:
     assert "litestar:litestar" in str(out["additional_context"])
 
 
-def test_gemini_shape(litestar_cwd: Path) -> None:
-    out = _run(litestar_cwd, {"GEMINI_CLI": "1"})
-    assert "hookSpecificOutput" in out
-    assert "systemMessage" in out
-    hs = out["hookSpecificOutput"]
-    assert isinstance(hs, dict)
-    assert hs["hookEventName"] == "SessionStart"
-    assert hs["additionalContext"] == out["systemMessage"]
-
-
 def test_unknown_host_falls_back_to_cursor_shape(litestar_cwd: Path) -> None:
     out = _run(litestar_cwd, {})
     assert "additional_context" in out
@@ -94,7 +84,6 @@ def test_emission_is_valid_json(litestar_cwd: Path) -> None:
         {"CLAUDE_PLUGIN_ROOT": "/x"},
         {"CODEX_PLUGIN_ROOT": "/x"},
         {"CURSOR_PLUGIN_ROOT": "/x"},
-        {"GEMINI_CLI": "1"},
         {},
     ):
         out = _run(litestar_cwd, env)

@@ -18,6 +18,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from litestar import Controller, get
+from litestar.di import NamedDependency
 from litestar.params import FromPath, SkipValidation  # Litestar >= 2.23
 
 from advanced_alchemy.extensions.litestar.providers import create_service_dependencies
@@ -53,8 +54,8 @@ class UserController(Controller):
     @get("/", operation_id="ListUsers", name="ListUsers", summary="List Users")
     async def list_users(
         self,
-        users_service: UserService,
-        filters: SkipValidation[list[FilterTypes]],
+        users_service: NamedDependency[UserService],
+        filters: NamedDependency[SkipValidation[list[FilterTypes]]],
     ) -> OffsetPagination[User]:
         results, total = await users_service.get_many_and_count(*filters)
         return users_service.to_schema(results, total, filters=filters, schema_type=User)
@@ -62,7 +63,7 @@ class UserController(Controller):
     @get("/{user_id:uuid}", operation_id="GetUser")
     async def get_user(
         self,
-        users_service: UserService,
+        users_service: NamedDependency[UserService],
         user_id: FromPath[UUID],
     ) -> User:
         db_user = await users_service.get(user_id)

@@ -46,20 +46,21 @@ def test_claude_marketplace_does_not_include_codex_policy() -> None:
 
 def test_host_facing_plugin_identity_is_litestar() -> None:
     """Host manifests should expose a clean `litestar` plugin/marketplace identity."""
+    antigravity_path = REPO_ROOT / "plugin.json"
     claude_marketplace_path = REPO_ROOT / ".claude-plugin" / "marketplace.json"
     claude_plugin_path = REPO_ROOT / ".claude-plugin" / "plugin.json"
     codex_marketplace_path = REPO_ROOT / ".agents" / "plugins" / "marketplace.json"
     codex_plugin_path = REPO_ROOT / ".codex-plugin" / "plugin.json"
-    gemini_path = REPO_ROOT / "gemini-extension.json"
     cursor_path = REPO_ROOT / ".cursor-plugin" / "plugin.json"
 
+    antigravity = json.loads(antigravity_path.read_text(encoding="utf-8"))
     claude_marketplace = json.loads(claude_marketplace_path.read_text(encoding="utf-8"))
     claude_plugin = json.loads(claude_plugin_path.read_text(encoding="utf-8"))
     codex_marketplace = json.loads(codex_marketplace_path.read_text(encoding="utf-8"))
     codex_plugin = json.loads(codex_plugin_path.read_text(encoding="utf-8"))
-    gemini = json.loads(gemini_path.read_text(encoding="utf-8"))
     cursor = json.loads(cursor_path.read_text(encoding="utf-8"))
 
+    assert antigravity["name"] == "litestar"
     assert claude_marketplace["name"] == "litestar"
     assert claude_marketplace["plugins"][0]["name"] == "litestar"
     assert claude_plugin["name"] == "litestar"
@@ -67,7 +68,6 @@ def test_host_facing_plugin_identity_is_litestar() -> None:
     assert codex_marketplace["plugins"][0]["name"] == "litestar"
     assert codex_marketplace["plugins"][0]["source"]["path"] == "./plugins/litestar"
     assert codex_plugin["name"] == "litestar"
-    assert gemini["name"] == "litestar"
     assert cursor["name"] == "litestar"
 
 

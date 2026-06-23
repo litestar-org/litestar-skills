@@ -9,13 +9,13 @@ description: "Auto-activate for litestar_vite, VitePlugin, ViteConfig, PathConfi
 
 The reference apps use `spa`, `template`, `htmx`, `hybrid` / `inertia`, `framework` / `ssr` / `ssg`, and `external` modes. Inertia is one `VitePlugin` configured with `ViteConfig(inertia=InertiaConfig(...))`; the plugin wires the internal Inertia integration from that config.
 
-The plugin pairs with the npm package [`litestar-vite-plugin`](https://www.npmjs.com/package/litestar-vite-plugin) on the JS side. Both must agree on `input`, `bundleDir`, `hotFile`, and asset URL.
+The plugin pairs with the npm package [`litestar-vite-plugin`](https://www.npmjs.com/package/litestar-vite-plugin) on the JS side. Python `ViteConfig` is the source of truth; the generated `.litestar.json` bridge lets JS config normally keep only `litestar({ input: [...] })`.
 
 ## Code Style Rules
 
 - **Python**: PEP 604 unions (`T | None`); consumer Litestar app modules MAY use `from __future__ import annotations`.
 - **TypeScript**: strict mode; `defineConfig` from `vite`; one `vite.config.ts` per frontend project.
-- The Python `ViteConfig` and JS `vite.config.ts` are a single coupled contract. Change them together or HMR/manifest will silently break.
+- Keep `ViteConfig` as the source of truth. Only duplicate `bundleDir`, `hotFile`, or `assetUrl` in `vite.config.ts` for deliberate standalone/override workflows.
 
 ## Quick Reference
 
@@ -23,16 +23,15 @@ The plugin pairs with the npm package [`litestar-vite-plugin`](https://www.npmjs
 
 ```python
 from litestar import Litestar
-from litestar_vite import PathConfig, RuntimeConfig, ViteConfig, VitePlugin
+from litestar_vite import PathConfig, ViteConfig, VitePlugin
 
 vite_config = ViteConfig(
     mode="spa",
     paths=PathConfig(
         resource_dir="resources",       # frontend source root
         bundle_dir="public",            # built assets land here
-        hot_file="hot",                 # MUST match vite.config.ts hotFile
+        hot_file="hot",                 # written to the .litestar.json bridge
     ),
-    runtime=RuntimeConfig(port=5173),
     dev_mode=True,                      # toggled by env in production
 )
 
@@ -50,7 +49,6 @@ import react from "@vitejs/plugin-react"
 export default defineConfig({
   clearScreen: false,
   publicDir: "public",
-  server: { cors: true },
   plugins: [
     react(),
     litestar({
@@ -117,7 +115,7 @@ vite_config = ViteConfig(
 )
 ```
 
-### Canonical fullstack-spa pattern
+### Explicit fullstack-spa override pattern
 
 From [litestar-fullstack](https://github.com/litestar-org/litestar-fullstack) — `src/js/web/vite.config.ts`:
 
@@ -134,8 +132,7 @@ export default defineConfig({
   base: process.env.ASSET_URL ?? "/static/web/",
   publicDir: "public",
   server: {
-    cors: true,
-    port: Number(process.env.VITE_PORT ?? 3006),
+    port: Number(process.env.VITE_PORT ?? 3006), // direct/two-port workflows only
   },
   build: {
     outDir: path.resolve(__dirname, "../../py/app/server/static/web"),
@@ -164,7 +161,7 @@ from app import config
 vite = VitePlugin(config=config.vite)
 ```
 
-The `config.vite` `ViteConfig` references the **same** `bundle_dir`, `hot_file`, and `resource_dir` paths as the JS-side `vite.config.ts`. They are one coupled contract.
+The `config.vite` `ViteConfig` owns `bundle_dir`, `hot_file`, and `resource_dir`. Duplicate them in JS only when intentionally overriding the `.litestar.json` bridge, as this explicit mono-repo example does.
 
 ### Type Generation
 
@@ -181,15 +178,18 @@ TypeGenConfig(
 | Output | Path | Trigger | Frontend Use |
 | --- | --- | --- | --- |
 | `openapi.json` | `output/openapi.json` | Whenever OpenAPI schema changes | Source of truth for SDK + schemas |
+| `routes.json` | `output/routes.json` | Route table changes | Route metadata consumed by the JS plugin |
 | `routes.ts` | `output/routes.ts` | Route table changes | `route("name", { params })` typed URL builder |
 | `schemas.ts` | `output/schemas.ts` | Pydantic / msgspec DTO changes | `components["schemas"]["User"]` typed models |
-| `inertia-pages.json` | `output/inertia-pages.json` | Inertia handlers added/changed | Page-prop typing for Inertia adapters |
+| `inertia-pages.json` | `output/inertia-pages.json` | Inertia handlers added/changed | Page-prop metadata consumed by the JS plugin |
+| `page-props.ts` | `output/page-props.ts` | Inertia handlers added/changed | Typed props for Inertia page components |
 
 CLI:
 
 ```bash
 litestar assets generate-types          # one-off generation
-litestar assets export-routes           # routes.ts only
+litestar assets export-routes           # routes.json metadata
+litestar assets export-routes --typescript  # routes.ts only
 litestar --app app:app run              # generates on startup if enabled
 ```
 
@@ -253,8 +253,9 @@ litestar assets install          # Run npm/pnpm/bun install
 litestar assets serve            # Start Vite dev server (also auto-started when `dev_mode=True`)
 litestar assets build            # Production build (emits manifest.json + hashed bundles)
 litestar assets generate-types   # TypeScript type generation
-litestar assets export-routes    # routes.ts only
-litestar assets status           # Verify integration health
+litestar assets export-routes    # routes.json metadata
+litestar assets doctor           # Diagnose integration health
+litestar assets status           # Read-only status summary
 ```
 
 ### HMR
@@ -263,15 +264,15 @@ In dev mode:
 
 1. Vite dev server runs on `runtime.port` (e.g., `5173`).
 2. Plugin writes a "hot file" (path = `hot_file`) signaling dev-mode is active.
-3. `vite()` returns proxied URLs (`http://localhost:5173/...`) instead of manifest paths.
+3. `vite()` returns Litestar-proxied dev URLs by default instead of manifest paths.
 4. `vite_hmr()` injects the HMR client script.
 5. On rebuild, Vite pushes updates over WS; the page hot-swaps without a reload.
 
 Common HMR gotchas:
 
-- **Hot file mismatch**: `ViteConfig.paths.hot_file` and `vite.config.ts` `hotFile` must point to the same marker. Mismatch ⇒ stale prod URLs in dev.
-- **CORS errors**: set `server.cors: true` in `vite.config.ts` so the Litestar origin can fetch dev assets.
-- **Port conflict**: pin `runtime.port` and `server.port`; do not let Vite auto-pick.
+- **Hot file mismatch**: remove JS `hotFile` overrides or align them with `ViteConfig.paths.hot_file`. Mismatch ⇒ stale prod URLs in dev.
+- **CORS errors**: use default proxy mode first. In direct/two-port mode, set `server.cors: true` so the Litestar origin can fetch dev assets.
+- **Port conflict**: proxy mode can auto-pick a Vite port. In direct/two-port mode, pin `runtime.port` and `server.port`.
 - **Browsers cache `manifest.json`**: cache-bust by hash; never serve manifest.json from a CDN with long TTL.
 
 ### Production Build & Deploy
@@ -349,11 +350,11 @@ Optional bootstrap: `litestar assets init` scaffolds `vite.config.ts` + `package
 
 ### Step 3: Wire ViteConfig (Python)
 
-Define `ViteConfig` with `bundle_dir`, `resource_dir`, `hot_file`, `runtime` settings. Toggle `dev_mode` from an env var. Add to `Litestar(plugins=[VitePlugin(config=...)])`.
+Define `ViteConfig` with `paths=PathConfig(...)`, optional `runtime=RuntimeConfig(...)`, and optional `types=True` / `types=TypeGenConfig(...)`. Toggle `dev_mode` from an env var. Add to `Litestar(plugins=[VitePlugin(config=...)])`.
 
 ### Step 4: Wire vite.config.ts (JS)
 
-Add `litestar()` plugin with matching `input`, `bundleDir`, `hotFile`. Set `server.cors: true`, pin `server.port`, set `base` for prod CDN if needed.
+Add `litestar()` with `input`. Let the `.litestar.json` bridge provide `bundleDir`, `hotFile`, typegen paths, and asset URL unless you are deliberately overriding Python config. Set `base` for prod CDN if needed.
 
 ### Step 5: Enable Type Generation (optional)
 
@@ -378,9 +379,9 @@ For HTMX, register `HTMXPlugin()` and keep `ViteConfig(mode="htmx", ...)`.
 
 ## Guardrails
 
-- **`ViteConfig` paths and `vite.config.ts` paths are a single contract** — `bundle_dir`, `hot_file`, `resource_dir`, asset URL, `input` must agree. Mismatch breaks HMR or manifest resolution silently.
-- **Pin `server.port` in `vite.config.ts`** — auto-picked ports break the plugin's URL resolution.
-- **Set `server.cors: true`** when Litestar serves on a different origin than Vite in dev.
+- **`ViteConfig` is the source of truth** — avoid JS-side `bundleDir`, `hotFile`, and `assetUrl` overrides unless this is a standalone/mono-repo override. Mismatch breaks HMR or manifest resolution silently.
+- **Use proxy mode by default** — Vite can auto-pick a port and the hot file carries the actual URL. Pin `server.port` only for direct/two-port workflows.
+- **Set `server.cors: true` only for different public origins** — proxy mode keeps Litestar as the public origin.
 - **Toggle `dev_mode` from env**, never hardcode `True` in committed code — leaving dev mode on in prod proxies to a non-existent dev server.
 - **Keep `RuntimeConfig.start_dev_server=True` in dev** so `litestar run` starts/stops Vite. For prod, set `dev_mode=False`.
 - **Commit generated types** OR regenerate in CI and check no diff — a drift between OpenAPI and `schemas.ts` is a runtime error.
@@ -400,11 +401,10 @@ Before delivering a `litestar-vite` integration, verify:
 - [ ] Mode (`spa` / `template` / `htmx` / `hybrid` / `framework` / `external`) is explicit
 - [ ] HTMX apps use `mode="htmx"` with `HTMXPlugin()`
 - [ ] Inertia apps put `InertiaConfig` on `ViteConfig` and register one `VitePlugin`
-- [ ] `ViteConfig.paths.bundle_dir` and `vite.config.ts` `bundleDir` match
-- [ ] `ViteConfig.paths.hot_file` and `vite.config.ts` `hotFile` match
+- [ ] JS-side `bundleDir` / `hotFile` / `assetUrl` overrides are absent or intentionally match `ViteConfig`
 - [ ] `dev_mode` is env-toggled
-- [ ] `server.port` is pinned in `vite.config.ts`
-- [ ] `server.cors: true` if Litestar and Vite are on different origins in dev
+- [ ] Direct/two-port workflows pin `server.port`; proxy-mode workflows do not rely on a fixed Vite port
+- [ ] `server.cors: true` only if Litestar and Vite are different public origins in dev
 - [ ] Template base file uses `vite_hmr()` before `vite(...)`
 - [ ] If `types=TypeGenConfig(...)`, generated types are committed or CI verifies they are up-to-date
 - [ ] Production build sets `dev_mode=False` and ships `manifest.json` + hashed bundles
@@ -463,7 +463,7 @@ export default defineConfig({
   clearScreen: false,
   base: process.env.ASSET_URL ?? "/static/web/",
   publicDir: "public",
-  server: { cors: true, port: Number(process.env.VITE_PORT ?? 3006) },
+  server: { port: Number(process.env.VITE_PORT ?? 3006) }, // direct/two-port workflows only
   build: {
     outDir: path.resolve(__dirname, "../../py/app/server/static/web"),
     emptyOutDir: true,
@@ -474,8 +474,8 @@ export default defineConfig({
     react(),
     litestar({
       input: ["src/main.tsx", "src/styles.css"],
-      bundleDir: path.resolve(__dirname, "../../py/app/server/static/web"),
-      hotFile: path.resolve(__dirname, "../../py/app/server/static/web/hot"),
+      bundleDir: path.resolve(__dirname, "../../py/app/server/static/web"), // explicit override
+      hotFile: path.resolve(__dirname, "../../py/app/server/static/web/hot"), // explicit override
     }),
   ],
   resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
