@@ -25,6 +25,7 @@ from tests.hooks._subproc import bash_executable, subprocess_env
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 HOOKS_DIR = REPO_ROOT / "hooks"
+PACKAGE_HOOKS_DIR = REPO_ROOT / "plugins" / "litestar" / "hooks"
 
 # Manifest filename + the JSON event key per host.
 MANIFESTS = {
@@ -34,9 +35,9 @@ MANIFESTS = {
 }
 
 
-def _command_for(host: str) -> str:
+def _command_for(host: str, hooks_dir: Path = HOOKS_DIR) -> str:
     filename, event = MANIFESTS[host]
-    data = cast("dict[str, Any]", json.loads((HOOKS_DIR / filename).read_text(encoding="utf-8")))
+    data = cast("dict[str, Any]", json.loads((hooks_dir / filename).read_text(encoding="utf-8")))
     matcher = data["hooks"][event][0]
     # Claude/Codex nest a "hooks" array under the matcher; Cursor puts "command" on the matcher directly.
     entry = matcher["hooks"][0] if "hooks" in matcher else matcher
@@ -103,6 +104,34 @@ def test_codex_command_resolves_without_plugin_root(litestar_project: Path, fake
     assert "hookSpecificOutput" in out, out
     assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
     assert "litestar:litestar" in out["hookSpecificOutput"]["additionalContext"]
+
+
+@pytest.mark.parametrize("host", sorted(MANIFESTS))
+@pytest.mark.parametrize(
+    "hooks_dir",
+    [HOOKS_DIR, PACKAGE_HOOKS_DIR],
+    ids=["canonical", "codex-package"],
+)
+def test_hook_commands_noop_when_plugin_root_cannot_be_resolved(
+    host: str,
+    hooks_dir: Path,
+    litestar_project: Path,
+    tmp_path: Path,
+) -> None:
+    """A missing host root must not become ./hooks/session-start.sh and exit 127."""
+    result = _run_command(
+        _command_for(host, hooks_dir),
+        cwd=litestar_project,
+        overrides={
+            "HOME": str(tmp_path / "empty-home"),
+            "PLUGIN_ROOT": "",
+            "CODEX_PLUGIN_ROOT": "",
+            "CLAUDE_PLUGIN_ROOT": "",
+            "CURSOR_PLUGIN_ROOT": "",
+        },
+    )
+    assert result.returncode == 0, f"{host} command exited {result.returncode}: {result.stderr!r}"
+    assert result.stdout == ""
 
 
 def test_codex_command_prefers_plugin_root_when_set(litestar_project: Path) -> None:

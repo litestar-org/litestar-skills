@@ -702,6 +702,8 @@ def validate_hook_manifest(path: Path, host: str) -> list[Violation]:
       * No reference to undocumented `${CLAUDE_PLUGIN_DATA}` env var.
       * No legacy Google placeholder syntax in manifests that a shell can
         execute directly before host substitution.
+      * No bare current-working-directory fallback for hook roots; host commands
+        must check that ``./hooks/session-start.sh`` exists before using it.
     """
     violations: list[Violation] = []
     try:
@@ -745,6 +747,16 @@ def validate_hook_manifest(path: Path, host: str) -> list[Violation]:
                     message,
                 )
             )
+
+    if re.search(r"\$\{[A-Za-z_][A-Za-z0-9_]*:-\.\}", text):
+        violations.append(
+            Violation(
+                path,
+                1,
+                "hook root command must not fall back to the current working directory without checking "
+                "./hooks/session-start.sh first",
+            )
+        )
 
     if re.search(r'"decision"\s*:\s*"(approve|block)"', text):
         violations.append(

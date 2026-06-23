@@ -7,6 +7,7 @@ executes end-to-end.
 """
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -420,19 +421,8 @@ class TestValidateHookManifest:
         hooks_dir = root / "hooks"
         hooks_dir.mkdir(parents=True, exist_ok=True)
         path = hooks_dir / filename
-        path.write_text(
-            (
-                "{\n"
-                '  "hooks": {\n'
-                '    "SessionStart": [\n'
-                '      {"hooks": [{"type": "command", "command": '
-                f"{command!r}"
-                "}]}\n"
-                "    ]\n"
-                "  }\n"
-                "}\n"
-            ).replace("'", '"')
-        )
+        data = {"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": command}]}]}}
+        path.write_text(json.dumps(data, indent=2) + "\n")
         return path
 
     def test_rejects_legacy_google_path_separator_placeholder(self, tmp_path: Path) -> None:
@@ -448,6 +438,20 @@ class TestValidateHookManifest:
         path = self._write_manifest(tmp_path, "node ${extensionPath}/hooks/session-start.js")
         violations = mod.validate_hook_manifest(path, "claude")
         assert any("${extensionPath}" in v.message for v in violations)
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            'r="${CURSOR_PLUGIN_ROOT:-.}"; bash "${r%/}/hooks/session-start.sh"',
+            'r="${r:-.}"; bash "${r%/}/hooks/session-start.sh"',
+        ],
+    )
+    def test_rejects_bare_cwd_fallback_for_hook_roots(self, tmp_path: Path, command: str) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        path = self._write_manifest(tmp_path, command)
+        violations = mod.validate_hook_manifest(path, "claude")
+        assert any("current working directory" in v.message.lower() for v in violations)
 
 
 class TestValidateCodexAgent:
