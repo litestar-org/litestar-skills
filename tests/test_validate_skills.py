@@ -453,6 +453,21 @@ class TestValidateHookManifest:
         violations = mod.validate_hook_manifest(path, "claude")
         assert any("current working directory" in v.message.lower() for v in violations)
 
+    def test_iter_hook_manifests_includes_antigravity_root_hooks(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        root_hook = tmp_path / "hooks.json"
+        root_hook.write_text(json.dumps({"hooks": {"SessionStart": []}}) + "\n")
+        claude_hook = self._write_manifest(
+            tmp_path,
+            'r="${CLAUDE_PLUGIN_ROOT:-}"; [ -n "$r" ] || exit 0; bash "${r%/}/hooks/session-start.sh"',
+        )
+
+        manifests = dict(mod.iter_hook_manifests())
+
+        assert manifests[root_hook] == "antigravity"
+        assert manifests[claude_hook] == "claude"
+
 
 class TestValidateCodexAgent:
     def _write_agent(

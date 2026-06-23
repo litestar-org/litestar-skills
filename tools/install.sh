@@ -189,8 +189,10 @@ prepare_antigravity_payload() {
     run rm -rf "$ANTIGRAVITY_PAYLOAD"
     run mkdir -p "$ANTIGRAVITY_PAYLOAD/agents"
     run cp "${PROJECT_ROOT}/plugin.json" "${ANTIGRAVITY_PAYLOAD}/plugin.json"
+    run cp "${PROJECT_ROOT}/hooks.json" "${ANTIGRAVITY_PAYLOAD}/hooks.json"
     run cp -R "${PROJECT_ROOT}/skills" "${ANTIGRAVITY_PAYLOAD}/skills"
     run cp -R "${PROJECT_ROOT}/commands" "${ANTIGRAVITY_PAYLOAD}/commands"
+    run cp -R "${PROJECT_ROOT}/hooks" "${ANTIGRAVITY_PAYLOAD}/hooks"
     run cp "${PROJECT_ROOT}"/agents/*.md "${ANTIGRAVITY_PAYLOAD}/agents/"
 }
 

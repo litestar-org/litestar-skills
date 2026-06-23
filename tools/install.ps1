@@ -217,8 +217,10 @@ function Initialize-AntigravityPayload {
         }
         New-Item -ItemType Directory -Path (Join-Path $stage 'agents') -Force | Out-Null
         Copy-Item (Join-Path $script:RepoRoot 'plugin.json') (Join-Path $stage 'plugin.json')
+        Copy-Item (Join-Path $script:RepoRoot 'hooks.json') (Join-Path $stage 'hooks.json')
         Copy-Item (Join-Path $script:RepoRoot 'skills') (Join-Path $stage 'skills') -Recurse
         Copy-Item (Join-Path $script:RepoRoot 'commands') (Join-Path $stage 'commands') -Recurse
+        Copy-Item (Join-Path $script:RepoRoot 'hooks') (Join-Path $stage 'hooks') -Recurse
         Get-ChildItem (Join-Path $script:RepoRoot 'agents') -Filter '*.md' -File |
             Copy-Item -Destination (Join-Path $stage 'agents')
     }

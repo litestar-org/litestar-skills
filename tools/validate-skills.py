@@ -669,23 +669,22 @@ def iter_manifests() -> Iterator[Path]:
             yield candidate
 
 
-# Per-host hook manifests under hooks/. Names are load-bearing:
-#   hooks.json         -> Claude Code default plugin hook file
-#   hooks-cursor.json  -> Cursor (referenced from .cursor-plugin/plugin.json)
-#   hooks-codex.json   -> Codex CLI (referenced from .codex-plugin/plugin.json)
+# Per-host hook manifests. Names and locations are load-bearing:
+#   hooks.json               -> Antigravity CLI plugin root hook file
+#   hooks/hooks.json         -> Claude Code default plugin hook file
+#   hooks/hooks-cursor.json  -> Cursor (referenced from .cursor-plugin/plugin.json)
+#   hooks/hooks-codex.json   -> Codex CLI (referenced from .codex-plugin/plugin.json)
 HOOK_MANIFESTS = {
-    "hooks.json": "claude",
-    "hooks-cursor.json": "cursor",
-    "hooks-codex.json": "codex",
+    "hooks.json": "antigravity",
+    "hooks/hooks.json": "claude",
+    "hooks/hooks-cursor.json": "cursor",
+    "hooks/hooks-codex.json": "codex",
 }
 
 
 def iter_hook_manifests() -> Iterator[tuple[Path, str]]:
-    hooks_dir = REPO_ROOT / "hooks"
-    if not hooks_dir.is_dir():
-        return
-    for name, host in HOOK_MANIFESTS.items():
-        candidate = hooks_dir / name
+    for rel, host in HOOK_MANIFESTS.items():
+        candidate = REPO_ROOT / rel
         if candidate.is_file():
             yield candidate, host
 

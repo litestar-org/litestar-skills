@@ -38,7 +38,7 @@ Document hosts by the artifacts this repo ships. Do not describe hosts as compat
 | Host | Entry Point | Notes |
 | --- | --- | --- |
 | **Claude Code** | `.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` + `.claude-plugin/agents/*.md` | Full plugin with skills, commands, agents, hooks. |
-| **Antigravity CLI** | `plugin.json` + `agents/*.md` + `skills/` | Google CLI plugin with Markdown subagent templates. |
+| **Antigravity CLI** | `plugin.json` + `hooks.json` + `agents/*.md` + `skills/` + `hooks/` | Google CLI plugin with Markdown subagent templates and SessionStart hooks. |
 | **Codex CLI** | `.codex-plugin/plugin.json` + `.codex/agents/*.toml` + `.codex/config.toml` | Custom agents ship as pure TOML (tools inherited from session). |
 | **OpenCode** | `.opencode/plugins/litestar.js` + `.opencode/agents/*.md` + native `.claude/skills/` / `.agents/skills/` reads | JS plugin wrapper + dict-schema agents. |
 | **Cursor** | `.cursor-plugin/plugin.json` | Hooks via `hooks/hooks-cursor.json`. |
@@ -56,7 +56,7 @@ Document hosts by the artifacts this repo ships. Do not describe hosts as compat
 | Subagents (Codex CLI) | `.codex/agents/<agent-name>.toml` (pure TOML; `developer_instructions` holds the prompt; no top-level `tools` — inherited from session `config.toml`) |
 | Subagents (OpenCode) | `.opencode/agents/<agent-name>.md` (`tools` as dict mapping + `mode: subagent`) |
 | MCP servers | `mcp-servers/<server-name>/` |
-| Hooks | `hooks/hooks-<host>.json` + `hooks/session-start.{sh,ps1,js}` + `hooks/lib/{detect-env.{sh,ps1,js},_detector.py,skill-map.json}` |
+| Hooks | Root `hooks.json` for Antigravity CLI; `hooks/hooks-<host>.json` for Claude/Cursor/Codex; shared runtime in `hooks/session-start.{sh,ps1,js}` + `hooks/lib/{detect-env.{sh,ps1,js},_detector.py,skill-map.json}` |
 | Templates | `templates/skill-template/` |
 
 ## Harness Names
@@ -74,7 +74,7 @@ Canonical command files live in `commands/litestar/*.toml`. Generated subagents 
 
 ## Hooks
 
-The SessionStart hook scans the project's cwd for known Litestar-ecosystem signals (pyproject deps, `[tool.<lib>]` sections, Python imports, file globs in `hooks/lib/skill-map.json`) and injects per-host context naming the relevant `litestar:<skill>` skills. Detection logic lives in `hooks/lib/_detector.py` (the canonical Python implementation reused by `detect-env.sh` and `detect-env.ps1`) and a parallel ESM port in `hooks/lib/detect-env.js` (used by the OpenCode plugin). Per-host shims: `hooks/hooks.json` (Claude Code default plugin hook file), `hooks/hooks-cursor.json` (Cursor), and `hooks/hooks-codex.json` (Codex). Override via `LITESTAR_SKILLS_HOOK_DISABLE=1`. Run `make test-hooks` to exercise the suite.
+The SessionStart hook scans the project's cwd for known Litestar-ecosystem signals (pyproject deps, `[tool.<lib>]` sections, Python imports, file globs in `hooks/lib/skill-map.json`) and injects per-host context naming the relevant `litestar:<skill>` skills. Detection logic lives in `hooks/lib/_detector.py` (the canonical Python implementation reused by `detect-env.sh` and `detect-env.ps1`) and a parallel ESM port in `hooks/lib/detect-env.js` (used by the OpenCode plugin). Per-host shims: root `hooks.json` (Antigravity CLI plugin hook file), `hooks/hooks.json` (Claude Code default plugin hook file), `hooks/hooks-cursor.json` (Cursor), and `hooks/hooks-codex.json` (Codex). Override via `LITESTAR_SKILLS_HOOK_DISABLE=1`. Run `make test-hooks` to exercise the suite.
 
 ## Development Commands
 
