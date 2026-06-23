@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import cast
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -75,6 +77,23 @@ def test_python_distribution_remains_litestar_skills() -> None:
     """The clean host identity break does not rename the Python package."""
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert '\nname = "litestar-skills"\n' in pyproject
+
+
+def test_ci_smoke_harness_targets_current_host_artifacts() -> None:
+    """CI smoke tests must validate shipped host artifacts, not removed manifests."""
+    workflow_path = REPO_ROOT / ".github" / "workflows" / "test.yml"
+    workflow_text = workflow_path.read_text(encoding="utf-8")
+    workflow = yaml.safe_load(workflow_text)
+
+    smoke = workflow["jobs"]["smoke-test"]
+    assert {"host": "antigravity-cli", "install_name": "antigravity"} in smoke["strategy"]["matrix"]["include"]
+    assert "gemini-extension.json" not in workflow_text
+    assert "install_name: gemini" not in workflow_text
+
+    manifest_step = next(step for step in smoke["steps"] if step.get("name") == "Verify plugin manifest parses")
+    manifest_command = manifest_step["run"]
+    assert "json.load(open('plugin.json'))" in manifest_command
+    assert "agents/litestar-reviewer.md" in manifest_command
 
 
 def test_codex_plugin_manifest_agents_is_string() -> None:

@@ -59,7 +59,7 @@ jobs:
       - name: Run tests
         run: make test
 
-  # Pragmatic smoke test: the upstream Claude Code / Gemini CLI container
+  # Pragmatic smoke test: the upstream Claude Code / Antigravity CLI container
   # images are not yet stable enough to run a full plugin-load step. For now
   # we exercise install.sh --dry-run (catches host-detection and path-layout
   # bugs), parse the host-specific manifest JSON (catches schema drift), and
@@ -72,12 +72,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        host: [claude-code, gemini-cli]
+        host: [claude-code, antigravity-cli]
         include:
           - host: claude-code
             install_name: claude
-          - host: gemini-cli
-            install_name: gemini
+          - host: antigravity-cli
+            install_name: antigravity
     env:
       HOST: ${{ matrix.host }}
       INSTALL_NAME: ${{ matrix.install_name }}
@@ -108,8 +108,9 @@ jobs:
               uv run python -c "import json; json.load(open('.claude-plugin/plugin.json'))"
               uv run python -c "import json; json.load(open('.claude-plugin/marketplace.json'))"
               ;;
-            gemini-cli)
-              uv run python -c "import json; json.load(open('gemini-extension.json'))"
+            antigravity-cli)
+              uv run python -c "import json; json.load(open('plugin.json'))"
+              test -f agents/litestar-reviewer.md
               ;;
           esac
 
