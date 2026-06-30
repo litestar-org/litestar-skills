@@ -18,7 +18,7 @@ Raw SQL / Builder API / SQL File
     Driver Adapter (execute against database)
         |
         v
-    Result (rows, Arrow, scalar, rowcount)
+    Result (rows, Arrow, scalar, rows_affected)
 ```
 
 The `SQL` object is the single source of truth. All operations produce new `SQL` instances (immutability). The pipeline is single-pass: parse once, transform once, validate once.

@@ -18,6 +18,7 @@ See `hmr.md` for the full debug checklist. Quick summary:
 - Vite not actually running (check `litestar run` logs)
 - CORS / port mismatch in direct mode
 - Missing `vite_hmr()` in template
+- Vite 8.1+ config still puts HMR network fields under `server.hmr` instead of `server.ws`
 
 ## Type Generation Fails
 
@@ -44,6 +45,15 @@ See `hmr.md` for the full debug checklist. Quick summary:
 | Page renders as JSON, not HTML | `ViteConfig.inertia` missing or route lacks `component=` / Inertia response helper | Add `InertiaConfig(...)` to `ViteConfig`; set `mode="hybrid"` when explicit mode is needed |
 | Type errors on page props | `inertia-pages.json` / `page-props.ts` stale | Re-run `litestar assets generate-types` |
 | First-load works, navigations break | `root_template` missing Inertia head tags | Use Inertia layout pattern in `base.html` |
+| Structured handler return nests under `content` or boots as JSON | Running pre-0.24.1 behavior or bypassing the Inertia wrapper | Upgrade to `litestar-vite>=0.24.1`; return a prop bag from a `component=` handler |
+| Deferred props loop after partial reload | Resolved keys are echoed back in `deferredProps` | Upgrade to `litestar-vite>=0.24.0`; resolved partial-reload keys are stripped from metadata |
+
+## SPA Catch-All Issues
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Non-root `spa_path` such as `/ui` returns `Not an SPA route` | SPA handler's own route is treated as a non-SPA Litestar route in pre-0.24.0 versions | Upgrade to `litestar-vite>=0.24.0`; keep real API routes registered normally |
+| API routes return SPA HTML | Catch-all SPA route is too broad or registered before explicit routes | Register explicit API routes and let SPA fallback serve only non-Litestar paths |
 
 ## Performance
 

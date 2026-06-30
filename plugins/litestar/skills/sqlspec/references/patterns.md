@@ -5,7 +5,7 @@
 `SQLSpecAsyncService` ships upstream in `sqlspec.service`. Use it as the base class for app services that wrap an async driver with helpers like `paginate`, `get_one`, `exists`, and `begin_transaction`.
 
 ```python
-from sqlspec.core.filters import OffsetPagination
+from sqlspec.core.filters import LimitOffsetFilter, OffsetPagination
 from sqlspec.service import SQLSpecAsyncService
 
 
@@ -13,9 +13,8 @@ class UserService(SQLSpecAsyncService):
     async def list_users(self, page: int = 1, page_size: int = 20) -> OffsetPagination[User]:
         return await self.paginate(
             "SELECT * FROM users ORDER BY created_at DESC",
+            LimitOffsetFilter(limit=page_size, offset=page_size * (page - 1)),
             schema_type=User,
-            page=page,
-            page_size=page_size,
         )
 
     async def get_user(self, user_id: str) -> User:
@@ -35,11 +34,13 @@ class UserService(SQLSpecAsyncService):
         async with self.begin_transaction() as tx:
             await tx.execute(
                 "UPDATE accounts SET balance = balance - $1 WHERE id = $2",
-                [amount, from_id],
+                amount,
+                from_id,
             )
             await tx.execute(
                 "UPDATE accounts SET balance = balance + $1 WHERE id = $2",
-                [amount, to_id],
+                amount,
+                to_id,
             )
 ```
 
@@ -71,7 +72,7 @@ result = await db_session.execute_many(
     "INSERT INTO users (name, email) VALUES ($1, $2)",
     users,
 )
-print(f"Inserted {result.rowcount} rows")
+print(f"Inserted {result.rows_affected} rows")
 ```
 
 ### Batch with Dicts
@@ -128,7 +129,7 @@ query = (
 )
 
 stmt = query.to_statement()
-rows = await db_session.select_many(stmt, schema_type=DeptSummary)
+rows = await db_session.select(stmt, schema_type=DeptSummary)
 ```
 
 ---

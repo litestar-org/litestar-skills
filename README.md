@@ -6,7 +6,7 @@
 
 ## Status
 
-**v0.4.0 — early access.** Multi-host plumbing, 28 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
+**v0.5.0 — early access.** Multi-host plumbing, 29 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
 
 **Breaking host identity note:** host-facing marketplace, plugin, extension, managed-config, and skill namespace IDs are `litestar`. Existing installs under `litestar-skills` should be removed and reinstalled; no alias is shipped. The Python package and repository remain `litestar-skills`.
 
@@ -268,7 +268,7 @@ Per-host uninstall:
 
 ## What's In This Repo
 
-28 skills, focused references, ~28,500+ lines of canonical content:
+29 skills, focused references, ~28,500+ lines of canonical content:
 
 | Category | Skills |
 | --- | --- |
@@ -277,7 +277,7 @@ Per-host uninstall:
 | Foundation | `litestar-styleguide` |
 | Data | `advanced-alchemy`, `sqlspec`, `msgspec` |
 | Server | `litestar-granian` |
-| Tasks | `litestar-saq` |
+| Tasks | `litestar-saq`, `litestar-queues` |
 | Frontend | `litestar-vite`, `litestar-inertia`, `litestar-htmx` |
 | Integrations | `litestar-mcp`, `litestar-email` |
 | Packaging | `litestar-build` |

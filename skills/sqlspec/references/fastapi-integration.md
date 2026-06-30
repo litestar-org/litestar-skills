@@ -144,7 +144,7 @@ SessionDep = Annotated[AsyncpgDriver, Depends(db_plugin.provide_session())]
 
 @app.get("/orders/{order_id}")
 async def get_order(order_id: int, db: SessionDep) -> dict[str, Any]:
-    rows = await db.select("SELECT * FROM orders WHERE id = $1", [order_id])
+    rows = await db.select("SELECT * FROM orders WHERE id = $1", order_id)
     return {"order": rows[0] if rows else None}
 ```
 
@@ -454,14 +454,16 @@ async def create_order(payload: dict[str, Any], db: SessionDep) -> dict[str, Any
         raise HTTPException(status_code=422, detail="customer_id and amount required")
     result = await db.execute(
         "INSERT INTO orders (customer_id, status, amount) VALUES ($1, $2, $3) RETURNING id",
-        [payload["customer_id"], "pending", payload["amount"]],
+        payload["customer_id"],
+        "pending",
+        payload["amount"],
     )
     return {"id": result.one()["id"]}
 
 
 @app.get("/orders/{order_id}")
 async def get_order(order_id: int, db: SessionDep) -> dict[str, Any]:
-    rows = await db.select("SELECT * FROM orders WHERE id = $1", [order_id])
+    rows = await db.select("SELECT * FROM orders WHERE id = $1", order_id)
     if not rows:
         raise HTTPException(status_code=404, detail="order not found")
     return {"order": rows[0]}

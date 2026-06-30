@@ -83,6 +83,8 @@ Also configure Vite top-level:
 | `base` | Asset URL base; CDN URL in prod |
 | `publicDir` | Static files copied verbatim |
 | `server.port` | Optional in proxy mode; pin for direct/external two-port workflows |
+| `server.ws` | Vite 8.1+ HMR network overrides (`host`, `port`, `clientPort`, `path`, `protocol`, `timeout`) |
+| `server.hmr` | Vite 7 / 8.0 HMR network overrides; `false` disables HMR |
 | `server.cors: true` | Only needed when Litestar and Vite are different public origins |
 | `build.outDir` | Match `bundle_dir` |
 | `build.emptyOutDir` | `true` to avoid stale assets |

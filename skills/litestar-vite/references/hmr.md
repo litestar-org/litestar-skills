@@ -27,6 +27,32 @@ In dev mode:
 
 React projects get Fast Refresh through the Vite React plugin and HMR client. Keep `vite_hmr()` before the entrypoint tag.
 
+## Vite 8.1+ HMR Config Shape
+
+Vite 8.1 moved HMR network options from `server.hmr.*` to `server.ws.*`.
+
+Use this shape only when you must override the network settings explicitly:
+
+```ts
+export default defineConfig({
+  server: {
+    ws: {
+      host: "localhost",
+      path: "vite-hmr",
+      clientPort: 8000,
+      protocol: "ws",
+    },
+  },
+})
+```
+
+Rules:
+
+- Vite 8.1+: place `host`, `port`, `clientPort`, `path`, `protocol`, and `timeout` under `server.ws`.
+- Vite 7 / 8.0: place those fields under `server.hmr`.
+- Disabling HMR remains `server.hmr = false`.
+- In proxy mode, omit explicit HMR network settings unless the default bridge-derived values are wrong.
+
 ## Common Issues
 
 ### Stale prod URLs in dev
@@ -52,6 +78,12 @@ Fix: first use the default proxy mode so Litestar is the public origin. In direc
 Symptom: HMR works some runs, fails others. Asset URLs point at unexpected ports.
 
 Fix: in proxy mode, let Vite auto-pick and read the generated hot-file URL. In direct/two-port mode, pin both `RuntimeConfig.port` (Python) and `server.port` (JS) to the same value.
+
+### Vite 8.1 HMR deprecation warning
+
+Symptom: Vite logs that `server.hmr.*` network options are deprecated.
+
+Fix: move HMR network options to `server.ws` when running Vite 8.1+. If the project must support Vite 7 or 8.0 from the same `vite.config.ts`, avoid explicit HMR network config and let `litestar-vite-plugin` emit the version-gated shape.
 
 ### HMR works but full reloads happen
 
@@ -86,5 +118,6 @@ Fix: never set long TTL on `manifest.json`. Hash the bundles (Vite default), but
 - [ ] `hot_file` exists at the configured path during a dev session
 - [ ] Browser network tab shows JS fetched through Litestar's proxy in default mode, or from the pinned Vite origin in direct mode
 - [ ] `vite_hmr()` rendered to a `<script>` tag in the served HTML
+- [ ] Vite 8.1+ configs use `server.ws` for HMR network fields
 - [ ] Browser console shows `[vite] connected`
 - [ ] WebSocket frames appear in network tab on file edit

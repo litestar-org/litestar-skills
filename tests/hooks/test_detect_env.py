@@ -214,6 +214,26 @@ def test_htmx_signal_triggers_htmx_skill(htmx_project: Path) -> None:
     assert "litestar:litestar-htmx" in str(out["context"])
 
 
+def test_litestar_queues_dependency_triggers_queues_skill(tmp_path: Path) -> None:
+    """litestar-queues dependencies should trigger the focused queues skill."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "worker"\ndependencies = ["litestar", "litestar-queues"]\n'
+    )
+    out = _run(tmp_path)
+    assert "litestar-queues" in out["detected_skills"]
+    assert "litestar:litestar-queues" in str(out["context"])
+
+
+def test_litestar_queues_import_triggers_queues_skill(tmp_path: Path) -> None:
+    """litestar_queues imports should trigger the focused queues skill."""
+    src = tmp_path / "src" / "myapp"
+    src.mkdir(parents=True)
+    (src / "tasks.py").write_text("from litestar_queues import Queue\n")
+    out = _run(tmp_path)
+    assert "litestar-queues" in out["detected_skills"]
+    assert "litestar:litestar-queues" in str(out["context"])
+
+
 def test_disable_env_var_short_circuits(litestar_project: Path) -> None:
     """LITESTAR_SKILLS_HOOK_DISABLE=1 should yield empty JSON object."""
     out = _run(litestar_project, env_overrides={"LITESTAR_SKILLS_HOOK_DISABLE": "1"})

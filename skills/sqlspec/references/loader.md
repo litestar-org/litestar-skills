@@ -2,7 +2,7 @@
 
 ## Overview
 
-`SQLFileLoader` loads SQL statements from external files, supporting metadata directives, multiple search paths, and content caching with checksums.
+`SQLFileLoader` loads SQL statements from external files, supporting metadata directives, declared parameter annotations, multiple search paths, and content caching with checksums.
 
 ---
 
@@ -16,7 +16,7 @@ loader.load_sql("./sql", "./sql/queries")
 
 # Load a named query
 stmt = loader.get_sql("get-user-by-id")
-result = await db_session.select_one(stmt, [user_id], schema_type=User)
+result = await db_session.select_one(stmt, user_id, schema_type=User)
 ```
 
 ---
@@ -40,6 +40,7 @@ WHERE id = $1
 | --- | --- | --- |
 | `-- name:` | Yes | Unique identifier for the query |
 | `-- dialect:` | No | Source dialect for sqlglot parsing |
+| `-- param:` | No | Declared parameter metadata and validation |
 | `-- description:` | No | Human-readable description |
 | `-- result:` | No | Expected result type hint (`one`, `many`, `value`, `affected`) |
 
@@ -58,6 +59,38 @@ SELECT COUNT(*) FROM users
 -- dialect: postgres
 SELECT * FROM users WHERE email = $1
 ```
+
+---
+
+## Declared Parameters
+
+Use `-- param:` lines in the leading comment block for named SQL that crosses service boundaries:
+
+```sql
+-- name: get-team-by-name
+-- param: name str  The team name to look up
+SELECT id, name FROM teams WHERE name = :name
+
+-- name: list-teams
+-- param: name str?  Optional team name filter
+SELECT id, name FROM teams
+WHERE (:name IS NULL OR name = :name)
+ORDER BY id
+```
+
+Grammar: `-- param: <name> <type> [description]`. Append `?` to the type or end the description with `(optional)` to mark a named parameter optional.
+
+Behavior:
+
+- No `-- param:` lines means no declaration validation and no behavior change.
+- Required declarations must be supplied at execution time.
+- Missing optional named declarations bind `None`; the SQL must express the intended nullable condition.
+- Declared names are cross-checked against actual placeholders at load time.
+- Type strings from the allowlist are checked at execution time; unresolved type strings are documentation-only.
+- Extra parameters are allowed because filters may add `limit`, `offset`, and related parameters.
+- Malformed `-- param:` lines warn and are skipped by default. Pass `strict_parameter_annotations=True` to `SQLFileLoader` to make malformed annotations fail.
+
+Introspect declarations with `spec.get_query_parameters(name)` or `spec.get_sql(name).declared_parameters`.
 
 ---
 
@@ -133,9 +166,9 @@ loader.load_sql("./sql")
 
 # Load and execute
 stmt = loader.get_sql("list-active-users")
-users = await db_session.select_many(stmt, schema_type=User)
+users = await db_session.select(stmt, schema_type=User)
 
 # Load with parameter override
 stmt = loader.get_sql("get-user-by-id")
-user = await db_session.select_one(stmt, [user_id], schema_type=User)
+user = await db_session.select_one(stmt, user_id, schema_type=User)
 ```

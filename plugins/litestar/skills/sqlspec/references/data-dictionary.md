@@ -1,6 +1,6 @@
 # SQLSpec Data Dictionary
 
-`sqlspec.data_dictionary` is the introspection layer that exposes `information_schema`-style metadata — table lists, column definitions, indexes, foreign keys, database version, feature flags — uniformly across every supported dialect. It is what the migration tracker uses to decide whether `ddl_migrations` needs schema upgrades, and what adapter-specific code uses to pick an optimal column type for a logical category (e.g. "give me the best JSON type this Postgres version can handle").
+`sqlspec.data_dictionary` is the introspection layer that exposes `information_schema`-style metadata -- table lists, column definitions, indexes, foreign keys, database version, feature flags, and native statistics where supported. It is what the migration tracker uses to decide whether `ddl_migrations` needs schema upgrades, and what adapter-specific code uses to pick an optimal column type for a logical category (e.g. "give me the best JSON type this Postgres version can handle").
 
 ## What It Is
 
@@ -17,7 +17,8 @@ Top-level exports in `sqlspec.data_dictionary.__init__`:
 
 - `DataDictionaryLoader`, `get_data_dictionary_loader()` — singleton that lazy-loads the per-dialect SQL queries from `sqlspec/data_dictionary/sql/<dialect>/*.sql`.
 - `get_dialect_config(dialect)`, `list_registered_dialects()`, `register_dialect(config)`, `normalize_dialect_name(dialect)` — the dialect registry.
-- `DialectConfig`, `FeatureFlags`, `FeatureVersions` — the static-config types in `sqlspec/data_dictionary/_types.py`.
+- `DialectConfig`, `FeatureFlags`, `FeatureVersions` — static-config types in `sqlspec/data_dictionary/_types.py`.
+- `TableMetadata`, `ColumnMetadata`, `IndexMetadata`, `ForeignKeyMetadata`, `TableStatisticsMetadata` — runtime metadata types exported from `sqlspec.data_dictionary`.
 
 `DialectConfig` fields (see `sqlspec/data_dictionary/_types.py`):
 
@@ -36,16 +37,17 @@ config = DialectConfig(
 
 `FeatureFlags` is a `TypedDict` with keys like `supports_arrays`, `supports_clustering`, `supports_cte`, `supports_json`, `supports_returning`, `supports_upsert`, `supports_uuid`, `supports_window_functions`. `FeatureVersions` maps a subset of those to `VersionInfo(major, minor, patch)` minimums.
 
-Runtime metadata types live in `sqlspec.typing` and are `TypedDict`s:
+Runtime metadata types live in `sqlspec.data_dictionary`:
 
 - `TableMetadata` — `schema_name`, `table_name`, `table_type`, `table_catalog`.
 - `ColumnMetadata` — `column_name`, `data_type`, `is_nullable`, `column_default`, `ordinal_position`, `max_length`, `numeric_precision`, `numeric_scale`, `is_primary`, `is_unique`, `extra`.
 - `IndexMetadata` — `index_name`, `columns`, `is_unique`, `is_primary`.
 - `ForeignKeyMetadata` — source/target columns and schemas.
+- `TableStatisticsMetadata` — `catalog_name`, `schema_name`, `table_name`, optional `column_name`, `statistic_key`, `statistic_name`, `statistic_value`, `is_approximate`.
 
 ## Dialect Coverage
 
-Eight dialect modules register a `DialectConfig` when imported (`sqlspec/data_dictionary/dialects/__init__.py`):
+Dialect modules register a `DialectConfig` when imported (`sqlspec/data_dictionary/dialects/__init__.py`):
 
 | Dialect module | Exported config |
 | --- | --- |
@@ -53,6 +55,7 @@ Eight dialect modules register a `DialectConfig` when imported (`sqlspec/data_di
 | `cockroachdb.py` | `COCKROACHDB_CONFIG` |
 | `duckdb.py` | `DUCKDB_CONFIG` |
 | `mysql.py` | `MYSQL_CONFIG` |
+| `mssql.py` | `MSSQL_CONFIG` |
 | `oracle.py` | `ORACLE_CONFIG` |
 | `postgres.py` | `POSTGRES_CONFIG` |
 | `spanner.py` | `SPANNER_CONFIG` |
@@ -96,6 +99,8 @@ Available driver-side methods (async signatures shown; sync drivers expose the s
 - `await driver.data_dictionary.get_columns(driver, table=None, schema=None)` → `list[ColumnMetadata]`
 - `await driver.data_dictionary.get_indexes(driver, table=None, schema=None)` → `list[IndexMetadata]`
 - `await driver.data_dictionary.get_foreign_keys(driver, table=None, schema=None)` → `list[ForeignKeyMetadata]`
+
+ADBC adds an adapter-specific `get_statistics(driver, table, schema=None)` method that wraps the native `adbc_get_statistics` API and returns `list[TableStatisticsMetadata]`. It is separate from the shared data dictionary surface because SQLSpec does not define a portable SQL statistics contract. Unsupported ADBC drivers raise `OperationalError`; PostgreSQL provides approximate native statistics, SQLite and DuckDB currently raise, Flight SQL behavior is server-dependent, and BigQuery is unverified.
 
 ### Sync
 

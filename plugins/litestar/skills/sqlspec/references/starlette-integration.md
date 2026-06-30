@@ -289,7 +289,7 @@ async def list_orders(request: Request) -> JSONResponse:
     db: AsyncpgDriver = db_plugin.get_session(request)
     rows = await db.select(
         "SELECT id, status, amount FROM orders WHERE status = $1 ORDER BY id",
-        ["pending"],
+        "pending",
     )
     return JSONResponse({"orders": rows})
 
@@ -299,7 +299,9 @@ async def create_order(request: Request) -> JSONResponse:
     db: AsyncpgDriver = db_plugin.get_session(request)
     result = await db.execute(
         "INSERT INTO orders (customer_id, status, amount) VALUES ($1, $2, $3) RETURNING id",
-        [payload["customer_id"], "pending", payload["amount"]],
+        payload["customer_id"],
+        "pending",
+        payload["amount"],
     )
     return JSONResponse({"id": result.one()["id"]}, status_code=201)
 

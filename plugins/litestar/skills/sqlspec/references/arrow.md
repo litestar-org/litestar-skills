@@ -2,117 +2,117 @@
 
 ## Overview
 
-SQLSpec provides first-class Apache Arrow support for high-performance data transfer. Adapters that support ADBC or have native Arrow interfaces (DuckDB, BigQuery, Spanner) use zero-copy paths. All other adapters fall back to conversion from row dicts.
+SQLSpec exposes Arrow through `select_to_arrow()` / `fetch_to_arrow()` for export and the storage bridge methods for ingest. The export call returns `ArrowResult`, not a bare `pyarrow.Table`.
+
+Use Arrow for analytics, ETL, cross-database transfers, and native bulk ingest. Use row APIs for small request/response CRUD paths.
 
 ---
 
 ## select_to_arrow()
 
-Extract query results directly as a `pyarrow.Table`:
-
 ```python
-# Zero-copy on DuckDB, ADBC adapters
-arrow_table = await db_session.select_to_arrow(
+arrow_result = await db_session.select_to_arrow(
     "SELECT * FROM large_dataset WHERE region = $1",
-    [region],
+    region,
+    return_format="table",
+    native_only=False,
 )
 
-# arrow_table is a pyarrow.Table
-print(arrow_table.num_rows)
-print(arrow_table.schema)
+table = arrow_result.data
+print(arrow_result.rows_affected)
 ```
 
-### Performance Characteristics
+Supported `return_format` values:
 
-| Adapter | Path | Copy Overhead |
-| --- | --- | --- |
-| DuckDB | Native Arrow | Zero-copy |
-| ADBC | Native ADBC | Zero-copy |
-| BigQuery | Storage Read API | Zero-copy (streaming) |
-| Spanner | Native proto-Arrow | Near zero-copy |
-| AsyncPG | Conversion | Row-to-Arrow conversion |
-| Psycopg | Conversion | Row-to-Arrow conversion |
-| All others | Conversion | Row-to-Arrow conversion |
+| Value | Payload |
+| --- | --- |
+| `"table"` | Single `pyarrow.Table` |
+| `"batch"` | Single `pyarrow.RecordBatch` |
+| `"batches"` | Iterator of `RecordBatch` objects |
+| `"reader"` | `pyarrow.RecordBatchReader` |
+
+Use `batch_size=` for batch and reader shapes. Use `arrow_schema=` to cast or stabilize schema. Set `native_only=True` when conversion fallback would hide a performance or memory bug.
+
+### Native Export Paths
+
+| Adapter | Export behavior |
+| --- | --- |
+| `adbc` | ADBC native Arrow reader/table path |
+| `arrow_odbc` | ODBC Arrow batch reader path |
+| `duckdb` | DuckDB native Arrow result path |
+| `bigquery` | BigQuery native Arrow result path with configured job controls |
+| `spanner` | Spanner native Arrow conversion path |
+| `mssql_python` | SQL Server native Arrow/bulk-copy integration |
+| `oracledb` | Oracle Arrow export path |
+| Other adapters | Dict rows converted to Arrow unless `native_only=True` |
+
+`config.supports_arrow_streaming` advertises adapters with native streamed Arrow export behavior. It is a capability flag, not a separate public `select_arrow_stream()` method.
 
 ---
 
-## copy_from_arrow()
+## Row Streaming vs Arrow Results
 
-Bulk load data from an Arrow table into a database table:
+Use `select_stream()` for row-by-row processing. Use `select_to_arrow(return_format="reader")` for Arrow batch pipelines.
 
 ```python
-import pyarrow as pa
-
-# Create or obtain Arrow table
-arrow_table = pa.table({
-    "id": [1, 2, 3],
-    "name": ["Alice", "Bob", "Carol"],
-    "score": [95.5, 87.3, 92.1],
-})
-
-# Bulk load into database
-await db_session.copy_from_arrow(arrow_table, target_table="users")
+async with db_session.select_stream(
+    "SELECT id, payload FROM events ORDER BY id",
+    chunk_size=1_000,
+    native_only=True,
+) as stream:
+    async for row in stream:
+        await process_row(row)
 ```
 
-### Native Arrow Load Paths
-
-| Adapter | Method | Notes |
-| --- | --- | --- |
-| DuckDB | `INSERT INTO ... SELECT * FROM arrow_table` | In-process, zero-copy |
-| BigQuery | Load job with Arrow format | Streaming insert |
-| Spanner | Mutation-based insert | Batched |
-| ADBC | `adbc_ingest` | Native ADBC bulk load |
-
-For adapters without native Arrow support, SQLSpec converts the Arrow table to row-based parameters and uses `execute_many()`.
+Native row streaming and Arrow streaming are separate capabilities. An adapter can support one without the other.
 
 ---
 
-## record_batches() Iterator
+## Ingest From Arrow
 
-For streaming large result sets without loading everything into memory:
+Use `load_from_arrow()` for inbound Arrow data.
 
 ```python
-async for batch in db_session.record_batches(
-    "SELECT * FROM very_large_table",
-    batch_size=10_000,
-):
-    # batch is a pyarrow.RecordBatch
-    process_batch(batch)
+job = await target_session.load_from_arrow(
+    "refined_analytics",
+    arrow_result,
+    overwrite=False,
+)
+print(job.telemetry["rows_processed"])
 ```
+
+Native ingest routes through adapter-specific primitives: PostgreSQL `COPY`, DuckDB registration plus `INSERT ... SELECT`, ADBC `adbc_ingest`, Oracle direct path load when available, BigQuery load jobs or Storage Write API, Spanner mutations or Batch Write API, SQL Server `bulkcopy()`, `arrow_odbc` `bulk_insert_arrow`, SQLite transactional `executemany`, and MySQL `executemany` or gated `LOAD DATA LOCAL INFILE`.
+
+See [bulk-ingest.md](bulk-ingest.md) for adapter gates and caveats.
 
 ---
 
 ## Cross-Database Arrow Pipeline
 
-A common pattern is extracting data from one database and loading into another using Arrow as the interchange format:
-
 ```python
-# Extract from DuckDB (zero-copy)
-arrow_table = duckdb_session.select_to_arrow(
-    "SELECT * FROM local_analytics WHERE date > $1",
-    [cutoff_date],
+source_result = await source_session.select_to_arrow(
+    "SELECT * FROM events WHERE updated_at > $1",
+    last_sync,
+    return_format="table",
 )
 
-# Load into BigQuery (native Arrow load)
-await bq_session.copy_from_arrow(arrow_table, target_table="refined_analytics")
+job = await target_session.load_from_arrow("events", source_result)
 ```
 
-### Two-Path Strategy
+Guidance:
 
-1. **Native Arrow Path** (ADBC, DuckDB, BigQuery, Spanner):
-   - Zero-copy data transfer, 5-10x faster than row-based.
-   - Uses ADBC loaders and native driver Arrow support.
-2. **Conversion Path** (all other adapters):
-   - Dict results converted to Arrow via `pyarrow.Table.from_pylist()`.
-   - Arrow tables converted to row parameters via `.to_pylist()` for loading.
+- Keep `ArrowResult` intact when passing between SQLSpec sessions.
+- Use `return_format="reader"` for large exports that downstream code consumes in batches.
+- Use `native_only=True` in tests for critical native paths so a conversion fallback cannot pass unnoticed.
+- Use `load_from_records()` when data originates as Python records; it normalizes through Arrow and then uses the same ingest surface.
 
 ---
 
-## Arrow Type Mapping
+## Type Mapping
 
-SQLSpec maps database types to Arrow types automatically:
+SQLSpec maps database values to Arrow through adapter-native metadata when available, otherwise through Python dict-row conversion.
 
-| SQL Type | Arrow Type |
+| SQL Type | Typical Arrow Type |
 | --- | --- |
 | INTEGER / BIGINT | `int64` |
 | REAL / DOUBLE | `float64` |
@@ -122,5 +122,5 @@ SQLSpec maps database types to Arrow types automatically:
 | TIMESTAMP | `timestamp[us]` |
 | DECIMAL | `decimal128` |
 | BLOB / BYTEA | `binary` |
-| JSON / JSONB | `utf8` (serialized) |
-| UUID | `utf8` |
+| JSON / JSONB | serialized string or adapter-native JSON representation |
+| UUID | string unless adapter/native schema preserves UUID semantics |

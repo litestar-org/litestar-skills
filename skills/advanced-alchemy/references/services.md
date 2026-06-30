@@ -67,11 +67,14 @@ class UserService(SQLAlchemyAsyncRepositoryService[m.User]):
 ## Helper Utilities
 
 ```python
-from advanced_alchemy.service import schema_dump, is_dict_with_field, is_dict_without_field
+from advanced_alchemy.service import SchemaDumpConfig, schema_dump, is_dict_with_field, is_dict_without_field
 
 
 # Convert a Pydantic/msgspec/attrs schema to dict for service ingestion
 data = schema_dump(create_schema)
+
+# Tune dump behavior for partial updates or plain-object DTOs
+data = schema_dump(create_schema, config=SchemaDumpConfig(exclude_none=True))
 
 # Check dict shape before transforming
 if is_dict_with_field(data, "password"):
@@ -79,6 +82,27 @@ if is_dict_with_field(data, "password"):
 
 if is_dict_without_field(data, "slug"):
     data["slug"] = slugify(data["title"])
+```
+
+Set `schema_dump_config` on a service class to change the default conversion behavior for schema-like inputs. Pass `schema_dump_config=` to `create()`, `create_many()`, `update()`, `update_many()`, `upsert()`, `upsert_many()`, `get_or_upsert()`, or `get_and_update()` for a single operation.
+
+```python
+from advanced_alchemy.service import SchemaDumpConfig
+
+
+class UserService(SQLAlchemyAsyncRepositoryService[m.User]):
+    class Repo(SQLAlchemyAsyncRepository[m.User]):
+        model_type = m.User
+
+    repository_type = Repo
+    schema_dump_config = SchemaDumpConfig(exclude_unset=True, exclude_none=True)
+
+
+user = await service.update(
+    data=patch_schema,
+    item_id=user_id,
+    schema_dump_config=SchemaDumpConfig(exclude_none=True, exclude_defaults=True),
+)
 ```
 
 ## Common Service Operations
@@ -110,6 +134,7 @@ user = await service.upsert({"email": "test@example.com", "name": "Test"})
 
 # Delete
 await service.delete(user_id)
+await service.delete_many([user_id, user_model])  # raw IDs, model instances, and mixed lists are valid
 
 # Exists / Count
 exists = await service.exists(email="test@example.com")

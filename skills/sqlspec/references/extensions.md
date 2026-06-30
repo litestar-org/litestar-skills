@@ -39,16 +39,17 @@ from litestar import get, post
 
 @get("/users")
 async def list_users(db_session: AsyncpgDriver) -> list[dict]:
-    result = await db_session.select_many("SELECT * FROM users")
+    result = await db_session.select("SELECT * FROM users")
     return result
 
 @post("/users")
 async def create_user(db_session: AsyncpgDriver, data: UserCreate) -> dict:
     result = await db_session.execute(
         "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id",
-        [data.name, data.email],
+        data.name,
+        data.email,
     )
-    return {"id": result.last_insert_id}
+    return {"id": result.last_inserted_id}
 ```
 
 ### Session Store Integration
@@ -129,7 +130,7 @@ db_ext = SQLSpecPlugin(sqlspec=spec, app=app)
 @app.get("/users")
 async def list_users(request: Request):
     db_session = db_ext.get_session(request)
-    result = await db_session.select_many("SELECT * FROM users")
+    result = await db_session.select("SELECT * FROM users")
     return result
 ```
 
@@ -172,7 +173,7 @@ All adapters wrap exceptions using `wrap_exceptions` referencing static mappings
 - `AdapterError`: Generic connectivity or execution issues.
 - `IntegrityError`: Constraint and uniqueness violations.
 - `NotFoundError`: Expected row not found.
-- `MultipleResultsError`: Expected single row but got multiple.
+- `ValueError`: `select_one()` and `select_one_or_none()` received multiple rows.
 
 ### Two-Tier Event Reporting
 
