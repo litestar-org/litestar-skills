@@ -11,6 +11,8 @@ The reference apps use `spa`, `template`, `htmx`, `hybrid` / `inertia`, `framewo
 
 The plugin pairs with the npm package [`litestar-vite-plugin`](https://www.npmjs.com/package/litestar-vite-plugin) on the JS side. Python `ViteConfig` is the source of truth; the generated `.litestar.json` bridge lets JS config normally keep only `litestar({ input: [...] })`.
 
+Current release note: `litestar-vite` `0.24.0` through `0.25.0` tightened SPA route exclusion, Inertia bootstrap/partial-reload behavior, Litestar 3 deprecation prep, and Vite 8.1 HMR config shape. See [Release Updates](references/release-updates.md).
+
 ## Code Style Rules
 
 - **Python**: PEP 604 unions (`T | None`); consumer Litestar app modules MAY use `from __future__ import annotations`.
@@ -273,7 +275,24 @@ Common HMR gotchas:
 - **Hot file mismatch**: remove JS `hotFile` overrides or align them with `ViteConfig.paths.hot_file`. Mismatch ⇒ stale prod URLs in dev.
 - **CORS errors**: use default proxy mode first. In direct/two-port mode, set `server.cors: true` so the Litestar origin can fetch dev assets.
 - **Port conflict**: proxy mode can auto-pick a Vite port. In direct/two-port mode, pin `runtime.port` and `server.port`.
+- **Vite 8.1 HMR deprecation**: put HMR network fields under `server.ws`, not `server.hmr`. Keep `server.hmr=false` only when disabling HMR. Use `server.hmr` network fields only when the project is pinned to Vite 7 or 8.0.
 - **Browsers cache `manifest.json`**: cache-bust by hash; never serve manifest.json from a CDN with long TTL.
+
+Vite 8.1+ explicit HMR network override:
+
+```ts
+export default defineConfig({
+  server: {
+    ws: {
+      host: "localhost",
+      path: "vite-hmr",
+      clientPort: 8000,
+    },
+  },
+})
+```
+
+Prefer no explicit HMR network override in proxy mode. Let `litestar-vite-plugin` write the version-correct config from the `.litestar.json` bridge.
 
 ### Production Build & Deploy
 
@@ -322,6 +341,13 @@ vite = VitePlugin(
 
 app = Litestar(plugins=[vite], middleware=[session_backend.middleware])
 ```
+
+Current Inertia behavior:
+
+- Initial non-Inertia visits return an HTML bootstrap. Inertia visits (`X-Inertia: true`) return JSON.
+- Handler returns shaped like prop bags (`dict`, `msgspec.Struct`, dataclass instance, or Pydantic model) become top-level page props. They are not nested under `content`.
+- Deferred props remain advertised on initial responses. A partial reload that resolves a deferred key strips that key from `deferredProps`; unrequested deferred keys stay advertised.
+- Use `litestar-vite-plugin` as the bridge owner. Do not add `@inertiajs/vite` to generated Litestar scaffolds by default.
 
 See `../litestar-inertia/SKILL.md` for client adapter setup.
 
@@ -381,6 +407,7 @@ For HTMX, register `HTMXPlugin()` and keep `ViteConfig(mode="htmx", ...)`.
 
 - **`ViteConfig` is the source of truth** — avoid JS-side `bundleDir`, `hotFile`, and `assetUrl` overrides unless this is a standalone/mono-repo override. Mismatch breaks HMR or manifest resolution silently.
 - **Use proxy mode by default** — Vite can auto-pick a port and the hot file carries the actual URL. Pin `server.port` only for direct/two-port workflows.
+- **Use `server.ws` for Vite 8.1+ HMR network overrides** — `server.hmr.host`, `server.hmr.port`, `server.hmr.clientPort`, `server.hmr.path`, `server.hmr.protocol`, and `server.hmr.timeout` are the Vite 7 / 8.0 shape.
 - **Set `server.cors: true` only for different public origins** — proxy mode keeps Litestar as the public origin.
 - **Toggle `dev_mode` from env**, never hardcode `True` in committed code — leaving dev mode on in prod proxies to a non-existent dev server.
 - **Keep `RuntimeConfig.start_dev_server=True` in dev** so `litestar run` starts/stops Vite. For prod, set `dev_mode=False`.
@@ -404,6 +431,7 @@ Before delivering a `litestar-vite` integration, verify:
 - [ ] JS-side `bundleDir` / `hotFile` / `assetUrl` overrides are absent or intentionally match `ViteConfig`
 - [ ] `dev_mode` is env-toggled
 - [ ] Direct/two-port workflows pin `server.port`; proxy-mode workflows do not rely on a fixed Vite port
+- [ ] Vite 8.1+ HMR network overrides use `server.ws`; Vite 7 / 8.0 overrides use `server.hmr`
 - [ ] `server.cors: true` only if Litestar and Vite are different public origins in dev
 - [ ] Template base file uses `vite_hmr()` before `vite(...)`
 - [ ] If `types=TypeGenConfig(...)`, generated types are committed or CI verifies they are up-to-date
@@ -504,6 +532,7 @@ For deep-dives on specific surfaces, see:
 - **[HMR](references/hmr.md)** — HMR architecture, debugging, common pitfalls.
 - **[Deployment](references/deployment.md)** — Production build, static hosting, CDN patterns, cache strategy.
 - **[Troubleshooting](references/troubleshooting.md)** — Common errors and fixes.
+- **[Release Updates](references/release-updates.md)** — `litestar-vite` `0.24.0` through `0.25.0` behavior changes.
 
 ## Cross-References
 

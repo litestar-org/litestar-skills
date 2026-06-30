@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "version": "1",
-  "static_intro": "litestar loaded. Prefer first-party Litestar patterns. Skills are namespaced as `litestar:<name>`. Available: litestar, litestar-routing, litestar-dto-openapi, litestar-auth-guards, litestar-di, litestar-data-services, litestar-settings, litestar-exceptions, litestar-middleware, litestar-plugins, litestar-realtime, litestar-ai-serving, sqlspec, advanced-alchemy, msgspec, litestar-granian, litestar-saq, litestar-vite, litestar-htmx, litestar-inertia, litestar-mcp, litestar-email, litestar-testing, pytest-databases, polyfactory, litestar-build, litestar-deployment, litestar-styleguide.",
+  "static_intro": "litestar loaded. Prefer first-party Litestar patterns. Skills are namespaced as `litestar:<name>`. Available: litestar, litestar-routing, litestar-dto-openapi, litestar-auth-guards, litestar-di, litestar-data-services, litestar-settings, litestar-exceptions, litestar-middleware, litestar-plugins, litestar-realtime, litestar-ai-serving, sqlspec, advanced-alchemy, msgspec, litestar-granian, litestar-saq, litestar-queues, litestar-vite, litestar-htmx, litestar-inertia, litestar-mcp, litestar-email, litestar-testing, pytest-databases, polyfactory, litestar-build, litestar-deployment, litestar-styleguide.",
   "matchers": [
     {
       "skill": "litestar",
@@ -158,6 +158,15 @@
         { "type": "python_import", "module": "litestar_saq" }
       ],
       "reminder": "Project uses litestar-saq. Use the `litestar:litestar-saq` skill for SAQPlugin / SAQConfig / QueueConfig: background tasks, cron jobs, and the `litestar workers run` CLI."
+    },
+    {
+      "skill": "litestar-queues",
+      "priority": 70,
+      "signals": [
+        { "type": "pyproject_dep", "name": "litestar-queues" },
+        { "type": "python_import", "module": "litestar_queues" }
+      ],
+      "reminder": "Project uses litestar-queues. Use the `litestar:litestar-queues` skill for queue app wiring, broker/back-end selection, workers, tasks, and schedules."
     },
     {
       "skill": "litestar-vite",

@@ -27,7 +27,7 @@ Advanced Alchemy is NOT a raw ORM — it is a **service/repository layer** built
 - **Repository pattern** for type-safe async CRUD
 - **Service layer** with lifecycle hooks (`to_model_on_create`, `to_model_on_update`)
 - **Framework plugins** for automatic session/transaction management
-- **Custom types**: `EncryptedString`, `FileObject`, `DateTimeUTC`, `GUID`
+- **Custom types**: `EncryptedString`, `FileObject`, `DateTimeUTC`, `GUID`, `Bool`, `Vector`, `TOTPSecret`, `OneTimeCode`
 - **Alembic integration** for migrations via CLI
 
 ## Quick Reference
@@ -69,13 +69,16 @@ Key lifecycle hooks: `to_model_on_create`, `to_model_on_update`, `to_model_on_up
 | `EncryptedString` | Transparent AES encryption at rest | Requires `ENCRYPTION_KEY` in config |
 | `UUID6` / `UUID7` | Time-sortable UUID variants | UUID7 preferred — monotonic ordering with millisecond timestamp prefix |
 | `DateTimeUTC` | Timezone-aware UTC datetime | Stores as UTC; raises on naive datetimes |
+| `Bool` | Dialect-aware boolean | Uses Oracle 23c native `BOOLEAN` when SQLAlchemy exposes it; falls back to stock SQLAlchemy `Boolean` |
+| `Vector` | Dialect-aware vector storage and distance operators | Oracle 23ai `VECTOR`, PostgreSQL/CockroachDB `pgvector`, JSON fallback without distance operators |
+| `TOTPSecret` / `OneTimeCode` | MFA and single-use code storage | `TOTPSecret` encrypts shared secrets; `OneTimeCode` hashes codes and requires an explicit hashing backend |
 
 ## Repository Service Layer
 
 `SQLAlchemyAsyncRepositoryService` is the primary service base class. Key behaviors:
 
 - **Dict-to-model conversion**: pass raw `dict` to `create()`, `update()`, `upsert()` — the service converts via `to_model_on_create` / `to_model_on_update` lifecycle hooks before persistence
-- **Bulk operations**: `create_many(data)`, `update_many(data)`, `upsert_many(data)`, `delete_many(item_ids)` — batched in a single transaction; prefer over calling single-row methods in a loop
+- **Bulk operations**: `create_many(data)`, `update_many(data)`, `upsert_many(data)`, `delete_many(item_ids)` — batched in a single transaction; `delete_many()` accepts raw primary keys, composite-key tuples/dicts, model instances, or mixed lists
 - **Lifecycle hooks**: `to_model_on_create`, `to_model_on_update`, `to_model_on_upsert` — override to transform input data, hash passwords, normalize strings, etc.
 
 ## Mixins
@@ -139,7 +142,7 @@ Run `alembic revision --autogenerate -m "description"` to create the migration, 
 - **Repositories are for data access only** — no business rules, no side effects beyond database operations
 - **Never bypass the service layer** to call repository methods directly from handlers
 - **Always set `match_fields`** on services that use `upsert()` to avoid duplicate-key errors
-- **Use `schema_dump()` to convert DTOs** (Pydantic/msgspec/attrs) before passing to service methods
+- **Use `schema_dump()` / `schema_dump_config` for explicit dump behavior** — services already convert Pydantic/msgspec/attrs/dataclass inputs during model conversion
 - **Prefer `UUIDAuditBase`** as default base class — only deviate when you have a concrete reason
 - **Use `advanced_alchemy.*` imports** — the old `litestar.plugins.sqlalchemy` paths are deprecated
 - **Model modules avoid `from __future__ import annotations`** — SQLAlchemy 2.0 needs the real `Mapped[...]` type at class-creation time. Consumer modules (handlers, services, tests) MAY use it.

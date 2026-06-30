@@ -14,6 +14,10 @@ from advanced_alchemy.types import (
     BigIntIdentity,
     ORA_JSONB,
     PasswordHash,
+    Bool,
+    Vector,
+    TOTPSecret,
+    OneTimeCode,
 )
 from advanced_alchemy.types.file_object import FileObject, StoredObject
 ```
@@ -60,7 +64,7 @@ class Token(UUIDAuditBase):
 
 ## JsonB
 
-Cross-database JSONB type. Uses native `JSONB` on PostgreSQL (with indexing support). Falls back to standard `JSON` on other databases.
+Cross-database JSONB type. Uses native `JSONB` on PostgreSQL/CockroachDB (with indexing support). On Oracle, it routes through `ORA_JSONB`; other databases use standard `JSON`.
 
 ```python
 from advanced_alchemy.types import JsonB
@@ -72,14 +76,15 @@ class Config(UUIDAuditBase):
     tags: Mapped[list] = mapped_column(JsonB, default=list)
 ```
 
-- On PostgreSQL, supports GIN indexing for fast key/value lookups
-- On SQLite/MySQL, stores as JSON text
+- On PostgreSQL/CockroachDB, supports native JSONB indexing for fast key/value lookups.
+- On Oracle with SQLAlchemy 2.1+ and Oracle 21c+, stores as native `oracle.JSON`; otherwise uses BLOB binary JSON with an `IS JSON` check constraint.
+- On SQLite/MySQL, stores as standard `JSON`.
 
 ---
 
 ## ORA_JSONB
 
-Oracle-compatible JSONB type. Handles Oracle's specific JSON column semantics while remaining compatible with other databases.
+Oracle-compatible JSONB type. Uses native `sqlalchemy.dialects.oracle.JSON` on SQLAlchemy 2.1+ when the Oracle server is 21c or newer. Falls back to BLOB binary JSON with an `IS JSON` check constraint when native Oracle JSON is unavailable.
 
 ```python
 from advanced_alchemy.types import ORA_JSONB
@@ -90,8 +95,8 @@ class OracleModel(UUIDAuditBase):
     metadata_: Mapped[dict] = mapped_column(ORA_JSONB, default=dict)
 ```
 
-- Use when targeting Oracle as a primary or secondary database
-- Falls back to standard JSON behavior on non-Oracle backends
+- Use when targeting Oracle as a primary or secondary database.
+- Keep the fallback path in mind for SQLAlchemy 2.0.x, Oracle 19c, offline DDL, or first-connect flows without server version information.
 
 ---
 
@@ -307,7 +312,7 @@ if document.file:
 
 ## Bool (dialect-aware boolean)
 
-`Bool` (added 1.11) resolves to each dialect's native boolean, including Oracle 23c's real `BOOLEAN` (falling back to `NUMBER(1)` on older Oracle). Use it instead of `sqlalchemy.Boolean` when the model must run on Oracle as well as PostgreSQL/SQLite/MySQL.
+`Bool` (added 1.11) resolves to each dialect's stock boolean type, including Oracle 23c's real `BOOLEAN` when SQLAlchemy exposes `oracle.BOOLEAN`. Older Oracle versions and SQLAlchemy 2.0.x fall back to stock SQLAlchemy `Boolean`. Use it when a model must run on Oracle as well as PostgreSQL/SQLite/MySQL.
 
 ```python
 from advanced_alchemy.types import Bool
@@ -345,22 +350,28 @@ stmt = (
 
 ## TOTP and One-Time Codes
 
-Added in 1.11 for authentication flows. `TOTPSecret` is an `EncryptedString` subtype that stores a TOTP shared secret encrypted at rest; pair it with `TOTPProvider` / `generate_totp_secret` to issue and verify codes. `OneTimeCode` is the SQLAlchemy column type for single-use codes (email/SMS verification); loaded values expose the `HashedOneTimeCode` verification wrapper.
+Added in 1.11 for authentication flows. `TOTPSecret` is an `EncryptedString` subtype that stores a TOTP shared secret encrypted at rest; it requires `pyotp` and an explicit encryption key. Pair it with `TOTPProvider` / `generate_totp_secret` to issue and verify codes. `OneTimeCode` is the SQLAlchemy column type for single-use codes (email/SMS verification); it requires an explicit password-hashing backend and loaded values expose the `HashedOneTimeCode` verification wrapper.
 
 ```python
+from typing import Any
+
 from advanced_alchemy.types import (
     TOTPSecret,
     OneTimeCode,
     generate_totp_secret,
     generate_one_time_code,
 )
+from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
 from sqlalchemy.orm import Mapped, mapped_column
 
 
 class Account(UUIDBase):
     totp_secret: Mapped[str | None] = mapped_column(TOTPSecret(key=ENCRYPTION_KEY), default=None)
     # writes a plaintext code; the column hashes it. Loaded values verify through HashedOneTimeCode.
-    email_code: Mapped[str | None] = mapped_column(OneTimeCode, default=None)
+    email_code: Mapped[Any | None] = mapped_column(
+        OneTimeCode(backend=Argon2Hasher(), ttl_seconds=600, max_attempts=3),
+        default=None,
+    )
 ```
 
 ## Type Compatibility Matrix
@@ -369,12 +380,12 @@ class Account(UUIDBase):
 | --- | --- | --- | --- | --- |
 | `DateTimeUTC` | `TIMESTAMP WITH TIME ZONE` | `DATETIME` | `DATETIME` | `TIMESTAMP WITH TIME ZONE` |
 | `GUID` | `UUID` (native) | `CHAR(32)` / `BINARY(16)` | `CHAR(32)` / `BINARY(16)` | `RAW(16)` |
-| `JsonB` | `JSONB` (native) | `JSON` | `JSON` | `JSON` |
-| `ORA_JSONB` | `JSONB` | `JSON` | `JSON` | `JSON` (Oracle-optimized) |
+| `JsonB` | `JSONB` (native) | `JSON` | `JSON` | `oracle.JSON` on SQLAlchemy 2.1+ / Oracle 21c+; BLOB + check constraint fallback |
+| `ORA_JSONB` | `JSONB` | `JSON` | `JSON` | `oracle.JSON` on SQLAlchemy 2.1+ / Oracle 21c+; BLOB + check constraint fallback |
 | `BigIntIdentity` | `BIGSERIAL` | `INTEGER` | `BIGINT AUTO_INCREMENT` | `NUMBER(19)` |
 | `EncryptedString` | `VARCHAR` | `VARCHAR` | `VARCHAR` | `VARCHAR2` |
 | `EncryptedText` | `TEXT` | `TEXT` | `TEXT` | `CLOB` |
 | `PasswordHash` | `VARCHAR` | `VARCHAR` | `VARCHAR` | `VARCHAR2` |
 | `StoredObject` | `JSONB` | `JSON` | `JSON` | `JSON` |
-| `Bool` | `BOOLEAN` | `BOOLEAN` | `BOOL` | `BOOLEAN` (23c) / `NUMBER(1)` |
-| `Vector` | `pgvector` / JSON | `JSON` | `JSON` | `VECTOR` (23ai) / JSON |
+| `Bool` | `BOOLEAN` | `BOOLEAN` | `BOOL` | `BOOLEAN` on SQLAlchemy 2.1+ / Oracle 23c+; stock SQLAlchemy `Boolean` fallback |
+| `Vector` | `pgvector` / JSON | `JSON` | `JSON` | `VECTOR` |

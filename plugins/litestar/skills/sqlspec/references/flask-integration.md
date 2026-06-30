@@ -208,7 +208,9 @@ def create_order() -> tuple[dict, int]:
     db: SqliteDriver = plugin.get_session()
     result = db.execute(
         "INSERT INTO orders (customer_id, status, amount) VALUES (?, ?, ?) RETURNING id",
-        [payload["customer_id"], "pending", payload["amount"]],
+        payload["customer_id"],
+        "pending",
+        payload["amount"],
     )
     return {"id": result.one()["id"]}, 201
 
@@ -396,7 +398,9 @@ def create_app() -> Flask:
         db: SqliteDriver = plugin.get_session()
         result = db.execute(
             "INSERT INTO orders (customer_id, status, amount) VALUES (?, ?, ?) RETURNING id",
-            [payload["customer_id"], "pending", payload["amount"]],
+            payload["customer_id"],
+            "pending",
+            payload["amount"],
         )
         return {"id": result.one()["id"]}, 201
 

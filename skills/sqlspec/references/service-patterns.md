@@ -92,7 +92,7 @@ Decision table:
 | A count or single cell | `select_value` |
 | One mapped object, must exist | `select_one` / `get_one` |
 | One mapped object, may be absent | `select_one_or_none` |
-| List of rows | `select_many` (via driver) or `paginate` (via service) |
+| List of rows | `select()` (via driver) or `paginate` (via service) |
 | INSERT/UPDATE/DELETE (no return) | `execute` |
 
 Example method combining `get_one` with a named template:

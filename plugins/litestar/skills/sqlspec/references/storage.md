@@ -2,7 +2,7 @@
 
 ## Overview
 
-SQLSpec provides adapter-specific storage implementations for three integration points: ADK stores, event channel backends, and Litestar session stores. All are configured through the `extension_config` dict on adapter configs.
+SQLSpec provides adapter-specific storage implementations for Litestar session stores, event channel backends, and ADK session/event plus memory stores. Artifact service contracts are available under ADK, but adapter-specific concrete artifact metadata stores are deployment-provided. All integrations are configured through the `extension_config` dict on adapter configs.
 
 ---
 
@@ -18,9 +18,9 @@ config = AsyncpgConfig(
     connection_config={"dsn": "postgresql://localhost/app"},
     extension_config={
         "adk": {
-            "session_table": "adk_sessions",
-            "events_table": "adk_events",
-            "memory_table": "adk_memory_entries",
+            "session_table": "adk_session",
+            "events_table": "adk_event",
+            "memory_table": "adk_memory",
             "memory_use_fts": True,
         }
     },
@@ -34,11 +34,13 @@ await memory_store.ensure_tables()
 
 ### Available ADK Stores
 
-Every ADK-supported adapter provides its own store implementation. The stores handle:
+ADK-supported adapters are `asyncpg`, `psycopg`, `psqlpy`, `cockroach_asyncpg`, `cockroach_psycopg`, `aiomysql`, `asyncmy`, `mysqlconnector`, `pymysql`, `aiosqlite`, `sqlite`, `oracledb`, `duckdb`, `adbc`, and `spanner`. These stores handle:
 
 - Session rows and event history for `SQLSpecSessionService`
 - Memory rows for `SQLSpecMemoryService` / `SQLSpecSyncMemoryService`
 - Adapter-specific JSON, FTS, and transaction optimizations
+
+BigQuery is not an ADK backend. Use Spanner or an OLTP adapter for Google ADK session/event storage.
 
 ---
 
@@ -131,9 +133,9 @@ config = AsyncpgConfig(
         },
         # ADK session/event and memory stores
         "adk": {
-            "session_table": "adk_sessions",
-            "events_table": "adk_events",
-            "memory_table": "adk_memory_entries",
+            "session_table": "adk_session",
+            "events_table": "adk_event",
+            "memory_table": "adk_memory",
             "memory_use_fts": True,
         },
     },

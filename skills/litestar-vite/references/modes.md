@@ -251,6 +251,8 @@ See [`../../litestar-htmx/SKILL.md`](../../litestar-htmx/SKILL.md) for the full 
 - Page components live in `resources/js/pages/<component>/<name>.tsx`
 - Configure one `VitePlugin` with `ViteConfig(inertia=InertiaConfig(...))`
 - Page-prop type generation via `TypeGenConfig` + Inertia's schema
+- `dict`, `msgspec.Struct`, dataclass, and Pydantic handler returns are prop bags: initial visits bootstrap HTML, and Inertia visits spread fields as top-level props
+- Deferred props advertise metadata on initial responses; partial reloads strip only the keys they just resolved from `deferredProps`
 
 ```python
 from litestar import Controller, Litestar, get

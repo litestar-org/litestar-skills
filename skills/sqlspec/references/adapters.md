@@ -10,23 +10,37 @@
 | Arrow ODBC | `"arrow_odbc"` | dynamic | QMARK (`?`) | `helper` | No | Arrow-native |
 | AsyncMy | `"asyncmy"` | `mysql` | PYFORMAT (`%s`) | `helper` | Yes | MySQL native |
 | AsyncPG | `"asyncpg"` | `postgres` | NUMERIC (`$1`) | `driver` | Yes | asyncpg codecs |
-| BigQuery | `"bigquery"` | `bigquery` | NAMED_AT (`@name`) | `helper` | Yes | BQ type mapping |
+| BigQuery | `"bigquery"` | `bigquery` | NAMED_AT (`@name`) | `helper` | No | BQ type mapping |
 | CockroachDB Asyncpg | `"cockroach_asyncpg"` | `postgres` | NUMERIC (`$1`) | `driver` | Yes | asyncpg codecs |
 | CockroachDB Psycopg | `"cockroach_psycopg"` | `postgres` | PYFORMAT (`%s`) | `helper` | Yes | psycopg adapt |
 | DuckDB | `"duckdb"` | `duckdb` | QMARK (`?`) | `helper` | No | Arrow-native |
 | MSSQL Python | `"mssql_python"` | `tsql` | QMARK (`?`) | `helper` | Both | SQL Server native |
-| MysqlConnector | `"mysql_connector"` | `mysql` | PYFORMAT (`%s`) | `helper` | No | MySQL native |
+| MysqlConnector | `"mysqlconnector"` | `mysql` | PYFORMAT (`%s`) | `helper` | Both | MySQL native |
 | OracleDB | `"oracledb"` | `oracle` | NAMED_COLON (`:name`) | `helper` | Both | Oracle DB API |
 | PSQLPy | `"psqlpy"` | `postgres` | NUMERIC (`$1`) | `helper` | Yes | Rust-backed |
 | Psycopg | `"psycopg"` | `postgres` | PYFORMAT (`%s`) | `helper` | Both | psycopg adapt |
 | PyMySQL | `"pymysql"` | `mysql` | PYFORMAT (`%s`) | `helper` | No | MySQL native |
-| Spanner | `"spanner"` | `spanner` | NAMED_AT (`@name`) | `helper` | Yes | Spanner proto |
+| Spanner | `"spanner"` | `spanner` | NAMED_AT (`@name`) | `helper` | No | Spanner proto |
 | SQLite | `"sqlite"` | `sqlite` | QMARK (`?`) | `helper` | No | Python stdlib |
 
 ### JSON Strategy
 
 - **`driver`**: The database driver handles JSON serialization natively (AsyncPG, CockroachDB Asyncpg). Zero overhead.
 - **`helper`**: SQLSpec serializes JSON values before binding. Works universally.
+
+---
+
+## Capability Snapshot
+
+Check the adapter config flags before building generic tooling:
+
+| Capability | Native adapters | Caveats |
+| --- | --- | --- |
+| Row streaming with `select_stream()` / `fetch_stream()` | `asyncpg`, `cockroach_asyncpg`, `psycopg`, `cockroach_psycopg`, `psqlpy`, `pymysql`, `aiomysql`, `asyncmy`, `mysqlconnector`, `sqlite`, `aiosqlite`, `oracledb`, `bigquery` | `adbc`, `duckdb`, `mssql_python`, `arrow_odbc`, and `spanner` use eager fallback only. Use `native_only=True` when fallback would violate memory bounds. |
+| Arrow export with native `select_to_arrow()` override | `adbc`, `arrow_odbc`, `duckdb`, `bigquery`, `spanner`, `mssql_python`, `oracledb` | Other adapters use the base dict-to-Arrow conversion for `select_to_arrow()`; `native_only=True` raises there. `config.supports_arrow_streaming` is a streaming capability flag, not a separate API. |
+| Native ingest through `load_from_arrow()` / `load_from_records()` | PostgreSQL family, MySQL family, SQLite family, `adbc`, `duckdb`, `oracledb`, `bigquery`, `spanner`, `mssql_python`, `arrow_odbc` | `load_from_records()` normalizes to Arrow first. MySQL local-infile, Oracle direct path load, BigQuery Storage Write API, and Spanner Batch Write API have explicit gates. |
+| ADK session/event and memory stores | `asyncpg`, `psycopg`, `psqlpy`, `cockroach_asyncpg`, `cockroach_psycopg`, `aiomysql`, `asyncmy`, `mysqlconnector`, `pymysql`, `aiosqlite`, `sqlite`, `oracledb`, `duckdb`, `adbc`, `spanner` | BigQuery and `mssql_python` are not ADK backends. Artifact service contracts exist, but concrete adapter artifact metadata stores are deployment-provided. |
+| Cloud job/session controls | `bigquery`, `spanner` | BigQuery controls live in `BigQueryConfig.driver_features`; Spanner controls live in `SpannerSyncConfig.driver_features`, per-call kwargs, and `provide_session()` / `provide_read_session()`. |
 
 ---
 
@@ -90,7 +104,7 @@ Each adapter's `core.py` module exports these helpers:
 
 ### PostgreSQL
 
-- **asyncpg**: Best throughput, native JSON/UUID, zero-copy Arrow. Use for high-performance async apps.
+- **asyncpg**: Best throughput, native JSON/UUID, and PostgreSQL COPY ingest. Use for high-performance async apps.
 - **psycopg**: Broadest compatibility, sync + async, PgBouncer-friendly. Use when you need sync or connection pooling.
 - **psqlpy**: Rust-backed async driver. Use when you want Rust performance with Python ergonomics.
 - **cockroach_asyncpg / cockroach_psycopg**: CockroachDB-specific. Built-in retry logic for serialization conflicts (`40001`), follower reads.
@@ -99,7 +113,7 @@ Each adapter's `core.py` module exports these helpers:
 
 - **asyncmy**: Async MySQL with good performance. Use for async applications.
 - **pymysql**: Pure Python sync driver. Use for simple scripts or when C extensions are unavailable.
-- **mysql_connector**: Oracle's official connector. Use when vendor support matters.
+- **mysqlconnector**: Oracle's official connector. Use when vendor support matters.
 
 ### SQLite
 
@@ -167,8 +181,9 @@ class MyDriver(SyncDriverAdapterBase):
 
 ### DuckDB
 
-- Native Apache Arrow support with zero-copy for `select_to_arrow()` and `copy_from_arrow()`.
+- Native Apache Arrow support for `select_to_arrow()` and `load_from_arrow()`.
 - Best for in-memory analytics and local OLAP workloads.
+- `DuckDBExtensionConfig` separates install and load lifecycle: `install=True` forces an `install_extension()` call, `force_install=True` reinstalls, and `required=True` turns load/install failures from best-effort warnings into exceptions.
 
 ### BigQuery
 

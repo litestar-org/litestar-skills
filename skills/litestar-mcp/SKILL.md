@@ -1,6 +1,6 @@
 ---
 name: litestar-mcp
-description: "Auto-activate for litestar_mcp, LitestarMCP, MCPConfig, MCPAuthConfig, MCPAuthBackend, mcp_tool=, mcp_resource=, Streamable HTTP, or OIDC MCP endpoints. Not for non-Litestar MCP."
+description: "Auto-activate for litestar_mcp, LitestarMCP, MCP, MCPConfig, mcp.app, mcp.run(), @mcp.tool/resource/prompt, MCPAuthConfig, MCPAuthBackend, mcp_tool=, mcp_resource=, Streamable HTTP, stdio, or OIDC MCP endpoints. Not for non-Litestar MCP."
 ---
 
 # litestar-mcp
@@ -13,7 +13,7 @@ Mark routes by passing `mcp_tool="name"`, `mcp_resource="name"`, or `mcp_prompt=
 
 - PEP 604 unions: `T | None`, never `Optional[T]`
 - Consumer Litestar app modules MAY use `from __future__ import annotations`
-- Async all I/O - handlers exposed through MCP must be `async def`
+- Async all I/O. Pure standalone `@mcp.tool` / `@mcp.resource` / `@mcp.prompt` functions may be sync; keep blocking I/O out of the event loop.
 
 ## Quick Reference
 
@@ -71,6 +71,7 @@ The default MCP surface is:
 | `base_path` | `str` | `"/mcp"` | URL prefix for the MCP Streamable HTTP endpoint |
 | `include_in_schema` | `bool` | `False` | Include MCP routes in OpenAPI |
 | `name` | `str \| None` | `None` | Server name; defaults to OpenAPI title |
+| `instructions` | `str \| None` | `None` | Server instructions advertised to MCP clients |
 | `guards` | `list[Any] \| None` | `None` | Litestar guards applied to the MCP router |
 | `allowed_origins` | `list[str] \| None` | `None` | Restrict accepted `Origin` headers |
 | `include_operations` | `list[str] \| None` | `None` | Only expose matching operation names |
@@ -80,6 +81,8 @@ The default MCP surface is:
 | `auth` | `MCPAuthConfig \| None` | `None` | OAuth protected-resource metadata |
 | `tasks` | `bool \| MCPTaskConfig` | `False` | Enable experimental in-memory MCP task support |
 | `list_page_size` | `int` | `100` | Page size for `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list` (clients page via opaque cursors) |
+| `before_tool_call` | `BeforeToolCallHook \| None` | `None` | Observe each `tools/call` before dispatch |
+| `after_tool_call` | `AfterToolCallHook \| None` | `None` | Observe each `tools/call` result, exception, and duration |
 | `opt_keys` | `MCPOptKeys` | `MCPOptKeys()` | Rename the `handler.opt` keys the plugin reads (e.g. to avoid collisions) |
 | `session_store` | `Store \| None` | `None` | Litestar `Store` backing MCP sessions; defaults to an in-memory store |
 | `session_max_idle_seconds` | `float` | `3600.0` | Idle timeout before an MCP session is evicted |
@@ -145,6 +148,45 @@ Use structured metadata when the agent needs sharper tool selection:
 async def generate_report(data: ReportRequest) -> ReportQueued: ...
 ```
 
+### Standalone MCP App
+
+Use `MCP(...)` when the application is primarily an MCP server. Use `LitestarMCP(...)` when adding MCP to an existing Litestar app.
+
+```python
+from litestar_mcp import MCP
+
+
+mcp = MCP("inventory-mcp", instructions="Expose inventory tools.")
+
+
+@mcp.tool(name="lookup_product", description="Look up a product by SKU.")
+def lookup_product(sku: str) -> dict[str, str]:
+    return {"sku": sku, "status": "active"}
+
+
+@mcp.resource(uri="inventory://status", name="inventory_status")
+def inventory_status() -> dict[str, str]:
+    return {"status": "healthy"}
+
+
+@mcp.prompt(name="summarize_product")
+def summarize_product(sku: str) -> str:
+    return f"Summarize product {sku}."
+
+
+app = mcp.app
+
+
+if __name__ == "__main__":
+    mcp.run(transport="stdio")
+```
+
+`mcp.app` lazily builds the underlying `Litestar` instance; access it after registering standalone decorators. `@mcp.tool`, `@mcp.resource`, and `@mcp.prompt` accept normal Litestar route-handler kwargs such as `dependencies`, `guards`, `tags`, DTO options, hooks, and `sync_to_thread`. The `name` kwarg names the MCP primitive; use `route_name` when the Litestar route handler itself needs a name.
+
+`MCP(...)` also accepts `config=`, existing `plugins=`, existing `route_handlers=`, and standard `Litestar(...)` app kwargs. Use that pass-through when a standalone MCP app still needs Litestar middleware, dependencies, CORS, or additional non-MCP routes.
+
+`mcp.run(transport="sse", port=8000)` starts the HTTP/SSE transport through the Litestar CLI, so expose `app = mcp.app` at module scope or set `LITESTAR_APP` for worker/reload discovery. `mcp.run(transport="stdio")` reads line-delimited JSON-RPC from stdin, writes responses to stdout, manually drives ASGI lifespan, and dispatches through the same JSON-RPC router with a synthetic request context.
+
 ### Hiding Routes
 
 Discovery is opt-in: a handler that carries no `mcp_*` marker never appears in MCP. There is no per-route exclude flag — `opt={"mcp_exclude": True}` is ignored.
@@ -169,6 +211,24 @@ To drop *marked* routes in bulk, use the `MCPConfig` filters (`exclude_tags` / `
   }
 }
 ```
+
+Direct router use is transport-internal. Current `JSONRPCRouter.dispatch()` takes a parsed request plus `RequestContext`; HTTP builds that context from the live `Request`, while stdio uses `client_id="stdio"`, `owner_id="stdio"`, and `request=None`. Do not import `litestar_mcp.routes.build_jsonrpc_router`; use `LitestarMCP` or `MCP` unless you are maintaining `litestar-mcp` transport internals.
+
+### Pagination, Signatures, And Errors
+
+`tools/list`, `resources/list`, `resources/templates/list`, and `prompts/list` use opaque cursor pagination. Clients pass `params.cursor` from `nextCursor` until the response omits it; clients do not send `limit`. Set server page size with `MCPConfig(list_page_size=...)`; invalid cursors return `INVALID_PARAMS` (`-32602`).
+
+Tool arguments are validated against Litestar's `handler.parsed_fn_signature` before dispatch. Do not reference legacy `signature_model` or private validation-context parameter lists.
+
+Tool execution errors stay inside the tool result with `isError: true`; protocol errors such as unknown tool names use JSON-RPC errors. Resource and prompt handler failures use primitive-level JSON-RPC codes and preserve the handler HTTP status in `error.data.statusCode` when a handler response produced one. Do not invent status-code-specific JSON-RPC codes for 401/403/409/429.
+
+### Tool-Call Callbacks
+
+Use `MCPConfig.before_tool_call` and `MCPConfig.after_tool_call` for audit, metrics, or tracing that must fire around `tools/call` regardless of route ownership. Both callbacks receive the MCP tool name, a shallow copy of submitted arguments, and the synthesized `Request`. `after_tool_call` also receives keyword-only `result`, `exception`, and `duration`; it fires for successes, guard failures, handled error responses, and unhandled exceptions. Callback exceptions are logged and swallowed.
+
+### Dependency Providers And Dishka
+
+Litestar `Provide(...)` factory parameters that are user inputs, such as pagination or filter values, remain in tool schemas and forward during `tools/call`. When `dishka.integrations.litestar.setup_dishka()` is attached, provider-factory parameters whose annotated type is resolvable from `app.state.dishka_container` are treated as DI inputs instead of MCP arguments. Dishka remains optional; installs without Dishka should still import and run `litestar_mcp`.
 
 ### Built-in OpenAPI Resource
 
@@ -240,7 +300,7 @@ List only the routes that should be callable by AI clients. Mark those routes wi
 
 ### Step 3: Add the Plugin
 
-Wire `LitestarMCP(MCPConfig(name=...))` into `Litestar(plugins=[...])`. Use `include_tags` or `include_operations` when you need a second allowlist.
+Wire `LitestarMCP(MCPConfig(name=...))` into `Litestar(plugins=[...])`, or use standalone `MCP(...)` when the app exists only to serve MCP primitives. Use `include_tags` or `include_operations` when you need a second allowlist.
 
 ### Step 4: Add Auth
 
@@ -248,7 +308,7 @@ For public endpoints, configure bearer-token validation and `MCPAuthConfig` meta
 
 ### Step 5: Verify
 
-Hit `POST /mcp` with `tools/list` and `resources/list`. Confirm only marked routes appear. Call one representative tool and read one representative resource.
+For Streamable HTTP, initialize first: `POST /mcp` with `initialize`, send `notifications/initialized`, then include the returned `Mcp-Session-Id` header on later `tools/list`, `resources/list`, `tools/call`, and `resources/read` requests. Confirm only marked routes appear, call one representative tool, and read one representative resource. For standalone stdio apps, send one line-delimited JSON-RPC request through stdin and confirm the response is written to stdout.
 
 </workflow>
 
@@ -263,6 +323,8 @@ Hit `POST /mcp` with `tools/list` and `resources/list`. Confirm only marked rout
 - **Keep DTOs precise** - loose `dict[str, Any]` request schemas produce weak tool contracts.
 - **Use `MCPAuthConfig` plus token validation for public MCP** - metadata alone does not authenticate requests.
 - **Set `allowed_origins` for browser-accessible MCP clients** - leave it `None` only for trusted server-to-server deployments.
+- **Treat `MCP` and `LitestarMCP` as public entry points** - avoid private router/service imports unless you are maintaining `litestar-mcp` transport internals.
+- **Keep observability callbacks side-effect safe** - `before_tool_call` / `after_tool_call` failures are swallowed, so callbacks must not enforce authorization or business invariants.
 
 </guardrails>
 
@@ -272,15 +334,17 @@ Hit `POST /mcp` with `tools/list` and `resources/list`. Confirm only marked rout
 
 Before delivering an MCP integration, verify:
 
-- [ ] `LitestarMCP` is in `app.plugins`
-- [ ] Exposed routes use `mcp_tool=`, `mcp_resource=`, or `mcp_resource_template=`
+- [ ] Existing Litestar apps include `LitestarMCP` in `app.plugins`; standalone apps expose `app = mcp.app`
+- [ ] Exposed routes/functions use `mcp_tool=`, `mcp_resource=`, `mcp_prompt=`, `@mcp.tool`, `@mcp.resource`, or `@mcp.prompt`
 - [ ] Admin / internal routes are left unmarked, or kept outside `include_*` / inside `exclude_*` — with `guards` or auth enforcing access
 - [ ] Auth is configured for the deployment boundary
 - [ ] `POST /mcp` `tools/list` returns only intended tools
 - [ ] `POST /mcp` `resources/list` includes only intended resources plus `litestar://openapi`
 - [ ] Filtered tools/resources/templates fail direct invocation as unknown
-- [ ] Provider-declared query parameters appear in tool `inputSchema` and forward during `tools/call`
-- [ ] Exposed handlers are `async def` and return JSON-serializable types
+- [ ] Provider-declared user inputs appear in tool `inputSchema`; Dishka-resolved service parameters do not
+- [ ] `before_tool_call` / `after_tool_call` callbacks are covered when configured, including failure paths
+- [ ] Standalone `MCP` SSE or stdio transport is smoke-tested for the chosen deployment mode
+- [ ] Exposed handlers performing I/O are `async def`; sync standalone functions are pure/non-blocking and return JSON-serializable types
 - [ ] Tool argument DTOs are specific enough for generated schemas
 
 </validation>

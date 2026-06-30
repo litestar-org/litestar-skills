@@ -57,6 +57,7 @@ TARGET_ROOTS: frozenset[str] = frozenset(
         "litestar",
         "litestar_granian",
         "litestar_mcp",
+        "litestar_queues",
         "litestar_saq",
         "msgspec",
         "sqlalchemy",

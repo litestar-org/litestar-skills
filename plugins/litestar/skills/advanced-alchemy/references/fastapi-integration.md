@@ -1,6 +1,6 @@
 # FastAPI integration
 
-This guide covers wiring Advanced Alchemy into a FastAPI application: the `Depends`-based DI pattern, the `provide_service` and `provide_filters` helpers, and the `alchemy database` CLI shim that ships with the FastAPI extension. Routing note: this guide covers FastAPI. For plain Starlette without `Depends`, see [starlette-integration.md](starlette-integration.md). For Flask (WSGI), see [flask-integration.md](flask-integration.md). For Sanic, see [sanic-integration.md](sanic-integration.md).
+This guide covers wiring Advanced Alchemy into a FastAPI application: the `Depends`-based DI pattern, the `provide_service` and `provide_filters` helpers, and the `database` / `db` CLI shim that ships with the FastAPI extension. Routing note: this guide covers FastAPI. For plain Starlette without `Depends`, see [starlette-integration.md](starlette-integration.md). For Flask (WSGI), see [flask-integration.md](flask-integration.md). For Sanic, see [sanic-integration.md](sanic-integration.md).
 
 ## Install
 
@@ -8,7 +8,7 @@ This guide covers wiring Advanced Alchemy into a FastAPI application: the `Depen
 pip install 'advanced-alchemy[fastapi]'
 ```
 
-This pulls FastAPI, Starlette (FastAPI's ASGI substrate), and the core Advanced Alchemy library. The async SQLAlchemy driver (`asyncpg`, `aiosqlite`, `asyncmy`, etc.) is installed separately. If you want the `alchemy` CLI integrated with `fastapi dev` / `fastapi run`, also install `fastapi[standard]` so `fastapi_cli` is available.
+This pulls FastAPI, Starlette (FastAPI's ASGI substrate), and the core Advanced Alchemy library. The async SQLAlchemy driver (`asyncpg`, `aiosqlite`, `asyncmy`, etc.) is installed separately. If you want the database CLI integrated with `fastapi dev` / `fastapi run`, also install `fastapi[standard]` so `fastapi_cli` is available.
 
 ## Entry point
 
@@ -238,7 +238,7 @@ The FastAPI extension ships a Click command group that wraps the Alembic CLI. Tw
 
 ### Via the FastAPI CLI (`fastapi dev` / `fastapi run`)
 
-If you have `fastapi_cli` installed (through the `fastapi[standard]` extra), call `assign_cli_group(app)` from your app module. This adds an `alchemy database` subcommand to the `fastapi` CLI:
+If you have `fastapi_cli` installed (through the `fastapi[standard]` extra), call `assign_cli_group(app)` from your app module. This registers Typer-native `database` and `db` commands on the FastAPI CLI and forwards to the Advanced Alchemy Click migration group. Use this Typer 0.26-compatible path; do not attach the Click group directly to Typer.
 
 ```python
 from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, assign_cli_group
@@ -257,18 +257,19 @@ fastapi dev app.py database revision --autogenerate -m "add orders table"
 
 ### As a standalone Click entry point
 
-Alternatively, wire the command group into your own `__main__` using `register_database_commands(app)`:
+Alternatively, wire the command group into your own Click `__main__` using `register_database_commands(app)`:
 
 ```python
 if __name__ == "__main__":
-    from fastapi_cli.cli import app as fastapi_cli_app
-    from typer.main import get_group
-
     from advanced_alchemy.extensions.fastapi.cli import register_database_commands
+    from advanced_alchemy.utils.cli_tools import click
 
-    click_app = get_group(fastapi_cli_app)
-    click_app.add_command(register_database_commands(app))
-    click_app()
+    @click.group()
+    def cli() -> None:
+        """Application CLI."""
+
+    cli.add_command(register_database_commands(app))
+    cli()
 ```
 
 Then `python app.py database upgrade head` works without FastAPI's own CLI entry point.
@@ -401,5 +402,5 @@ One POST to `/orders` with `{"customer_email": "a@b.co", "total_cents": 9900}`:
 - [sanic-integration.md](sanic-integration.md) — `request.ctx`-based equivalent.
 - [services.md](services.md) — `SQLAlchemyAsyncRepositoryService` API.
 - [filters.md](filters.md) — the underlying filter types (`LimitOffset`, `SearchFilter`, etc.) that `provide_filters` assembles.
-- [migrations.md](migrations.md) — Alembic workflow behind `alchemy database`.
+- [migrations.md](migrations.md) — Alembic workflow behind the database CLI.
 - [../../litestar-styleguide/references/canonical-apps.md](../../litestar-styleguide/references/canonical-apps.md) — public reference apps (Litestar-based; service/repository code transfers directly).

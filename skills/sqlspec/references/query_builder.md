@@ -57,7 +57,7 @@ filters = [
 ]
 
 # The driver applies filters to the AST before execution
-rows = await db_session.select_many(base, *filters, schema_type=User)
+rows = await db_session.select(base, *filters, schema_type=User)
 
 # Or with pagination (returns items + total count)
 rows, total = await db_session.select_with_total(base, *filters, schema_type=User)
@@ -97,7 +97,7 @@ query = (
 | `.join(table, on=)` | INNER JOIN | `.join("orders", on="users.id = orders.user_id")` |
 | `.left_join(table, on=)` | LEFT JOIN | `.left_join("profiles", on="users.id = profiles.user_id")` |
 | `.where(expr)` | WHERE clause (AND-combined) | `.where("active = true")` |
-| `.where_eq(**kw)` | WHERE col = value (parameterized) | `.where_eq(status="active")` |
+| `.where_eq(column, value)` | WHERE col = value (parameterized) | `.where_eq("status", "active")` |
 | `.group_by(*cols)` | GROUP BY | `.group_by("department")` |
 | `.having(expr)` | HAVING clause | `.having("COUNT(*) > 5")` |
 | `.order_by(*exprs)` | ORDER BY | `.order_by("created_at DESC")` |
@@ -193,7 +193,7 @@ query = (
 query = (
     sql.update("users")
     .set(name="Bob", updated_at="now()")
-    .where_eq(id=1)
+    .where_eq("id", 1)
     .returning("id", "name")
 )
 
@@ -215,7 +215,7 @@ query = (
 query = (
     sql.delete()
     .from_("users")
-    .where_eq(id=1)
+    .where_eq("id", 1)
     .returning("id")
 )
 ```
@@ -248,7 +248,7 @@ query = sql.select("*").from_("users").where_eq("active", True)
 stmt = query.to_statement()
 
 # Execute via driver
-rows = await db_session.select_many(stmt, schema_type=User)
+rows = await db_session.select(stmt, schema_type=User)
 ```
 
 ### .compile(dialect=)

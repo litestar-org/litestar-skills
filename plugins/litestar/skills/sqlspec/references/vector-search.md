@@ -237,6 +237,6 @@ The `<=>` operator returns cosine distance (0 = identical, 2 = opposite); `1 - (
 
 ## Shared Styleguide Baseline
 
-- [`../litestar-styleguide/references/general.md`](../litestar-styleguide/references/general.md) — Cross-language baseline
-- [`../litestar-styleguide/references/python.md`](../litestar-styleguide/references/python.md) — Python conventions
-- [`../litestar-styleguide/references/litestar.md`](../litestar-styleguide/references/litestar.md) — Litestar-specific baseline
+- [`../../litestar-styleguide/references/general.md`](../../litestar-styleguide/references/general.md) — Cross-language baseline
+- [`../../litestar-styleguide/references/python.md`](../../litestar-styleguide/references/python.md) — Python conventions
+- [`../../litestar-styleguide/references/litestar.md`](../../litestar-styleguide/references/litestar.md) — Litestar-specific baseline

@@ -1,11 +1,11 @@
 ---
 name: sqlspec
-description: "Auto-activate for sqlspec, SQLSpec, SQLFileLoader, drivers, query builders, named SQL, filters, pagination, Arrow, framework extensions, ADK stores, data dictionary, or observers. Not for ORM repositories."
+description: "Auto-activate for sqlspec, SQLSpec, SQLFileLoader, drivers, query builders, named SQL, filters, pagination, Arrow, framework extensions, ADK stores, data dictionary, or observers. Not for ORM repositories -- use advanced-alchemy."
 ---
 
 # SQLSpec Skill
 
-SQLSpec is a **type-safe SQL query mapper for Python** -- NOT an ORM. It provides flexible connectivity with consistent interfaces across 18+ database adapters. Write raw SQL, use the builder API, or load SQL from files. All statements pass through a sqlglot-powered AST pipeline for validation and dialect conversion.
+SQLSpec is a **type-safe SQL query mapper for Python** -- NOT an ORM. It provides flexible connectivity with consistent interfaces across 18+ database adapters. Write raw SQL, use the builder API, or load SQL from files. Statements pass through a sqlglot-powered AST pipeline for validation, parameter handling, and dialect conversion.
 
 ## Match-Your-Framework — read first
 
@@ -46,9 +46,9 @@ db_manager.add_config(config)
 
 # Use SQLSpec's session provider for connection lifecycle
 async with db_manager.provide_session(config) as db:
-    users = await db.select_many(
+    users = await db.select(
         "SELECT * FROM users WHERE active = $1",
-        [True],
+        True,
         schema_type=User,
     )
 ```
@@ -91,24 +91,37 @@ stmt = (
 
 | Method | Returns | Use Case |
 | --- | --- | --- |
+| `select()` / `fetch()` | List of rows | Filtered queries, listing |
 | `select_value()` | Single scalar | `COUNT(*)`, `MAX()`, existence checks |
+| `select_value_or_none()` | Scalar or `None` | Optional scalar lookup |
 | `select_one()` | One row (strict) | Get-by-ID, raises `NotFoundError` |
 | `select_one_or_none()` | One row or `None` | Optional lookup |
-| `select_many()` | List of rows | Filtered queries, listing |
-| `select_to_arrow()` | `pyarrow.Table` | Bulk data export, analytics |
-| `execute()` | Row count | INSERT/UPDATE/DELETE |
-| `execute_many()` | Row count | Batch operations |
+| `select_with_total()` | Rows plus total | Pagination |
+| `select_stream()` / `fetch_stream()` | Context-managed row stream | Bounded row iteration where adapter supports native streaming |
+| `select_to_arrow()` / `fetch_to_arrow()` | `ArrowResult` | Bulk data export, analytics |
+| `execute()` | `SQLResult` | INSERT/UPDATE/DELETE metadata |
+| `execute_many()` | `SQLResult` | Batch operation metadata |
+| `load_from_arrow()` | `StorageBridgeJob` | Native Arrow bulk ingest |
+| `load_from_storage()` | `StorageBridgeJob` | Load staged files or cloud URIs |
+| `load_from_records()` | `StorageBridgeJob` | Native bulk ingest for in-memory records |
 
 ### Arrow Integration Basics
 
 ```python
-# Zero-copy on DuckDB, ADBC adapters; conversion on others
-arrow_table = await db.select_to_arrow(
-    "SELECT * FROM large_dataset WHERE region = $1", [region]
+# Native Arrow on ADBC, DuckDB, BigQuery, Spanner, mssql-python, arrow-odbc,
+# and oracledb; conversion path on other adapters unless native_only=True.
+arrow_result = await db.select_to_arrow(
+    "SELECT * FROM large_dataset WHERE region = $1",
+    region,
+    return_format="reader",
+    batch_size=10_000,
 )
 
 # Bulk load from Arrow
-await db.copy_from_arrow(arrow_table, target_table="users")
+await db.load_from_arrow("users", arrow_result)
+
+# Bulk load records through the same native ingest path
+await db.load_from_records("users", [{"id": 1, "name": "Ada"}])
 ```
 
 <workflow>
@@ -122,13 +135,14 @@ await db.copy_from_arrow(arrow_table, target_table="users")
 | PostgreSQL async | `asyncpg`, `psycopg` | Async, NUMERIC/PYFORMAT params |
 | PostgreSQL sync | `psycopg` | Sync+async, PYFORMAT params |
 | SQLite | `sqlite`, `aiosqlite` | QMARK params, local dev |
-| DuckDB analytics | `duckdb` | Arrow-native, zero-copy |
+| DuckDB analytics | `duckdb` | Arrow-native OLAP, extension load/install lifecycle |
 | MySQL async | `asyncmy` | PYFORMAT params |
 | Oracle | `oracledb` | NAMED_COLON params, sync+async |
-| BigQuery / Spanner | `bigquery`, `spanner` | NAMED_AT params |
-| Raw SQL strings | Driver methods | `select_many()`, `execute()` |
+| BigQuery / Spanner | `bigquery`, `spanner` | NAMED_AT params, cloud job/session controls |
+| Raw SQL strings | Driver methods | `select()`, `execute()` |
 | Dynamic queries | Query builder | `sql.select()...to_statement()` |
-| SQL from files | `SQLFileLoader` | Metadata directives, caching |
+| SQL from files | `SQLFileLoader` | Metadata directives, `-- param:` declarations, caching |
+| High-volume ingest | Storage bridge | `load_from_arrow()`, `load_from_storage()`, `load_from_records()` |
 
 ### Step 2: Implement
 
@@ -137,6 +151,8 @@ await db.copy_from_arrow(arrow_table, target_table="users")
 3. Choose the appropriate driver method for your query shape
 4. Use `schema_type` parameter for typed results (Pydantic or msgspec models)
 5. Apply filters with `LimitOffsetFilter`, `OrderByFilter`, `SearchFilter`
+6. Use `select_stream(..., native_only=True)` when bounded-memory streaming is mandatory
+7. Use `load_from_records()` or `load_from_arrow()` for high-volume ingest; avoid row-by-row `execute_many()` for bulk pipelines
 
 ### Step 3: Validate
 
@@ -153,9 +169,13 @@ Run through the validation checkpoint below before considering the work complete
 - **Always use context managers** for driver lifecycle -- `async with db_manager.provide_session(config) as db:`
 - **Prefer the query builder** for complex dynamic queries -- avoids string concatenation, handles dialect conversion
 - **Prefer `SQLFileLoader`** for static queries -- keeps SQL out of Python, enables caching
+- **Use `-- param:` declarations for named SQL files that cross service boundaries** -- load-time and execute-time validation catches name drift and required parameter omissions
+- **Use `native_only=True` for streaming or Arrow paths only when fallback is unacceptable** -- unsupported adapters otherwise use eager row conversion
+- **Pass regular query bind values as positional arguments** -- `await db.select("... WHERE id = $1", user_id, schema_type=User)`, not `await db.select(..., [user_id], ...)`
 - **Never concatenate SQL strings** -- use parameterized queries or the query builder
 - **Never hold connections outside context managers** -- connection leaks exhaust the pool
 - **Match parameter style to adapter**: `$1` for asyncpg, `%s` for psycopg, `?` for sqlite, `:name` for oracledb
+- **Do not invent adapter APIs** -- BigQuery job controls live in `driver_features`; Spanner request controls live in `driver_features` or `provide_session()` kwargs
 - **Adapter config / driver modules avoid `from __future__ import annotations`**. Consumer app modules MAY use it.
 
 </guardrails>
@@ -172,6 +192,9 @@ Before delivering SQLSpec code, verify:
 - [ ] Query results use `schema_type` for type-safe mapping
 - [ ] Complex dynamic queries use the builder API, not string concatenation
 - [ ] Filters use SQLSpec filter objects (`LimitOffsetFilter`, etc.) not manual LIMIT/OFFSET
+- [ ] Streaming code uses context managers and sets `native_only=True` when eager fallback would be a bug
+- [ ] Bulk ingest code uses `load_from_arrow()`, `load_from_storage()`, or `load_from_records()` and checks adapter gates such as MySQL local-infile, Oracle direct path load, BigQuery Storage Write API, or Spanner Batch Write API
+- [ ] ADK stores are selected from supported adapter `adk` packages; BigQuery is not an ADK backend
 
 </validation>
 
@@ -220,9 +243,9 @@ async def list_active_users(page: int = 1, page_size: int = 25) -> list[User]:
     ]
 
     async with db_manager.provide_session(config) as db:
-        users = await db.select_many(
+        users = await db.select(
             "SELECT id, name, email, active FROM users WHERE active = $1",
-            [True],
+            True,
             *filters,
             schema_type=User,
         )
@@ -232,80 +255,16 @@ async def list_active_users(page: int = 1, page_size: int = 25) -> list[User]:
 async def get_user_count() -> int:
     async with db_manager.provide_session(config) as db:
         count = await db.select_value(
-            "SELECT COUNT(*) FROM users WHERE active = $1", [True]
+            "SELECT COUNT(*) FROM users WHERE active = $1", True
         )
         return count
 ```
 
 </example>
 
-## Query Builder
-
-The `sql` factory provides a fluent builder API with full method chaining. All builders terminate with `.to_statement()` and pass through sqlglot for validation and dialect conversion.
-
-| Builder | Entry Point | Key Methods |
-| --- | --- | --- |
-| SELECT | `sql.select(*cols)` | `.from_()`, `.where()`, `.where_eq()`, `.join()`, `.order_by()`, `.limit()`, `.offset()` |
-| INSERT | `sql.insert(table)` | `.columns()`, `.values()`, `.returning()` |
-| UPDATE | `sql.update(table)` | `.set_()`, `.where()`, `.returning()` |
-| DELETE | `sql.delete(table)` | `.where()`, `.returning()` |
-| MERGE | `sql.merge_(target)` | `.using()`, `.when_matched()`, `.when_not_matched()` |
-| CREATE TABLE | `sql.create_table(name)` | `.column()`, `.primary_key()`, `.if_not_exists()` |
-| DROP TABLE | `sql.drop_table(name)` | `.if_exists()`, `.cascade()` |
-
-## ArrowResult
-
-`select_to_arrow()` returns an Apache Arrow `Table` for bulk and analytical workloads:
-
-- **Zero-copy** on DuckDB and ADBC-native adapters — no serialization overhead
-- **Conversion path** on other adapters — rows are materialized into an Arrow schema
-- Returned tables are compatible with Polars, Pandas, and PyArrow directly
-- Use `copy_from_arrow(table, target_table)` for bulk loads back into the database
-
-## Filters
-
-SQLSpec filter objects are passed directly to driver methods alongside the SQL string. They modify the statement before execution.
-
-| Filter | Purpose | Example Use |
-| --- | --- | --- |
-| `BeforeAfterFilter` | Date range bounds (`before`, `after`) | Audit log queries, time-range pagination |
-| `InCollectionFilter` | SQL `IN (...)` clause | Filter by a set of IDs or enum values |
-| `LimitOffsetFilter` | Page-based pagination | `limit=25, offset=50` |
-| `OrderByFilter` | Dynamic sort columns and direction | User-supplied sort fields |
-| `SearchFilter` | Text search (`ILIKE` / `LIKE`) | Full-text style search on string columns |
-
-Filters are composable — pass multiple to a single `select_many()` call and they are applied in order.
-
-## Framework Integrations
-
-| Framework | Integration | Key Feature |
-| --- | --- | --- |
-| Litestar | `SQLSpecPlugin` | Dependency injection of typed driver; auto session lifecycle |
-| FastAPI / Starlette | Middleware | Request-scoped connection; injects driver into route dependencies |
-| Flask | Extension | `init_app()` pattern; driver available via `g` or `current_app` |
-
-`SQLSpecPlugin` for Litestar registers the driver as a DI provider — inject it into route handlers via type annotation without manual context management.
-
-## Event Channels
-
-For databases that support server-side pub/sub (e.g., PostgreSQL `LISTEN`/`NOTIFY`):
-
-- Use `AsyncEventChannel` to subscribe to named channels
-- Publish with `NOTIFY channel, payload` from SQL or from the `publish()` method
-- Handlers receive `EventMessage` objects with channel name, payload, and PID
-- Useful for real-time cache invalidation, cross-process coordination, and background job triggers
-
-## Key Design Principles
-
-1. **Single Source of Truth**: The `SQL` object holds all state for a given statement
-2. **Immutability**: All operations on a `SQL` object return new instances
-3. **Type Safety**: Parameters carry type information through the processing pipeline
-4. **Protocol-Based Design**: Uses Python protocols for runtime type checking instead of inheritance
-5. **Single-Pass Processing**: Parse once, transform once, validate once
-
 ## References Index
 
-> **Choosing between `sqlspec` and `advanced-alchemy`:** `advanced-alchemy` gives you an opinionated ORM service layer with `UUIDAuditBase`, lifecycle hooks, repository / service / Alembic integration, and `OffsetPagination[T]` out of the box — pick it when you want a complete CRUD surface with attribute-style row access and you're happy inside the SQLAlchemy ecosystem. `sqlspec` gives you direct SQL control, 18+ driver adapters (asyncpg, oracledb, DuckDB, BigQuery, SQLite, and more), Arrow-native result streams for analytics, and a builder API when you need it — pick it when you want explicit SQL, heterogeneous database backends, or Arrow integration. Both skills integrate with Litestar via first-party plugins; see [`../advanced-alchemy/SKILL.md`](../advanced-alchemy/SKILL.md) for the ORM path.
+> **Choosing between `sqlspec` and `advanced-alchemy`:** `advanced-alchemy` gives you an opinionated ORM service layer with `UUIDAuditBase`, lifecycle hooks, repository / service / Alembic integration, and `OffsetPagination[T]` out of the box — pick it when you want a complete CRUD surface with attribute-style row access and you're happy inside the SQLAlchemy ecosystem. `sqlspec` gives you direct SQL control, 18+ driver adapters (asyncpg, oracledb, DuckDB, BigQuery, SQLite, and more), Arrow result paths for analytics, and a builder API when you need it — pick it when you want explicit SQL, heterogeneous database backends, or Arrow integration. Both skills integrate with Litestar via first-party plugins; see [`../advanced-alchemy/SKILL.md`](../advanced-alchemy/SKILL.md) for the ORM path.
 
 For detailed instructions, patterns, and API guides, refer to the following documents:
 
@@ -319,18 +278,20 @@ For detailed instructions, patterns, and API guides, refer to the following docu
 
 ### Architecture & Performance
 
-- **[Architecture & Caching](references/architecture.md)** -- Core data flow, NamespacedCache system, Mypyc compilation.
-- **[Data Dictionary](references/data-dictionary.md)** -- Dialect feature flags, runtime introspection (`get_tables`, `get_columns`, `get_indexes`), driver-side metadata API.
+- **[Architecture & Caching](references/architecture.md)** -- Core data flow, NamespacedCache system, statement/cache tuning, Mypyc compilation.
+- **[Performance & Cloud Controls](references/performance.md)** -- Bounded async bridge, cache/fetch tuning, BigQuery job controls, Spanner session controls.
+- **[Data Dictionary](references/data-dictionary.md)** -- Dialect feature flags, runtime introspection (`get_tables`, `get_columns`, `get_indexes`), ADBC native metadata/statistics.
 
 ### Query Building & Execution
 
 - **[Query Builder API](references/query_builder.md)** -- `sql` factory: select, insert, update, delete, merge.
-- **[Driver Method Reference](references/driver_api.md)** -- `select_value()`, `select_one()`, `select_many()`, `select_to_arrow()`.
+- **[Driver Method Reference](references/driver_api.md)** -- `select()`, `select_one()`, `select_stream()`, `select_to_arrow()`, load methods.
 - **[Filter & Pagination System](references/filters.md)** -- `LimitOffsetFilter`, `OrderByFilter`, `SearchFilter`.
 
 ### Data Integration
 
-- **[Arrow & ADBC Integration](references/arrow.md)** -- `select_to_arrow()` zero-copy, `copy_from_arrow()` bulk loading.
+- **[Arrow & ADBC Integration](references/arrow.md)** -- `select_to_arrow()` formats, Arrow-native paths, conversion fallbacks.
+- **[Native Bulk Ingest](references/bulk-ingest.md)** -- `load_from_arrow()`, `load_from_storage()`, `load_from_records()`, adapter gates.
 - **[SQL File Loading](references/loader.md)** -- `SQLFileLoader` with search paths, metadata directives.
 
 ### Adapters & Drivers
@@ -342,7 +303,7 @@ For detailed instructions, patterns, and API guides, refer to the following docu
 - **[Framework Extensions](references/extensions.md)** -- Litestar plugin, FastAPI/Starlette integration.
 - **[Storage Integration](references/storage.md)** -- ADK store, Litestar session stores, event channel backends.
 - **[Event Channels (Pub/Sub)](references/events.md)** -- `AsyncEventChannel`, subscribe/publish patterns.
-- **[ADK Extension](references/adk.md)** -- `SQLSpecSessionService`, `SQLSpecMemoryService`, `SQLSpecArtifactService`, per-adapter ADK stores.
+- **[ADK Extension](references/adk.md)** -- ADK 2 session/memory stores, scoped state, artifact service contracts.
 
 ### Migrations & Schema
 
