@@ -6,7 +6,7 @@
       "name": "litestar-skills",
       "devDependencies": {
         "markdownlint-cli2": "^0.22.1",
-        "oxlint": "^1.72.0",
+        "oxlint": "^1.75.0",
       },
     },
   },

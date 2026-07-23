@@ -42,7 +42,7 @@ dev = [
 # skill code samples actually resolves against the installed version.
 # CI installs this group on every run; local dev opts in.
 validation = [
-  "advanced-alchemy[cli,cryptography]>=1.11.0",
+  "advanced-alchemy[cli,cryptography,fsspec,obstore]>=1.11.0",
   "argon2-cffi>=23.1",  # advanced_alchemy.types.password_hash.argon2 imports argon2 at module load
   "dishka>=1.4",
   "flask>=3.0",        # advanced_alchemy.extensions.flask imports flask at module load
@@ -56,11 +56,11 @@ validation = [
   "litestar-saq[psycopg]>=0.8.0",
   "litestar-vite>=0.27.0",
   "msgspec>=0.21.1",
-  "polyfactory[sqlalchemy]>=3.3.0",
+  "polyfactory[beanie,sqlalchemy]>=3.3.0",
   "pytest-databases>=0.19.0",
   "sanic[ext]>=24.6",  # advanced_alchemy.extensions.sanic imports sanic_ext at module load
   "sqlmodel>=0.0.27",
-  "sqlspec[adk,asyncpg,performance,psycopg]>=0.56.0",
+  "sqlspec[adk,asyncpg,duckdb,oracledb,performance,psycopg]>=0.56.0",
 ]
 
 [project.urls]
@@ -141,6 +141,13 @@ addopts = "-ra --strict-markers --strict-config"
 markers = [
   "slow: marks tests as slow (deselect with '-m \"not slow\"')",
   "integration: marks tests as integration tests",
+]
+# Silence deprecations from transitive tooling deps we neither control nor give
+# guidance on. Scoped by message so real deprecations from the libraries the
+# skills document (litestar, advanced-alchemy, sqlspec, msgspec, …) still surface.
+filterwarnings = [
+  "ignore:'MultiCommand' is deprecated:DeprecationWarning",          # rich_click -> click 9 shim
+  "ignore:SelectableGroups dict interface is deprecated:DeprecationWarning",  # opentelemetry importlib.metadata
 ]
 
 # ============================================================
