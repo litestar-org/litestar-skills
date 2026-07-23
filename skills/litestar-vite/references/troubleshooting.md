@@ -16,7 +16,7 @@ See `hmr.md` for the full debug checklist. Quick summary:
 
 - Hot file path mismatch between Python and JS configs
 - Vite not actually running (check `litestar run` logs)
-- CORS / port mismatch in direct mode
+- A JS-side origin/HMR override bypassing the Litestar proxy
 - Missing `vite_hmr()` in template
 - Vite 8.1+ config still puts HMR network fields under `server.hmr` instead of `server.ws`
 
@@ -25,7 +25,7 @@ See `hmr.md` for the full debug checklist. Quick summary:
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `routes.ts` empty | Handlers missing `name=` parameter | Add `name=` to handlers; route names come from there |
-| `schemas.ts` missing types | DTO not registered with OpenAPI | Ensure handler return type or `dto=` parameter exposes the schema |
+| `api/types.gen.ts` missing types | DTO not registered with OpenAPI | Ensure handler request/return annotations or DTO configuration exposes the schema |
 | `inertia-pages.json` empty | Pages use generic JSON responses | Use `component=` handlers or Inertia response helpers from `litestar_vite.inertia` |
 | CI diff after re-gen | Local types out of date | `litestar assets generate-types` then commit |
 
@@ -46,7 +46,8 @@ See `hmr.md` for the full debug checklist. Quick summary:
 | Type errors on page props | `inertia-pages.json` / `page-props.ts` stale | Re-run `litestar assets generate-types` |
 | First-load works, navigations break | `root_template` missing Inertia head tags | Use Inertia layout pattern in `base.html` |
 | Structured handler return nests under `content` or boots as JSON | Running pre-0.24.1 behavior or bypassing the Inertia wrapper | Upgrade to `litestar-vite>=0.24.1`; return a prop bag from a `component=` handler |
-| Deferred props loop after partial reload | Resolved keys are echoed back in `deferredProps` | Upgrade to `litestar-vite>=0.24.0`; resolved partial-reload keys are stripped from metadata |
+| Deferred metadata appears on a partial response | Running behavior older than `0.26.0` | Upgrade; partial responses omit all `deferredProps` metadata |
+| Mutation request becomes a 409 refresh | Running behavior older than `0.26.0` | Upgrade; version mismatch short-circuits stale `GET` visits only |
 
 ## SPA Catch-All Issues
 
@@ -70,3 +71,7 @@ litestar --app app:app assets doctor --runtime-checks
 ```
 
 Reports configuration drift, manifest status, hot-file presence, and runtime reachability. Use `litestar --app app:app assets status` for read-only status output.
+
+Missing manifests are intentionally quiet during configuration. If an asset is
+requested without a usable manifest, run `litestar assets build`; current errors
+do not expose absolute manifest paths.

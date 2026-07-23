@@ -26,6 +26,7 @@ Behavior when a target library is **not installed**:
   imports of that library as unverifiable rather than failing. CI installs the
   ``validation`` extra (``pip install -e '.[validation]'``) so missing-library
   warnings are the local-dev signal to opt in.
+- Pass ``--strict-missing`` in CI to turn those warnings into failures.
 
 Exit codes:
 
@@ -35,6 +36,7 @@ Exit codes:
   itself, etc.).
 """
 
+import argparse
 import ast
 import importlib
 import re
@@ -43,27 +45,17 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import NamedTuple
 
+if sys.version_info >= (3, 11):
+    import tomllib as _tomllib
+else:  # pragma: no cover - py310 fallback path
+    import tomli as _tomllib  # type: ignore[import-not-found,unused-ignore]
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILLS_DIR = REPO_ROOT / "skills"
 COMMANDS_DIR = REPO_ROOT / "commands"
+UPSTREAM_MANIFEST = REPO_ROOT / "tools" / "upstream-releases.toml"
 
-# Root module names whose imports we verify against installed packages.
-# Imports rooted in any other module (stdlib, third-party we don't ship guidance
-# for, neutral placeholders like ``app`` or ``my_package``) are ignored.
-TARGET_ROOTS: frozenset[str] = frozenset(
-    {
-        "advanced_alchemy",
-        "dishka",
-        "litestar",
-        "litestar_granian",
-        "litestar_mcp",
-        "litestar_queues",
-        "litestar_saq",
-        "msgspec",
-        "sqlalchemy",
-        "sqlspec",
-    }
-)
+_ANCILLARY_ROOTS = frozenset({"dishka", "sqlalchemy"})
 
 # Files exempt from the import check entirely. Use sparingly.
 _IMPORT_CHECK_ALLOWLIST: frozenset[str] = frozenset()
@@ -167,6 +159,20 @@ def is_target_import(ref: ImportRef) -> bool:
     return root in TARGET_ROOTS
 
 
+def load_manifest_import_roots(path: Path = UPSTREAM_MANIFEST) -> frozenset[str]:
+    """Load every import root represented by the upstream release manifest."""
+    if not path.is_file():
+        return frozenset()
+    with path.open("rb") as file:
+        data = _tomllib.load(file)
+    return frozenset(str(root) for package in data.get("package", []) for root in package.get("imports", []))
+
+
+# Imports rooted in any other module (stdlib, neutral placeholders like ``app``,
+# or packages without shipped guidance) are ignored.
+TARGET_ROOTS: frozenset[str] = load_manifest_import_roots() | _ANCILLARY_ROOTS
+
+
 def _parent_chain(dotted: str) -> tuple[str, ...]:
     """Return all ancestor module names for a dotted path.
 
@@ -227,14 +233,52 @@ def verify_import(ref: ImportRef, _module_cache: dict[str, object | str] | None 
     return None
 
 
-def iter_skill_markdown() -> Iterator[Path]:
+def classify_import(
+    ref: ImportRef,
+    module_cache: dict[str, object | str],
+    *,
+    strict_missing: bool,
+) -> tuple[str, str]:
+    """Classify one import as ok, missing, partial, or a violation."""
+    error = verify_import(ref, module_cache)
+    if error is None:
+        return ("ok", "")
+
+    root = ref.module.split(".")[0]
+    root_missing = False
+    try:
+        importlib.import_module(root)
+    except ImportError:
+        root_missing = True
+
+    if root_missing:
+        if strict_missing:
+            return ("violation", f"target library {root!r} is not installed")
+        return ("missing", root)
+    if "library not importable" in error:
+        return ("partial", ref.module)
+    return ("violation", error)
+
+
+def iter_skill_sources() -> Iterator[Path]:
+    """Yield canonical Markdown and command TOML sources in stable order."""
+    sources: list[Path] = []
     if SKILLS_DIR.is_dir():
-        yield from sorted(SKILLS_DIR.rglob("*.md"))
+        sources.extend(SKILLS_DIR.rglob("*.md"))
     if COMMANDS_DIR.is_dir():
-        yield from sorted(COMMANDS_DIR.rglob("*.md"))
+        sources.extend(COMMANDS_DIR.rglob("*.md"))
+        sources.extend(COMMANDS_DIR.rglob("*.toml"))
+    yield from sorted(sources)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--strict-missing",
+        action="store_true",
+        help="Fail when a represented target package is not installed.",
+    )
+    args = parser.parse_args(argv)
     violations: list[Violation] = []
     # ``missing_libs`` tracks root packages not installed at all. ``partial_libs``
     # tracks submodules that fail to import even when their root does — usually
@@ -252,12 +296,12 @@ def main() -> int:
     blocks_legacy = 0
     imports_checked = 0
 
-    for md_file in iter_skill_markdown():
-        rel = _rel(md_file)
+    for source_file in iter_skill_sources():
+        rel = _rel(source_file)
         if rel in _IMPORT_CHECK_ALLOWLIST:
             continue
         try:
-            text = md_file.read_text(encoding="utf-8")
+            text = source_file.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as exc:
             print(f"[ERROR] could not read {rel}: {exc}", file=sys.stderr)
             return 2
@@ -267,45 +311,30 @@ def main() -> int:
             if is_legacy:
                 blocks_legacy += 1
                 continue
-            for ref in extract_imports(code, md_file, body_start):
+            for ref in extract_imports(code, source_file, body_start):
                 if not is_target_import(ref):
                     continue
                 imports_checked += 1
-                error = verify_import(ref, module_cache)
-                if error is None:
+                classification, detail = classify_import(
+                    ref,
+                    module_cache,
+                    strict_missing=args.strict_missing,
+                )
+                if classification == "ok":
                     continue
-                if "does not exist" in error:
-                    # The module the skill referenced genuinely doesn't exist
-                    # upstream — this IS a violation (real API drift).
+                if classification == "violation":
                     violations.append(
                         Violation(
-                            file=md_file,
+                            file=source_file,
                             line=ref.line_in_file,
-                            message=f"broken import — {ref.raw!r}: {error}",
+                            message=f"broken import — {ref.raw!r}: {detail}",
                         )
                     )
                     continue
-                if "library not importable" in error:
-                    root = ref.module.split(".")[0]
-                    # Distinguish "root package itself not installed" from
-                    # "submodule fails to import because a transitive dep is
-                    # missing." If the root imports cleanly, the skill's
-                    # reference is to the right API — we just need a different
-                    # extras install to verify it.
-                    try:
-                        importlib.import_module(root)
-                    except ImportError:
-                        missing_libs.add(root)
-                    else:
-                        partial_libs.add(ref.module)
-                    continue  # not a violation — opt-in to verify
-                violations.append(
-                    Violation(
-                        file=md_file,
-                        line=ref.line_in_file,
-                        message=f"broken import — {ref.raw!r}: {error}",
-                    )
-                )
+                if classification == "missing":
+                    missing_libs.add(detail)
+                elif classification == "partial":
+                    partial_libs.add(detail)
 
     for v in violations:
         print(f"[FAIL] {_rel(v.file)}:{v.line}: {v.message}")

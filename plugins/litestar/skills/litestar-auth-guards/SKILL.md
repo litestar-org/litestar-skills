@@ -13,6 +13,8 @@ Use this skill for authentication boundaries, authorization checks, guard compos
 - Prefer Controller-level guards when a whole domain shares a policy.
 - Raise Litestar HTTP exceptions or domain exceptions consistently.
 - Keep tenant isolation explicit in guard logic and service filters.
+- Let authentication middleware populate `connection.user` and
+  `connection.auth`; use guards for authorization.
 
 ## Quick Reference
 
@@ -39,6 +41,8 @@ Use this skill for authentication boundaries, authorization checks, guard compos
 - Do not make Guards perform database work repeatedly when middleware can load the user once.
 - Do not trust client-supplied tenant IDs without server-side scoping.
 - Do not use HTTP-only assumptions for WebSocket auth.
+- Do not claim WebSocket handshakes cannot carry headers. Non-browser clients
+  can send them; the browser WebSocket API cannot set arbitrary headers.
 
 </guardrails>
 
@@ -49,7 +53,8 @@ Use this skill for authentication boundaries, authorization checks, guard compos
 - [ ] Guard scope matches the policy scope.
 - [ ] Denial paths return the expected status.
 - [ ] Handlers contain no duplicated auth branching.
-- [ ] WebSocket routes use an explicit browser-compatible auth path.
+- [ ] Browser WebSocket routes use cookies, a short-lived query token, or a
+  first-message protocol; non-browser header auth is documented separately.
 
 </validation>
 
@@ -77,6 +82,7 @@ async def requires_active_user(connection: ASGIConnection, _: BaseRouteHandler) 
 
 - <https://docs.litestar.dev/> - Litestar documentation
 - <https://docs.litestar.dev/latest/reference/> - Litestar API reference
+- <https://github.com/litestar-org/litestar/tree/v2.24.0> - Audited Litestar 2.24.0 source
 
 ## Shared Styleguide Baseline
 

@@ -34,26 +34,36 @@ app = Litestar(
 ## Inertia Response Helpers
 
 ```python
-from litestar import Request, get
+from litestar import Request, get, post
 from litestar_vite.inertia import (
+    InertiaBack,
     InertiaResponse,
-    share, lazy, defer, merge, flash, error,
-    only, except_, clear_history, scroll_props,
+    defer,
+    error,
+    share,
 )
 
-@get("/users")
+@get("/users", component="Users/Index")
 async def users_page() -> InertiaResponse:
     return InertiaResponse(
         content={
             "users": await fetch_users(),
-            "stats": defer(lambda: fetch_stats()),
+            "stats": defer("stats", fetch_stats),
         },
     )
 
-@get("/dashboard")
+@get("/dashboard", component="Dashboard")
 async def dashboard(request: Request) -> InertiaResponse:
     share(request, "auth", {"user": request.user})
-    return InertiaResponse(content={...})
+    return InertiaResponse(content={"summary": await load_summary()})
+
+@post("/users")
+async def create_user(request: Request, data: UserCreate) -> InertiaBack:
+    if await email_exists(data.email):
+        error(request, "email", "Email already exists")
+        return InertiaBack(request)
+    await save_user(data)
+    return InertiaBack(request)
 ```
 
 ## Vite Config
@@ -85,10 +95,16 @@ import {
   resolvePageComponent,
   unwrapPageProps,
 } from "litestar-vite-plugin/inertia-helpers"
+import { csrfHeaders } from "litestar-vite-plugin/helpers"
 
 createInertiaApp({
+  defaults: {
+    visitOptions: (_href, options) => ({
+      headers: csrfHeaders(options.headers ?? {}),
+    }),
+  },
   resolve: (name) => resolvePageComponent(
-    name,
+    `./pages/${name}.tsx`,
     import.meta.glob("./pages/**/*.tsx"),
   ),
   setup({ el, App, props }) {
@@ -122,7 +138,19 @@ export default function Dashboard() {
 }
 ```
 
-## Inertia v3 Features
+## Partial Reload and Version Contract
+
+- A request is partial only when `X-Inertia-Partial-Component` matches the
+  route component and partial data or partial except is present.
+- Partial data includes requested keys. Partial except excludes keys and wins
+  on overlap.
+- Initial responses advertise deferred groups. Partial responses omit
+  `deferredProps`.
+- A stale asset-version `GET` receives `409` and `X-Inertia-Location`.
+  Non-`GET` submissions continue to their handlers.
+- Infinite-scroll metadata is `scrollProps.<propName>`, not one flat object.
+
+## Inertia Features
 
 ```python
 # Precognition (form validation preview)

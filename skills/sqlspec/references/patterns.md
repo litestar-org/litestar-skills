@@ -138,13 +138,13 @@ rows = await db_session.select(stmt, schema_type=DeptSummary)
 
 ### High Performance Upsert
 
-Leverage `merge_` for upsert strategies compatible across PostgreSQL 15+ and analytical engines:
+Use `sql.merge(dialect=...)` only for dialects that implement `MERGE`, including PostgreSQL 15+, Oracle, and BigQuery. Use `INSERT ... ON CONFLICT` or the dialect-specific duplicate-key API for SQLite, DuckDB, and MySQL.
 
 ```python
 from sqlspec import sql
 
 query = (
-    sql.merge_
+    sql.merge(dialect="postgres")
     .into("products", alias="t")
     .using({"id": 1, "name": "Widget"}, alias="src")
     .on("t.id = src.id")
@@ -161,7 +161,7 @@ For 100+ rows, pass a list of dicts:
 products = [{"id": 1, "name": "Widget"}, {"id": 2, "name": "Gadget"}]
 
 query = (
-    sql.merge_
+    sql.merge(dialect="postgres")
     .into("products", alias="t")
     .using(products, alias="src")
     .on("t.id = src.id")

@@ -5,6 +5,9 @@
 ### Plugin Configuration
 
 ```python
+from litestar import Litestar
+from sqlspec import SQLSpec
+from sqlspec.adapters.asyncpg import AsyncpgConfig
 from sqlspec.extensions.litestar import SQLSpecPlugin
 
 config = AsyncpgConfig(
@@ -16,11 +19,16 @@ config = AsyncpgConfig(
     },
 )
 
+sqlspec = SQLSpec()
+sqlspec.add_config(config)
+
 app = Litestar(
     route_handlers=[...],
-    plugins=[SQLSpecPlugin(config=config)],
+    plugins=[SQLSpecPlugin(sqlspec=sqlspec)],
 )
 ```
+
+`SQLSpecPlugin` accepts a configured `SQLSpec` registry, not an adapter config. Register every config before constructing the plugin; the plugin snapshots the registry during initialization.
 
 ### Commit Modes
 
@@ -36,9 +44,10 @@ The plugin automatically provides driver sessions via dependency injection:
 
 ```python
 from litestar import get, post
+from sqlspec.adapters.asyncpg import AsyncpgDriver
 
 @get("/users")
-async def list_users(db_session: AsyncpgDriver) -> list[dict]:
+async def list_users(db_session: AsyncpgDriver) -> list[dict[str, object]]:
     result = await db_session.select("SELECT * FROM users")
     return result
 
@@ -54,29 +63,27 @@ async def create_user(db_session: AsyncpgDriver, data: UserCreate) -> dict:
 
 ### Session Store Integration
 
-Server-side session storage using the database adapter:
+Session stores are adapter-local Litestar stores. Construct the store from the same adapter config and pass it to Litestar's session middleware; `SQLSpecPlugin` does not automatically select a session backend.
 
 ```python
-from sqlspec.extensions.litestar import SQLSpecPlugin
+from sqlspec.adapters.asyncpg import AsyncpgConfig
+from sqlspec.adapters.asyncpg.litestar import AsyncpgStore
 
 config = AsyncpgConfig(
     connection_config={"dsn": "postgresql://localhost/app"},
     extension_config={
         "litestar": {
-            "commit_mode": "autocommit",
-            "session_table": "sessions",   # Table name (default: "litestar_session")
-            "session_ttl": 3600,           # TTL in seconds
+            "session_table": "sessions",
+            "manage_schema": True,
+            "create_schema": True,
         }
     },
 )
 
-# The plugin registers AsyncpgStore as the session backend
-app = Litestar(
-    plugins=[SQLSpecPlugin(config=config)],
-)
+store = AsyncpgStore(config)
 ```
 
-Available session stores per adapter: `AsyncpgStore`, `PsycopgStore`, `AiosqliteStore`, `DuckdbStore`, etc.
+Configure expiry in Litestar's session middleware. SQLSpec's extension block controls the table name, additive schema lifecycle, and adapter-specific table options.
 
 ### Correlation Header for Request Tracing
 
@@ -99,6 +106,8 @@ The correlation header value is extracted from each request and attached to all 
 ## Starlette / FastAPI Integration
 
 ```python
+from sqlspec import SQLSpec
+from sqlspec.adapters.asyncpg import AsyncpgConfig
 from sqlspec.extensions.starlette import SQLSpecPlugin
 
 config = AsyncpgConfig(
@@ -111,7 +120,9 @@ config = AsyncpgConfig(
     },
 )
 
-plugin = SQLSpecPlugin(config=config)
+sqlspec = SQLSpec()
+sqlspec.add_config(config)
+plugin = SQLSpecPlugin(sqlspec)
 plugin.init_app(app)
 ```
 
@@ -121,10 +132,10 @@ plugin.init_app(app)
 
 ```python
 from fastapi import FastAPI, Request
-from sqlspec.extensions.starlette import SQLSpecPlugin
+from sqlspec.extensions.fastapi import SQLSpecPlugin
 
 app = FastAPI()
-db_ext = SQLSpecPlugin(sqlspec=spec, app=app)
+db_ext = SQLSpecPlugin(spec, app=app)
 
 
 @app.get("/users")
@@ -134,7 +145,7 @@ async def list_users(request: Request):
     return result
 ```
 
-The plugin caches the session on `request.state` under the configured `session_key` (defaults to `"db"`), so subsequent calls within the same request reuse the same session.
+The plugin caches the session on `request.state` under the configured `session_key` (default `"db_session"`), so subsequent calls within the same request reuse the same session.
 
 ---
 
@@ -172,8 +183,9 @@ All adapters wrap exceptions using `wrap_exceptions` referencing static mappings
 
 - `AdapterError`: Generic connectivity or execution issues.
 - `IntegrityError`: Constraint and uniqueness violations.
-- `NotFoundError`: Expected row not found.
-- `ValueError`: `select_one()` and `select_one_or_none()` received multiple rows.
+- `NotFoundError`: `select_one()` or `select_value()` received no result.
+- `ValueError`: `select_one()` or `select_value()` received multiple results.
+- `MultipleResultsFoundError`: `select_one_or_none()` or `select_value_or_none()` received multiple results.
 
 ### Two-Tier Event Reporting
 

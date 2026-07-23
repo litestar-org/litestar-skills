@@ -234,6 +234,26 @@ def test_litestar_queues_import_triggers_queues_skill(tmp_path: Path) -> None:
     assert "litestar:litestar-queues" in str(out["context"])
 
 
+def test_litestar_autowire_dependency_triggers_autowire_skill(tmp_path: Path) -> None:
+    """litestar-autowire dependencies should trigger the focused Autowire skill."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "api"\ndependencies = ["litestar", "litestar-autowire"]\n'
+    )
+    out = _run(tmp_path)
+    assert "litestar-autowire" in out["detected_skills"]
+    assert "litestar:litestar-autowire" in str(out["context"])
+
+
+def test_litestar_autowire_import_triggers_autowire_skill(tmp_path: Path) -> None:
+    """litestar_autowire imports should trigger the focused Autowire skill."""
+    src = tmp_path / "src" / "myapp"
+    src.mkdir(parents=True)
+    (src / "app.py").write_text("from litestar_autowire import AutowireConfig, AutowirePlugin\n")
+    out = _run(tmp_path)
+    assert "litestar-autowire" in out["detected_skills"]
+    assert "litestar:litestar-autowire" in str(out["context"])
+
+
 def test_disable_env_var_short_circuits(litestar_project: Path) -> None:
     """LITESTAR_SKILLS_HOOK_DISABLE=1 should yield empty JSON object."""
     out = _run(litestar_project, env_overrides={"LITESTAR_SKILLS_HOOK_DISABLE": "1"})

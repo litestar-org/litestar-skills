@@ -4,7 +4,7 @@
 
 All database interactions go through driver adapters. Async adapters extend `AsyncDriverAdapterBase`; sync adapters extend `SyncDriverAdapterBase`. The public method surface is parallel: async drivers use `await`, sync drivers do not.
 
-Use the current method names. `select_many()` and `copy_from_arrow()` are not public SQLSpec APIs in `v0.51.0`.
+Use the current method names. `select_many()` and `copy_from_arrow()` are not public SQLSpec APIs in `v0.56.0`.
 
 Bind normal query parameters as variadic positional arguments. Use `await db_session.select("... WHERE id = $1", user_id, schema_type=User)`, not `await db_session.select(..., [user_id], ...)`. Keep list or tuple containers for real batch/data payloads such as `execute_many()` parameter sets or `load_from_records()` rows.
 
@@ -40,7 +40,7 @@ user = await db_session.select_one(
 
 ### select_one_or_none() -- Single Row (Optional)
 
-Return one row or `None`. More than one row raises `ValueError`.
+Return one row or `None`. More than one row raises `MultipleResultsFoundError`.
 
 ```python
 user = await db_session.select_one_or_none(
@@ -101,8 +101,12 @@ Native paths:
 - `sqlite`, `aiosqlite`, `oracledb`: chunked `fetchmany()`.
 - `psqlpy`: server-side cursor with `array_size`.
 - `bigquery`: page-wise result iteration.
+- `adbc`: partitioned Arrow readers.
+- `arrow_odbc`: Arrow batch readers.
+- `mssql_python`: forward-only cursor chunking.
+- `pymssql`: server-side cursor chunking.
 
-Eager fallback only: `adbc`, `duckdb`, `mssql_python`, `arrow_odbc`, and `spanner`.
+Eager fallback only: `duckdb` and `spanner`.
 
 Lifetime rules:
 
@@ -110,7 +114,7 @@ Lifetime rules:
 - PostgreSQL-family streams open their own transaction or savepoint and close it when the stream closes.
 - MySQL unbuffered cursors drain remaining rows when closed mid-iteration.
 - BigQuery `page_size` is advisory.
-- Oracle streams return raw driver values for LOB columns.
+- Oracle defaults `fetch_lobs=False`, materializing supported LOB values as `str` or `bytes`. Pass `fetch_lobs=True` per call only when the consumer must control native LOB locators.
 - If iteration raises on PostgreSQL drivers, roll back before reusing the connection.
 
 ### select_to_arrow() / fetch_to_arrow() -- Arrow Result
@@ -243,7 +247,7 @@ async with config.provide_session() as session:
 | --- | --- | --- |
 | `select()` / `fetch()` | `list[T]` or `list[dict]` | Multiple rows |
 | `select_one()` / `fetch_one()` | `T` or `dict` | No row becomes `NotFoundError`; multiple rows raise `ValueError` |
-| `select_one_or_none()` / `fetch_one_or_none()` | `T \| dict \| None` | Optional row |
+| `select_one_or_none()` / `fetch_one_or_none()` | `T \| dict \| None` | Multiple rows raise `MultipleResultsFoundError` |
 | `select_value()` / `fetch_value()` | Scalar | Optional `value_type=` coercion |
 | `select_value_or_none()` / `fetch_value_or_none()` | Scalar or `None` | Optional scalar |
 | `select_with_total()` / `fetch_with_total()` | `tuple[list[T], int]` | Pagination |

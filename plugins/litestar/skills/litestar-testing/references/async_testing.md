@@ -222,3 +222,38 @@ async def test_inline_async_app():
         resp = await client.get("/")
         assert resp.status_code == 200
 ```
+
+### Dependency replacements
+
+Litestar does not expose a mutable dependency-override registry. Pass
+replacement providers while constructing a fresh test app:
+
+```python
+from litestar.di import Provide
+from litestar.testing import create_async_test_client
+
+
+async def provide_fake_service() -> Service:
+    return FakeService()
+
+
+@pytest.mark.anyio
+async def test_with_fake_service():
+    async with create_async_test_client(
+        [handler],
+        dependencies={
+            "service": Provide(provide_fake_service),
+        },
+    ) as client:
+        response = await client.get("/")
+        assert response.status_code == 200
+```
+
+For full-application tests, make the application factory accept a dependency
+map and return a new `Litestar` instance. Never mutate a shared app between
+tests.
+
+## Tagged source
+
+- [2.24 test-client helpers](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/testing/helpers.py)
+- [2.24 dependency replacement guidance](https://github.com/litestar-org/litestar/blob/v2.24.0/docs/onboarding/fastapi.rst)

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `sql` factory object is the primary entry point for building type-safe SQL statements programmatically. All builder methods return new instances (immutable chain). Convert to an executable `SQL` object with `.to_statement()` or get raw SQL with `.compile(dialect=)`.
+The `sql` factory object is the primary entry point for building parameterized SQL statements programmatically. Builder methods mutate the current builder and return it for chaining. Do not reuse one builder as multiple query templates. Convert the finished builder to an executable `SQL` object with `.to_statement()`, or inspect a `BuiltQuery` with `.build(dialect=...)`.
 
 ```python
 from sqlspec import sql
@@ -121,7 +121,7 @@ only_active = active.except_(archived)
 ```python
 query = (
     sql.select("*")
-    .cte("recent_orders", "SELECT * FROM orders WHERE created_at > now() - interval '7 days'")
+    .with_cte("recent_orders", "SELECT * FROM orders WHERE created_at > now() - interval '7 days'")
     .from_("recent_orders")
     .where("total > 100")
 )
@@ -142,13 +142,13 @@ query = (
 query = (
     sql.select("*")
     .from_("sales")
-    .pivot(values="revenue", index="region", columns="quarter")
+    .pivot("SUM", "revenue", "quarter", ["Q1", "Q2", "Q3", "Q4"])
 )
 
 query = (
     sql.select("*")
     .from_("quarterly_sales")
-    .unpivot(value="revenue", name="quarter", columns=["q1", "q2", "q3", "q4"])
+    .unpivot("revenue", "quarter", ["q1", "q2", "q3", "q4"])
 )
 ```
 
@@ -171,7 +171,11 @@ query = (
     sql.insert()
     .into("user_archive")
     .columns("id", "name", "email")
-    .from_select("SELECT id, name, email FROM users WHERE deleted = true")
+    .from_select(
+        sql.select("id", "name", "email")
+        .from_("users")
+        .where_eq("deleted", True)
+    )
 )
 
 # Upsert with ON CONFLICT
@@ -222,14 +226,15 @@ query = (
 
 ---
 
-## sql.merge_
+## `sql.merge()`
+
+Use `sql.merge(table, dialect=...)` when the target table or dialect is known. `sql.merge_` is a no-argument property shorthand; never call it as a function.
 
 ```python
 query = (
-    sql.merge_
-    .into("target_table", alias="t")
+    sql.merge("target_table", dialect="postgres")
     .using(source_data, alias="src")
-    .on("t.id = src.id")
+    .on("target_table.id = src.id")
     .when_matched_then_update(name="src.name", updated_at="now()")
     .when_not_matched_then_insert(id="src.id", name="src.name")
 )
@@ -251,25 +256,16 @@ stmt = query.to_statement()
 rows = await db_session.select(stmt, schema_type=User)
 ```
 
-### .compile(dialect=)
+### `.build(dialect=...)`
 
-Get the compiled SQL string and parameters for a specific dialect:
+Get a `BuiltQuery` containing rendered named-placeholder SQL and the builder's parameter mapping:
 
 ```python
 query = sql.select("*").from_("users").where_eq("active", True)
 
-# Compile for PostgreSQL (NUMERIC params)
-compiled = query.compile(dialect="postgres")
-# compiled.sql -> "SELECT * FROM users WHERE active = $1"
-# compiled.parameters -> [True]
-
-# Compile for SQLite (QMARK params)
-compiled = query.compile(dialect="sqlite")
-# compiled.sql -> "SELECT * FROM users WHERE active = ?"
-# compiled.parameters -> [True]
-
-# Compile for MySQL (PYFORMAT params)
-compiled = query.compile(dialect="mysql")
-# compiled.sql -> "SELECT * FROM users WHERE active = %s"
-# compiled.parameters -> [True]
+built = query.build(dialect="postgres")
+built.sql
+built.parameters
 ```
+
+`build()` renders the builder for inspection. Adapter parameter-style conversion happens when the `SQL` statement is compiled by a driver. Execute `query` directly or call `query.to_statement()`; do not execute interpolated output from `to_sql(show_parameters=True)`.

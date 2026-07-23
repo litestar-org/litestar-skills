@@ -5,11 +5,17 @@ description: "Auto-activate for Provide, NamedDependency, SkipValidation, Depend
 
 # Litestar Dependency Injection
 
-Use this skill for `Provide`, `NamedDependency` / `SkipValidation` (Litestar ≥ 2.23), dependency maps, provider factories, request-scoped resources, and Dishka integration.
+Use this skill for `Provide`, `NamedDependency` / `SkipValidation`, dependency
+maps, provider factories, request-scoped resources, and Dishka integration.
 
 ## Code Style Rules
 
-- Prefer `NamedDependency[T]` and `NamedDependency[SkipValidation[T]]` (≥ 2.24) over implicit DI / `Annotated[T, Dependency()]` / `Dependency(skip_validation=True)`; `params.Dependency` and implicit dependency injection are deprecated (removed in 3.0).
+- Mark every name-based injected parameter with `NamedDependency[T]`. Use
+  `NamedDependency[SkipValidation[T]]` only for trusted provider output that
+  must bypass validation.
+- Wrap providers in `Provide`. For synchronous providers, set
+  `sync_to_thread=True` for blocking work or `False` for trivial non-blocking
+  work; leaving it unspecified emits a warning.
 - Use Litestar dependency maps for simple and medium apps.
 - Use Dishka when the project needs explicit scopes and provider modules.
 - Keep provider names stable and descriptive.
@@ -20,6 +26,8 @@ Use this skill for `Provide`, `NamedDependency` / `SkipValidation` (Litestar ≥
 - DI patterns: [di.md](references/di.md)
 - Pair with [litestar-data-services](../litestar-data-services/SKILL.md) for service providers.
 - Pair with [litestar-settings](../litestar-settings/SKILL.md) for settings injection.
+- Pair with [litestar-autowire](../litestar-autowire/SKILL.md) when discovered
+  controllers need the optional Dishka router integration.
 
 <workflow>
 
@@ -40,6 +48,8 @@ Use this skill for `Provide`, `NamedDependency` / `SkipValidation` (Litestar ≥
 - Do not mix dependency naming conventions in one app.
 - Do not keep database sessions or clients as global mutable state.
 - Do not hide business logic inside providers.
+- Do not mutate dependencies on a constructed app in tests. Build a fresh app
+  or test client with the replacement dependency map.
 
 </guardrails>
 
@@ -77,6 +87,7 @@ dependencies = {"users_service": Provide(provide_user_service)}
 
 - <https://docs.litestar.dev/> - Litestar documentation
 - <https://docs.litestar.dev/latest/reference/> - Litestar API reference
+- <https://github.com/litestar-org/litestar/tree/v2.24.0> - Audited Litestar 2.24.0 source
 
 ## Shared Styleguide Baseline
 

@@ -1,6 +1,6 @@
 # Pytest integration
 
-Polyfactory ships a pytest plugin that turns factory classes into pytest fixtures. The plugin is loaded automatically when polyfactory is on the path — no `pytest_plugins = [...]` entry is required in most setups.
+Polyfactory exposes `register_fixture`, which injects a pytest fixture into the caller's module. Invoke it in a test module or `conftest.py` that pytest collects. Installing Polyfactory alone does not register factory classes automatically.
 
 ## `@register_fixture` — the canonical decorator
 
@@ -11,10 +11,10 @@ from polyfactory.pytest_plugin import register_fixture
 
 @register_fixture
 class OrderFactory(DataclassFactory[Order]):
-    __model__ = Order
+    pass
 
 
-def test_order(order_factory: OrderFactory) -> None:
+def test_order(order_factory: type[OrderFactory]) -> None:
     order = order_factory.build()
     assert order.id > 0
 ```
@@ -23,7 +23,7 @@ What happens:
 
 1. `OrderFactory` remains a regular factory class — importable, usable directly via `OrderFactory.build()`.
 2. A pytest fixture named `order_factory` (snake-case of the class name) is registered.
-3. The fixture *yields the factory class itself*, not an instance. Call `.build()` / `.batch()` on the fixture to get model instances.
+3. The fixture returns the factory class itself, not an instance. Call `.build()` / `.batch()` on the fixture to get model instances.
 
 This dual nature — factory + fixture — is why the decorator is preferred over hand-rolling `@pytest.fixture` wrappers.
 
@@ -34,10 +34,10 @@ Snake-case conversion: `OrderFactory` → `order_factory`, `OrderItemFactory` �
 ```python
 @register_fixture(name="orders")
 class OrderFactory(DataclassFactory[Order]):
-    __model__ = Order
+    pass
 
 
-def test_x(orders: OrderFactory) -> None:
+def test_x(orders: type[OrderFactory]) -> None:
     ...
 ```
 
@@ -48,10 +48,10 @@ Default scope is `"function"`. Override with `scope=`:
 ```python
 @register_fixture(scope="session")
 class CustomerFactory(DataclassFactory[Customer]):
-    __model__ = Customer
+    pass
 ```
 
-Session-scoped factories are common for read-only test data shared across many tests. Function-scoped is the default and the right choice when factories produce data that flows into a database with per-test cleanup.
+The fixture returns a class, and each `.build()` still creates new model data. Keep function scope unless another fixture explicitly requires a broader dependency scope.
 
 ## Cross-model wiring
 
@@ -65,68 +65,67 @@ from polyfactory.pytest_plugin import register_fixture
 
 @register_fixture
 class CustomerFactory(DataclassFactory[Customer]):
-    __model__ = Customer
     __set_as_default_factory_for_type__ = True
 
 
 @register_fixture
 class OrderFactory(DataclassFactory[Order]):
-    __model__ = Order
     customer = Use(CustomerFactory.build)
 ```
 
 Use `__set_as_default_factory_for_type__ = True` when the same nested factory should be used broadly. Use `Use(CustomerFactory.build)` when one parent factory needs an explicit local override.
 
-## Function-decorator form
+## Registering separately
 
-For simple cases, decorate a factory-returning function:
+Call `register_fixture()` after the class definition when the factory and pytest registration live in different modules:
 
 ```python
-@pytest.fixture
-def special_order_factory() -> type[OrderFactory]:
-    class SpecialOrderFactory(OrderFactory):
-        status = "expedited"
+from polyfactory.pytest_plugin import register_fixture
 
-    return SpecialOrderFactory
+from tests.factories import OrderFactory
 
 
-def test_special_order(special_order_factory: type[OrderFactory]) -> None:
-    order = special_order_factory.build()
-    assert order.status == "expedited"
+register_fixture(OrderFactory, name="orders")
+
+
+def test_order(orders: type[OrderFactory]) -> None:
+    assert orders.build().id > 0
 ```
 
-This is plain pytest with no polyfactory decorator — useful when the factory is a one-off subclass parameterized by other fixtures.
+The call injects `orders` into the current module, so place it at module scope in a pytest-discovered file. `register_fixture` accepts only `BaseFactory` subclasses and raises `ParameterException` otherwise.
 
-## Async factories
+## Async persistence
 
-For async ODMs (Beanie, Odmantic) where build is async:
+Async factory methods build and persist instances. They require an async persistence handler; `BeanieDocumentFactory` supplies one:
 
 ```python
+import pytest
+
 from polyfactory.factories.beanie_odm_factory import BeanieDocumentFactory
 from polyfactory.pytest_plugin import register_fixture
 
 
 @register_fixture
 class UserFactory(BeanieDocumentFactory[User]):
-    __model__ = User
+    pass
 
 
 @pytest.mark.anyio
-async def test_user(user_factory: UserFactory) -> None:
-    user = await user_factory.build_async()
+async def test_user(user_factory: type[UserFactory]) -> None:
+    user = await user_factory.create_async()
     assert user.id is not None
 ```
 
-Use `build_async()` instead of `build()`; the async factory handles awaitable defaults and async validators correctly.
+Polyfactory has no `build_async()`. Use `build()` for in-memory construction and `create_async()` / `create_batch_async()` only for configured persistence.
 
 ## When NOT to register as a fixture
 
 - Factories used in exactly one test — call `.build()` inline; the indirection isn't worth it.
 - Factories used to seed data outside test bodies (conftest setup, CLI scripts) — register as a regular pytest fixture only if the seeding happens during a test.
 
-## Plugin discovery
+## Collection boundary
 
-The plugin is registered as a pytest entry point. If you see `register_fixture` apparently doing nothing, verify polyfactory is installed in the same environment as pytest (`uv pip list | grep polyfactory`) and that no `conftest.py` has explicitly disabled it. Pinning `pytest_plugins = ["polyfactory.pytest_plugin"]` in `conftest.py` is supported but redundant in most setups.
+`register_fixture` writes the pytest fixture into the caller's global namespace. Calling it from an ordinary helper module does not make pytest collect that module. Decorate in the test module, or import the factory into `conftest.py` and call `register_fixture(Factory)` there.
 
 ## Interaction with parametrize
 
@@ -134,12 +133,12 @@ The plugin is registered as a pytest entry point. If you see `register_fixture` 
 
 ```python
 @pytest.mark.parametrize("status", ["pending", "paid", "shipped"])
-def test_order_status_transitions(order_factory: OrderFactory, status: str) -> None:
+def test_order_status_transitions(order_factory: type[OrderFactory], status: str) -> None:
     order = order_factory.build(status=status)
     ...
 ```
 
-Don't try to `parametrize` over `OrderFactory.coverage()` results outside the test — the factory hasn't been instantiated yet at collection time. Either call `coverage()` inside the test body, or generate the list at module-level (not via the fixture):
+Factory methods are class methods, so module-level coverage generation is valid without fixture setup:
 
 ```python
 @pytest.mark.parametrize("contact", list(ContactFactory.coverage()))

@@ -61,7 +61,9 @@ When you want to expose an ORM model (or any class) and shape it with `DTOConfig
 from __future__ import annotations
 
 from dataclasses import dataclass
+from litestar import get
 from litestar.dto import DataclassDTO, DTOConfig, MsgspecDTO
+from litestar.params import FromPath
 
 
 @dataclass
@@ -80,7 +82,7 @@ class UserReadDTO(DataclassDTO[User]):
 
 
 @get("/users/{user_id:int}", return_dto=UserReadDTO)
-async def get_user(user_id: int) -> User:
+async def get_user(user_id: FromPath[int]) -> User:
     return await fetch_user(user_id)
 ```
 
@@ -94,6 +96,29 @@ async def get_user(user_id: int) -> User:
 | `rename_strategy="camel"` | Bulk rename: `camel`, `pascal`, `upper`, `lower`, or a custom callable |
 | `partial=True` | All fields optional (PATCH endpoints) |
 | `max_nested_depth=N` | Cap nested DTO recursion |
+
+## OpenAPI required vs nullable
+
+OpenAPI requiredness follows the Python default, not the presence of `None` in
+the type:
+
+```python
+import msgspec
+
+
+class UserPatch(msgspec.Struct):
+    display_name: str | None
+    biography: str | None = None
+```
+
+- `display_name` is required and nullable. Clients must send the field, and its
+  value may be `null`.
+- `biography` is optional and nullable. Clients may omit the field because it
+  has a default.
+
+Litestar 2.24 fixes generated schemas for dataclasses, msgspec Structs, attrs
+classes, and Pydantic models so required nullable fields remain in the schema's
+`required` array. Runtime validation already enforced this behavior.
 
 ## Request Body Markers (Litestar ≥ 2.23)
 
@@ -136,3 +161,8 @@ async def login(data: URLEncodedBody[Credentials]) -> Token: ...
 - `to_schema` in repository services automatically converts ORM → DTO: [services.md](../../litestar-data-services/references/services.md)
 - Pagination wraps DTOs in `OffsetPagination[T]`: [pagination.md](../../litestar-data-services/references/pagination.md)
 - Sibling skill for msgspec deep dive: `../../msgspec/SKILL.md` (if present)
+
+## Tagged source
+
+- [2.24 nullable-required changelog](https://github.com/litestar-org/litestar/blob/v2.24.0/docs/release-notes/changelog.rst)
+- [2.24 required-parameter regression tests](https://github.com/litestar-org/litestar/blob/v2.24.0/tests/unit/test_openapi/test_parameters.py)

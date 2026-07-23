@@ -2,7 +2,9 @@
 
 ## Base Classes
 
-All models inherit from an Advanced Alchemy base that provides automatic `id`, `created_at`, and `updated_at` columns.
+For Advanced Alchemy declarative models, select a base matching the required
+primary-key and audit-column behavior. SQLModel `table=True` models are also
+supported; see [SQLModel Compatibility](#sqlmodel-compatibility).
 
 ```python
 from advanced_alchemy.base import UUIDAuditBase, UUIDv7AuditBase, BigIntAuditBase
@@ -33,8 +35,6 @@ class User(UUIDAuditBase):
 
     __tablename__ = "user_account"
     __table_args__ = {"comment": "User accounts"}
-    __pii_columns__ = {"name", "email"}  # GDPR: marks PII for auditing/scrubbing
-
     # Required field
     email: Mapped[str] = mapped_column(unique=True, index=True)
 
@@ -76,7 +76,7 @@ from advanced_alchemy.mixins import SlugKey
 
 
 class Article(UUIDAuditBase, SlugKey):
-    """Article with auto-generated slug from title."""
+    """Article with a unique slug column."""
 
     __tablename__ = "article"
 
@@ -84,7 +84,9 @@ class Article(UUIDAuditBase, SlugKey):
     body: Mapped[str] = mapped_column()
 ```
 
-`SlugKey` adds a `slug: Mapped[str]` column (unique, indexed). Use with `SQLAlchemyAsyncSlugRepository` for automatic slug generation.
+`SlugKey` adds a unique `slug: Mapped[str]` column. Use
+`SQLAlchemyAsyncSlugRepository` to derive and deduplicate slug values; the
+mixin itself does not populate the column.
 
 ### UniqueMixin — Select-or-Create
 
@@ -105,9 +107,13 @@ class Tag(UUIDAuditBase, UniqueMixin):
         return name
 
     @classmethod
-    def unique_filter(cls, query, name: str):
-        return query.filter(cls.name == name)
+    def unique_filter(cls, name: str):
+        return cls.name == name
 ```
+
+Call `await Tag.as_unique_async(session, name)` for an async session or
+`Tag.as_unique_sync(session, name)` for a sync session. The mixin caches the
+result on that session.
 
 ## Special Types
 
@@ -140,6 +146,11 @@ class UserSecret(UUIDAuditBase):
         default=None,
     )
 ```
+
+Always pass `key=` explicitly. In 1.11, omitting it emits a deprecation
+warning and uses a process-random key; data written with that default cannot be
+decrypted after restart. Load the stable passphrase from application settings
+or a secrets manager.
 
 ### FileObject / StoredObject
 
@@ -185,22 +196,6 @@ user = await service.get(
     load=[undefer_group("security_sensitive")],
 )
 ```
-
-## PII Metadata
-
-Mark columns containing Personally Identifiable Information for GDPR compliance:
-
-```python
-class Customer(UUIDAuditBase):
-    __tablename__ = "customer"
-    __pii_columns__ = {"name", "email", "phone"}
-
-    name: Mapped[str] = mapped_column()
-    email: Mapped[str] = mapped_column(unique=True)
-    phone: Mapped[str | None] = mapped_column(default=None)
-```
-
-This metadata can be used by audit tools or data scrubbing scripts.
 
 ## Relationship Patterns
 
@@ -285,3 +280,28 @@ Available hashers (each in its own submodule under `advanced_alchemy.types.passw
 - `argon2.Argon2Hasher` — requires the `argon2-cffi` extra.
 - `pwdlib.PwdlibHasher` — requires the `pwdlib` extra.
 - `passlib.PasslibHasher` — requires the `passlib` extra.
+
+## SQLModel Compatibility
+
+Advanced Alchemy 1.11 accepts SQLModel table models directly. Use
+`table=True`; a schema-only SQLModel has no SQLAlchemy mapper and is treated as
+an input schema instead.
+
+```python
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+from sqlmodel import Field, SQLModel
+
+
+class Hero(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    name: str
+
+
+class HeroRepository(SQLAlchemyAsyncRepository[Hero]):
+    model_type = Hero
+```
+
+Repositories and services use `model_to_dict()` for mapped SQLModel objects.
+Create SQLModel tables from `SQLModel.metadata`; Advanced Alchemy base-class
+mixins and automatic table metadata do not apply to an unrelated SQLModel
+base.

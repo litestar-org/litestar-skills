@@ -14,11 +14,12 @@
 | CockroachDB Asyncpg | `"cockroach_asyncpg"` | `postgres` | NUMERIC (`$1`) | `driver` | Yes | asyncpg codecs |
 | CockroachDB Psycopg | `"cockroach_psycopg"` | `postgres` | PYFORMAT (`%s`) | `helper` | Yes | psycopg adapt |
 | DuckDB | `"duckdb"` | `duckdb` | QMARK (`?`) | `helper` | No | Arrow-native |
-| MSSQL Python | `"mssql_python"` | `tsql` | QMARK (`?`) | `helper` | Both | SQL Server native |
+| MSSQL Python | `"mssql_python"` | `tsql` | QMARK (`?`) | `helper` | No | SQL Server native |
 | MysqlConnector | `"mysqlconnector"` | `mysql` | PYFORMAT (`%s`) | `helper` | Both | MySQL native |
 | OracleDB | `"oracledb"` | `oracle` | NAMED_COLON (`:name`) | `helper` | Both | Oracle DB API |
 | PSQLPy | `"psqlpy"` | `postgres` | NUMERIC (`$1`) | `helper` | Yes | Rust-backed |
 | Psycopg | `"psycopg"` | `postgres` | PYFORMAT (`%s`) | `helper` | Both | psycopg adapt |
+| PyMSSQL | `"pymssql"` | `tsql` | PYFORMAT (`%s`) input, positional execution | `helper` | No | SQL Server native |
 | PyMySQL | `"pymysql"` | `mysql` | PYFORMAT (`%s`) | `helper` | No | MySQL native |
 | Spanner | `"spanner"` | `spanner` | NAMED_AT (`@name`) | `helper` | No | Spanner proto |
 | SQLite | `"sqlite"` | `sqlite` | QMARK (`?`) | `helper` | No | Python stdlib |
@@ -36,39 +37,12 @@ Check the adapter config flags before building generic tooling:
 
 | Capability | Native adapters | Caveats |
 | --- | --- | --- |
-| Row streaming with `select_stream()` / `fetch_stream()` | `asyncpg`, `cockroach_asyncpg`, `psycopg`, `cockroach_psycopg`, `psqlpy`, `pymysql`, `aiomysql`, `asyncmy`, `mysqlconnector`, `sqlite`, `aiosqlite`, `oracledb`, `bigquery` | `adbc`, `duckdb`, `mssql_python`, `arrow_odbc`, and `spanner` use eager fallback only. Use `native_only=True` when fallback would violate memory bounds. |
-| Arrow export with native `select_to_arrow()` override | `adbc`, `arrow_odbc`, `duckdb`, `bigquery`, `spanner`, `mssql_python`, `oracledb` | Other adapters use the base dict-to-Arrow conversion for `select_to_arrow()`; `native_only=True` raises there. `config.supports_arrow_streaming` is a streaming capability flag, not a separate API. |
-| Native ingest through `load_from_arrow()` / `load_from_records()` | PostgreSQL family, MySQL family, SQLite family, `adbc`, `duckdb`, `oracledb`, `bigquery`, `spanner`, `mssql_python`, `arrow_odbc` | `load_from_records()` normalizes to Arrow first. MySQL local-infile, Oracle direct path load, BigQuery Storage Write API, and Spanner Batch Write API have explicit gates. |
-| ADK session/event and memory stores | `asyncpg`, `psycopg`, `psqlpy`, `cockroach_asyncpg`, `cockroach_psycopg`, `aiomysql`, `asyncmy`, `mysqlconnector`, `pymysql`, `aiosqlite`, `sqlite`, `oracledb`, `duckdb`, `adbc`, `spanner` | BigQuery and `mssql_python` are not ADK backends. Artifact service contracts exist, but concrete adapter artifact metadata stores are deployment-provided. |
+| Native row streaming | All adapters except `duckdb` and `spanner` | `select_stream(..., native_only=True)` rejects unsupported adapters. ADBC, Arrow ODBC, and `mssql_python` expose native stream implementations in 0.56. |
+| Native Arrow export | All adapters except `pymssql` | Availability also requires PyArrow. `supports_arrow_streaming` is a separate capability and is not implied by native table export. |
+| Native Arrow import | All adapters except `bigquery` and `pymssql` | Check `config.storage_capabilities()` at runtime. `load_from_records()` normalizes through Arrow. |
+| ADK session/event and memory stores | Adapter-local `adk` packages, including PostgreSQL, CockroachDB, MySQL, SQLite, Oracle, DuckDB, ADBC, and Spanner families | BigQuery is not an ADK backend. Verify the concrete store export for the selected adapter instead of inferring it from database support. |
+| Event transports | PostgreSQL: `notify`, `notify_queue`, `poll_queue`; Oracle: `aq`, `txeventq`, `poll_queue`; others: `poll_queue` | Retired names `listen_notify`, `listen_notify_durable`, and `table_queue` raise configuration errors. |
 | Cloud job/session controls | `bigquery`, `spanner` | BigQuery controls live in `BigQueryConfig.driver_features`; Spanner controls live in `SpannerSyncConfig.driver_features`, per-call kwargs, and `provide_session()` / `provide_read_session()`. |
-
----
-
-## Transaction Detection Patterns
-
-Each adapter MUST override `_connection_in_transaction()`. The detection method varies by driver:
-
-| Adapter | Detection Pattern |
-| --- | --- |
-| AsyncPG / CockroachDB Asyncpg | `self.connection.is_in_transaction()` |
-| Psycopg / CockroachDB Psycopg | `self.connection.info.transaction_status != IDLE` |
-| SQLite / AioSQLite | `self.connection.in_transaction` |
-| DuckDB | `self.connection.begin()` state tracking |
-| OracleDB | `self.connection.autocommit` check |
-| AsyncMy / PyMySQL / MysqlConnector | Server status flag inspection |
-| BigQuery | Always `False` (jobs are atomic) |
-| Spanner | Session-level transaction tracking |
-| ADBC | Always `False` (explicit BEGIN, no introspection) |
-| PSQLPy | Connection status enum check |
-
-```python
-class MyAdapterDriver(SyncDriverAdapterBase):
-    def _connection_in_transaction(self) -> bool:
-        # AsyncPG: return self.connection.is_in_transaction()
-        # SQLite: return self.connection.in_transaction
-        # Psycopg: return self.connection.info.transaction_status != IDLE
-        ...
-```
 
 ---
 
@@ -82,21 +56,6 @@ class MyAdapterDriver(SyncDriverAdapterBase):
 | SQLite | string | ISO-8601 string | string | string | blob |
 | BigQuery | string | BQ TIMESTAMP | BQ NUMERIC | BQ JSON | BQ BYTES |
 | OracleDB | RAW(16) | DATE/TIMESTAMP | NUMBER | CLOB/JSON | RAW/BLOB |
-
----
-
-## Standardized core.py Functions
-
-Each adapter's `core.py` module exports these helpers:
-
-| Function | Purpose | Signature |
-| --- | --- | --- |
-| `collect_rows` | Extract rows from cursor | `(data, description) -> tuple[list[dict], list[str]]` |
-| `resolve_rowcount` | Get affected row count | `(cursor) -> int` |
-| `normalize_execute_parameters` | Prepare single params | `(params) -> Any` |
-| `normalize_execute_many_parameters` | Prepare batch params | `(params) -> Any` |
-| `build_connection_config` | Transform raw config | `(config) -> dict` |
-| `raise_exception` | Map to SQLSpec exceptions | `(error) -> NoReturn` |
 
 ---
 
@@ -134,43 +93,10 @@ Each adapter's `core.py` module exports these helpers:
 
 ---
 
-## Driver Implementation Guide
-
-### Required Methods
-
-```python
-class MyDriver(SyncDriverAdapterBase):
-    dialect: DialectType = "mydialect"
-
-    def with_cursor(self, connection: Any) -> Any:
-        """Return context manager for cursor."""
-
-    def handle_database_exceptions(self) -> "AbstractContextManager[None]":
-        """Exception handling context."""
-
-    def begin(self) -> None:
-        """Begin transaction."""
-
-    def commit(self) -> None:
-        """Commit transaction."""
-
-    def rollback(self) -> None:
-        """Rollback transaction."""
-
-    def dispatch_special_handling(self, cursor: Any, statement: "SQL") -> None:
-        """Hook for database-specific operations (COPY, bulk ops)."""
-
-    def dispatch_execute(self, cursor: Any, statement: "SQL") -> "ExecutionResult":
-        """Execute single statement."""
-```
-
----
-
 ## Specific Adapter Notes
 
 ### ADBC
 
-- Returns `False` for `_connection_in_transaction()` since ADBC uses explicit `BEGIN` and does not expose reliable transaction state.
 - Optimized for Arrow framework transfers; prefer `select_to_arrow()` over row-based methods.
 
 ### AsyncPG
@@ -201,4 +127,6 @@ class MyDriver(SyncDriverAdapterBase):
 
 - Supports both sync and async modes via `oracledb` thin/thick client.
 - Named parameter binding with `:name` style.
-- Oracle Advanced Queuing support for event channels.
+- Defaults `fetch_lobs=False`, which materializes supported LOBs as `str` or `bytes`. Set `fetch_lobs=True` only when code needs native LOB locators.
+- Native JSON, `IS JSON` CLOB/BLOB, and OSON columns decode through metadata-aware handlers. Plain CLOB/BLOB values are never JSON-decoded by content heuristics.
+- Event channels support opt-in `aq` and `txeventq`; `poll_queue` remains the Oracle default.

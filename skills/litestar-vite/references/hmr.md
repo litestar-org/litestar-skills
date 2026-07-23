@@ -6,11 +6,13 @@ How Hot Module Replacement works between Litestar and Vite, and how to debug it.
 
 ```text
 Browser ──HTTP──▶ Litestar (port 8000)
-   │
-   └─WS────────▶ Vite dev server (port 5173)
-                  │
-                  ├─ watches resource_dir for changes
-                  └─ pushes update messages → browser swaps modules
+   │                 │
+   └─WS──────────────┤ proxy using hot-file target
+                     ▼
+                  Vite (internal port)
+                     │
+                     ├─ watches resource_dir
+                     └─ pushes updates through Litestar
 ```
 
 In dev mode:
@@ -19,9 +21,14 @@ In dev mode:
 2. `litestar-vite` writes `.litestar.json` so the JS plugin sees the Python config.
 3. Vite writes a "hot file" at `ViteConfig.paths.hot_file`.
 4. The plugin checks the hot file on each request — present ⇒ dev proxy mode active.
-5. `vite()` returns Litestar-proxied dev URLs by default.
+5. `vite()` returns URLs on the Litestar public origin.
 6. `vite_hmr()` injects the HMR client `<script>`.
-7. Browser opens WS to Vite, gets module updates without page reload.
+7. The browser opens the HMR WebSocket against Litestar; Litestar proxies it
+   to Vite.
+
+This single-port ASGI contract is the supported development path. Legacy
+`VITE_PROXY_MODE=direct` warns and becomes `"vite"`; `"direct"` is not a valid
+`RuntimeConfig.proxy_mode`.
 
 ## React Fast Refresh
 
@@ -67,17 +74,12 @@ Causes:
 
 Fix: remove the JS-side `hotFile` override or align it with `ViteConfig.paths.hot_file`; verify Vite started.
 
-### CORS errors fetching JS
-
-Symptom: browser console shows `CORS policy: No 'Access-Control-Allow-Origin'`.
-
-Fix: first use the default proxy mode so Litestar is the public origin. In direct/two-port mode, set `server.cors: true`; if using HTTPS, also set `server.origin`.
-
 ### Port conflict / random port
 
-Symptom: HMR works some runs, fails others. Asset URLs point at unexpected ports.
+Symptom: HMR works some runs and fails after Vite restarts.
 
-Fix: in proxy mode, let Vite auto-pick and read the generated hot-file URL. In direct/two-port mode, pin both `RuntimeConfig.port` (Python) and `server.port` (JS) to the same value.
+Fix: remove public-origin overrides. The proxy re-reads the hot file by mtime and
+recovers when the file is replaced or temporarily missing.
 
 ### Vite 8.1 HMR deprecation warning
 
@@ -97,14 +99,16 @@ Causes:
 
 ### WebSocket connection fails
 
-Symptom: console shows `WebSocket connection to 'ws://localhost:5173/...' failed`.
+Symptom: the browser connects directly to the Vite port or the WebSocket fails.
 
 Causes:
 
 - Vite isn't running.
-- Host mismatch — `RuntimeConfig.host="localhost"` but accessed via `127.0.0.1` (browsers treat as different origins for WS).
+- A user-defined `server.origin`, `server.hmr`, or `server.ws` override bypasses
+  the bridge-derived Litestar route.
 
-Fix: align host across both configs and access URL.
+Fix: remove explicit network overrides. The npm plugin sets the HMR client port
+to the Litestar port and routes it under the asset URL.
 
 ### Browser caches manifest.json
 
@@ -114,9 +118,9 @@ Fix: never set long TTL on `manifest.json`. Hash the bundles (Vite default), but
 
 ## Debugging Checklist
 
-- [ ] `litestar run` logs show `Vite serving at http://localhost:<port>`
+- [ ] Load the Litestar URL, not the internal Vite URL
 - [ ] `hot_file` exists at the configured path during a dev session
-- [ ] Browser network tab shows JS fetched through Litestar's proxy in default mode, or from the pinned Vite origin in direct mode
+- [ ] Browser network tab shows JS and HMR WebSocket traffic on the Litestar origin
 - [ ] `vite_hmr()` rendered to a `<script>` tag in the served HTML
 - [ ] Vite 8.1+ configs use `server.ws` for HMR network fields
 - [ ] Browser console shows `[vite] connected`

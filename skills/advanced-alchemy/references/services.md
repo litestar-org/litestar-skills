@@ -37,7 +37,7 @@ class UserService(SQLAlchemyAsyncRepositoryService[m.User]):
 Transform data before persistence. These are the primary extension points:
 
 ```python
-from advanced_alchemy.service.typing import ModelDictT
+from advanced_alchemy.service import ModelDictT
 
 
 class UserService(SQLAlchemyAsyncRepositoryService[m.User]):
@@ -107,6 +107,11 @@ user = await service.update(
 
 ## Common Service Operations
 
+Use `get_many()` and `get_many_and_count()`. The older `list()` and
+`list_and_count()` methods remain as deprecation wrappers only until 2.0. The
+same rename applies to repositories, query repositories, memory repositories,
+and cache-manager list helpers.
+
 ```python
 from advanced_alchemy.filters import LimitOffset, OrderBy, SearchFilter
 
@@ -145,6 +150,7 @@ count = await service.count()
 
 ```python
 from advanced_alchemy.filters import (
+    BooleanFilter,
     LimitOffset,
     OrderBy,
     SearchFilter,
@@ -173,7 +179,7 @@ class UserService(SQLAlchemyAsyncRepositoryService[m.User]):
 
     async def list_active_users(self, *filters: FilterTypes) -> list[m.User]:
         custom_filters: list[FilterTypes] = [
-            SearchFilter(field_name="is_active", value=True),
+            BooleanFilter(field_name="is_active", value=True),
         ]
         custom_filters.extend(filters)
         return await self.get_many(*custom_filters)

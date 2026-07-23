@@ -122,6 +122,10 @@ class LegacyRecord(UUIDAuditBase):
 
 Transparent encryption at rest for sensitive data. Values are encrypted before writing and decrypted on read. `EncryptedString` is for short values (API keys, tokens). `EncryptedText` is for longer payloads (notes, documents).
 
+Pass a stable `key=` explicitly. Advanced Alchemy 1.11 retains the
+process-random default only as a deprecated compatibility path; values written
+with it become undecryptable after process restart.
+
 ```python
 from advanced_alchemy.types import EncryptedString, EncryptedText
 from advanced_alchemy.types.encrypted_string import FernetBackend, PGCryptoBackend
@@ -176,6 +180,8 @@ class SecureRecord(UUIDAuditBase):
 - `PGCryptoBackend` requires the PostgreSQL `pgcrypto` extension and performs encryption server-side.
 - Encrypted columns cannot be used in WHERE clauses or indexes (the ciphertext changes each write).
 - Store the encryption key in environment variables or a secrets manager, never in code.
+- Advanced Alchemy does not read an `ENCRYPTION_KEY` setting automatically.
+  Pass the resolved secret, or a callable returning it, to each encrypted type.
 
 ---
 

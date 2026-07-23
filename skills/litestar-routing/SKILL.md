@@ -1,6 +1,6 @@
 ---
 name: litestar-routing
-description: "Auto-activate for Controller, Router, @get/@post/@put/@patch/@delete, route_handler, path params, app/domain modules, or DomainPlugin layout. Not for frontend routers."
+description: "Auto-activate for Controller, Router, @get/@post/@put/@patch/@delete, route_handler, path params, app/domain modules, or Autowire layout. Not for frontend routers."
 ---
 
 # Litestar Routing
@@ -12,7 +12,12 @@ Use this skill for route handlers, Controllers, Routers, domain clustering, and 
 - Cluster Controllers by domain, not HTTP method.
 - Keep handlers thin: parse request data, call a service, return a DTO or response object.
 - Put shared path, dependencies, guards, and tags on the Controller class.
-- Prefer the typed markers `FromPath[T]` / `FromQuery[T]` / `FromHeader[T]` / `FromCookie[T]` (Litestar ≥ 2.22) over `Annotated[T, Parameter()]`; never use the `field = Parameter(...)` default form (removed in 3.0).
+- Use `FromPath[T]`, `FromQuery[T]`, `FromHeader[T]`, and `FromCookie[T]` for
+  unconstrained request parameters.
+- Use `Annotated[T, PathParameter(...)]`, `QueryParameter(...)`,
+  `HeaderParameter(...)`, or `CookieParameter(...)` when the parameter needs
+  constraints, metadata, or a wire name. Do not use implicit parameters or the
+  deprecated `field: T = Parameter(...)` form.
 - Use typed path parameters and explicit return annotations.
 
 ## Quick Reference
@@ -20,6 +25,7 @@ Use this skill for route handlers, Controllers, Routers, domain clustering, and 
 - Controller and route patterns: [routing.md](references/routing.md)
 - Domain folder layout: [domains.md](references/domains.md)
 - End-to-end vertical slice: [example.md](references/example.md)
+- Automatic domain-package registration: [litestar-autowire](../litestar-autowire/SKILL.md)
 
 <workflow>
 
@@ -28,7 +34,7 @@ Use this skill for route handlers, Controllers, Routers, domain clustering, and 
 1. Identify the domain boundary and URL prefix.
 2. Pick a Controller when routes share path, guards, dependencies, or tags.
 3. Keep data access in services and validation in DTOs.
-4. Wire the Controller into the app or DomainPlugin.
+4. Wire the Controller into the app explicitly or through Litestar Autowire.
 
 </workflow>
 
@@ -85,6 +91,7 @@ class UserController(Controller):
 
 - <https://docs.litestar.dev/> - Litestar documentation
 - <https://docs.litestar.dev/latest/reference/> - Litestar API reference
+- <https://github.com/litestar-org/litestar/tree/v2.24.0> - Audited Litestar 2.24.0 source
 
 ## Shared Styleguide Baseline
 

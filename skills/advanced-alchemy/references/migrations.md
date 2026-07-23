@@ -5,11 +5,11 @@
 Advanced Alchemy uses `metadata_registry` for automatic model discovery by Alembic:
 
 ```python
-from advanced_alchemy.base import orm_registry
+from advanced_alchemy.base import metadata_registry
 
-# All models inheriting from UUIDAuditBase/BigIntAuditBase/etc. are automatically
-# registered in orm_registry.metadata. Import all models before running migrations.
-target_metadata = orm_registry.metadata
+# Default-bind models use metadata_registry.get(). Import all model modules
+# before migration autogeneration.
+target_metadata = metadata_registry.get()
 ```
 
 ## Alembic env.py Configuration
@@ -21,12 +21,12 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from advanced_alchemy.base import orm_registry
+from advanced_alchemy.base import metadata_registry
 
 # Import all models so they register with metadata
 from app.db import models  # noqa: F401
 
-target_metadata = orm_registry.metadata
+target_metadata = metadata_registry.get()
 
 
 def run_migrations_offline() -> None:
@@ -78,20 +78,20 @@ else:
 
 ```bash
 # Generate migration
-alchemy make-migrations --config path.to.alchemy_config.config
+alchemy --config path.to.alchemy_config.config make-migrations -m "add user table"
 
 # Apply all pending migrations
-alchemy upgrade --config path.to.alchemy_config.config
+alchemy --config path.to.alchemy_config.config upgrade head
 
 # Rollback one migration
-alchemy downgrade --config path.to.alchemy_config.config
+alchemy --config path.to.alchemy_config.config downgrade -1
 ```
 
 ### Litestar Integration CLI
 
 ```bash
 # Generate migration
-litestar database make-migrations
+litestar database make-migrations -m "add user table"
 
 # Apply all pending migrations
 litestar database upgrade
@@ -99,16 +99,16 @@ litestar database upgrade
 # Rollback last migration
 litestar database downgrade
 
-# Create the database (if it doesn't exist)
-litestar database create-database
-
 # Show current revision
 litestar database show-current-revision
 ```
 
 `litestar db ...` is also supported as a short alias in recent Litestar releases.
 
-### Common Alembic Commands (Direct)
+### Direct Alembic CLI
+
+Use direct Alembic commands only when the application maintains a conventional
+`alembic.ini` and `env.py` independently of Advanced Alchemy's config loader:
 
 ```bash
 # Generate migration with message
@@ -129,14 +129,18 @@ alembic history
 
 ## Multiple Database Support
 
-Use `bind_keys` to manage migrations across multiple databases:
+Give each config a unique `bind_key`, metadata, and migration location:
 
 ```python
+from advanced_alchemy.base import metadata_registry
+from advanced_alchemy.config import AlembicAsyncConfig
 from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig
 
 
 primary_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://localhost/primary",
+    bind_key="primary",
+    metadata=metadata_registry.get("primary"),
     alembic_config=AlembicAsyncConfig(
         script_location="migrations/primary",
     ),
@@ -145,20 +149,30 @@ primary_config = SQLAlchemyAsyncConfig(
 analytics_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://localhost/analytics",
     bind_key="analytics",
+    metadata=metadata_registry.get("analytics"),
     alembic_config=AlembicAsyncConfig(
         script_location="migrations/analytics",
     ),
 )
 ```
 
-Each bind key gets its own migration directory and version history.
+Target one configured database with `--bind-key`:
+
+```bash
+litestar database upgrade --bind-key analytics head
+alchemy --config path.to.config upgrade --bind-key analytics head
+```
+
+The CLI does not infer a migration directory from `bind_key`; configure
+`AlembicAsyncConfig(script_location=...)` explicitly.
 
 ## Migration Best Practices
 
 - Always import all model modules in `env.py` before accessing `target_metadata`
 - Use `--autogenerate` to detect schema changes, but review generated migrations before applying
 - For production deployments, test migrations against a staging database first
-- Use `alembic stamp head` to mark a fresh database as up-to-date without running migrations
+- Use `litestar database stamp head` (or the standalone `alchemy` equivalent)
+  to mark a fresh database as up-to-date without running migrations
 - Keep migrations small and focused — one logical change per migration file
 
 ## Testing with Migrations

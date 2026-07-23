@@ -1,6 +1,9 @@
 # Multi-Database Configuration
 
-This reference describes how Advanced Alchemy supports applications that talk to more than one database in the same process — for example a primary OLTP store plus a read-only analytics warehouse, or a tenant database plus a shared identity database. The mechanism is the same across every framework integration: pass a list of configs to the extension class, give each one a `bind_key`, and look configs up by that key when you need a specific session. Per-framework injection wiring (how the right session ends up in a handler signature) is covered in the framework guides.
+Advanced Alchemy accepts multiple configs in every framework integration, but
+session selection follows the host framework. FastAPI, Flask, Starlette, and
+Sanic select configs by `bind_key`. Litestar registers the
+`session_dependency_key` and `engine_dependency_key` from each config.
 
 ## The Bind-Key Model
 
@@ -56,11 +59,14 @@ def __init__(
     ...
 ```
 
-`extensions.fastapi`, `extensions.sanic`, and the other framework modules expose the same constructor shape — the `Starlette` annotation is just the most general ASGI type.
+Constructor keywords differ by framework: FastAPI, Flask, and Starlette use
+`config=`, Sanic uses `sqlalchemy_config=`, and Litestar receives the config
+sequence through `SQLAlchemyPlugin(config=[...])`.
 
 ## Looking Up a Config by Key
 
-The extension exposes `get_config(key)` and a pair of `provide_session(key)` / `provide_engine(key)` factories that return callables for the specified bind:
+FastAPI and Starlette expose `get_config(key)` and
+`provide_session(key)` / `provide_engine(key)` factories:
 
 ```python
 # Address the analytics bind
@@ -75,7 +81,18 @@ get_analytics_engine = extension.provide_engine(key="analytics")
 
 When `key=None` and only one config is registered, the extension falls back to that single config — convenient for tests and for incremental adoption (start with one, add a second later without rewriting call sites that already pass `None`).
 
-The framework guides show how to wire these provider callables into per-framework dependency systems; the lookup primitive itself is the same everywhere.
+Flask uses `get_sync_session(bind_key)` / `get_async_session(bind_key)`. Sanic
+uses its config/session helpers. Litestar injects the unique dependency keys
+configured on each config:
+
+```python
+reporting = SQLAlchemyAsyncConfig(
+    connection_string="sqlite+aiosqlite:///reporting.sqlite",
+    bind_key="reporting",
+    session_dependency_key="reporting_session",
+    engine_dependency_key="reporting_engine",
+)
+```
 
 ## Async + Sync in the Same Application
 
@@ -159,14 +176,21 @@ extension = AdvancedAlchemy(config=[primary, posts])
 
 ## Metadata and Migrations
 
-`bind_key` also drives Alembic's table-to-engine routing. When you declare a model, point its declarative base or its `__table_args__["info"]` at the same bind key so Alembic knows which engine to emit DDL against during migrations. See [migrations.md](./migrations.md) for the multi-bind Alembic configuration.
+`bind_key` also selects metadata for config-owned Alembic commands. Set
+`__bind_key__` on an Advanced Alchemy model, or pass the matching
+`metadata=metadata_registry.get(bind_key)` to the config. A table's arbitrary
+`info` dictionary does not route migrations.
 
 ## Common Pitfalls
 
 - **Forgetting to set `bind_key` on the second config.** Both configs default to `bind_key=None` -> both map to `"default"` -> the extension raises `ImproperConfigurationError` with the "unique name" message. Always set `bind_key` explicitly when you have more than one config.
 - **No cross-bind transactions.** Sessions are per-config; `session.commit()` on the primary does not commit work on the analytics bind. If you need atomic cross-database semantics, you need explicit coordination (two-phase commit at the database level, an outbox table, or a saga pattern at the application layer).
-- **Models bound to the wrong key.** A model declared against the primary `MetaData` cannot be queried through the analytics session — SQLAlchemy will look for the table on the wrong engine. Use a separate declarative base per bind, or set the `info={"bind_key": "..."}` on `__table_args__`.
-- **Migrations run against the default bind only.** The `alchemy database upgrade` CLI iterates configured binds, but it's easy to forget to add a new bind to the Alembic config. Always update Alembic when you add a new `SQLAlchemyAsyncConfig`.
+- **Models bound to the wrong key.** Set `__bind_key__ = "analytics"` before
+  the model is mapped, or use a base whose metadata is registered under that
+  key.
+- **CLI selection is explicit.** Pass `--bind-key analytics` to target one
+  config. `init` and `drop-all` iterate all configs when the option is omitted;
+  ordinary migration commands resolve one config.
 - **Pool exhaustion at the wrong bind.** If the analytics pool is sized at 5 and a long-running report blocks all of them, requests that need *any* analytics query queue up. Size analytics pools for the worst-case concurrent slow query, not the average.
 - **Different `commit_mode` per bind is intentional.** A read-only analytics bind should use `commit_mode="manual"` (no writes -> no commits needed); a primary write bind typically uses `autocommit`. See [commit-modes.md](./commit-modes.md).
 

@@ -1,9 +1,17 @@
 ---
 name: advanced-alchemy
-description: "Auto-activate for advanced_alchemy imports, alembic/, SQLAlchemyAsyncRepositoryService, SQLAlchemyAsyncConfig, repository_type, service_class, filters, or storage. Not for raw SQLAlchemy."
+description: "Auto-activate for advanced_alchemy imports, alembic/, SQLAlchemyAsyncRepositoryService, SQLAlchemyAsyncConfig, repository_type, service_class, filters, or storage. Not for raw SQLAlchemy without Advanced Alchemy — use SQLAlchemy guidance."
 ---
 
 # Advanced Alchemy
+
+## Code Style Rules
+
+- Use `Mapped[...]` for columns and `T | None` for optional fields.
+- Keep business transformations in service lifecycle hooks.
+- Prefer the inner `Repo` service pattern and `advanced_alchemy.*` imports.
+- Use `from __future__ import annotations` when it matches the project; 1.11
+  supports it in model modules.
 
 ## Match-Your-Framework — read first
 
@@ -15,7 +23,12 @@ advanced-alchemy ships first-party extensions for five web frameworks. If your p
 - **Sanic** → [`references/sanic-integration.md`](references/sanic-integration.md) — `AdvancedAlchemy(sqlalchemy_config=..., sanic_app=app)` (note: `sqlalchemy_config=` kwarg, not `config=`), sanic-ext DI, `request.ctx` sessions.
 - **Starlette** → [`references/starlette-integration.md`](references/starlette-integration.md) — `AdvancedAlchemy(config=..., app=app)`, `request.state` session access, lifespan wrapping.
 
-Shared topics that apply to every framework live in [`references/commit-modes.md`](references/commit-modes.md) (`commit_mode="manual"` / `"autocommit"` / `"autocommit_include_redirect"`) and [`references/multi-database.md`](references/multi-database.md) (bind-key pattern). Read the framework guide first, then those for depth.
+Transaction configuration is framework-specific. Litestar uses
+`before_send_handler`; FastAPI, Flask, Starlette, and Sanic use
+`commit_mode="manual"`, `"autocommit"`, or
+`"autocommit_include_redirect"`. Read the matching framework guide, then
+[`references/commit-modes.md`](references/commit-modes.md) and
+[`references/multi-database.md`](references/multi-database.md).
 
 The rest of this SKILL.md covers framework-agnostic topics: base classes, repositories, services, filters, custom types, caching, replicas, operations, and Alembic migrations.
 
@@ -40,8 +53,9 @@ Advanced Alchemy is NOT a raw ORM — it is a **service/repository layer** built
 | `UUIDBase` | UUID v4 | None | Lookup tables, tags, no audit needed |
 | `UUIDv7AuditBase` | UUID v7 | `created_at`, `updated_at` | Time-sortable IDs (preferred over v6) |
 | `BigIntAuditBase` | BigInt auto-increment | `created_at`, `updated_at` | Legacy systems, integer PKs |
-| `NanoidAuditBase` | Nanoid string | `created_at`, `updated_at` | URL-friendly short IDs |
-| `DeclarativeBase` | None (define yourself) | None | Full schema control |
+| `NanoIDAuditBase` | NanoID string | `created_at`, `updated_at` | URL-friendly short IDs |
+| `IdentityAuditBase` | database identity | `created_at`, `updated_at` | Native IDENTITY columns |
+| `DefaultBase` | None (define yourself) | None | Custom primary keys with AA table naming |
 
 ### Repository Pattern
 
@@ -66,8 +80,8 @@ Key lifecycle hooks: `to_model_on_create`, `to_model_on_update`, `to_model_on_up
 | --- | --- | --- |
 | `FileObject` | Object storage with lifecycle hooks | Tracks file state across session; auto-deletes on row delete via `StoredObject` tracker |
 | `PasswordHash` | Hashed password storage | Supports Argon2, Passlib, and Pwdlib backends; hashes on assignment |
-| `EncryptedString` | Transparent AES encryption at rest | Requires `ENCRYPTION_KEY` in config |
-| `UUID6` / `UUID7` | Time-sortable UUID variants | UUID7 preferred — monotonic ordering with millisecond timestamp prefix |
+| `EncryptedString` | Transparent encryption at rest | Pass a stable key explicitly; the random default is deprecated |
+| `UUID6` / `UUID7` | Time-sortable UUID variants | UUID7 preferred for standardized timestamp-ordered identifiers |
 | `DateTimeUTC` | Timezone-aware UTC datetime | Stores as UTC; raises on naive datetimes |
 | `Bool` | Dialect-aware boolean | Uses Oracle 23c native `BOOLEAN` when SQLAlchemy exposes it; falls back to stock SQLAlchemy `Boolean` |
 | `Vector` | Dialect-aware vector storage and distance operators | Oracle 23ai `VECTOR`, PostgreSQL/CockroachDB `pgvector`, JSON fallback without distance operators |
@@ -85,28 +99,21 @@ Key lifecycle hooks: `to_model_on_create`, `to_model_on_update`, `to_model_on_up
 
 | Mixin | Fields Added | When to Use |
 | --- | --- | --- |
-| `AuditMixin` | `created_at`, `updated_at`, `created_by`, `updated_by` | Any model needing a full audit trail (who + when) |
-| `SlugMixin` | `slug` (auto-generated) | URL-friendly identifiers derived from another field |
-| `UniqueMixin` | `get_or_create` class method | Idempotent inserts for lookup/reference tables |
-| `SentinelMixin` | `_sentinel` version column | Optimistic locking; raises `ConflictError` on stale writes |
+| `AuditColumns` | `created_at`, `updated_at` | Add timestamps to a model with a custom primary key |
+| `SlugKey` | unique `slug` column | Pair with a slug repository; the mixin does not generate values |
+| `UniqueMixin` | `as_unique_async()` / `as_unique_sync()` | Session-cached select-or-create after defining `unique_hash()` and `unique_filter()` |
+| `SentinelMixin` | hidden `sa_orm_sentinel` column | Deterministic ordering for SQLAlchemy bulk inserts; not optimistic locking |
 
 ## Litestar Integration
 
 Use `SQLAlchemyPlugin` (composite of `SQLAlchemyInitPlugin` + `SQLAlchemySerializationPlugin`) for full integration:
 
-- **`SQLAlchemyPlugin`**: registers session provider, transaction middleware, and ORM type encoders in one call
+- **`SQLAlchemyPlugin`**: registers engine/session providers, a Litestar
+  `before_send` hook, and ORM type encoders in one call
 - **`SQLAlchemyDTO`**: generates Litestar DTOs directly from ORM models with `include`/`exclude` field control
 - **Type encoders**: automatic serialization of `datetime`, `UUID`, `Decimal`, `Enum`, and custom column types
-- **Exception handling**: `RepositoryError`, `ConflictError`, and `NotFoundError` map to HTTP 409/404 via built-in exception handlers — register with `app.exception_handlers`
-
-## Code Style
-
-- `__slots__` on non-model classes, `Mapped[]` typing for all columns
-- `T | None` for optional fields (PEP 604 unions, never `Optional[T]`)
-- Full type annotations on all function signatures
-- Inner `Repo` class pattern inside service definitions
-- Prefer `advanced_alchemy.*` imports; avoid deprecated `litestar.plugins.sqlalchemy` paths
-- **`from __future__ import annotations` rule** — Advanced Alchemy model modules **avoid** `from __future__ import annotations` because SQLAlchemy 2.0 `Mapped[...]` columns are introspected at class-creation time. Consumer application modules (handlers, services, tests) MAY and typically SHOULD use it — canonical Litestar apps use it in 100+ files.
+- **Exception handling**: `set_default_exception_handler=True` (the default)
+  registers `RepositoryError` handling through the plugin
 
 <workflow>
 
@@ -130,7 +137,10 @@ Use the framework plugin (Litestar, FastAPI, Flask, Sanic) to inject sessions an
 
 ### Step 5: Generate Migration
 
-Run `alembic revision --autogenerate -m "description"` to create the migration, then review and apply with `alembic upgrade head`.
+With Litestar, run `litestar database make-migrations -m "description"` and
+then `litestar database upgrade`. With the standalone CLI, put the required
+config option before the command:
+`alchemy --config path.to.config make-migrations -m "description"`.
 
 </workflow>
 
@@ -145,7 +155,11 @@ Run `alembic revision --autogenerate -m "description"` to create the migration, 
 - **Use `schema_dump()` / `schema_dump_config` for explicit dump behavior** — services already convert Pydantic/msgspec/attrs/dataclass inputs during model conversion
 - **Prefer `UUIDAuditBase`** as default base class — only deviate when you have a concrete reason
 - **Use `advanced_alchemy.*` imports** — the old `litestar.plugins.sqlalchemy` paths are deprecated
-- **Model modules avoid `from __future__ import annotations`** — SQLAlchemy 2.0 needs the real `Mapped[...]` type at class-creation time. Consumer modules (handlers, services, tests) MAY use it.
+- **Pass stable keys to `EncryptedString` and `EncryptedText`.** Omitting
+  `key=` emits a 1.11 deprecation warning and produces data that cannot survive
+  a process restart.
+- **Use `get_many()` and `get_many_and_count()`.** `list()` and
+  `list_and_count()` are deprecated until 2.0.
 
 </guardrails>
 
@@ -160,7 +174,8 @@ Before delivering code, verify:
 - [ ] Service has an inner `Repo` class with `model_type` set
 - [ ] Business logic lives in service lifecycle hooks, not in route handlers
 - [ ] Imports come from `advanced_alchemy.*`, not deprecated paths
-- [ ] Model module does NOT use `from __future__ import annotations` (consumer modules may)
+- [ ] Encrypted columns receive a stable explicit key
+- [ ] New code uses `get_many()` / `get_many_and_count()`, not deprecated list aliases
 
 </validation>
 
@@ -175,7 +190,7 @@ A complete `Tag` entity with model, repository, and service:
 
 from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
+from advanced_alchemy.service import ModelDictT, SQLAlchemyAsyncRepositoryService
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -203,7 +218,7 @@ class TagService(SQLAlchemyAsyncRepositoryService[Tag]):
     repository_type = Repo
     match_fields = ["name"]
 
-    async def to_model_on_create(self, data):
+    async def to_model_on_create(self, data: ModelDictT[Tag]) -> ModelDictT[Tag]:
         """Normalize tag name before creation."""
         if isinstance(data, dict) and "name" in data:
             data["name"] = data["name"].strip().lower()
@@ -251,12 +266,10 @@ For detailed guides and code examples, refer to the following documents in `refe
 
 ## Official References
 
-- <https://advanced-alchemy.litestar.dev/latest/>
-- <https://advanced-alchemy.litestar.dev/latest/usage/services.html>
-- <https://advanced-alchemy.litestar.dev/latest/usage/cli.html>
-- <https://advanced-alchemy.litestar.dev/latest/usage/modeling/types.html>
-- <https://advanced-alchemy.litestar.dev/latest/reference/types.html>
-- <https://advanced-alchemy.litestar.dev/latest/changelog.html>
+- <https://github.com/litestar-org/advanced-alchemy/tree/v1.11.0/advanced_alchemy>
+- <https://github.com/litestar-org/advanced-alchemy/blob/v1.11.0/docs/changelog.rst>
+- <https://github.com/litestar-org/advanced-alchemy/tree/v1.11.0/tests>
+- <https://github.com/litestar-org/advanced-alchemy/tree/v1.11.0/docs/usage>
 - <https://docs.litestar.dev/2/release-notes/changelog.html>
 - <https://docs.sqlalchemy.org/en/20/orm/quickstart.html>
 

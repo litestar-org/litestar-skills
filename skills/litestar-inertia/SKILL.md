@@ -29,12 +29,18 @@ This skill covers that integration end-to-end. For anything that's purely about 
 
 ## Code Style Rules
 
-- **PEP 604 unions, `from __future__ import annotations`** in consumer Python modules — standard Litestar rules apply
+- **PEP 604 unions** in consumer Python modules; use
+  `from __future__ import annotations` only when the application benefits from it
 - **TypeScript typed pages** — generate page-props types via `litestar-vite`'s TypeGen, never hand-roll
-- **Forms via `useForm`** — never a plain `<form onSubmit>`. `useForm` handles CSRF, errors, submission state, and navigation in one call
-- **CSRF via Litestar state** — configure Litestar `CSRFConfig`; generated clients use `csrfHeaders()` from `litestar-vite-plugin/helpers` so `cookie_httponly=True` works.
+- **Forms via `useForm`** — use the adapter form helper for errors, submission
+  state, and navigation
+- **CSRF via Litestar state** — configure Litestar `CSRFConfig` and wire
+  `csrfHeaders()` into global Inertia visit options; generated scaffolds already
+  do this, including with `cookie_httponly=True`
 - **Shared data for auth + flash**, never page-specific. Static page props go in `InertiaConfig.extra_static_page_props`; session-backed props go in `extra_session_page_props`; request-time flashes use `share(request, ...)`.
-- **camelCase on the wire** — Python msgspec Structs use `Meta(rename="camel")`, JS consumes `camelCase` directly
+- **camelCase on the wire** — define msgspec structs with
+  `class Example(msgspec.Struct, rename="camel")`; generated TypeScript consumes
+  the serialized names
 - **Partial reloads** over full-page reloads when only a subset of props changes (`router.reload({ only: ['notifications'] })`)
 - **Lazy props** for expensive-to-compute page data the user may not need on first paint
 
@@ -67,7 +73,7 @@ class DashboardController(Controller):
 ```tsx
 // resources/js/pages/dashboard/Index.tsx
 import { usePage, Head } from "@inertiajs/react";
-import type { Dashboard } from "@/types/generated";   // TypeGen output
+import type { Dashboard } from "@/generated/api";
 
 export default function DashboardIndex() {
   const { dashboard } = usePage<{ dashboard: Dashboard }>().props;
@@ -153,7 +159,10 @@ export default function CreateProject() {
 }
 ```
 
-On the Python side, raising a `ValidationException` with a `dict` of field errors auto-maps into `errors` on the client — no manual serialization.
+Inertia validation follows redirect-with-session semantics. Use `error(request,
+field, message)` and return `InertiaBack(request)`, or install an exception
+handler that performs that mapping. A raw `422` response does not populate the
+next page's `errors` prop automatically.
 
 ### Partial reloads — only re-fetch what changed
 
@@ -174,11 +183,14 @@ from litestar_vite.inertia import lazy
 async def reports_page(self, reports_service) -> dict:
     return {
         "summary": await reports_service.summary(),            # eager
-        "fullExport": lazy(lambda: reports_service.export()),  # deferred
+        "fullExport": lazy("fullExport", reports_service.export),
     }
 ```
 
 Client fetches `fullExport` only on `router.reload({ only: ["fullExport"] })`.
+Pass the callable, not its result.
+
+<workflow>
 
 ## Workflow
 
@@ -192,7 +204,18 @@ Put static values in `InertiaConfig.extra_static_page_props`. Put session-backed
 
 ### Step 3 — Set up the client entrypoint
 
-`resources/js/app.tsx` (React) or equivalent: `createInertiaApp({ resolve: (name) => resolvePageComponent(name, ...), setup: ({ el, App, props }) => createRoot(el).render(<App {...props} />) })`.
+`resources/js/app.tsx` (React) or equivalent: call `createInertiaApp()` with
+`resolvePageComponent()`, render setup, and global visit options:
+
+```ts
+defaults: {
+  visitOptions: (_href, options) => ({
+    headers: csrfHeaders(options.headers ?? {}),
+  }),
+}
+```
+
+Import `csrfHeaders` from `litestar-vite-plugin/helpers`.
 
 ### Step 4 — Build page components
 
@@ -207,17 +230,31 @@ One `.tsx` / `.vue` / `.svelte` file per route, keyed by name. `@get(..., compon
 - `/` returns `text/html` (full initial render) on first visit
 - Subsequent navigations return `application/json` with Inertia envelope (`X-Inertia: true`)
 - DevTools Network tab shows `X-Inertia-*` response headers
-- `useForm().post()` with invalid data returns 422 + `errors` populated
+- Invalid form input stores errors and redirects back; the next page response
+  exposes `errors`
+- Stale asset-version `GET` requests return `409` plus
+  `X-Inertia-Location`; non-`GET` requests continue to the handler
+- Partial responses omit `deferredProps`
+
+</workflow>
+
+<guardrails>
 
 ## Guardrails
 
 - **Don't mix Inertia and plain JSON API routes in the same app surface** — pick one per domain. Mixing confuses auth, CSRF, and response shape expectations. If you need both, use separate route prefixes (`/api/*` for JSON, `/dashboard/*` for Inertia).
-- **CSRF is enabled by default in Litestar-Vite's Inertia integration** — don't disable unless you know what you're breaking. `useForm` handles the token transparently.
+- **Do not assume `useForm` adds CSRF headers** — wire `csrfHeaders()` through
+  `createInertiaApp({ defaults: { visitOptions } })`; the shipped scaffolds do
+  this.
 - **Shared props must be cheap** — session props are read on every page request. Cache user lookup; don't hit the DB for feature flags; use Redis for session state.
 - **Version strings matter** — Inertia tracks an asset version; mismatched versions force a full page reload. Let `litestar-vite` generate the version hash; don't hand-roll.
 - **No mixed-framework pages** — React + Vue in the same app breaks Inertia's resolver. Pick one adapter per project.
 - **Deep-link routes need real URLs** — every Inertia page should have a Litestar route returning it. SPA-only client routes (React Router inside an Inertia page) exist but are an escape hatch.
 - **Don't forget the root template** — `InertiaConfig.root_template` points at the template that mounts the SPA. Default is `index.html`; Jinja-backed Inertia apps set a Litestar `TemplateConfig` as well.
+
+</guardrails>
+
+<validation>
 
 ## Validation Checkpoint
 
@@ -229,11 +266,17 @@ Before shipping an Inertia-integrated Litestar app:
 - [ ] Static/session/request-time shared props have consistent shape across handlers
 - [ ] Page components resolve via the resolver function (one place of truth for path→component mapping)
 - [ ] TypeScript page-props types generated via `litestar assets generate-types`
-- [ ] Forms use `useForm`, not bare `<form>`
-- [ ] 422 responses from Litestar include `errors` that the client reads
-- [ ] CSRF/session data is exposed through Inertia shared props and `useForm` picks it up automatically
+- [ ] Forms use `useForm`
+- [ ] Validation failures call `error()` and redirect back, or an exception
+      handler performs the same mapping
+- [ ] `csrfHeaders()` is wired into global visit options
 - [ ] `dev_mode` toggles correctly between dev (Vite HMR) and prod (manifest-resolved assets)
-- [ ] Production build (`litestar assets build`) emits `public/manifest.json` + hashed bundles
+- [ ] Production build emits a configured or `.vite/` fallback manifest plus
+      hashed bundles
+
+</validation>
+
+<example>
 
 ## Example — Authenticated dashboard with forms + partial reload
 
@@ -242,8 +285,7 @@ Before shipping an Inertia-integrated Litestar app:
 from __future__ import annotations
 
 from litestar import Controller, Request, get, post
-from litestar.exceptions import ValidationException
-from litestar_vite.inertia import InertiaBack
+from litestar_vite.inertia import InertiaBack, error
 
 from app.domain.accounts.guards import requires_active_user
 from app.domain.projects.schemas import Project, ProjectCreate
@@ -255,7 +297,9 @@ class ProjectsController(Controller):
     guards = [requires_active_user]
 
     @get("/", component="projects/Index")
-    async def index(self, projects_service: ProjectService, request) -> dict:
+    async def index(
+        self, projects_service: ProjectService, request: Request
+    ) -> dict[str, list[Project]]:
         return {
             "projects": await projects_service.list_for_user(request.user.id),
         }
@@ -264,9 +308,9 @@ class ProjectsController(Controller):
     async def create(
         self, data: ProjectCreate, projects_service: ProjectService, request: Request,
     ) -> InertiaBack:
-        # Validation
         if await projects_service.exists(name=data.name, owner_id=request.user.id):
-            raise ValidationException(extra={"name": "You already have a project with this name."})
+            error(request, "name", "You already have a project with this name.")
+            return InertiaBack(request)
 
         await projects_service.create(data.to_dict(), owner_id=request.user.id)
         return InertiaBack(request)
@@ -275,7 +319,7 @@ class ProjectsController(Controller):
 ```tsx
 // resources/js/pages/projects/Index.tsx
 import { useForm, usePage, router } from "@inertiajs/react";
-import type { Project } from "@/types/generated";
+import type { Project } from "@/generated/api";
 
 export default function ProjectsIndex() {
   const { projects, flash } = usePage<{ projects: Project[]; flash: { success?: string } }>().props;
@@ -308,6 +352,8 @@ export default function ProjectsIndex() {
 }
 ```
 
+</example>
+
 ## References Index
 
 - **[Inertia Protocol & Client](references/protocol.md)** — Protocol v3, request/response shape, React/Vue/Svelte adapter setup, `useForm`, `usePage`, `router`, partial reloads, lazy props, SSR
@@ -320,18 +366,14 @@ export default function ProjectsIndex() {
 - **[`../advanced-alchemy/SKILL.md`](../advanced-alchemy/SKILL.md)** — Data services that produce page props
 - **[`../msgspec/SKILL.md`](../msgspec/SKILL.md)** — Struct definitions that TypeGen consumes
 
-## Canonical Reference Implementation
-
-The canonical Litestar + Inertia stack lives at [`litestar-fullstack-inertia`](https://github.com/litestar-org/litestar-fullstack-inertia). When in doubt about wiring or file layout, mirror it.
-
 ## Official References
 
 - Inertia.js v3 docs: <https://inertiajs.com/docs/v3>
-- Inertia v2/v3 support and upgrade guide: <https://litestar-org.github.io/litestar-vite/frameworks/inertia/upgrade-guide.html>
+- Tagged Litestar-Vite Inertia docs: <https://github.com/litestar-org/litestar-vite/tree/v0.27.0/docs/frameworks/inertia>
 - Client-side setup: <https://inertiajs.com/docs/v3/installation/client-side-setup>
 - Release notes: <https://github.com/inertiajs/inertia/releases>
-- `litestar-vite` Inertia docs: <https://litestar-org.github.io/litestar-vite/inertia/>
-- `litestar-vite` Inertia API: <https://litestar-org.github.io/litestar-vite/reference/inertia/>
+- Tagged `litestar-vite` Inertia source: <https://github.com/litestar-org/litestar-vite/tree/v0.27.0/src/py/litestar_vite/inertia>
+- Tagged Inertia tests: <https://github.com/litestar-org/litestar-vite/tree/v0.27.0/src/py/tests/unit/inertia>
 
 ## Shared Styleguide Baseline
 

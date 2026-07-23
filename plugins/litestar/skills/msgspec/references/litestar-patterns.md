@@ -69,33 +69,18 @@ await backend.publish(payload, channels=[f"orders:{order.id}:events"])
 
 ### Branch B — sqlspec not in-stack
 
-Hand-roll an `Encoder` singleton with a custom `enc_hook`. Pattern from
-`litestar-fullstack/src/py/app/utils/serialization.py:L1–47`.
+Use a plain `Encoder` singleton. msgspec natively handles UUID, datetime, date, time, Decimal,
+Enum, dataclasses, attrs classes, and Struct instances; do not duplicate those types in an
+`enc_hook`.
 
 ```python
 # myapp/utils/serialization.py
-import datetime as _dt
 from typing import Any
-from uuid import UUID
 
 import msgspec
-from pydantic import BaseModel
 
 
-def _default(value: Any) -> str:
-    if isinstance(value, BaseModel):
-        import json
-        return json.dumps(value.model_dump(by_alias=True))
-    if isinstance(value, UUID):
-        return str(value)
-    if isinstance(value, _dt.datetime):
-        return value.astimezone(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    if isinstance(value, _dt.date):
-        return value.isoformat()
-    return str(value)
-
-
-_encoder = msgspec.json.Encoder(enc_hook=_default)
+_encoder = msgspec.json.Encoder()
 
 
 def to_json(value: Any) -> bytes:
@@ -104,14 +89,17 @@ def to_json(value: Any) -> bytes:
     return _encoder.encode(value)
 ```
 
-Drop the `BaseModel` branch if your project has no Pydantic dependency.
+If the payload contains an unsupported custom type, add a narrow `enc_hook` that handles only
+that type and raises `NotImplementedError` for all others. If Pydantic is already in-stack and a
+Pydantic model must cross this serializer, return `value.model_dump(by_alias=True)` from that
+specific hook branch; never return a JSON string from an `enc_hook`.
 
 ### Decision guide
 
 | Situation | Pick |
 | --- | --- |
 | sqlspec is in-stack | Branch A — one-line re-export, zero maintenance |
-| sqlspec not available | Branch B — hand-rolled enc_hook |
+| sqlspec not available | Branch B — plain msgspec encoder |
 
 Both are canonical. Choose based on your existing dependencies, not preference.
 
@@ -174,9 +162,10 @@ class Order(CamelizedBaseStruct, kw_only=True):
             raise ValueError(msg)
 ```
 
-`__post_init__` runs after `__init__` and after msgspec's own field validation, making it the
-correct location for cross-field invariants. Raise `ValueError` (not `TypeError`) so callers
-and Litestar's exception handlers can treat it as a validation failure.
+`__post_init__` runs after direct `__init__`, typed decode, `convert()`, and, as of msgspec
+0.21.0, `msgspec.structs.replace()` and Python's `copy.replace()`. Direct construction does not
+validate field annotations first. Typed decode and `convert()` validate fields before the hook;
+in those paths a `ValueError` or `TypeError` becomes a path-aware `msgspec.ValidationError`.
 
 ## DTO vs response schema
 

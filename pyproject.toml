@@ -42,18 +42,25 @@ dev = [
 # skill code samples actually resolves against the installed version.
 # CI installs this group on every run; local dev opts in.
 validation = [
-  "advanced-alchemy>=1.0",
+  "advanced-alchemy[cli,cryptography]>=1.11.0",
   "argon2-cffi>=23.1",  # advanced_alchemy.types.password_hash.argon2 imports argon2 at module load
   "dishka>=1.4",
   "flask>=3.0",        # advanced_alchemy.extensions.flask imports flask at module load
-  "litestar[jinja,jwt]>=2.23",  # skill samples use 2.22/2.23 markers (FromQuery/JSONBody/NamedDependency/SkipValidation), litestar.plugins.jinja, and litestar.security.jwt
-  "litestar-granian>=0.10",
-  "litestar-mcp>=0.9",  # litestar-mcp skill samples import LitestarMCP/MCP/MCPConfig/MCPAuthBackend/OIDCProviderConfig/mcp_prompt
-  "litestar-queues>=0.1",
-  "litestar-saq>=0.5",
+  "litestar[jinja,jwt]>=2.24.0",
+  "litestar-autowire>=0.2.0",
+  "litestar-email>=0.4.0",
+  "litestar-granian>=0.15.0",
+  "litestar-htmx>=0.5.0",
+  "litestar-mcp>=0.11.1",
+  "litestar-queues[advanced-alchemy,sqlspec]>=0.5.0",
+  "litestar-saq[psycopg]>=0.8.0",
+  "litestar-vite>=0.27.0",
+  "msgspec>=0.21.1",
+  "polyfactory[sqlalchemy]>=3.3.0",
+  "pytest-databases>=0.19.0",
   "sanic[ext]>=24.6",  # advanced_alchemy.extensions.sanic imports sanic_ext at module load
-  "sqlspec[adk,asyncpg,performance,psycopg]>=0.13",
-  "pytest-databases"
+  "sqlmodel>=0.0.27",
+  "sqlspec[adk,asyncpg,performance,psycopg]>=0.56.0",
 ]
 
 [project.urls]

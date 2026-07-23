@@ -24,6 +24,14 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/db/1d/fdeb83451261ff933fbea56cae9769c8a3d4908a8d6c4983f1346817fcab/advanced_alchemy-1.11.0-py3-none-any.whl", hash = "sha256:5e9d92e3df5c073565c06f0a401f4b3c24ed1a450834b8dd467239136cd86b5c", size = 342338, upload-time = "2026-05-31T18:14:24.718Z" },
 ]
 
+[package.optional-dependencies]
+cli = [
+    { name = "rich-click" },
+]
+cryptography = [
+    { name = "cryptography" },
+]
+
 [[package]]
 name = "aiofiles"
 version = "25.1.0"
@@ -1401,6 +1409,31 @@ jwt = [
 ]
 
 [[package]]
+name = "litestar-autowire"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "litestar" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/97/45/80b71ce065883100863f2c614acb15fa66e95b856a1ca3755543c967b2f2/litestar_autowire-0.2.0.tar.gz", hash = "sha256:db71621dec2563bd84eecea9377080ec1ec3b30ce5c4afae36bf8f440e2a51fc", size = 151927, upload-time = "2026-07-07T17:21:21.415Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/98/c1/abc6042f0b06cb9665a58df9a01d7a51cde73e2f32255e5b5017a93477b3/litestar_autowire-0.2.0-py3-none-any.whl", hash = "sha256:ba4811777fbb01a53ac2f02841f2ecd595740b80c7135fdc74443193623b1e79", size = 13027, upload-time = "2026-07-07T17:21:20.217Z" },
+]
+
+[[package]]
+name = "litestar-email"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "litestar" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7b/73/b07fbe4eb1a88443d33d4a31f75c8f31b4dce706a9df5f67d1a6c0e298cb/litestar_email-0.4.0.tar.gz", hash = "sha256:942c101f1afb3c9d5c3fe528023cbba5657d5b7ad2ee7e1a699d6da0ba8c7670", size = 244961, upload-time = "2026-05-03T16:59:03.716Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c7/dd/66846552f682441702c556ce2353d27890cd04bb4027d1bcce8f5ee40c5a/litestar_email-0.4.0-py3-none-any.whl", hash = "sha256:de79248036647d6a7008bbe9505ff58fa994797eb82e0f71378e02661fbe02ec", size = 45365, upload-time = "2026-05-03T16:59:02.553Z" },
+]
+
+[[package]]
 name = "litestar-granian"
 version = "0.15.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1452,6 +1485,14 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/cc/f9/18dbc38ed5f9bfdccc8fa936fe106848ed498294f101e4a6365cd19ecf00/litestar_queues-0.5.0-py3-none-any.whl", hash = "sha256:40f98f4d136370f4aed2a2345ff8da65d90bca82913274d529fc92fad2151669", size = 243134, upload-time = "2026-07-23T03:46:02.753Z" },
 ]
 
+[package.optional-dependencies]
+advanced-alchemy = [
+    { name = "advanced-alchemy" },
+]
+sqlspec = [
+    { name = "sqlspec" },
+]
+
 [[package]]
 name = "litestar-saq"
 version = "0.8.0"
@@ -1463,6 +1504,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/be/80/054b7b73f384c0a5ea555130e0f18233e98d3341a7b8fadcf42f1968b75f/litestar_saq-0.8.0.tar.gz", hash = "sha256:4d6b6bd6e8c76a6dbf8537f51f71180a78ff7ba4a09294fbb62965653bb04a31", size = 286634, upload-time = "2026-06-03T21:07:52.184Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4a/e7/205c29fa6c60fb6d841f8cb3880147963a4f26efa6f3f4815edb189082f8/litestar_saq-0.8.0-py3-none-any.whl", hash = "sha256:0a47fd054aef997c9870f821638af4dfb2804bfb4652549c96689d81d8f99a92", size = 39793, upload-time = "2026-06-03T21:07:50.989Z" },
+]
+
+[package.optional-dependencies]
+psycopg = [
+    { name = "psycopg", extra = ["binary", "pool"] },
 ]
 
 [[package]]
@@ -1483,45 +1529,74 @@ dev = [
     { name = "types-pyyaml" },
 ]
 validation = [
-    { name = "advanced-alchemy" },
+    { name = "advanced-alchemy", extra = ["cli", "cryptography"] },
     { name = "argon2-cffi" },
     { name = "dishka" },
     { name = "flask" },
     { name = "litestar", extra = ["jinja", "jwt"] },
+    { name = "litestar-autowire" },
+    { name = "litestar-email" },
     { name = "litestar-granian" },
+    { name = "litestar-htmx" },
     { name = "litestar-mcp" },
-    { name = "litestar-queues" },
-    { name = "litestar-saq" },
+    { name = "litestar-queues", extra = ["advanced-alchemy", "sqlspec"] },
+    { name = "litestar-saq", extra = ["psycopg"] },
+    { name = "litestar-vite" },
+    { name = "msgspec" },
+    { name = "polyfactory", extra = ["sqlalchemy"] },
     { name = "pytest-databases" },
     { name = "sanic", extra = ["ext"] },
+    { name = "sqlmodel" },
     { name = "sqlspec", extra = ["adk", "asyncpg", "performance", "psycopg"] },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "advanced-alchemy", marker = "extra == 'validation'", specifier = ">=1.0" },
+    { name = "advanced-alchemy", extras = ["cli", "cryptography"], marker = "extra == 'validation'", specifier = ">=1.11.0" },
     { name = "argon2-cffi", marker = "extra == 'validation'", specifier = ">=23.1" },
     { name = "bump-my-version", marker = "extra == 'dev'", specifier = ">=0.28" },
     { name = "dishka", marker = "extra == 'validation'", specifier = ">=1.4" },
     { name = "flask", marker = "extra == 'validation'", specifier = ">=3.0" },
-    { name = "litestar", extras = ["jinja", "jwt"], marker = "extra == 'validation'", specifier = ">=2.23" },
-    { name = "litestar-granian", marker = "extra == 'validation'", specifier = ">=0.10" },
-    { name = "litestar-mcp", marker = "extra == 'validation'", specifier = ">=0.9" },
-    { name = "litestar-queues", marker = "extra == 'validation'", specifier = ">=0.1" },
-    { name = "litestar-saq", marker = "extra == 'validation'", specifier = ">=0.5" },
+    { name = "litestar", extras = ["jinja", "jwt"], marker = "extra == 'validation'", specifier = ">=2.24.0" },
+    { name = "litestar-autowire", marker = "extra == 'validation'", specifier = ">=0.2.0" },
+    { name = "litestar-email", marker = "extra == 'validation'", specifier = ">=0.4.0" },
+    { name = "litestar-granian", marker = "extra == 'validation'", specifier = ">=0.15.0" },
+    { name = "litestar-htmx", marker = "extra == 'validation'", specifier = ">=0.5.0" },
+    { name = "litestar-mcp", marker = "extra == 'validation'", specifier = ">=0.11.1" },
+    { name = "litestar-queues", extras = ["advanced-alchemy", "sqlspec"], marker = "extra == 'validation'", specifier = ">=0.5.0" },
+    { name = "litestar-saq", extras = ["psycopg"], marker = "extra == 'validation'", specifier = ">=0.8.0" },
+    { name = "litestar-vite", marker = "extra == 'validation'", specifier = ">=0.27.0" },
+    { name = "msgspec", marker = "extra == 'validation'", specifier = ">=0.21.1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11" },
+    { name = "polyfactory", extras = ["sqlalchemy"], marker = "extra == 'validation'", specifier = ">=3.3.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1.380" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
-    { name = "pytest-databases", marker = "extra == 'validation'" },
+    { name = "pytest-databases", marker = "extra == 'validation'", specifier = ">=0.19.0" },
     { name = "pyyaml", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.7" },
     { name = "sanic", extras = ["ext"], marker = "extra == 'validation'", specifier = ">=24.6" },
-    { name = "sqlspec", extras = ["adk", "asyncpg", "performance", "psycopg"], marker = "extra == 'validation'", specifier = ">=0.13" },
+    { name = "sqlmodel", marker = "extra == 'validation'", specifier = ">=0.0.27" },
+    { name = "sqlspec", extras = ["adk", "asyncpg", "performance", "psycopg"], marker = "extra == 'validation'", specifier = ">=0.56.0" },
     { name = "tomli", marker = "python_full_version < '3.11' and extra == 'dev'", specifier = ">=2.0" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0" },
 ]
 provides-extras = ["dev", "validation"]
+
+[[package]]
+name = "litestar-vite"
+version = "0.27.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "litestar" },
+    { name = "typing-extensions" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f1/fb/cb98464ad8ed908fb247690f8bd9820398d0564eabd084820b535f1e6616/litestar_vite-0.27.0.tar.gz", hash = "sha256:a1dba10a61b19ad1b9460671833a963536d49c5374561ed997460b87638e2121", size = 539500, upload-time = "2026-07-23T13:48:43.197Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ca/d3/daf8a8628760a8caec4aef316747b4fe4459029ae1b25e35e43fcf256be9/litestar_vite-0.27.0-py3-none-any.whl", hash = "sha256:246bf3c40a096ed70abd479332d9064235a00dc65b61afd3faf1e82027d28aff", size = 278415, upload-time = "2026-07-23T13:48:41.344Z" },
+]
 
 [[package]]
 name = "mako"
@@ -1999,6 +2074,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/85/68/7717bd9e63ed254617a7d3dc9260904fb736d6ea203e58ffddcb186c64e4/polyfactory-3.3.0.tar.gz", hash = "sha256:237258b6ff43edf362ffd1f68086bb796466f786adfa002b0ac256dbf2246e9a", size = 348668, upload-time = "2026-02-22T09:46:28.01Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dd/34/b6f19941adcdaf415b5e8a8d577499f5b6a76b59cbae37f9b125a9ffe9f2/polyfactory-3.3.0-py3-none-any.whl", hash = "sha256:686abcaa761930d3df87b91e95b26b8d8cb9fdbbbe0b03d5f918acff5c72606e", size = 62707, upload-time = "2026-02-22T09:46:25.985Z" },
+]
+
+[package.optional-dependencies]
+sqlalchemy = [
+    { name = "sqlalchemy" },
 ]
 
 [[package]]
@@ -3064,6 +3144,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/bf/62/6d5bd3169478b7f09e08ab3e50175d486a9e7f3a419b88fc9280ba564ab1/sqlglot-30.13.0.tar.gz", hash = "sha256:f0a6eb79de2fd6efe2689f8cf197caa4f08bfe77c7880315616fa4420b8ba2bf", size = 5932385, upload-time = "2026-07-20T20:16:54.873Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f2/2f/2076eca54f6a8ed1c86301bdb4bb2ae4181b0c1c4dbc041062ca997dc1b2/sqlglot-30.13.0-py3-none-any.whl", hash = "sha256:08f87ff7b052246d61b731628c8c2db0bc91f2c9e69f5ba68a1d160a9f5b49b1", size = 719120, upload-time = "2026-07-20T20:16:53.248Z" },
+]
+
+[[package]]
+name = "sqlmodel"
+version = "0.0.39"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "sqlalchemy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/68/ee/22a0559283c3cf6048678e787ed5d4959dcd00dedd8ba4567eeae684eeb1/sqlmodel-0.0.39.tar.gz", hash = "sha256:23d8e50a8d8ee936032ed79c55023a5d618dd6bc3c510bbf4909d1a7a605a570", size = 91057, upload-time = "2026-06-25T13:01:38.475Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cf/7d/b9813a582d4eb310be35e1fc7dfaae71207d7b62e9e53be314ebd251b53b/sqlmodel-0.0.39-py3-none-any.whl", hash = "sha256:90ebe92ce5cc11d7fff8dc7cb594790a102333c8fe7c14865254f6fc5c939795", size = 29680, upload-time = "2026-06-25T13:01:37.494Z" },
 ]
 
 [[package]]

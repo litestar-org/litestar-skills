@@ -10,7 +10,7 @@ Review the files changed in the current branch (or the files the user points at)
 
 Apply the project's existing stack to each criterion — flag a violation only when code uses a pattern from a *different* stack than the rest of the project, not when it uses a valid alternative.
 
-1. **DTO / serialization correctness** — if project is on `msgspec`, are DTOs Structs with `Meta(rename="camel")`? If on Pydantic, do models use `alias_generator=to_camel` + `ConfigDict(populate_by_name=True)`? Flag mixed stacks (msgspec Struct AND `BaseModel` in the same request path).
+1. **DTO / serialization correctness** — if project is on `msgspec`, are DTOs Structs with the class option `rename="camel"`? If on Pydantic, do models use `alias_generator=to_camel` + `ConfigDict(populate_by_name=True)`? Flag mixed stacks (msgspec Struct AND `BaseModel` in the same request path).
 2. **Guards** — auth enforced via Guards at Controller class level? No inline `if not request.user:` checks?
 3. **DI** — services injected via `Provide()` or Dishka `Inject[T]` per the project's DI choice? Nothing instantiated inside handlers?
 4. **Data access** — matches the project's stack? `SQLAlchemyAsyncRepositoryService` in an `advanced-alchemy` project, `SQLSpecAsyncService` + driver methods in a `sqlspec` project, or `async_sessionmaker` + hand-rolled statements in a raw-SA project. Flag cross-stack imports (e.g., an `advanced_alchemy` import inside a sqlspec-only repo).

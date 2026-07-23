@@ -2,11 +2,11 @@
 
 > Opinionated, first-party agent skills, plugins, subagents, slash commands, and MCP servers for the **Litestar** framework and its ecosystem — publishable to **every major AI agent and IDE** from a single repo.
 
-`litestar-skills` is a curated collection of agentic-development assets that teach AI coding agents how the Litestar team actually builds software. It covers the Litestar core plus first-party libraries (`sqlspec`, `advanced-alchemy`, `litestar-granian`, `litestar-saq`, `litestar-vite`, `litestar-mcp`, `litestar-email`, `litestar-htmx`, `litestar-asyncpg`, `litestar-oracledb`, and more).
+`litestar-skills` is a curated collection of agentic-development assets that teach AI coding agents how the Litestar team actually builds software. Dedicated package guidance covers Litestar, SQLSpec, Advanced Alchemy, msgspec, Polyfactory, pytest-databases, Litestar Autowire, Litestar Granian, Litestar SAQ, Litestar Queues, Litestar Vite, Litestar MCP, Litestar Email, and Litestar HTMX.
 
 ## Status
 
-**v0.6.0 — early access.** Multi-host plumbing, 29 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
+**v0.6.0 — early access.** Multi-host plumbing, 30 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
 
 **Breaking host identity note:** host-facing marketplace, plugin, extension, managed-config, and skill namespace IDs are `litestar`. Existing installs under `litestar-skills` should be removed and reinstalled; no alias is shipped. The Python package and repository remain `litestar-skills`.
 
@@ -268,7 +268,7 @@ Per-host uninstall:
 
 ## What's In This Repo
 
-29 skills, focused references, ~28,500+ lines of canonical content:
+30 skills, focused references, ~28,500+ lines of canonical content:
 
 | Category | Skills |
 | --- | --- |
@@ -279,7 +279,7 @@ Per-host uninstall:
 | Server | `litestar-granian` |
 | Tasks | `litestar-saq`, `litestar-queues` |
 | Frontend | `litestar-vite`, `litestar-inertia`, `litestar-htmx` |
-| Integrations | `litestar-mcp`, `litestar-email` |
+| Integrations | `litestar-mcp`, `litestar-email`, `litestar-autowire` |
 | Packaging | `litestar-build` |
 | Deployment | `litestar-deployment` |
 | Testing | `litestar-testing`, `pytest-databases`, `polyfactory` |

@@ -85,19 +85,19 @@ def create_saq_plugin_pg() -> SAQPlugin:
     )
 ```
 
-**Pick Branch A (SAQ + Redis) when:** Redis is already in-stack (cache, sessions, Channels), you need multi-queue fanout across many workers, want the SAQ web UI and dead-letter dashboards, or have high throughput (>1k jobs/s per queue).
+**Pick Branch A (SAQ + Redis) when:** Redis is already in-stack (cache, sessions, Channels), you need multi-queue fanout across many workers, want the SAQ web UI, or prioritize queue throughput.
 
-**Pick Branch B (SAQ + PostgreSQL) when:** PG-only deployment (Cloud SQL, AlloyDB, self-hosted single DB), avoiding Redis, durable SQL-backed SAQ storage, SQL-queryable job history, or moderate throughput (<1k jobs/s).
+**Pick Branch B (SAQ + PostgreSQL) when:** the deployment is PostgreSQL-only, avoiding Redis matters, or SQL inspection of retained SAQ jobs is useful.
 
-**Pick Branch C (sidecar worker) when:** you need same-transaction outbox semantics with business data, a project-owned job schema, frontend progress updates through channels, or multi-target execution routing (`local` / `cloudrun` / `immediate`) — and you're willing to own the `TaskService + Worker + WorkerSidecar + WorkerPlugin` stack. See below.
+**Pick Branch C (sidecar worker) when:** you need a project-owned transactional outbox with business data, a project-owned job schema, frontend progress updates through channels, or multi-target execution routing (`local` / `cloudrun` / `immediate`) — and you're willing to own the `TaskService + Worker + WorkerSidecar + WorkerPlugin` stack. See below.
 
 **Anti-pattern:** hard-coding `dsn=settings.redis.url` in a PG-only project just because Redis is the "default" example. Match the broker to the stack.
 
-`QueueConfig` accepts `redis://...`, `postgresql://...`, or `http://...` / `https://...` DSNs, or a supported `broker_instance`. Redis can use `litestar-saq[hiredis]`; PostgreSQL requires `litestar-saq[psycopg]`. Configure backend-specific knobs with `broker_options` and connection/client knobs with `broker_instance_options`.
+Each `QueueConfig` accepts exactly one connection source: a `redis://...` or `postgresql://...` `dsn`, or a supported `broker_instance`. Supplying both or neither raises `ImproperlyConfiguredException`. Redis can use `litestar-saq[hiredis]`; PostgreSQL requires `litestar-saq[psycopg]`. Configure queue behavior with `broker_options` and connection/client construction with `broker_instance_options`.
 
 ### Branch C — Sidecar Worker Pattern
 
-Some projects need a project-owned PostgreSQL worker stack. This wins when you want same-transaction outbox semantics, a project-owned job table, frontend progress updates through channels, and multi-target execution routing (`local` / `cloudrun` / `immediate`).
+Some projects need a project-owned PostgreSQL worker stack. This wins when you want to write business data and an outbox job in one project-owned transaction, own the job table, publish frontend progress through channels, or route execution across `local`, `cloudrun`, and `immediate` targets.
 
 In this pattern, `TaskService` owns the SQL state transitions, `Worker` owns claim/execution/retry flow, `WorkerSidecar` owns LISTEN/NOTIFY plus batched heartbeat/progress/channel publishing on a dedicated asyncpg connection, and `WorkerPlugin` only wires task discovery, schedule sync, DI, and optional in-process startup into Litestar.
 
@@ -155,7 +155,7 @@ async def send_email(ctx: dict, *, recipient: str, subject: str, body: str) -> N
     await email_service.send(recipient, subject, body)
 ```
 
-For long-running work, decorate the task with `monitored_job()` so heartbeats are sent while the task runs:
+For long-running work, set the job's `heartbeat` stale threshold and decorate the task with `monitored_job()` so the plugin signals its batched `HeartbeatManager` while the task runs. `heartbeat` is not an update interval: SAQ marks an active job stuck when its last touch is older than that threshold.
 
 ```python
 from litestar_saq import monitored_job
@@ -185,7 +185,7 @@ class NotificationController(Controller):
         task_queues: NamedDependency[TaskQueues],
     ) -> dict[str, str]:
         queue = task_queues.get("default")
-        await queue.enqueue(
+        job = await queue.enqueue(
             "send_email",
             recipient=data.email,
             subject=data.subject,
@@ -194,7 +194,7 @@ class NotificationController(Controller):
             retries=2,
             key=f"notify-{data.email}",
         )
-        return {"status": "queued"}
+        return {"status": "queued" if job is not None else "duplicate"}
 ```
 
 ### CLI
@@ -223,9 +223,11 @@ When `web_enabled=True`, the SAQ web UI is mounted under the Litestar app for qu
 | --- | --- | --- |
 | `timeout` | `10` | **Always set explicitly** — SAQ's default is usually too low or too high for real jobs |
 | `retries` | `1` | Retry count on exception |
+| `retry_delay` | `0.0` | Seconds to wait before retrying |
+| `retry_backoff` | `False` | `True` for exponential backoff with jitter, or a numeric maximum delay |
 | `ttl` | `600` | Seconds to retain result after completion |
-| `key` | `None` | Deduplication key — skip if already queued |
-| `heartbeat` | `0` | Heartbeat interval for long-running jobs |
+| `key` | generated | Stable uniqueness key; enqueue returns `None` while that key already exists |
+| `heartbeat` | `0` | Maximum seconds an active job may go without a touch; `0` disables stale detection |
 | `scheduled` | `0` | Unix timestamp to delay start |
 
 <workflow>
@@ -242,11 +244,11 @@ pip install "litestar-saq[otel]"     # OpenTelemetry spans
 
 ### Step 2: Define Queues
 
-Build `QueueConfig` instances for each logical queue (`"default"`, `"emails"`, `"reports"`). Put the broker `dsn` or `broker_instance` on each `QueueConfig`. Reference task functions by dotted path or callable; the plugin imports dotted paths at startup.
+Build `QueueConfig` instances for each logical queue (`"default"`, `"emails"`, `"reports"`). Put exactly one of `dsn` or `broker_instance` on each `QueueConfig`. Reference task functions by dotted path or callable; the plugin imports dotted paths at startup.
 
 ### Step 3: Configure Plugin
 
-Wrap `QueueConfig`s in `SAQConfig`. Pick Redis (`redis://...`) when Redis is already in the stack; pick PostgreSQL (`postgresql://...`) when the project is PG-only. HTTP queues are supported for delegating to a remote SAQ service. Set `use_server_lifespan=True` when the web process should own worker child processes. Toggle `web_enabled` / `web_guards` for the introspection UI and `enable_otel` for tracing.
+Wrap `QueueConfig`s in `SAQConfig`. Pick Redis (`redis://...`) when Redis is already in the stack; pick PostgreSQL (`postgresql://...`) when the project is PG-only. Set `use_server_lifespan=True` when the web process should own worker child processes. Toggle `web_enabled` / `web_guards` for the introspection UI and `enable_otel` for tracing.
 
 ### Step 4: Define Tasks
 
@@ -258,7 +260,7 @@ Add `CronJob` entries to `QueueConfig.scheduled_tasks` for recurring work. Alway
 
 ### Step 6: Enqueue from Handlers
 
-Inject `TaskQueues` into route handlers. Use `task_queues.get("name")` then `await queue.enqueue("task_name", ...)`. Use `key=` for deduplication.
+Inject `TaskQueues` into route handlers. Use `task_queues.get("name")` then `await queue.enqueue("task_name", ...)`. The result is the new `Job`, or `None` when its unique `key` already exists; handle both outcomes. Use `key=` for deduplication.
 
 ### Step 7: Publish to Channels (optional)
 
@@ -268,6 +270,7 @@ For real-time updates after a job completes, publish to Litestar Channels from i
 
 For dev: `litestar run` can start worker child processes when `use_server_lifespan=True`.
 For production: run `litestar workers run --workers N` as a separate service/process from `litestar run`. There is no `--process` flag in litestar-saq 0.8.0.
+For portable multi-process workers, configure each queue with `dsn`. Under `spawn` and `forkserver`, litestar-saq removes cached live broker objects from the child configuration and rebuilds them from that DSN.
 
 </workflow>
 
@@ -277,16 +280,17 @@ For production: run `litestar workers run --workers N` as a separate service/pro
 
 - **Use `litestar-saq`, not raw SAQ, in Litestar apps** — the plugin handles DI, lifespan, CLI, and the web UI. Raw SAQ misses all of that.
 - **Always set `timeout`** on tasks and CronJobs — SAQ defaults to 10s, which is rarely the correct production value.
-- **Use `monitored_job()` or `heartbeat`** for jobs that run longer than ~30s, otherwise SAQ may mark them stuck and re-queue.
+- **Pair `heartbeat` with `monitored_job()` for long-running jobs** — `heartbeat` defines when a job is stale; it does not emit updates. Keep the stale threshold longer than the decorator signal interval and the heartbeat manager's flush cadence.
 - **Inject `TaskQueues` via DI** — don't import a global queue inside handlers. The plugin owns the queue lifecycle.
 - **Use `CronJob` for scheduled work** — not external cron. CronJobs participate in retries, timeouts, and observability.
-- **Use `key=` for deduplication** — same logical job (per-user sync, per-resource refresh) should not stack.
+- **Handle `queue.enqueue()` returning `None`** — an existing unique key prevents insertion, so do not report every enqueue attempt as newly queued.
+- **Use `key=` for deduplication** — same logical job (per-user sync, per-resource refresh) should not stack. The key remains occupied until the stored job expires or is removed, including after terminal completion.
 - **`use_server_lifespan=True`** for dev and small-to-mid apps that should start worker child processes with the web server. For high-throughput production, run `litestar workers run --workers N` as a separate service.
-- **Use `dsn` for multi-process workers** — Python 3.14 forkserver/spawn support rebuilds brokers in child processes from `QueueConfig.dsn`; `broker_instance`-only queues cannot be pickled into child workers.
+- **Use `dsn` for portable multi-process workers** — forkserver/spawn workers rebuild brokers from `QueueConfig.dsn`. A `broker_instance`-only queue works in the parent and under `fork`, but spawn preparation rejects it.
 - **Set graceful shutdown controls for long jobs** — use `shutdown_grace_period_s` and, when needed, `cancellation_hard_deadline_s` on `QueueConfig`.
 - **Publish to Litestar Channels from tasks** when the job result must update connected websocket clients. See `../litestar-realtime/references/websockets.md`.
 - **Pull shared resources from `ctx` populated by `QueueConfig` hooks**, not module-level globals — keeps tests deterministic and supports per-worker init.
-- **Reach for the sidecar worker pattern when** you need same-transaction outbox semantics, a project-owned job schema, batched heartbeats for many running jobs, frontend updates through channels, or execution-target routing across Cloud Run / local. Keep the stack explicit: `TaskService` for fenced SQL transitions, `Worker` for execution, `WorkerSidecar` for wakeups/batched heartbeats/channel publishing, and `WorkerPlugin` for Litestar lifecycle wiring. For normal PG-backed queueing, SAQ+PG is the simpler default. See [references/postgres-native-sidecar-worker.md](references/postgres-native-sidecar-worker.md).
+- **Reach for the sidecar worker pattern when** you need a project-owned transactional outbox, job schema, batched heartbeats for many running jobs, frontend updates through channels, or execution-target routing across Cloud Run / local. Keep the stack explicit: `TaskService` for fenced SQL transitions, `Worker` for execution, `WorkerSidecar` for wakeups/batched heartbeats/channel publishing, and `WorkerPlugin` for Litestar lifecycle wiring. For normal PG-backed queueing, SAQ+PG is the simpler default. See [references/postgres-native-sidecar-worker.md](references/postgres-native-sidecar-worker.md).
 
 </guardrails>
 
@@ -299,15 +303,16 @@ Before delivering Litestar + SAQ code, verify:
 - [ ] `SAQPlugin` is in `app.plugins`
 - [ ] `SAQConfig.use_server_lifespan` is set explicitly
 - [ ] `SAQConfig.worker_processes` or CLI `--workers` is set intentionally
-- [ ] Each `QueueConfig` has a broker `dsn` or `broker_instance`
+- [ ] Each `QueueConfig` has exactly one of `dsn` or `broker_instance`
 - [ ] Multi-process worker configs use `dsn`, not `broker_instance` only
 - [ ] Each `QueueConfig` lists tasks by dotted path; the imports resolve
 - [ ] All tasks have `ctx: dict` as the first positional arg, keyword-only params after `*`
 - [ ] Every task has `timeout` set
-- [ ] Long-running jobs (>30s) have `heartbeat` set
+- [ ] Long-running jobs have a `heartbeat` stale threshold longer than their update cadence
 - [ ] Long-running task functions use `monitored_job()` when they need automatic heartbeats
 - [ ] CronJobs have `timeout` and a sensible `cron` expression
 - [ ] Handlers enqueue via injected `TaskQueues`, not module globals
+- [ ] Handlers account for `queue.enqueue()` returning `None` for an existing unique key
 - [ ] Job dedup uses `key=` where applicable
 - [ ] Production deploys run workers as a separate service (`litestar workers run --workers N`)
 
@@ -403,7 +408,7 @@ class NotificationController(Controller):
         task_queues: NamedDependency[TaskQueues],
     ) -> dict[str, str]:
         queue = task_queues.get("default")
-        await queue.enqueue(
+        job = await queue.enqueue(
             "send_email",
             recipient=data.email,
             subject=data.subject,
@@ -412,7 +417,7 @@ class NotificationController(Controller):
             retries=2,
             key=f"notify-{data.email}",
         )
-        return {"status": "queued"}
+        return {"status": "queued" if job is not None else "duplicate"}
 ```
 
 ```python
@@ -444,7 +449,7 @@ litestar --app app:app workers run --workers 4
 ## References Index
 
 - **[Advanced Patterns](references/patterns.md)** — Heartbeat tuning, dead-letter handling, job chaining, queue priorities, worker lifecycle hooks, Postgres backend.
-- **[Sidecar Worker Pattern](references/postgres-native-sidecar-worker.md)** — TaskService + Worker + WorkerSidecar + WorkerPlugin pattern for same-transaction outbox semantics, project-owned job schema, sidecar batched heartbeats/wakeups, channel publish-back to the frontend, `@task` decorator + ScheduleConfig cron registry, and execution_target routing (local / cloudrun / immediate).
+- **[Sidecar Worker Pattern](references/postgres-native-sidecar-worker.md)** — TaskService + Worker + WorkerSidecar + WorkerPlugin pattern for a project-owned transactional outbox, job schema, sidecar batched heartbeats/wakeups, channel publish-back to the frontend, `@task` decorator + ScheduleConfig cron registry, and execution_target routing (local / cloudrun / immediate).
 
 ## Cross-References
 
@@ -453,9 +458,9 @@ litestar --app app:app workers run --workers 4
 
 ## Official References
 
-- <https://github.com/litestar-org/litestar-saq>
-- <https://github.com/tobymao/saq>
-- <https://saq-py.readthedocs.io/en/latest/>
+- <https://github.com/litestar-org/litestar-saq/tree/v0.8.0>
+- <https://pypi.org/project/litestar-saq/0.8.0/>
+- <https://github.com/tobymao/saq/tree/v0.26.4>
 
 ## Shared Styleguide Baseline
 

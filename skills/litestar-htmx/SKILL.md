@@ -1,282 +1,227 @@
 ---
 name: litestar-htmx
-description: "Auto-activate for litestar.plugins.htmx, litestar_htmx, HTMXPlugin, HTMXRequest, HTMXTemplate, TriggerEvent, hx-* attributes, or partial HTML. Not for full SPA routing."
+description: "Auto-activate for litestar_htmx, HTMXPlugin, HTMXConfig, HTMXRequest, HTMXTemplate, HXLocation, ReplaceUrl, TriggerEvent, HX-* headers, or Litestar partial HTML. Not for generic browser-side HTMX or Litestar Vite JSON templating — those are client concerns."
 ---
 
 # litestar-htmx
 
-Litestar has first-party HTMX support in `litestar.plugins.htmx`. It exposes `HTMXPlugin`, `HTMXRequest` (request-side helpers), `HTMXTemplate` (template response with HTMX headers), and HTMX-specific response objects (`TriggerEvent`, `Reswap`, `Retarget`, `PushUrl`, `HXLocation`, `ClientRedirect`, `ClientRefresh`).
-
-This skill is **Litestar-specific**. For generic HTMX `hx-*` attributes and patterns that aren't Litestar-bound, refer directly to <https://htmx.org/docs/>.
+`litestar-htmx` is the standalone Litestar integration for HTMX. Version 0.5.0
+ships the `litestar_htmx` import package with request helpers, an optional
+application plugin, template responses, and typed HTMX response-header helpers.
 
 ## Code Style Rules
 
-- PEP 604 unions: `T | None`, never `Optional[T]`
-- Consumer Litestar app modules MAY use `from __future__ import annotations`
-- Async all I/O — handlers are `async def`
-- Return partial HTML, not full pages, from HTMX-targeted endpoints
-- Use Jinja2 (or Mako) templates for partials; do not string-concat HTML
+- Import the integration from `litestar_htmx`, never
+  `litestar.plugins.htmx`; Litestar no longer owns this package's import
+  surface.
+- Use `HTMXRequest` when handlers inspect HTMX request headers.
+- Return template fragments from HTMX endpoints; keep full-page routes and
+  fragment routes distinct.
+- Use the response classes for `HX-*` headers; do not assemble those headers
+  by hand.
+- Keep browser-side HTMX extensions separate from this server package.
 
 ## Quick Reference
 
-### HTMXRequest
-
-`HTMXRequest` is a `Request` subclass with HTMX-aware properties:
-
-```python
-from litestar import get
-from litestar.plugins.htmx import HTMXRequest
-
-@get("/items")
-async def list_items(request: HTMXRequest) -> ...:
-    if request.htmx:                  # True if HX-Request header present
-        ...                           # return partial
-    else:
-        ...                           # full page
-
-    # Other helpers
-    request.htmx.target               # HX-Target header (str | None)
-    request.htmx.trigger              # HX-Trigger header
-    request.htmx.trigger_name         # HX-Trigger-Name header
-    request.htmx.boosted              # HX-Boosted (bool)
-    request.htmx.current_url          # HX-Current-URL
-    request.htmx.history_restore_request
-    request.htmx.prompt               # HX-Prompt (user input from hx-prompt)
-```
-
-Wire it into the app:
+### Configure the plugin
 
 ```python
 from litestar import Litestar
-from litestar.plugins.htmx import HTMXPlugin
+from litestar_htmx import HTMXPlugin
 
-app = Litestar(route_handlers=[...], plugins=[HTMXPlugin()])
+app = Litestar(
+    route_handlers=[...],
+    plugins=[HTMXPlugin()],
+)
 ```
 
-### HTMXTemplate + Partial HTML
+`HTMXPlugin()` is the convenience path: it registers the package's request and
+response types. Its default `HTMXConfig(set_request_class_globally=True)` sets
+`HTMXRequest` only when the application does not already have a request class.
 
-Return Jinja partials from handlers:
+Preserve an existing custom request class by extending `HTMXRequest`:
+
+```python
+from litestar_htmx import HTMXRequest
+
+
+class ApplicationRequest(HTMXRequest):
+    """Application request with HTMX helpers."""
+```
+
+If the application only needs response helpers, use
+`HTMXConfig(set_request_class_globally=False)`. To inspect `request.htmx`,
+configure `HTMXRequest` (or a subclass) as the application request class. The
+plugin never replaces a request class already present in `AppConfig`.
+
+The plugin itself is optional. Applications can instead set
+`request_class=HTMXRequest` directly and return the response subclasses without
+registering `HTMXPlugin`.
+
+### Inspect request headers
+
+`request.htmx` is always an `HTMXDetails` object. Its truth value is `True` only
+when `HX-Request` is exactly `"true"`.
 
 ```python
 from litestar import get
 from litestar.response import Template
+from litestar_htmx import HTMXRequest
+
 
 @get("/items")
-async def list_items() -> Template:
-    items = await item_service.get_many()
-    return Template(template_name="partials/item_list.html", context={"items": items})
+async def list_items(request: HTMXRequest) -> Template:
+    template_name = "partials/item-list.html" if request.htmx else "pages/items.html"
+    return Template(template_name=template_name, context={"items": []})
 ```
 
-For HTMX-targeted endpoints, the template is a fragment (no `<html>` / `<body>`), e.g.:
+Available request helpers:
 
-```html
-<!-- partials/item_list.html -->
-<ul id="item-list">
-  {% for item in items %}
-    <li>{{ item.name }}</li>
-  {% endfor %}
-</ul>
-```
+| Property | Source | Result |
+| --- | --- | --- |
+| `bool(request.htmx)` | `HX-Request` | Whether this is an HTMX request |
+| `request.htmx.boosted` | `HX-Boosted` | `bool` |
+| `request.htmx.current_url` | `HX-Current-URL` | `str \| None` |
+| `request.htmx.current_url_abs_path` | `HX-Current-URL` | Same-origin path, query, and fragment, or `None` |
+| `request.htmx.history_restore_request` | `HX-History-Restore-Request` | `bool` |
+| `request.htmx.prompt` | `HX-Prompt` | `str \| None` |
+| `request.htmx.target` | `HX-Target` | `str \| None` |
+| `request.htmx.trigger` | `HX-Trigger` | `str \| None` |
+| `request.htmx.trigger_name` | `HX-Trigger-Name` | `str \| None` |
+| `request.htmx.triggering_event` | `Triggering-Event` | Decoded JSON value, or `None` |
 
-### Server-driven HTMX Responses
+`triggering_event` is supplied by HTMX's `event-header` extension. Malformed
+JSON resolves to `None`. Headers accompanied by
+`<Header>-URI-AutoEncoded: true` are URL-decoded before use.
 
-| Response Object | Purpose |
-| --- | --- |
-| `TriggerEvent(name, after="receive", params={...})` | Sets `HX-Trigger` / `HX-Trigger-After-Swap` / `HX-Trigger-After-Settle` |
-| `ClientRedirect(redirect_to=...)` | Sets `HX-Redirect` — client-side hard redirect |
-| `ClientRefresh()` | Sets `HX-Refresh: true` |
-| `PushUrl(push_url=...)` | Sets `HX-Push-Url` — adds entry to browser history |
-| `Reswap(method="outerHTML")` | Sets `HX-Reswap` — overrides client `hx-swap` |
-| `Retarget(target="#new")` | Sets `HX-Retarget` — overrides client `hx-target` |
-| `HXLocation(redirect_to=...)` | Sets `HX-Location` — client-side soft navigation |
-| `HXStopPolling()` | Returns 286 — HTMX stops polling on this element |
+### Return template fragments with HTMX headers
 
-Example: trigger a custom event after a successful save:
+`HTMXTemplate` extends Litestar's `Template`. Annotate handlers with
+`Template`, then pass normal `Template` arguments plus HTMX-specific options:
 
 ```python
-from litestar.plugins.htmx import TriggerEvent
+from litestar import get
+from litestar.response import Template
+from litestar_htmx import HTMXTemplate
 
-@post("/items")
-async def create_item(data: ItemCreate) -> TriggerEvent:
-    item = await item_service.create(data)
-    return TriggerEvent(
-        name="itemCreated",
-        params={"id": item.id, "name": item.name},
+
+@get("/items/fragment")
+async def item_list() -> Template:
+    return HTMXTemplate(
+        template_name="partials/item-list.html",
+        context={"items": []},
+        push_url=False,
+        re_swap="outerHTML",
+        re_target="#item-list",
+        trigger_event="itemsLoaded",
+        params={"count": 0},
         after="receive",
     )
 ```
 
-### OOB (Out-of-Band) Swaps
+`trigger_event`, `params`, and `after` form one event declaration. When
+triggering an event, set `after` to `"receive"`, `"settle"`, or `"swap"`.
 
-For a single response that updates multiple regions, render multiple fragments and use `hx-swap-oob`:
+### Response helper signatures
 
-```html
-<!-- main response -->
-<div id="form-result">Saved!</div>
+All helpers are exported from `litestar_htmx` and
+`litestar_htmx.response`.
 
-<!-- OOB updates -->
-<div id="notification" hx-swap-oob="true">New notification!</div>
-<div id="counter" hx-swap-oob="innerHTML">42</div>
+| Helper | Constructor | Behavior |
+| --- | --- | --- |
+| `HXStopPolling` | `HXStopPolling()` | Returns status `286` |
+| `ClientRedirect` | `ClientRedirect(redirect_to)` | Sets `HX-Redirect`; no `Location` header |
+| `ClientRefresh` | `ClientRefresh()` | Sets `HX-Refresh: true` |
+| `PushUrl` | `PushUrl(content, push_url, **response_kwargs)` | Sets `HX-Push-Url` |
+| `ReplaceUrl` | `ReplaceUrl(content, replace_url, **response_kwargs)` | Sets `HX-Replace-Url` |
+| `Reswap` | `Reswap(content, method, **response_kwargs)` | Sets `HX-Reswap` |
+| `Retarget` | `Retarget(content, target, **response_kwargs)` | Sets `HX-Retarget` |
+| `TriggerEvent` | `TriggerEvent(content, name, after, params=None, **response_kwargs)` | Sets the selected `HX-Trigger*` header |
+| `HXLocation` | `HXLocation(redirect_to, source=None, event=None, target=None, select=None, swap=None, hx_headers=None, values=None, **response_kwargs)` | Sets JSON in `HX-Location` |
+
+`push_url=False` and `replace_url=False` emit `"false"` to prevent the
+corresponding history update.
+
+### Soft navigation with `HXLocation`
+
+Use `HXLocation` for an HTMX navigation request without a full-page reload.
+`select` chooses a fragment from the fetched response before it is swapped:
+
+```python
+from litestar import post
+from litestar_htmx import HXLocation
+
+
+@post("/items")
+async def create_item() -> HXLocation:
+    return HXLocation(
+        redirect_to="/items",
+        source="#create-item",
+        event="submit",
+        target="#content",
+        select="#item-list",
+        swap="innerHTML",
+        hx_headers={"X-View": "compact"},
+        values={"created": "true"},
+    )
 ```
 
-Return the combined HTML as a `Template` or `HTMXTemplate`.
+The response uses status `200`, carries `HX-Location`, and removes the ordinary
+`Location` header.
 
-### CSRF
+### Trigger an event while returning content
 
-Use Litestar's CSRF middleware; expose the token to templates as a `<meta>` tag and forward it via HTMX:
+`TriggerEvent` requires the response `content`, event `name`, and `after`
+phase:
 
-```html
-<meta name="csrf-token" content="{{ request.scope['csrf_token'] }}">
-<script>
-  document.body.addEventListener('htmx:configRequest', (e) => {
-    e.detail.headers['X-CSRF-Token'] =
-      document.querySelector('meta[name="csrf-token"]').content;
-  });
-</script>
+```python
+from litestar import post
+from litestar_htmx import TriggerEvent
+
+
+@post("/items")
+async def create_item() -> TriggerEvent[str]:
+    return TriggerEvent(
+        content="<li>Saved</li>",
+        name="itemCreated",
+        after="swap",
+        params={"id": 42},
+        media_type="text/html",
+    )
 ```
 
-### Pairing with `litestar-vite` (template mode)
+Prefer `HTMXTemplate` when the content is HTML assembled from application data.
 
-For HTMX projects with bundled JS/CSS and HMR, use `litestar-vite` in `template` mode. Vite bundles HTMX + extensions + CSS; Litestar returns partials. See `../litestar-vite/SKILL.md` and [`../litestar-vite/references/modes.md`](../litestar-vite/references/modes.md#htmx--template-mode).
+### Litestar Vite is a separate client layer
 
-```html
-<!-- base.html.j2 -->
-<!DOCTYPE html>
-<html>
-<head>
-  {{ vite_hmr() }}
-  {{ vite('resources/main.js') }}
-</head>
-<body hx-ext="litestar">          <!-- enables the Litestar client extension -->
-  {% block content %}{% endblock %}
-</body>
-</html>
+The standalone package owns Python request parsing and response headers:
+
+```python
+from litestar_htmx import HTMXPlugin, HTMXRequest, HTMXTemplate
 ```
 
-### The `hx-ext="litestar"` client-side templating extension
-
-Activating `hx-ext="litestar"` (on `<body>` or any enclosing element) unlocks **client-side JSON rendering** via `<template>` tags. When an HTMX swap uses `hx-swap="json"`, the response body is parsed as JSON and matched against `ls-*` attributes on descendant `<template>` tags.
-
-This lets you render JSON API responses as HTML **without** server-side templates — complementary to the partial-HTML pattern.
-
-| Attribute | Purpose |
-| --- | --- |
-| `ls-for="item in $data"` | Iterate over the JSON response array |
-| `ls-key="item.id"` | Stable key for list reconciliation |
-| `ls-if="condition"` | Render only when truthy |
-| `ls-else` | Fallback block for `ls-if` |
-| `${expression}` | Interpolate JS expression into text content |
-| `:attr="expression"` | Dynamic attribute binding |
-| `$data` | The raw JSON response body |
-
-Array rendering:
-
-```html
-<button hx-get="/api/books" hx-target="#books" hx-swap="json">Load</button>
-
-<div id="books">
-  <template ls-for="book in $data" ls-key="book.id">
-    <article :id="`book-${book.id}`">
-      <h3>${book.title}</h3>
-      <p>${book.author} • ${book.year}</p>
-    </article>
-  </template>
-</div>
-```
-
-Single-item rendering (properties on `$data` accessible directly via prototype inheritance):
-
-```html
-<div hx-get="/api/books/1" hx-target="#book" hx-swap="json">
-  <template ls-if="id">
-    <h3>${title}</h3>
-    <p>${author} • ${year}</p>
-    <div>
-      <template ls-for="tag in tags">
-        <span>${tag}</span>
-      </template>
-    </div>
-  </template>
-  <template ls-else>
-    <p>Click to load…</p>
-  </template>
-</div>
-```
-
-**When to use this vs server-side partials:**
-
-| Case | Approach |
-| --- | --- |
-| Data shape simple, rendering trivial, already have JSON endpoint | Client `ls-*` templating (no `HTMXTemplate`) |
-| Complex conditionals, auth-sensitive fields, heavy formatting | Server partials via `HTMXTemplate` |
-| Same endpoint serving both JSON (for JS clients) and HTML (for HTMX clients) | Branch on `request.htmx`; return JSON always and let `ls-*` render it for HTMX consumers |
-
-Both coexist in one page. The canonical `jinja-htmx` example in `litestar-vite/examples/jinja-htmx/` demonstrates both side by side.
-
-### Common HTMX Attributes (quick refresher)
-
-```html
-<!-- Trigger types -->
-<button hx-get="/items" hx-target="#item-list">Load</button>
-<button hx-post="/items" hx-vals='{"name":"x"}'>Create</button>
-<button hx-delete="/items/1" hx-confirm="Are you sure?">Delete</button>
-
-<!-- Triggers -->
-<input hx-get="/search" hx-trigger="keyup changed delay:500ms">
-<div hx-get="/updates" hx-trigger="every 5s">Polling</div>
-
-<!-- Swaps -->
-<div hx-get="/x" hx-swap="outerHTML">Replace element</div>
-<div hx-get="/x" hx-swap="beforeend">Append</div>
-
-<!-- Boost -->
-<a hx-boost="true" href="/page">Boost</a>
-<a hx-get="/page" hx-push-url="true">Navigate with history</a>
-```
-
-For full HTMX attribute reference, see <https://htmx.org/reference/>.
+Litestar Vite's `hx-ext="litestar"` JSON templating and CSRF integration come
+from the separate `litestar-vite-plugin/helpers` JavaScript export. They are not
+installed, registered, or enabled by `HTMXPlugin()`. Use them only when the
+project already uses Litestar Vite and needs client-side JSON swaps. See
+[Litestar Vite Integration](references/litestar_vite.md).
 
 <workflow>
 
 ## Workflow
 
-### Step 1: Wire HTMXRequest
-
-Pass `request_class=HTMXRequest` to `Litestar(...)`. All handlers can now type-annotate `request: HTMXRequest`.
-
-### Step 2: Decide Page vs Partial Boundaries
-
-For each route, decide:
-
-- **Page route** — returns full layout (one `Template` rendering `base.html`)
-- **Partial route** — returns a fragment used by `hx-get`/`hx-post`
-
-Cluster partial routes under a sub-path like `/htmx/...` or differentiate by `request.htmx`.
-
-### Step 3: Templates for Partials
-
-Build Jinja2 partials as fragments — no `<html>`, no `<body>`. Mount your full-page templates separately.
-
-### Step 4: Server-driven Behavior
-
-Use `TriggerEvent`, `Refresh`, `Reswap`, `Retarget` to push behavior from the server. Avoid putting business logic in the client.
-
-### Step 5: Pair with `litestar-vite` (optional)
-
-If the app needs bundled CSS/JS or HMR for non-HTMX assets, add `litestar-vite` in `template` or `htmx` mode. See `../litestar-vite/SKILL.md`.
-
-### Step 6: CSRF + Auth
-
-Apply Litestar Guards / middleware as usual. Include CSRF token via `htmx:configRequest`.
-
-### Step 7: Test
-
-Use `litestar.testing.AsyncTestClient` with the `HX-Request: true` header to exercise partial responses. See `../litestar-testing/SKILL.md`.
-
-```python
-resp = await client.get("/items", headers={"HX-Request": "true", "HX-Target": "#item-list"})
-assert "<ul" in resp.text
-```
+1. Check the project's installed `litestar-htmx` version and existing request
+   class.
+2. Register `HTMXPlugin()` or set `request_class=HTMXRequest` directly. Extend
+   `HTMXRequest` when the application needs custom request behavior.
+3. Separate full-page endpoints from fragment endpoints. Branch on
+   `request.htmx` only when one URL intentionally supports both.
+4. Render fragments with `Template` or `HTMXTemplate`.
+5. Select the narrow response helper matching the required HTMX header.
+6. Configure CSRF protection for every state-changing HTMX request.
+7. Test the response body, status, and exact `HX-*` header.
+8. Add Litestar Vite's client extension only for bundled assets, CSRF header
+   injection, or JSON templating.
 
 </workflow>
 
@@ -284,31 +229,40 @@ assert "<ul" in resp.text
 
 ## Guardrails
 
-- **Use `litestar.plugins.htmx`**, not generic ASGI patterns — the plugin integrates with Litestar's lifecycle, OpenAPI, and DI. Treat `litestar_htmx` imports as legacy project signals.
-- **Register `HTMXPlugin()`** at the app level — handlers shouldn't construct `HTMXRequest` ad-hoc.
-- **Return partial HTML for HTMX-targeted routes** — never return a full layout to an `hx-get` target.
-- **Use `Template` (Litestar response) — never string-concat HTML** — XSS risk and template caching benefits.
-- **CSRF protection applies to HTMX too** — non-GET HTMX requests must include the CSRF token (header preferred).
-- **Use server-driven response objects** (`TriggerEvent`, `Reswap`, `Retarget`) rather than ad-hoc JS — keeps logic on the server.
-- **Pair with `litestar-vite` only when you need bundled assets / HMR** — pure HTMX with a CDN htmx.min.js works fine without Vite.
-- **Don't return JSON to HTMX endpoints** — HTMX expects HTML; JSON breaks `hx-swap` semantics.
-- **Test with `HX-Request: true`** to exercise the HTMX path.
+- **Use `litestar_htmx`, never `litestar.plugins.htmx`.** The 0.5.0 package is a
+  standalone distribution with its own public import root.
+- **Pass every required response-helper argument.** `TriggerEvent` requires
+  `content`, `name`, and `after`; `PushUrl`, `ReplaceUrl`, `Reswap`, and
+  `Retarget` also require content.
+- **Use `select=` on `HXLocation` to choose returned content.** Do not confuse
+  it with `target=`, which chooses the receiving element.
+- **Do not assume `HTMXPlugin` overrides an existing request class.** It
+  preserves a non-null `AppConfig.request_class`.
+- **Do not treat `request.htmx` as an optional object.** Test its truth value to
+  identify HTMX requests.
+- **Do not send a normal redirect for `HXLocation` or `ClientRedirect`.** These
+  helpers return `200` with HTMX response headers.
+- **Do not attribute `hx-ext="litestar"` to `litestar-htmx`.** That browser
+  extension ships with Litestar Vite's npm package.
+- **Do not return unsanitized, concatenated HTML.** Render templates so escaping
+  and template caching remain intact.
 
 </guardrails>
 
 <validation>
 
-### Validation Checkpoint
+## Validation Checkpoint
 
-Before delivering Litestar + HTMX code, verify:
-
-- [ ] `HTMXPlugin()` is registered on the `Litestar(...)` constructor
-- [ ] HTMX-targeted routes return Jinja2 fragments (no `<html>` / `<body>`)
-- [ ] `Template` response object used (not raw HTML strings)
-- [ ] CSRF middleware enabled; token forwarded via `htmx:configRequest`
-- [ ] Server-driven behavior uses `TriggerEvent` / `Reswap` / `Retarget` (not ad-hoc JS)
-- [ ] Tests assert against partial HTML with `HX-Request: true` header
-- [ ] If using `litestar-vite`, mode is `template`
+- [ ] Imports use `litestar_htmx`, not `litestar.plugins.htmx`
+- [ ] `HTMXPlugin()` or `request_class=HTMXRequest` wires request helpers
+- [ ] A custom global request class extends `HTMXRequest`
+- [ ] Full pages and HTMX fragments have explicit boundaries
+- [ ] `TriggerEvent` includes `content`, `name`, and a valid `after` value
+- [ ] `ReplaceUrl` uses `replace_url=`, not `push_url=`
+- [ ] `HXLocation.select` and `HXLocation.target` serve distinct purposes
+- [ ] State-changing HTMX requests include the application's CSRF token
+- [ ] Tests assert the exact status, body, and `HX-*` response header
+- [ ] Litestar Vite client-extension guidance is identified as a separate layer
 
 </validation>
 
@@ -316,103 +270,71 @@ Before delivering Litestar + HTMX code, verify:
 
 ## Example
 
-**Task:** Items page with an HTMX-driven create form, OOB notification, and server-triggered refresh event.
+Return a fragment, retarget the swap, prevent a history update, and verify the
+HTMX response:
 
 ```python
-# app/domain/items/controllers.py
-from litestar import Controller, get, post
+from litestar import Controller, get
 from litestar.response import Template
-from litestar.plugins.htmx import HTMXRequest, TriggerEvent
+from litestar_htmx import HTMXRequest, HTMXTemplate
 
 
 class ItemController(Controller):
     path = "/items"
 
     @get("/")
-    async def index(self) -> Template:
-        items = await item_service.get_many()
-        return Template("pages/items.html", context={"items": items})
-
-    @get("/list")
-    async def list_partial(self, request: HTMXRequest) -> Template:
-        """Partial used by hx-get on initial load and after create."""
-        items = await item_service.get_many()
-        return Template("partials/item_list.html", context={"items": items})
-
-    @post("/")
-    async def create(self, data: ItemCreate) -> TriggerEvent:
-        item = await item_service.create(data)
-        return TriggerEvent(
-            name="itemCreated",
-            params={"id": item.id, "name": item.name},
-            after="receive",
-        )
-```
-
-```html
-<!-- pages/items.html -->
-{% extends "base.html" %}
-
-{% block content %}
-  <form
-    hx-post="/items/"
-    hx-target="#item-list"
-    hx-swap="outerHTML"
-    hx-on::after-request="this.reset()"
-  >
-    <input name="name" required>
-    <button type="submit">Add</button>
-  </form>
-
-  <div hx-get="/items/list" hx-trigger="itemCreated from:body" hx-swap="outerHTML">
-    {% include "partials/item_list.html" %}
-  </div>
-{% endblock %}
-```
-
-```html
-<!-- partials/item_list.html -->
-<ul id="item-list">
-  {% for item in items %}
-    <li>{{ item.name }}</li>
-  {% endfor %}
-</ul>
+    async def index(self, request: HTMXRequest) -> Template:
+        items = [{"id": 1, "name": "Widget"}]
+        if request.htmx:
+            return HTMXTemplate(
+                template_name="partials/item-list.html",
+                context={"items": items},
+                re_target="#item-list",
+                re_swap="outerHTML",
+                push_url=False,
+            )
+        return Template(template_name="pages/items.html", context={"items": items})
 ```
 
 ```python
-# tests/test_items.py
-async def test_create_item_triggers_event(client):
-    resp = await client.post(
+async def test_htmx_item_list(client) -> None:
+    response = await client.get(
         "/items/",
-        json={"name": "Widget"},
-        headers={"HX-Request": "true"},
+        headers={"HX-Request": "true", "HX-Target": "item-list"},
     )
-    assert resp.status_code == 201
-    assert "itemCreated" in resp.headers["HX-Trigger"]
+
+    assert response.status_code == 200
+    assert response.headers["HX-Retarget"] == "#item-list"
+    assert response.headers["HX-Reswap"] == "outerHTML"
+    assert response.headers["HX-Push-Url"] == "false"
+    assert "<html" not in response.text
 ```
 
 </example>
 
----
-
 ## References Index
 
-- **[litestar-vite Integration](references/litestar_vite.md)** — Bundling HTMX + custom JS/CSS with `litestar-vite` in template mode.
-
-## Cross-References
-
-- **[litestar](../litestar/SKILL.md)** — Litestar fundamentals (Templates, Controllers, Guards, middleware).
-- **[litestar-vite](../litestar-vite/SKILL.md)** — HTMX + Jinja with Vite-bundled assets.
+- **[Litestar Vite Integration](references/litestar_vite.md)** — Keep the
+  standalone Python package distinct from Litestar Vite's browser extension.
+- **[Litestar](../litestar/SKILL.md)** — Application setup, templates, and
+  lifecycle fundamentals.
+- **[Litestar Vite](../litestar-vite/SKILL.md)** — Asset bundling, template
+  mode, HMR, and the client helper package.
+- **[Litestar Testing](../litestar-testing/SKILL.md)** — Async clients and
+  application fixtures.
 
 ## Official References
 
-- <https://docs.litestar.dev/2/usage/htmx.html>
-- <https://htmx.org/docs/>
+- <https://pypi.org/project/litestar-htmx/0.5.0/>
+- <https://github.com/litestar-org/litestar-htmx/tree/v0.5.0/litestar_htmx>
+- <https://github.com/litestar-org/litestar-htmx/blob/v0.5.0/litestar_htmx/request.py>
+- <https://github.com/litestar-org/litestar-htmx/blob/v0.5.0/litestar_htmx/response.py>
+- <https://github.com/litestar-org/litestar-htmx/tree/v0.5.0/tests>
 - <https://htmx.org/reference/>
-- <https://htmx.org/migration-guide-htmx-1/>
-- <https://extensions.htmx.org/>
 
 ## Shared Styleguide Baseline
 
 - [General Principles](../litestar-styleguide/references/general.md)
+- [Python](../litestar-styleguide/references/python.md)
 - [Litestar](../litestar-styleguide/references/litestar.md)
+- [Testing](../litestar-styleguide/references/testing.md)

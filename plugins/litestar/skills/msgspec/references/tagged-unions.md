@@ -4,7 +4,9 @@ Tagged unions (discriminated unions) let msgspec select the correct Struct type 
 
 ## How It Works
 
-When a union contains multiple Structs that all declare a `tag`, msgspec reads the tag field from the incoming payload and routes to the matching Struct class. Tag matching happens before field validation.
+When a union contains multiple Structs that all declare a `tag`, msgspec reads the tag field from
+the incoming payload and routes to the matching Struct class. Tag matching happens before field
+validation. Every Struct in that union must be tagged.
 
 ---
 
@@ -86,6 +88,30 @@ class PongMessage(msgspec.Struct, tag=2):
     seq: int
 
 Message = PingMessage | PongMessage
+```
+
+Do not mix integer and string tags in one union. Integer tags must fit in a signed 64-bit value.
+
+---
+
+## Callable Tags and Inheritance
+
+Set the shared tag policy on a base Struct. The callable receives the subclass's qualified name.
+
+```python
+class TaggedMessage(msgspec.Struct, tag_field="kind", tag=str.lower):
+    pass
+
+
+class Started(TaggedMessage):
+    job_id: int
+
+
+class Stopped(TaggedMessage):
+    job_id: int
+
+
+Message = Started | Stopped
 ```
 
 ---
@@ -215,6 +241,9 @@ class A(msgspec.Struct, tag="type_a"): ...
 class B(msgspec.Struct, tag="type_b"): ...
 ```
 
-### Without `tag=`, union decoding falls back to structural matching (slower, error-prone)
+### Multiple untagged Structs are unsupported
 
-Always use `tag=` on Struct variants in polymorphic unions.
+A union may contain at most one untagged Struct. If it contains multiple Struct types, tag every
+Struct, use the same `tag_field`, and assign unique tag values with one value type (`str` or
+`int`). Tagged Structs may share a union with non-Struct types when the remaining union types are
+otherwise unambiguous.

@@ -7,31 +7,42 @@ How polyfactory fits into a Litestar test suite. The companion skill `litestar:l
 ```python
 # tests/factories.py
 from polyfactory.factories.msgspec_factory import MsgspecFactory
-from polyfactory.pytest_plugin import register_fixture
 
 from myapp.dtos import CreateOrderDTO
 
 
-@register_fixture
 class CreateOrderDTOFactory(MsgspecFactory[CreateOrderDTO]):
-    __model__ = CreateOrderDTO
+    pass
+```
+
+```python
+# tests/conftest.py
+from polyfactory.pytest_plugin import register_fixture
+
+from tests.factories import CreateOrderDTOFactory
+
+
+register_fixture(CreateOrderDTOFactory)
 ```
 
 ```python
 # tests/test_orders.py
 from __future__ import annotations
 
+import msgspec
 import pytest
 from litestar.testing import AsyncTestClient
+
+from tests.factories import CreateOrderDTOFactory
 
 
 @pytest.mark.anyio
 async def test_create_order(
     client: AsyncTestClient,
-    create_order_dto_factory: CreateOrderDTOFactory,
+    create_order_dto_factory: type[CreateOrderDTOFactory],
 ) -> None:
     payload = create_order_dto_factory.build()
-    response = await client.post("/orders", json=payload)
+    response = await client.post("/orders", json=msgspec.to_builtins(payload))
 
     assert response.status_code == 201
 ```
@@ -52,7 +63,7 @@ If you mix backends (Pydantic for HTTP boundaries, msgspec for internal events),
 
 ## Parametrizing handler tests via `coverage()`
 
-For handlers that accept tagged unions or polymorphic DTOs, `coverage()` produces one instance per branch — drive `parametrize` with it to exercise every dispatch path:
+For handlers that accept tagged unions or polymorphic DTOs, `coverage()` produces a minimal set that covers the supported forms. Drive `parametrize` with it to exercise each dispatch path:
 
 ```python
 import pytest
@@ -61,7 +72,7 @@ import pytest
 
 
 class CreateOrderDTOFactory(MsgspecFactory[CreateOrderDTO]):
-    __model__ = CreateOrderDTO
+    pass
 
 
 @pytest.mark.anyio
@@ -84,17 +95,19 @@ from myapp.db.models import Order  # advanced_alchemy.base.UUIDBase or similar
 
 @register_fixture
 class OrderModelFactory(SQLAlchemyFactory[Order]):
-    __model__ = Order
     __set_as_default_factory_for_type__ = True
-    __set_relationships__ = True  # populate FK fields with nested factories
+    __set_primary_key__ = False
+    __set_relationships__ = False
+    __set_association_proxy__ = False
 ```
 
-Two flags worth knowing for ORM use:
+Polyfactory 3 defaults primary keys, foreign keys, relationships, and association proxies to enabled. Set the graph flags explicitly for repository tests:
 
-- `__set_relationships__ = True` — populate relationship fields (one-to-many, many-to-one) using their default factories. Off by default because it can blow out object graphs.
-- `__set_primary_key__ = True` — set primary key fields explicitly. Off by default; usually you want the database to assign primary keys, so leave it off and let the session populate them on flush.
+- `__set_primary_key__ = False` lets the database assign the key.
+- `__set_relationships__ = False` avoids recursively populating ORM relationships.
+- `__set_association_proxy__ = False` avoids materializing association proxies and their relationship graphs.
 
-Bias toward calling `.build()` at the boundary and letting the session/repository persist:
+Build at the repository boundary when the repository owns persistence:
 
 ```python
 @pytest.mark.anyio
@@ -104,7 +117,7 @@ async def test_order_repo(order_repository, order_model_factory) -> None:
     assert persisted.id is not None
 ```
 
-Don't try to wire factories into `add_all` directly — the session lifecycle gets confusing. Build, then hand to the repository.
+When the factory owns persistence instead, configure `__session__` / `__async_session__` and call `create_sync()` / `create_async()`. Polyfactory 3.3 defaults to commit; select `SQLAlchemyPersistenceMethod.FLUSH` when the test owns the transaction and needs rollback isolation.
 
 ## SAQ task payload generation
 
@@ -119,7 +132,7 @@ from myapp.tasks import EmailJobPayload
 
 @register_fixture
 class EmailJobPayloadFactory(MsgspecFactory[EmailJobPayload]):
-    __model__ = EmailJobPayload
+    pass
 
 
 @pytest.mark.anyio

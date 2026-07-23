@@ -39,6 +39,19 @@ app = Litestar(
 )
 ```
 
+Wrap every provider in `Provide`. Litestar uses the wrapper to inspect the
+provider, control caching, and decide whether synchronous work runs inline or
+in a worker thread.
+
+- Use an async provider for async I/O.
+- Use `Provide(sync_provider, sync_to_thread=True)` when the provider performs
+  blocking I/O.
+- Use `Provide(sync_provider, sync_to_thread=False)` only for trivial
+  non-blocking work. Omitting `sync_to_thread` on a synchronous provider emits
+  `LitestarWarning`.
+- Use generator providers for request cleanup. Do not combine a generator
+  provider with `use_cache=True`.
+
 Dependency declaration layers:
 
 - **app** (default for `Litestar(dependencies=...)`)
@@ -52,8 +65,8 @@ Same-name lookups walk inward — handler-level overrides controller, controller
 Name handler and provider parameters after dependency keys. Use `NamedDependency[T]` for every value resolved from a Litestar dependency map; Litestar 2.24 deprecates implicit dependency injection by matching parameter names alone. Use `NamedDependency[SkipValidation[T]]` when the dependency value is trusted and should bypass validation, such as a generated filter aggregate.
 
 ```python
-from litestar.di import NamedDependency  # Litestar >= 2.23
-from litestar.params import SkipValidation  # Litestar >= 2.23
+from litestar.di import NamedDependency
+from litestar.params import SkipValidation
 
 
 async def list_users(
@@ -67,14 +80,53 @@ async def list_users(
 The dependency key and parameter name must match. `NamedDependency[T]` (from `litestar.di`) marks the parameter as a dependency value and replaces `Annotated[T, Dependency()]`:
 
 ```python
-from litestar.di import NamedDependency  # Litestar >= 2.23
+from litestar.di import NamedDependency
 
 
 async def list_users(db: NamedDependency[AsyncSession]) -> list[User]:  # injects the "db" provider
     ...
 ```
 
-`params.Dependency` / `DependencyKwarg` are deprecated since 2.23 and implicit dependency injection is deprecated since 2.24; prefer `NamedDependency` and `NamedDependency[SkipValidation[T]]`.
+`params.Dependency` / `DependencyKwarg` are deprecated since 2.23. Litestar
+2.24 also deprecates implicit injection based only on a matching parameter
+name. Both forms are removed in Litestar 3.0.
+
+## Dependency replacement in tests
+
+Litestar has no mutable `app.dependency_overrides` registry. Create a fresh app
+or client with the replacement providers:
+
+```python
+import pytest
+from litestar import get
+from litestar.di import NamedDependency, Provide
+from litestar.testing import create_async_test_client
+
+
+@get("/")
+async def get_user(users_service: NamedDependency[UserService]) -> User:
+    return await users_service.get_current()
+
+
+async def provide_fake_users_service() -> UserService:
+    return FakeUserService()
+
+
+@pytest.mark.anyio
+async def test_get_user() -> None:
+    async with create_async_test_client(
+        get_user,
+        dependencies={
+            "users_service": Provide(provide_fake_users_service),
+        },
+    ) as client:
+        response = await client.get("/")
+        assert response.status_code == 200
+```
+
+For full-application tests, make `create_app()` accept the provider map and
+construct a new `Litestar` instance per test. Do not mutate shared app state;
+parallel tests otherwise race on dependency configuration.
 
 ## Dishka (`FromDishka as Inject[T]`)
 
@@ -85,6 +137,7 @@ from __future__ import annotations
 
 from dishka import Provider, Scope, provide, make_async_container
 from dishka.integrations.litestar import FromDishka as Inject, setup_dishka
+from litestar.params import FromPath
 
 from app.domain.accounts.services import UserService
 
@@ -106,7 +159,11 @@ class UserController(Controller):
     path = "/api/users"
 
     @get("/{user_id:uuid}")
-    async def get_user(self, user_id: UUID, users_service: Inject[UserService]) -> User:
+    async def get_user(
+        self,
+        user_id: FromPath[UUID],
+        users_service: Inject[UserService],
+    ) -> User:
         return await users_service.get(user_id)
 ```
 
@@ -139,3 +196,9 @@ Dishka is not a standalone skill in this repo — Litestar is its primary surfac
 
 - Repository service deps live alongside DB sessions: [services.md](../../litestar-data-services/references/services.md)
 - Plugin-supplied deps (e.g. `TaskQueues` from `litestar-saq`): [plugins.md](../../litestar-plugins/references/plugins.md), `../../litestar-saq/SKILL.md`
+
+## Tagged source
+
+- [2.24 dependency injection guide](https://github.com/litestar-org/litestar/blob/v2.24.0/docs/usage/dependency-injection.rst)
+- [2.24 `Provide` and `NamedDependency`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/di.py)
+- [2.24 test override guidance](https://github.com/litestar-org/litestar/blob/v2.24.0/docs/onboarding/fastapi.rst)

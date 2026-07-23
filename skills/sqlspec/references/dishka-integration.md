@@ -165,7 +165,7 @@ Handlers declare injected services via `Inject[ServiceType]` and receive filter 
 from dishka.integrations.litestar import inject
 from litestar import get
 from litestar.di import NamedDependency
-from litestar.pagination import OffsetPagination
+from sqlspec.core import OffsetPagination
 from litestar.params import SkipValidation  # Litestar >= 2.23
 from sqlspec.core.filters import FilterTypes
 from sqlspec.extensions.litestar.providers import create_filter_dependencies

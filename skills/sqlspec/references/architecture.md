@@ -32,69 +32,53 @@ SQLSpec uses a structured caching system to eliminate redundant parsing, transpi
 ### Cache Namespaces
 
 ```python
-# Five cache namespaces with distinct purposes:
-statement_cache: CachedStatement       # Compiled SQL string + bound parameters
-expression_cache: Expression           # Parsed sqlglot AST expressions
-optimized_cache: Expression            # Optimizer-processed AST expressions
-builder_cache: SQL                     # Query builder -> SQL object results
-file_cache: SQLFileCacheEntry          # Loaded SQL files with content checksums
+# Names used by NamespacedCache:
+statement  # compiled SQL and safe rebinding state
+builder    # value-independent builder templates
+expression # parsed sqlglot expressions and fragments
+file       # loaded SQL files
+optimized  # optimizer-processed expressions
 ```
 
 ### Cache Configuration
 
-Each namespace supports independent tuning:
+`CacheConfig` groups namespaces by workload. It does not accept per-namespace objects or TTL values:
 
 ```python
-from sqlspec.core.cache import CacheConfig
+from sqlspec import CacheConfig, SQLSpec
 
 cache_config = CacheConfig(
-    statement_cache=NamespaceCacheConfig(
-        max_size=1024,           # Maximum entries
-        ttl=300,                 # Time-to-live in seconds
-        enabled=True,
-    ),
-    expression_cache=NamespaceCacheConfig(
-        max_size=512,
-        ttl=600,
-        enabled=True,
-    ),
-    builder_cache=NamespaceCacheConfig(
-        max_size=256,
-        ttl=300,
-        enabled=True,
-    ),
-    file_cache=NamespaceCacheConfig(
-        max_size=128,
-        ttl=0,                   # 0 = no expiry, invalidate on checksum change
-        enabled=True,
-    ),
+    compiled_cache_enabled=True,
+    sql_cache_enabled=True,
+    fragment_cache_enabled=True,
+    optimized_cache_enabled=True,
+    sql_cache_size=2_000,       # statement + builder
+    fragment_cache_size=5_000, # expression + file
+    optimized_cache_size=2_000,
 )
+
+db_manager = SQLSpec()
+db_manager.update_cache_config(cache_config)
 ```
 
 ### Cache Behavior
 
-- **LRU eviction**: All namespaces use bounded LRU caches. When `max_size` is reached, the least recently used entry is evicted.
-- **TTL expiry**: Entries older than `ttl` seconds are treated as stale and re-computed on next access.
-- **Thread safety**: Caches use lock-free reads with copy-on-write for mutations. Avoid mutating shared cache entries across execution batches without lock wrappers.
-- **File cache checksums**: `file_cache` entries store content checksums. If the file changes on disk, the cached entry is invalidated regardless of TTL.
+- **Global configuration**: `update_cache_config()` replaces the process-global configuration and clears existing caches.
+- **LRU + TTL**: the built-in namespaces use bounded, locked LRU caches with a one-hour default TTL.
+- **Template isolation**: builder and optimized-expression cache hits return isolated expressions; current values and statement configuration are rebound on each call.
+- **File validation**: `SQLFileLoader` compares an MD5 content checksum before reusing a tracked file.
+- **Driver-local fast path**: `driver_features={"sqlspec_statement_cache_size": N}` controls a separate per-driver raw-statement cache. Set `N=0` to disable it.
 
 ### Cache Hit/Miss Monitoring
 
 ```python
-from sqlspec.core.cache import CacheConfig
+from sqlspec import SQLSpec
 
-# Enable metrics collection
-cache_config = CacheConfig(enable_metrics=True)
-
-# Access metrics at runtime
-metrics = cache_config.get_metrics()
-# Returns per-namespace: {hits: int, misses: int, evictions: int, hit_rate: float}
+db_manager = SQLSpec()
+metrics = db_manager.get_cache_stats()
 ```
 
-Cache metrics are also emitted via the observability system as structured log events:
-
-- `cache.hit` / `cache.miss` with `cache.namespace` field
-- `cache.eviction` with `cache.reason` (`ttl` or `lru`)
+The result maps cache namespace names to `CacheStats` objects with `hits`, `misses`, `evictions`, `total_operations`, `memory_usage`, and `hit_rate`. Use `db_manager.log_cache_stats()` for structured debug logging and `db_manager.reset_stats_only()` to reset counters without clearing entries.
 
 ---
 

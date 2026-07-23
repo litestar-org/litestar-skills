@@ -1,0 +1,111 @@
+[[package]]
+pypi = "litestar"
+version = "2.24.0"
+date = "2026-06-11"
+tag = "v2.24.0"
+skills = ["skills/litestar", "skills/litestar-routing", "skills/litestar-di", "skills/litestar-dto-openapi", "skills/litestar-auth-guards", "skills/litestar-exceptions", "skills/litestar-testing"]
+imports = ["litestar"]
+
+[[package]]
+pypi = "advanced-alchemy"
+version = "1.11.0"
+date = "2026-05-31"
+tag = "v1.11.0"
+skills = ["skills/advanced-alchemy"]
+imports = ["advanced_alchemy"]
+
+[[package]]
+pypi = "sqlspec"
+version = "0.56.0"
+date = "2026-07-22"
+tag = "v0.56.0"
+skills = ["skills/sqlspec"]
+imports = ["sqlspec"]
+
+[[package]]
+pypi = "litestar-queues"
+version = "0.5.0"
+date = "2026-07-23"
+tag = "v0.5.0"
+skills = ["skills/litestar-queues"]
+imports = ["litestar_queues"]
+
+[[package]]
+pypi = "litestar-vite"
+version = "0.27.0"
+date = "2026-07-23"
+tag = "v0.27.0"
+skills = ["skills/litestar-vite", "skills/litestar-inertia"]
+imports = ["litestar_vite"]
+
+[[package]]
+pypi = "litestar-mcp"
+version = "0.11.1"
+date = "2026-07-06"
+tag = "v0.11.1"
+skills = ["skills/litestar-mcp"]
+imports = ["litestar_mcp"]
+
+[[package]]
+pypi = "litestar-saq"
+version = "0.8.0"
+date = "2026-06-03"
+tag = "v0.8.0"
+skills = ["skills/litestar-saq"]
+imports = ["litestar_saq"]
+
+[[package]]
+pypi = "litestar-granian"
+version = "0.15.0"
+date = "2026-04-18"
+tag = "v0.15.0"
+skills = ["skills/litestar-granian"]
+imports = ["litestar_granian"]
+
+[[package]]
+pypi = "litestar-email"
+version = "0.4.0"
+date = "2026-05-03"
+tag = "v0.4.0"
+skills = ["skills/litestar-email"]
+imports = ["litestar_email"]
+
+[[package]]
+pypi = "litestar-htmx"
+version = "0.5.0"
+date = "2025-06-11"
+tag = "v0.5.0"
+skills = ["skills/litestar-htmx"]
+imports = ["litestar_htmx"]
+
+[[package]]
+pypi = "pytest-databases"
+version = "0.19.0"
+date = "2026-05-23"
+tag = "v0.19.0"
+skills = ["skills/pytest-databases"]
+imports = ["pytest_databases"]
+
+[[package]]
+pypi = "polyfactory"
+version = "3.3.0"
+date = "2026-02-22"
+tag = "v3.3.0"
+skills = ["skills/polyfactory"]
+imports = ["polyfactory"]
+
+[[package]]
+pypi = "msgspec"
+version = "0.21.1"
+date = "2026-04-12"
+tag = "0.21.1"
+skills = ["skills/msgspec"]
+imports = ["msgspec"]
+
+[[package]]
+pypi = "litestar-autowire"
+version = "0.2.0"
+date = "2026-07-07"
+tag = "v0.2.0"
+skills = ["skills/litestar-autowire"]
+imports = ["litestar_autowire"]

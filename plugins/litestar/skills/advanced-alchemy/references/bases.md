@@ -6,8 +6,8 @@ Advanced Alchemy provides a hierarchy of declarative base classes in `advanced_a
 
 ```python
 from advanced_alchemy.base import (
-    # Plain base
-    DeclarativeBase,
+    # No predefined primary key
+    DefaultBase,
     # UUID v4
     UUIDBase, UUIDAuditBase,
     # UUID v6 (time-sortable)
@@ -18,27 +18,25 @@ from advanced_alchemy.base import (
     BigIntBase, BigIntAuditBase,
     # NanoID string
     NanoIDBase, NanoIDAuditBase,
-    # Audit columns mixin
-    AuditColumns,
     # Registry
     orm_registry, metadata_registry,
 )
-from advanced_alchemy.mixins import SlugKey, UniqueMixin
+from advanced_alchemy.mixins import AuditColumns, SlugKey, UniqueMixin
 ```
 
 ---
 
 ## Base Class Hierarchy
 
-### DeclarativeBase
+### DefaultBase
 
 The plain base with no opinions — no automatic `id`, no timestamps. Use when you need full control over the schema.
 
 ```python
-from advanced_alchemy.base import DeclarativeBase
+from advanced_alchemy.base import DefaultBase
 
 
-class CustomModel(DeclarativeBase):
+class CustomModel(DefaultBase):
     __tablename__ = "custom_model"
 
     # You define everything yourself
@@ -111,7 +109,7 @@ class Order(UUIDv7AuditBase):
 ```
 
 - **Recommended for all new projects** — best index locality and standardized format
-- Monotonically increasing within the same millisecond
+- Time-ordered by the UUIDv7 timestamp component
 - Compatible with PostgreSQL `UUID` type and all AA repository/service patterns
 
 ---
@@ -163,7 +161,8 @@ class ShortLink(NanoIDAuditBase):
 | `updated_at` | `DateTimeUTC` | Set on insert and update (audit bases only) |
 
 - Shorter and more URL-friendly than UUIDs
-- Configurable alphabet and length
+- Install `fastnanoid` for NanoID generation. Without it, 1.11 logs a warning
+  and falls back to UUIDv4 generation.
 
 ---
 
@@ -174,10 +173,11 @@ class ShortLink(NanoIDAuditBase):
 Adds only `created_at` and `updated_at` without any primary key. Use when you need timestamps on a model that defines its own PK.
 
 ```python
-from advanced_alchemy.base import AuditColumns, DeclarativeBase
+from advanced_alchemy.base import DefaultBase
+from advanced_alchemy.mixins import AuditColumns
 
 
-class ExternalRecord(DeclarativeBase, AuditColumns):
+class ExternalRecord(DefaultBase, AuditColumns):
     __tablename__ = "external_record"
 
     # Custom primary key
@@ -226,14 +226,16 @@ class Tag(UUIDAuditBase, UniqueMixin):
         return name
 
     @classmethod
-    def unique_filter(cls, query, name: str):
-        """Return a filtered query to find existing row."""
-        return query.filter(cls.name == name)
+    def unique_filter(cls, name: str):
+        """Return the uniqueness predicate."""
+        return cls.name == name
 ```
 
 - `unique_hash()`: returns a hashable key for in-memory dedup within a session
-- `unique_filter()`: returns the SQLAlchemy query filter to find existing rows
-- Used by the repository's `get_or_upsert` patterns
+- `unique_filter()`: returns a SQLAlchemy boolean expression
+- Call `await Tag.as_unique_async(session, name)` or
+  `Tag.as_unique_sync(session, name)`; this API is independent of repository
+  `get_or_upsert()`
 
 ---
 
@@ -310,8 +312,10 @@ class AnalyticsEvent(UUIDAuditBase):
 ```
 
 - Models without `__bind_key__` use the default (primary) database
-- Each bind key gets its own metadata, migration directory, and engine
+- Each bind key gets its own metadata and config-owned engine
 - Configure the corresponding `SQLAlchemyAsyncConfig` with matching `bind_key`
+- Configure a distinct Alembic `script_location` when binds require separate
+  migration histories
 
 ---
 
@@ -320,8 +324,8 @@ class AnalyticsEvent(UUIDAuditBase):
 Combine mixins to create project-specific bases:
 
 ```python
-from advanced_alchemy.base import UUIDv7Base, AuditColumns
-from advanced_alchemy.mixins import SlugKey
+from advanced_alchemy.base import UUIDv7Base
+from advanced_alchemy.mixins import AuditColumns, SlugKey
 
 
 class ProjectBase(UUIDv7Base, AuditColumns):
@@ -356,7 +360,7 @@ class Setting(ProjectBase):
 
 | Base Class | PK Type | Audit Fields | Best For |
 | --- | --- | --- | --- |
-| `DeclarativeBase` | None (define your own) | None | Full control, custom schemas |
+| `DefaultBase` | None (define your own) | None | Custom primary keys with AA table naming |
 | `UUIDBase` | UUID v4 | None | Simple lookup tables |
 | `UUIDAuditBase` | UUID v4 | `created_at`, `updated_at` | General-purpose models |
 | `UUIDv6Base` | UUID v6 | None | Time-sortable without audit |

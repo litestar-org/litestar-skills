@@ -1,6 +1,11 @@
 # msgspec Meta Constraints Reference
 
-`Meta` constraints are applied via `Annotated[Type, Meta(...)]`. They are evaluated at decode/convert time with zero runtime overhead — no validation code runs on already-valid data.
+`Meta` constraints are applied via `Annotated[Type, Meta(...)]`. Typed decoding and
+`msgspec.convert()` validate them and report the failing path. Direct Struct construction does
+not enforce annotations or `Meta` constraints.
+
+`Meta` has no `rename` parameter. Rename one field with `msgspec.field(name=...)`, or configure
+all fields with the Struct `rename=` option.
 
 ## Import
 
@@ -13,7 +18,7 @@ from msgspec import Meta
 
 ## Numeric Constraints
 
-Applies to `int`, `float`, `Decimal`.
+Applies to `int` and `float`.
 
 | Parameter | Description | Example |
 | --- | --- | --- |
@@ -23,9 +28,13 @@ Applies to `int`, `float`, `Decimal`.
 | `le` | Less than or equal (inclusive) | `Meta(le=100)` → value <= 100 |
 | `multiple_of` | Value must be a multiple of N | `Meta(multiple_of=5)` |
 
+Avoid non-integral `multiple_of` values on `float`; binary floating-point precision may reject
+mathematically valid inputs. Prefer an integer minor unit such as cents or milliseconds.
+
 ```python
-import msgspec
 from typing import Annotated
+
+import msgspec
 from msgspec import Meta
 
 PositiveInt = Annotated[int, Meta(gt=0)]
@@ -52,6 +61,8 @@ class Product(msgspec.Struct, kw_only=True):
 | `min_length` | Minimum char count | `Meta(min_length=1)` |
 | `max_length` | Maximum char count | `Meta(max_length=255)` |
 | `pattern` | Regex pattern | `Meta(pattern=r"^\d{4}$")` |
+
+Patterns use search semantics and are unanchored unless the expression includes `^` and `$`.
 
 ```python
 NonEmptyStr = Annotated[str, Meta(min_length=1)]
@@ -89,6 +100,28 @@ class SecurePayload(msgspec.Struct):
 
 ---
 
+## Datetime Constraints
+
+`tz` applies to `datetime.datetime` and `datetime.time`.
+
+| Parameter | Description |
+| --- | --- |
+| `tz=True` | Require a timezone-aware value |
+| `tz=False` | Require a timezone-naive value |
+| `tz=None` | Accept either; this is the default |
+
+```python
+from datetime import datetime
+
+AwareDatetime = Annotated[datetime, Meta(tz=True)]
+
+
+class ScheduledTask(msgspec.Struct):
+    run_at: AwareDatetime
+```
+
+---
+
 ## Collection Constraints
 
 Applies to `list`, `tuple`, `set`, `frozenset`, `dict`.
@@ -114,6 +147,7 @@ NonEmptyDict = Annotated[dict[str, int], Meta(min_length=1)]
 | `description` | Field description for docs |
 | `examples` | Example values |
 | `extra_json_schema` | Raw dict merged into JSON Schema output |
+| `extra` | User-defined metadata retained for inspection |
 
 ```python
 UserId = Annotated[
@@ -192,7 +226,8 @@ except msgspec.ValidationError as e:
     # Expected `float` satisfying gt=0.0 - at `$.price`
 ```
 
-Errors include the JSON path to the offending field — suitable for direct API client surfacing.
+Errors include the path to the offending field. Map them through the application's validation
+error contract before returning them to an API client.
 
 ---
 
