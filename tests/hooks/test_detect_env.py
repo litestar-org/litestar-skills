@@ -141,7 +141,7 @@ def htmx_project(tmp_path: Path) -> Path:
 def test_skill_map_exists() -> None:
     """skill-map.json must exist and be valid JSON with required structure."""
     assert SKILL_MAP.exists(), f"skill-map.json missing: {SKILL_MAP}"
-    data = json.loads(SKILL_MAP.read_text())
+    data = json.loads(SKILL_MAP.read_text(encoding="utf-8"))
     assert isinstance(data.get("matchers"), list)
     assert isinstance(data.get("static_intro"), str)
     assert all("skill" in m and "signals" in m and "reminder" in m for m in data["matchers"])
