@@ -223,6 +223,24 @@ check-upstream-imports:                             ## Verify every Python impor
 	@uv run python tools/check-upstream-imports.py
 	@echo "${OK} Upstream imports verified ✨"
 
+.PHONY: check-upstream-imports-strict
+check-upstream-imports-strict:                      ## CI import check; fail when any represented upstream package is missing
+	@echo "${INFO} Strictly checking upstream API imports... 🔍"
+	@uv run python tools/check-upstream-imports.py --strict-missing
+	@echo "${OK} Strict upstream imports verified ✨"
+
+.PHONY: check-upstream-releases
+check-upstream-releases:                            ## Verify audited releases match PyPI, validation floors, and uv.lock
+	@echo "${INFO} Checking audited upstream releases... 🔍"
+	@uv run python tools/check-upstream-releases.py
+	@echo "${OK} Upstream releases are current ✨"
+
+.PHONY: upstream-contracts
+upstream-contracts:                                 ## Run tagged package contracts and retired-token regressions
+	@echo "${INFO} Running upstream package contracts... 🧪"
+	@uv run pytest tests/upstream_contracts tests/test_upstream_stale_tokens.py -q
+	@echo "${OK} Upstream package contracts passed ✨"
+
 .PHONY: sync-codex-package
 sync-codex-package:                                 ## Assemble the committed Codex plugin package at plugins/litestar/
 	@echo "${INFO} Syncing Codex package payload... 🔗"

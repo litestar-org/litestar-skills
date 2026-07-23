@@ -186,8 +186,8 @@ dependencies = create_filter_dependencies({
 from dishka.integrations.litestar import FromDishka as Inject, inject
 from litestar import get
 from litestar.di import NamedDependency
-from litestar.pagination import OffsetPagination
 from litestar.params import SkipValidation  # Litestar >= 2.23
+from sqlspec.core import OffsetPagination
 from sqlspec.core.filters import FilterTypes
 
 from app.domains.orders.services import OrderService
@@ -208,19 +208,26 @@ async def list_orders(
 ```python
 from litestar import get
 from litestar.di import NamedDependency, Provide
-from litestar.pagination import OffsetPagination
 from litestar.params import SkipValidation  # Litestar >= 2.23
+from sqlspec.adapters.asyncpg import AsyncpgDriver
+from sqlspec.core import OffsetPagination
 from sqlspec.core.filters import FilterTypes
 
 from app.domains.orders.services import OrderService
 from app.schemas import Order
 
 
+def provide_order_service(
+    db_session: NamedDependency[AsyncpgDriver],
+) -> OrderService:
+    return OrderService(db_session)
+
+
 @get(
     "/orders",
     dependencies={
         **dependencies,
-        "orders_service": Provide(lambda driver: OrderService(driver)),
+        "orders_service": Provide(provide_order_service),
     },
 )
 async def list_orders(
@@ -259,7 +266,7 @@ config = AsyncpgConfig(
 db_manager.add_config(config)
 ```
 
-`include_extensions: ["litestar"]` activates the Litestar extension in the migration pipeline — Alembic will include session-table migrations automatically. (Cited from `litestar-sqlstack/src/sqlstack/lib/settings.py:L148`.)
+`include_extensions: ["litestar"]` explicitly includes the Litestar session migration in SQLSpec's native migration runner. An enabled `extension_config["litestar"]` block also auto-includes its extension migration unless it is excluded.
 
 `disable_di: True` — when using Dishka as the DI container, set this to prevent SQLSpec's built-in Litestar DI registration from conflicting with the Dishka provider. Handlers receive the `AsyncDriverAdapterBase` via the `LitestarPersistenceProvider` instead. See [`dishka-integration.md`](dishka-integration.md) for provider setup.
 

@@ -74,11 +74,25 @@ async def requires_workspace_membership(
         raise PermissionDeniedException("Not a workspace member")
 ```
 
-## WebSocket Auth (query-param JWT)
+## WebSocket authentication
 
-WS handshakes can't carry HTTP `Authorization` headers — pass the JWT as a query param.
+WebSocket handshakes contain HTTP headers, and Litestar exposes them through
+`connection.headers`. Litestar authentication middleware processes both HTTP
+and WebSocket scopes by default.
 
-### Auth guard (token + user load)
+Choose the credential transport for the client:
+
+| Client | Preferred transport |
+| --- | --- |
+| Browser `WebSocket` API | Secure, HTTP-only cookie |
+| Browser without cookie auth | Short-lived, single-use query token or first authenticated message |
+| Non-browser client | `Authorization` or another explicit header |
+
+The browser `WebSocket` constructor cannot set arbitrary headers. Do not turn
+that browser API restriction into a protocol-wide claim. Avoid long-lived query
+tokens because URLs can appear in logs and telemetry.
+
+### Browser-compatible cookie guard
 
 ```python
 from litestar.exceptions import WebSocketException
@@ -87,11 +101,15 @@ from litestar.exceptions import WebSocketException
 async def requires_websocket_auth(
     connection: ASGIConnection, _: BaseRouteHandler,
 ) -> None:
-    token_str = connection.query_params.get("token")
+    token_str = connection.cookies.get("access_token")
     if not token_str:
         raise WebSocketException(code=4001, detail="Missing token")
     try:
-        token = Token.decode(token_str, secret=settings.app.secret_key, algorithm="HS256")
+        token = Token.decode(
+            encoded_token=token_str,
+            secret=settings.app.secret_key,
+            algorithm="HS256",
+        )
     except Exception as exc:
         raise WebSocketException(code=4001, detail="Invalid token") from exc
     user = await user_service.get(UUID(token.sub))
@@ -99,6 +117,11 @@ async def requires_websocket_auth(
         raise WebSocketException(code=4001, detail="Unauthorized")
     connection.state.user = user
 ```
+
+Prefer Litestar's JWT, JWT-cookie, session, or custom authentication middleware
+when HTTP and WebSocket routes share identity loading. Their default scope
+configuration includes both `http` and `websocket`; set `scopes` explicitly
+only when the policy must differ.
 
 ### Membership guard (workspace-scoped)
 
@@ -181,9 +204,11 @@ class GlobalStreamController(Controller):
     guards = [requires_websocket_auth, requires_websocket_global_access]
 ```
 
-Contrast with HTTP-only controllers that use `requires_active_user` + `requires_workspace_membership`
-— WS controllers always start with `requires_websocket_auth` because the HTTP middleware auth
-stack is bypassed for WebSocket connections.
+Contrast with HTTP-only controllers that use `requires_active_user` +
+`requires_workspace_membership`: authentication middleware can populate
+`connection.user` for both HTTP and WebSocket scopes. Add
+`requires_websocket_auth` only when the WebSocket credential transport or
+identity-loading path differs.
 
 ## Cross-references
 
@@ -191,3 +216,9 @@ stack is bypassed for WebSocket connections.
 - RealtimeEvent contract and publisher: [realtime-events.md](../../litestar-realtime/references/realtime-events.md)
 - Auto-loading users via middleware: [middleware.md](../../litestar-middleware/references/middleware.md)
 - Custom exceptions for permission denials: [exceptions.md](../../litestar-exceptions/references/exceptions.md)
+
+## Tagged source
+
+- [2.24 authentication middleware scopes](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/middleware/authentication.py)
+- [2.24 JWT authentication scopes](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/security/jwt/auth.py)
+- [2.24 WebSocket header tests](https://github.com/litestar-org/litestar/blob/v2.24.0/tests/unit/test_connection/test_websocket.py)

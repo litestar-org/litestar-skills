@@ -77,9 +77,9 @@ filter_ = InCollectionFilter(
 The standard pagination result container:
 
 ```python
-from sqlspec.core.filters import OffsetPagination
+from sqlspec.core import OffsetPagination
 
-# Returned by service.paginate() and select_with_total()
+# Returned by SQLSpecAsyncService.paginate() / SQLSpecSyncService.paginate()
 result: OffsetPagination[User]
 result.items    # list[User] - current page rows
 result.total    # int - total matching rows
@@ -142,9 +142,13 @@ rows, total = await db_session.select_with_total(
 Use `create_filter_dependencies()` from `sqlspec.extensions.litestar.providers` to generate Litestar dependency injection parameters from a `FilterConfig` mapping:
 
 ```python
+from litestar import get
 from litestar.di import NamedDependency
-from litestar.params import SkipValidation  # Litestar >= 2.23
+from litestar.params import SkipValidation
+from sqlspec.adapters.asyncpg import AsyncpgDriver
+from sqlspec.core import FilterTypes, OffsetPagination
 from sqlspec.extensions.litestar.providers import create_filter_dependencies
+from sqlspec.service import SQLSpecAsyncService
 
 filter_deps = create_filter_dependencies({
     "pagination_type": "limit_offset",
@@ -159,20 +163,20 @@ filter_deps = create_filter_dependencies({
 @get("/users", dependencies=filter_deps)
 async def list_users(
     db_session: NamedDependency[AsyncpgDriver],
-    filters: NamedDependency[SkipValidation[list[StatementFilter]]],
+    filters: NamedDependency[SkipValidation[list[FilterTypes]]],
 ) -> OffsetPagination[User]:
-    rows, total = await db_session.select_with_total(
+    service = SQLSpecAsyncService(db_session)
+    return await service.paginate(
         sql.select("*").from_("users"),
         *filters,
         schema_type=User,
     )
-    return OffsetPagination(items=rows, total=total, limit=20, offset=0)
 ```
 
 Query parameters are automatically extracted from the request:
 
-- `?limit=20&offset=40` for `LimitOffsetFilter`
-- `?order_by=name&sort_order=asc` for `OrderByFilter`
-- `?search=alice` for `SearchFilter`
-- `?before=2025-12-31&after=2025-01-01` for `BeforeAfterFilter`
-- `?status=active&status=pending` for `InCollectionFilter`
+- `?currentPage=2&pageSize=20` for `LimitOffsetFilter`
+- `?orderBy=name&sortOrder=asc` for `OrderByFilter`
+- `?searchString=alice&searchIgnoreCase=true` for `SearchFilter`
+- `?createdBefore=2025-12-31&createdAfter=2025-01-01` when `created_at=True`
+- `?ids=<value>` for the configured ID collection filter

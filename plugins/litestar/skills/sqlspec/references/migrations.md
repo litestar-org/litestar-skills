@@ -12,28 +12,28 @@ The canonical command group is `sqlspec` (wired up in `sqlspec/cli.py`). When Li
 
 | Command | Purpose |
 | --- | --- |
-| `sqlspec database init` | Scaffold the migrations directory + README |
-| `sqlspec database create-migration -m "msg"` | Generate a timestamped migration file |
-| `sqlspec database upgrade [revision]` | Apply pending migrations up to `head` or target |
-| `sqlspec database downgrade [revision]` | Revert to a target revision |
-| `sqlspec database show-current-revision` | Print the applied head version |
-| `sqlspec database stamp <revision>` | Mark the DB at a revision without running SQL |
-| `sqlspec database fix` | Convert legacy timestamp versions to sequential |
-| `sqlspec database squash START:END -m "msg"` | Collapse a range of migrations into one |
-| `sqlspec database show-config` | List all configs with migrations enabled |
+| `sqlspec init` | Scaffold the migrations directory + README |
+| `sqlspec create-migration -m "msg"` | Generate a timestamped migration file |
+| `sqlspec upgrade [revision]` | Apply pending migrations up to `head` or target |
+| `sqlspec downgrade [revision]` | Revert to a target revision |
+| `sqlspec show-current-revision` | Print the applied head version |
+| `sqlspec stamp <revision>` | Mark the DB at a revision without running SQL |
+| `sqlspec fix` | Convert timestamp migrations to sequential |
+| `sqlspec squash START:END -m "msg"` | Collapse a range of migrations into one |
+| `sqlspec show-config` | List all configs with migrations enabled |
 
 ```bash
 # Create a new migration
-sqlspec database create-migration -m "add users table"
+sqlspec create-migration -m "add users table"
 
 # Apply everything
-sqlspec database upgrade
+sqlspec upgrade
 
 # Apply up to a specific version
-sqlspec database upgrade 20251011120000
+sqlspec upgrade 20251011120000
 
 # Preview without applying
-sqlspec database upgrade --dry-run
+sqlspec upgrade --dry-run
 ```
 
 The group also recognises `--bind-key <name>` (pick one config from a multi-config project), `--include` / `--exclude` (filter by bind key), `--no-auto-sync`, and `--use-logger` / `--summary` (structured logging instead of Rich console output). See `sqlspec/cli.py` for the full option matrix.
@@ -121,6 +121,7 @@ When `include_extensions` lists a name, `BaseMigrationCommands._discover_extensi
 ```python
 from litestar import Litestar
 
+from sqlspec import SQLSpec
 from sqlspec.adapters.asyncpg import AsyncpgConfig
 from sqlspec.extensions.litestar import SQLSpecPlugin
 
@@ -137,7 +138,9 @@ config = AsyncpgConfig(
     },
 )
 
-app = Litestar(route_handlers=[], plugins=[SQLSpecPlugin(config=config)])
+sqlspec = SQLSpec()
+sqlspec.add_config(config)
+app = Litestar(route_handlers=[], plugins=[SQLSpecPlugin(sqlspec=sqlspec)])
 ```
 
 ```bash
@@ -151,9 +154,9 @@ The CLI wiring is in `sqlspec/extensions/litestar/cli.py` (`database_group` is a
 
 ## Match Your Stack Callout
 
-- If the project already uses **Alembic** through `advanced-alchemy` or bare SQLAlchemy, do **not** layer `sqlspec database upgrade` on top of it. Pick one runner per project. Mixing means two tracking tables (`alembic_version` and `ddl_migrations`), two sources of truth for "head", and no cross-runner locking.
+- If the project already uses **Alembic** through `advanced-alchemy` or bare SQLAlchemy, do **not** layer `sqlspec upgrade` on top of it. Pick one runner per project. Mixing means two tracking tables (`alembic_version` and `ddl_migrations`), two sources of truth for "head", and no cross-runner locking.
 - If you are new to the project, or you need heterogeneous adapters (e.g., PostgreSQL + DuckDB + Oracle) managed together, SQLSpec's runner is the simpler choice.
-- Migrate from Alembic by stamping the SQLSpec tracking table at the Alembic head with `sqlspec database stamp <version>` and translating the Alembic revision graph into timestamped SQL files.
+- Migrate from Alembic by translating the Alembic revision graph into SQLSpec migration files and deliberately stamping the new tracker with `sqlspec stamp <version>`.
 
 ## Example: Full Configuration + Upgrade
 
@@ -180,11 +183,11 @@ config = AsyncpgConfig(
 
 ```bash
 # Inside the project root
-sqlspec database init db/migrations
-sqlspec database create-migration -m "initial schema"
+sqlspec init db/migrations
+sqlspec create-migration -m "initial schema"
 # (edit the generated file)
-sqlspec database upgrade
-sqlspec database show-current-revision
+sqlspec upgrade
+sqlspec show-current-revision
 ```
 
 `strict_ordering=True` makes the runner refuse out-of-order migrations (useful when branches merge unevenly across environments); pair it with `--no-auto-sync` on the CLI to disable automatic reconciliation of renamed versions.
@@ -192,10 +195,10 @@ sqlspec database show-current-revision
 ## Common Pitfalls
 
 - **Split-brain with Alembic** — if any service in the repo still runs Alembic, a SQLSpec upgrade will silently add a second `ddl_migrations` table and leave Alembic's `alembic_version` untouched. Audit `migration_config` and `alembic.ini` before shipping.
-- **Stale tracking table after manual edits** — if someone ran raw `DROP TABLE` against a migrated object, `show-current-revision` will still report the old head. Use `sqlspec database stamp <version>` to re-align after manual cleanup.
-- **Timestamp vs sequential confusion** — legacy `0001`-style filenames are still supported and sort before timestamp versions. `sqlspec database fix` converts timestamp migrations to sequential format when you want a clean monotonic series for a release tag.
+- **Stale tracking table after manual edits** — if someone ran raw `DROP TABLE` against a migrated object, `show-current-revision` will still report the old head. Use `sqlspec stamp <version>` only after reconciling the live schema.
+- **Timestamp vs sequential confusion** — legacy `0001`-style filenames are still supported and sort before timestamp versions. `sqlspec fix` converts timestamp migrations to sequential format when you want a clean monotonic series for a release tag.
 - **Extension migrations not discovered** — extensions are only scanned when listed in `include_extensions` (or when their `extension_config` key is present and not excluded). If the Litestar session table isn't being created, check that `migration_config["include_extensions"]` lists `"litestar"` **and** `extension_config["litestar"]` is set.
-- **Transactional DDL on adapters that don't support it** — `transactional=True` is the default only for PostgreSQL, SQLite, and DuckDB. MySQL, Oracle, and BigQuery skip transaction wrapping (their DDL auto-commits anyway). Do not rely on rollback-on-failure there — always keep migrations idempotent.
+- **Transactional DDL on adapters that don't support it** — transaction wrapping is enabled only when the selected adapter advertises `supports_transactional_ddl`. MySQL, Oracle, BigQuery, and Spanner do not. Do not rely on rollback-on-failure there; keep migrations idempotent.
 
 ## Public API Summary
 
@@ -206,7 +209,8 @@ Top-level exports in `sqlspec.migrations.__init__`:
 - `AsyncMigrationTracker`, `SyncMigrationTracker`
 - `SQLFileLoader`, `PythonFileLoader`, `BaseMigrationLoader`, `get_migration_loader`
 - `MigrationSquasher`, `SquashPlan`
-- `create_migration_file`, `drop_all`, `get_author`
+- `SchemaTarget`, `SchemaEnsureResult`, `ensure_schema_sync`, `ensure_schema_async`
+- `create_migration_file`, `get_author`
 
 Projects rarely touch these directly — the CLI in `sqlspec.cli` and the Litestar CLI integration are the normal entry points.
 

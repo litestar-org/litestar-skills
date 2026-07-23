@@ -1,170 +1,126 @@
-# SQLSpec Event Channels (Pub/Sub)
+# SQLSpec Event Channels
 
-## Overview
+SQLSpec exposes synchronous and asynchronous database-backed event channels. Choose a transport by delivery semantics.
 
-SQLSpec provides `AsyncEventChannel` for real-time messaging between application components using the database as the message transport. This avoids introducing external message brokers for simple pub/sub needs.
+## Transport Matrix
 
----
-
-## Backends
-
-| Backend | Description | When to Use |
+| Transport | Delivery | Adapters |
 | --- | --- | --- |
-| `listen_notify` | Native PostgreSQL LISTEN/NOTIFY | Real-time, fire-and-forget messaging |
-| `listen_notify_durable` | Hybrid: queue table + NOTIFY trigger | Real-time with message durability |
-| `advanced_queue` | Oracle Advanced Queuing | Enterprise Oracle deployments |
-| `table_queue` | Polling-based queue table | Universal fallback for any adapter |
+| `notify` | Transient native notification; no replay or retry | `asyncpg`, `psycopg`, `psqlpy` |
+| `notify_queue` | Durable competing-consumer queue with a native wakeup hint | `asyncpg`, `psycopg`, `psqlpy` |
+| `poll_queue` | Durable competing-consumer queue discovered by polling | All adapters with an event store |
+| `aq` | Oracle Advanced Queuing | `oracledb` |
+| `txeventq` | Oracle Transactional Event Queues | `oracledb` |
 
----
+PostgreSQL-family adapters default to `notify`. Other adapters default to `poll_queue`.
+
+The names `listen_notify`, `listen_notify_durable`, and `table_queue` were removed. SQLSpec raises `ImproperConfigurationError` and names the canonical replacement; it does not silently change delivery semantics.
 
 ## Configuration
 
 ```python
 from sqlspec.adapters.asyncpg import AsyncpgConfig
 
+
 config = AsyncpgConfig(
-    connection_config={"dsn": "postgresql://localhost/app"},
+    connection_config={
+        "dsn": "postgresql://localhost/app",
+        "max_size": 5,
+    },
     extension_config={
         "events": {
-            "backend": "listen_notify",
-            "channel": "app_events",
-        }
+            "backend": "notify_queue",
+            "event_poll_interval": 1.0,
+        },
     },
 )
 ```
 
-### Table Queue Configuration
+`event_poll_interval` controls durable reconciliation when no wakeup arrives. `poll_interval` remains a compatibility input; `event_poll_interval` wins when both are set.
 
-For adapters without native pub/sub:
+Native PostgreSQL listeners hold one dedicated pool connection for the backend lifetime. Configure at least two connections so publishing cannot deadlock behind the listener: `max_size >= 2` for asyncpg and psycopg, and `max_db_pool_size >= 2` for psqlpy.
 
-```python
-config = SqliteConfig(
-    connection_config={"database": "app.db"},
-    extension_config={
-        "events": {
-            "backend": "table_queue",
-            "queue_table": "app_events",
-            "poll_interval": 1.0,        # Seconds between polls
-            "batch_size": 100,           # Max messages per poll
-        }
-    },
-)
-```
+## Publish and Consume
 
----
-
-## Subscribe / Publish Patterns
-
-### Basic Subscribe
+`AsyncEventChannel` is not an async context manager and has no `subscribe()` API. Construct it, use `iter_events()` or `listen()`, and call `shutdown()`.
 
 ```python
 from sqlspec.extensions.events import AsyncEventChannel
 
-async with AsyncEventChannel(config) as channel:
-    async for message in channel.subscribe("user_events"):
-        print(f"Received: {message.payload}")
-        await handle_event(message)
-```
 
-### Publish
+channel = AsyncEventChannel(config)
 
-```python
-async with AsyncEventChannel(config) as channel:
-    await channel.publish("user_events", {
-        "type": "user.created",
-        "user_id": "abc-123",
-        "email": "alice@example.com",
-    })
-```
-
-### Filtered Subscribe
-
-```python
-async with AsyncEventChannel(config) as channel:
-    async for message in channel.subscribe(
+try:
+    event_id = await channel.publish(
         "user_events",
-        filter_fn=lambda msg: msg.payload.get("type") == "user.created",
-    ):
-        await on_user_created(message.payload)
+        {"type": "user.created", "user_id": "abc-123"},
+        {"source": "accounts"},
+    )
+
+    async for event in channel.iter_events("user_events"):
+        await handle_event(event)
+        await channel.ack(event.event_id)
+finally:
+    await channel.shutdown()
 ```
 
----
+`iter_events()` leaves acknowledgement to the caller. `listen(channel, handler, auto_ack=True)` starts a managed listener task and acknowledges successful handler calls by default. Use `nack(event_id)` to return a durable event for redelivery.
 
-## WebSocket Broadcasting
-
-A common pattern is bridging database events to WebSocket clients:
+## Batch Publication
 
 ```python
-from sqlspec.extensions.events import AsyncEventChannel
-
-async def websocket_bridge(websocket, channel: AsyncEventChannel):
-    await websocket.accept()
-    async for message in channel.subscribe("notifications"):
-        await websocket.send_json(message.payload)
+event_ids = await channel.publish_many([
+    ("orders", {"type": "order.created", "id": "o-1"}, None),
+    ("orders", {"type": "order.created", "id": "o-2"}, None),
+])
 ```
 
-### Litestar WebSocket Example
+Each item is `(channel, payload, metadata)`. Returned IDs preserve input order. Batch-capable backends publish a grouped call atomically. Backends without `publish_many()`, including Oracle native transports, use an ordered per-event fallback that is not atomic across the batch.
 
-```python
-from litestar import WebSocket, websocket
+For `notify_queue`, the durable queue is the source of truth. PostgreSQL emits compact per-channel wakeup markers and reconciles missed markers on `event_poll_interval`.
 
-@websocket("/ws/events")
-async def event_stream(socket: WebSocket, channel: AsyncEventChannel) -> None:
-    await socket.accept()
-    async for message in channel.subscribe("app_events"):
-        await socket.send_json(message.payload)
-```
+## Event Model
 
-### FastAPI WebSocket Example
+`EventMessage` fields are:
 
-```python
-from fastapi import WebSocket
+| Field | Type |
+| --- | --- |
+| `event_id` | `str` |
+| `channel` | `str` |
+| `payload` | `dict[str, Any]` |
+| `metadata` | `dict[str, Any] \| None` |
+| `attempts` | `int` |
+| `available_at` | `datetime` |
+| `lease_expires_at` | `datetime \| None` |
+| `created_at` | `datetime` |
 
-@app.websocket("/ws/events")
-async def event_stream(websocket: WebSocket):
-    await websocket.accept()
-    async with AsyncEventChannel(config) as channel:
-        async for message in channel.subscribe("app_events"):
-            await websocket.send_json(message.payload)
-```
+There is no `message_id` or `timestamp` field.
 
----
+## Oracle Native Backends
 
-## Message Format
+Oracle defaults to `poll_queue`. `aq` and `txeventq` are opt-in and attach to an existing queue; SQLSpec does not provision it.
 
-Each message received from a channel contains:
+- Both native transports work in python-oracledb Thin mode.
+- JSON payloads require Oracle Database 21c or newer.
+- The user needs the required `DBMS_AQADM`, AQ role, and `DBMS_AQ` privileges.
+- `aq_queue` defaults to `SQLSPEC_EVENTS_QUEUE` and can include `{channel}` when physical per-channel queues are pre-provisioned.
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `channel` | `str` | Channel name |
-| `payload` | `dict[str, Any]` | Message body (JSON-serializable) |
-| `timestamp` | `datetime` | Server-side timestamp |
-| `message_id` | `str` | Unique message identifier |
+## Durable Queue Schema
 
----
+Durable queues support additive schema reconciliation:
 
-## Backend Behavior Notes
+- `manage_schema=False` leaves schema ownership to external migrations.
+- `create_schema=False` refuses to create a missing queue table.
+- Unknown or unsupported adapter-specific storage settings raise `ImproperConfigurationError`.
 
-### listen_notify (PostgreSQL)
+Column renames, drops, and type changes require explicit migrations. See [storage.md](storage.md) for backend-specific table tuning.
 
-- Messages are delivered in real-time via PostgreSQL LISTEN/NOTIFY.
-- Messages are fire-and-forget: if no subscriber is listening, the message is lost.
-- Maximum payload size: 8000 bytes.
-- Use `listen_notify_durable` if you need message persistence.
+## Framework Fan-Out
 
-### listen_notify_durable (PostgreSQL)
+Database event queues are competing-consumer transports, not browser broadcast buses. Bridge an event channel into Litestar Channels only when the application explicitly needs WebSocket or SSE fan-out; acknowledge the database event after the broadcast boundary succeeds.
 
-- Combines a queue table with a NOTIFY trigger.
-- Subscribers receive real-time notification, then read from the table.
-- Messages persist until acknowledged or expired.
+## Cross References
 
-### table_queue (Universal)
-
-- Works with any adapter (SQLite, MySQL, DuckDB, etc.).
-- Polling-based: configurable `poll_interval` controls latency vs load tradeoff.
-- Messages are stored in a table and marked as processed after delivery.
-
-### advanced_queue (Oracle)
-
-- Uses Oracle's built-in Advanced Queuing infrastructure.
-- Supports priority, delay, expiration, and retry policies.
+- [storage.md](storage.md) — durable schema controls and backend tuning.
+- [adapters.md](adapters.md) — adapter capability matrix.
+- [observability.md](observability.md) — event metrics and tracing.

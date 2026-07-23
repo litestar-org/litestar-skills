@@ -30,7 +30,7 @@ Apply each criterion against THAT stack only. A `sqlspec` project that uses `SQL
 
 ### Criteria
 
-1. **DTOs** — `msgspec.Struct` with `Meta(rename="camel")` (canonical on msgspec stacks) OR `pydantic.BaseModel` with `alias_generator=to_camel` + `ConfigDict(populate_by_name=True)` (canonical on Pydantic stacks). Flag mixed stacks (both `msgspec.Struct` and `BaseModel` in the same request path). Do not flag Pydantic usage when Pydantic is already in-stack.
+1. **DTOs** — `msgspec.Struct` with the class option `rename="camel"` (canonical on msgspec stacks) OR `pydantic.BaseModel` with `alias_generator=to_camel` + `ConfigDict(populate_by_name=True)` (canonical on Pydantic stacks). Flag mixed stacks (both `msgspec.Struct` and `BaseModel` in the same request path). Do not flag Pydantic usage when Pydantic is already in-stack.
 
 2. **Guards** — auth via Guards at Controller class level, never inline `if not request.user:` checks inside handler bodies.
 
@@ -102,7 +102,7 @@ For each file:
   → Move to a Guard function and apply at Controller class level.
 - **warning** [criterion 4: Data access] line 78: Hand-written SELECT query for simple get-by-id.
   → Use the repository service method (`self.service.get(id)`) matching this project's data layer.
-- **info** [criterion 1: DTOs] line 12: Struct uses `Meta(rename="camel")` correctly.
+- **info** [criterion 1: DTOs] line 12: Struct uses the class option `rename="camel"` correctly.
 ```
 
 Then a summary:

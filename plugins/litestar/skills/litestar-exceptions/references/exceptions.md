@@ -2,7 +2,10 @@
 
 Build a project-local exception hierarchy that rolls up to a single `ApplicationError` base, register handlers on the app, and let exceptions bubble. Handlers never catch — the app-level handler maps cleanly to HTTP.
 
-Litestar's native HTTP exception responses follow Problem Details semantics (RFC 9457). Keep a custom envelope only when the project has an explicit API contract that differs from Problem Details.
+Litestar's native HTTP exception response is a JSON object with
+`status_code`, `detail`, and optional `extra`. It is not an RFC 9457 Problem
+Details response. Register `ProblemDetailsPlugin` when the API contract
+requires `application/problem+json`.
 
 ## Hierarchy
 
@@ -74,7 +77,7 @@ def application_exception_handler(request: Request, exc: ApplicationError) -> Re
     return Response(content=body, status_code=exc.status_code)
 ```
 
-If the project wants standard Problem Details, raise Litestar `HTTPException` subclasses directly at framework boundaries and put extension members in `extra`:
+Native Litestar exceptions keep extension data under `extra`:
 
 ```python
 from litestar.exceptions import HTTPException
@@ -86,6 +89,60 @@ raise HTTPException(
     extra={"code": "email_conflict"},
 )
 ```
+
+This produces Litestar's JSON error envelope, not Problem Details.
+
+## RFC 9457 Problem Details
+
+Register the plugin and raise `ProblemDetailsException`:
+
+```python
+from litestar import Litestar, get
+from litestar.params import FromPath
+from litestar.plugins.problem_details import (
+    ProblemDetailsException,
+    ProblemDetailsPlugin,
+)
+
+
+@get("/orders/{order_id:int}")
+async def get_order(order_id: FromPath[int]) -> None:
+    raise ProblemDetailsException(
+        status_code=404,
+        type_="https://example.com/problems/order-not-found",
+        title="Order not found",
+        detail=f"No order exists with identifier {order_id}.",
+        extra={"code": "order_not_found"},
+    )
+
+
+app = Litestar(
+    route_handlers=[get_order],
+    plugins=[ProblemDetailsPlugin()],
+)
+```
+
+The response uses `application/problem+json`. A mapping passed as `extra` is
+merged into the top-level Problem Details object; a list is emitted under the
+`extra` member.
+
+The plugin does not convert every `HTTPException` by default. Enable conversion
+explicitly when the whole API uses Problem Details:
+
+```python
+from litestar.plugins.problem_details import (
+    ProblemDetailsConfig,
+    ProblemDetailsPlugin,
+)
+
+
+problem_details = ProblemDetailsPlugin(
+    ProblemDetailsConfig(enable_for_all_http_exceptions=True),
+)
+```
+
+Use `exception_to_problem_detail_map` for domain exceptions that need a custom
+`type`, `title`, `detail`, or extension members.
 
 ## Registration
 
@@ -103,10 +160,17 @@ You may register multiple handlers for different bases. Litestar dispatches to t
 ## Anti-patterns
 
 - Inline `try` / `except` in handler bodies. Let exceptions bubble.
-- Mixing a custom `{detail, statusCode}` envelope with Problem Details in neighboring routes.
+- Mixing Litestar's `{status_code, detail, extra}` envelope with Problem
+  Details in neighboring routes without an explicit compatibility boundary.
 - Mixing transport-layer concerns (HTTP status) into service code. Services raise domain exceptions; the handler maps to status.
 
 ## Cross-references
 
 - Repository services raise `NotFoundError` from `get` / `get_one`: [services.md](../../litestar-data-services/references/services.md)
 - Validation errors from msgspec DTOs flow through Litestar's built-in handler unless you override: [dto.md](../../litestar-dto-openapi/references/dto.md)
+
+## Tagged source
+
+- [2.24 Problem Details implementation](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/plugins/problem_details.py)
+- [2.24 Problem Details tests](https://github.com/litestar-org/litestar/blob/v2.24.0/tests/unit/test_plugins/test_problem_details.py)
+- [2.24 native exception response](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/exceptions/responses/__init__.py)

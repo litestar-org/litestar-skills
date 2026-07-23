@@ -13,6 +13,8 @@ Use this skill for DTO selection, msgspec-first schemas, request/response typing
 - Keep persistence models separate from API DTOs.
 - Use camelCase wire names while Python stays snake_case.
 - Exclude server-owned fields from write DTOs.
+- Treat nullability and requiredness separately: `T | None` permits `null`;
+  only a default value makes a field optional.
 
 ## Quick Reference
 
@@ -50,6 +52,7 @@ Use this skill for DTO selection, msgspec-first schemas, request/response typing
 - [ ] Wire names match the API convention.
 - [ ] Server-owned fields are excluded from writes.
 - [ ] /schema output matches the intended contract.
+- [ ] Nullable fields without defaults remain in the OpenAPI `required` array.
 
 </validation>
 
@@ -74,6 +77,7 @@ class UserWriteDTO(MsgspecDTO[UserWrite]):
 
 - <https://docs.litestar.dev/> - Litestar documentation
 - <https://docs.litestar.dev/latest/reference/> - Litestar API reference
+- <https://github.com/litestar-org/litestar/tree/v2.24.0> - Audited Litestar 2.24.0 source
 
 ## Shared Styleguide Baseline
 

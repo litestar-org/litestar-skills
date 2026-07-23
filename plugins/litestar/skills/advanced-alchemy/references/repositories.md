@@ -1,5 +1,9 @@
 # Repository Patterns
 
+Advanced Alchemy 1.11 names collection reads `get_many()` and
+`get_many_and_count()`. Do not introduce `list()` or `list_and_count()`; those
+aliases are deprecated and scheduled for removal in 2.0.
+
 ## Repository Types
 
 Advanced Alchemy provides three async repository variants:

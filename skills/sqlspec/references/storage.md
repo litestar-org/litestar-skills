@@ -1,145 +1,118 @@
-# SQLSpec Storage Integration
+# SQLSpec Storage
 
-## Overview
+SQLSpec has two distinct storage concerns:
 
-SQLSpec provides adapter-specific storage implementations for Litestar session stores, event channel backends, and ADK session/event plus memory stores. Artifact service contracts are available under ADK, but adapter-specific concrete artifact metadata stores are deployment-provided. All integrations are configured through the `extension_config` dict on adapter configs.
+1. `sqlspec.storage` moves Arrow/row payloads between drivers and object stores.
+2. Adapter `extension_config` controls the database tables used by ADK, Litestar sessions, and durable event queues.
 
----
+Do not treat extension stores as `sqlspec.storage` backends.
 
-## ADK Store Implementations
+## Object-Store Registry
 
-Each production adapter provides an `adk` package with session/event and memory stores for Google ADK workflows:
+`StorageRegistry` resolves a URI or registered alias to one of three backends:
+
+| Backend | Use |
+| --- | --- |
+| `LocalStore` | Zero-dependency local filesystem access |
+| `ObStoreBackend` | Preferred object-store implementation when `obstore` supports the URI |
+| `FSSpecBackend` | Fallback and support for HTTP, HTTPS, FTP, SFTP, and SSH |
+
+```python
+from sqlspec.storage import StorageRegistry
+
+
+registry = StorageRegistry()
+registry.register_alias(
+    "exports",
+    "s3://analytics-bucket",
+    base_path="daily",
+)
+
+store = registry.get("exports")
+```
+
+Install `sqlspec[obstore]` or `sqlspec[fsspec]` for cloud storage. Local paths always have the built-in local fallback. Pass `backend="local"`, `"obstore"`, or `"fsspec"` only when backend selection must be explicit.
+
+## Storage Pipelines
+
+`SyncStoragePipeline` and `AsyncStoragePipeline` implement staging, partition fan-out, cleanup, CSV/JSON/NDJSON/Arrow/Parquet payload handling, and telemetry. Driver methods such as `select_to_storage()` and `load_from_storage()` use the same bridge vocabulary:
+
+- `StorageCapabilities` describes the selected driver's supported import/export paths.
+- `StorageLoadRequest` describes a staging allocation.
+- `StagedArtifact` carries cleanup and expiry metadata.
+- `StorageBridgeJob` is a completed operation handle with `job_id`, `status`, and telemetry.
+
+Check the adapter capability matrix before calling driver storage methods. A method existing on the shared driver base does not mean every adapter has a native or supported implementation.
+
+## Bridge Diagnostics
+
+```python
+from sqlspec.storage import (
+    get_storage_bridge_diagnostics,
+    get_storage_bridge_metrics,
+    reset_storage_bridge_metrics,
+)
+
+
+metrics = get_storage_bridge_metrics()
+diagnostics = get_storage_bridge_diagnostics()
+reset_storage_bridge_metrics()
+```
+
+The process-level metrics report bytes written and partitions created. Diagnostics add serializer-cache metrics. Treat them as in-process diagnostics, not a durable job registry.
+
+## Extension-Table Storage
+
+Put database-table settings under the matching extension block:
 
 ```python
 from sqlspec.adapters.asyncpg import AsyncpgConfig
-from sqlspec.adapters.asyncpg.adk import AsyncpgADKMemoryStore, AsyncpgADKStore
 
-config = AsyncpgConfig(
-    connection_config={"dsn": "postgresql://localhost/app"},
-    extension_config={
-        "adk": {
-            "session_table": "adk_session",
-            "events_table": "adk_event",
-            "memory_table": "adk_memory",
-            "memory_use_fts": True,
-        }
-    },
-)
 
-session_store = AsyncpgADKStore(config)
-memory_store = AsyncpgADKMemoryStore(config)
-await session_store.ensure_tables()
-await memory_store.ensure_tables()
-```
-
-### Available ADK Stores
-
-ADK-supported adapters are `asyncpg`, `psycopg`, `psqlpy`, `cockroach_asyncpg`, `cockroach_psycopg`, `aiomysql`, `asyncmy`, `mysqlconnector`, `pymysql`, `aiosqlite`, `sqlite`, `oracledb`, `duckdb`, `adbc`, and `spanner`. These stores handle:
-
-- Session rows and event history for `SQLSpecSessionService`
-- Memory rows for `SQLSpecMemoryService` / `SQLSpecSyncMemoryService`
-- Adapter-specific JSON, FTS, and transaction optimizations
-
-BigQuery is not an ADK backend. Use Spanner or an OLTP adapter for Google ADK session/event storage.
-
----
-
-## Event Channel Backends
-
-Each adapter provides an `events/store.py` module implementing event pub/sub storage:
-
-```python
-config = AsyncpgConfig(
-    connection_config={"dsn": "postgresql://localhost/app"},
-    extension_config={
-        "events": {
-            "backend": "listen_notify",      # or "table_queue"
-            "channel": "app_events",
-        }
-    },
-)
-```
-
-### Backend Selection by Adapter
-
-| Adapter | Recommended Backend | Notes |
-| --- | --- | --- |
-| AsyncPG / Psycopg / CockroachDB | `listen_notify` | Native PostgreSQL LISTEN/NOTIFY |
-| OracleDB | `advanced_queue` | Oracle Advanced Queuing |
-| All others | `table_queue` | Universal polling fallback |
-
-See [events.md](events.md) for full pub/sub documentation.
-
----
-
-## Litestar Session Store
-
-Each adapter provides a `litestar/store.py` module for server-side session storage:
-
-```python
 config = AsyncpgConfig(
     connection_config={"dsn": "postgresql://localhost/app"},
     extension_config={
         "litestar": {
-            "commit_mode": "autocommit",
-            "session_table": "sessions",
-            "session_ttl": 3600,
-        }
-    },
-)
-```
-
-### Available Session Stores
-
-| Adapter | Store Class | Notes |
-| --- | --- | --- |
-| AsyncPG | `AsyncpgStore` | JSONB session data |
-| Psycopg | `PsycopgStore` | JSONB session data |
-| AioSQLite | `AiosqliteStore` | JSON text column |
-| DuckDB | `DuckdbStore` | JSON column |
-| SQLite | `SqliteStore` | JSON text column |
-| BigQuery | `BigqueryStore` | JSON column |
-| OracleDB | `OracledbStore` | CLOB/JSON column |
-| All MySQL variants | Respective stores | JSON column |
-| All CockroachDB variants | Respective stores | JSONB column |
-| Spanner | `SpannerStore` | JSON column |
-| PSQLPy | `PsqlpyStore` | JSONB session data |
-| ADBC | `AdbcStore` | Varies by underlying driver |
-
----
-
-## Configuration via extension_config
-
-The `extension_config` dict on any adapter config is the unified entry point for all storage integrations:
-
-```python
-config = AsyncpgConfig(
-    connection_config={"dsn": "postgresql://localhost/app"},
-    extension_config={
-        # Litestar framework integration
-        "litestar": {
-            "commit_mode": "autocommit",
-            "session_table": "sessions",
-            "correlation_header": "x-request-id",
+            "session_table": "litestar_session",
+            "manage_schema": True,
         },
-        # Starlette/FastAPI framework integration
-        "starlette": {
-            "commit_mode": "autocommit",
-        },
-        # Event channel configuration
         "events": {
-            "backend": "listen_notify",
-            "channel": "app_events",
+            "backend": "notify_queue",
+            "queue_table": "sqlspec_event_queue",
+            "manage_schema": True,
         },
-        # ADK session/event and memory stores
         "adk": {
             "session_table": "adk_session",
             "events_table": "adk_event",
             "memory_table": "adk_memory",
-            "memory_use_fts": True,
+            "manage_schema": True,
         },
     },
 )
 ```
 
-Only include the keys for integrations you are using. Unused keys are ignored.
+SQLSpec 0.56 validates backend-specific extension storage keys. Unknown keys and options that the selected backend cannot honor raise `ImproperConfigurationError`; they are not ignored.
+
+Schema lifecycle controls are:
+
+- `manage_schema`: reconcile the canonical extension schema.
+- `create_schema`: allow creation when a table is absent.
+- `run_migrations`: run the extension's migration lifecycle where supported.
+
+Additive reconciliation creates missing tables and columns. Renames, drops, and incompatible type changes require an explicit migration.
+
+Backend-specific tuning includes PostgreSQL table/autovacuum settings, MySQL and MariaDB table/index options, BigQuery partition settings, Spanner sharding/table/index options, CockroachDB session hash sharding and row TTL, SQLite PRAGMA profiles, and Oracle compression/partitioning/In-Memory/table options. Use only keys documented by the selected adapter.
+
+## ADK and Framework Stores
+
+Adapter-local `adk`, `events`, and `litestar` packages expose concrete database stores. Instantiate them only when integrating those systems directly; normal framework and ADK integrations construct them from the registered adapter config.
+
+BigQuery does not provide an ADK session or memory backend. Artifact service protocols exist under the ADK extension, but SQLSpec does not claim a concrete artifact metadata store for every adapter.
+
+## Cross References
+
+- [adapters.md](adapters.md) — adapter and native capability matrix.
+- [arrow.md](arrow.md) — Arrow result/export behavior.
+- [bulk-ingest.md](bulk-ingest.md) — adapter-supported ingest paths.
+- [events.md](events.md) — event transport and durable-queue semantics.
+- [adk.md](adk.md) — ADK session and memory stores.

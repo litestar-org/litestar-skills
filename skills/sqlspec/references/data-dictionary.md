@@ -1,167 +1,144 @@
 # SQLSpec Data Dictionary
 
-`sqlspec.data_dictionary` is the introspection layer that exposes `information_schema`-style metadata -- table lists, column definitions, indexes, foreign keys, database version, feature flags, and native statistics where supported. It is what the migration tracker uses to decide whether `ddl_migrations` needs schema upgrades, and what adapter-specific code uses to pick an optimal column type for a logical category (e.g. "give me the best JSON type this Postgres version can handle").
+The data dictionary is SQLSpec's runtime database-introspection interface. Use the selected driver's `data_dictionary` property. Do not infer support from an empty list.
 
-## What It Is
+## Metadata Contract
 
-Two layers live side-by-side:
+SQLSpec 0.56 distinguishes capability, result, identity, and fidelity:
 
-1. **Static dialect configuration** — `DialectConfig` objects describing feature flags, minimum versions required for each feature, and logical-to-physical type mappings. Loaded from `sqlspec.data_dictionary.dialects.*`.
-2. **Runtime introspection** — async and sync `DataDictionary` classes attached to each driver that run SQL against live system catalogs and return typed metadata.
+- `MetadataCapabilityProfile` reports support by metadata domain.
+- `MetadataCapability` distinguishes supported, gated, unsupported, unknown, and not-implemented domains.
+- `MetadataResult` wraps domain lookups.
+- `ObjectIdentity` identifies catalog, schema, name, object type, dialect, quoting, and source.
+- `DDLResult` carries DDL plus status, fidelity, warnings, and dependency edges.
+- `SystemMetadataRequest` and `SystemMetadataResult` isolate operational metadata behind explicit risk gates.
 
-Useful for: schema migrations that must adapt to existing columns, DDL generation, query planning, feature-gated code paths ("only emit `INSERT ... ON CONFLICT` when `supports_upsert` is true at the detected version"), and table introspection without executing migrations.
+Inspect `result.capability` before reading `MetadataResult.items` or `SystemMetadataResult.rows`. Inspect `DDLResult.status` and `DDLResult.fidelity` before replaying DDL.
 
-## Core API
-
-Top-level exports in `sqlspec.data_dictionary.__init__`:
-
-- `DataDictionaryLoader`, `get_data_dictionary_loader()` — singleton that lazy-loads the per-dialect SQL queries from `sqlspec/data_dictionary/sql/<dialect>/*.sql`.
-- `get_dialect_config(dialect)`, `list_registered_dialects()`, `register_dialect(config)`, `normalize_dialect_name(dialect)` — the dialect registry.
-- `DialectConfig`, `FeatureFlags`, `FeatureVersions` — static-config types in `sqlspec/data_dictionary/_types.py`.
-- `TableMetadata`, `ColumnMetadata`, `IndexMetadata`, `ForeignKeyMetadata`, `TableStatisticsMetadata` — runtime metadata types exported from `sqlspec.data_dictionary`.
-
-`DialectConfig` fields (see `sqlspec/data_dictionary/_types.py`):
-
-```python
-from sqlspec.data_dictionary import DialectConfig
-
-config = DialectConfig(
-    name="postgres",
-    feature_versions={"supports_upsert": ...},
-    feature_flags={"supports_uuid": True, "supports_arrays": True},
-    type_mappings={"json": "JSONB", "uuid": "UUID"},
-    version_pattern=...,
-    default_schema="public",
-)
-```
-
-`FeatureFlags` is a `TypedDict` with keys like `supports_arrays`, `supports_clustering`, `supports_cte`, `supports_json`, `supports_returning`, `supports_upsert`, `supports_uuid`, `supports_window_functions`. `FeatureVersions` maps a subset of those to `VersionInfo(major, minor, patch)` minimums.
-
-Runtime metadata types live in `sqlspec.data_dictionary`:
-
-- `TableMetadata` — `schema_name`, `table_name`, `table_type`, `table_catalog`.
-- `ColumnMetadata` — `column_name`, `data_type`, `is_nullable`, `column_default`, `ordinal_position`, `max_length`, `numeric_precision`, `numeric_scale`, `is_primary`, `is_unique`, `extra`.
-- `IndexMetadata` — `index_name`, `columns`, `is_unique`, `is_primary`.
-- `ForeignKeyMetadata` — source/target columns and schemas.
-- `TableStatisticsMetadata` — `catalog_name`, `schema_name`, `table_name`, optional `column_name`, `statistic_key`, `statistic_name`, `statistic_value`, `is_approximate`.
-
-## Dialect Coverage
-
-Dialect modules register a `DialectConfig` when imported (`sqlspec/data_dictionary/dialects/__init__.py`):
-
-| Dialect module | Exported config |
-| --- | --- |
-| `bigquery.py` | `BIGQUERY_CONFIG` |
-| `cockroachdb.py` | `COCKROACHDB_CONFIG` |
-| `duckdb.py` | `DUCKDB_CONFIG` |
-| `mysql.py` | `MYSQL_CONFIG` |
-| `mssql.py` | `MSSQL_CONFIG` |
-| `oracle.py` | `ORACLE_CONFIG` |
-| `postgres.py` | `POSTGRES_CONFIG` |
-| `spanner.py` | `SPANNER_CONFIG` |
-| `sqlite.py` | `SQLITE_CONFIG` |
-
-Aliases defined in `_registry.DIALECT_ALIASES`: `postgresql` → `postgres`, `mariadb` → `mysql`, `cockroach` → `cockroachdb`.
-
-Each dialect ships a parallel SQL directory under `sqlspec/data_dictionary/sql/<dialect>/` containing named queries for `columns`, `foreign_keys`, `indexes`, `tables`, and `version`. These are loaded on demand by `DataDictionaryLoader` via `SQLFileLoader` — the first time you ask for a dialect's query, its file tree is parsed and cached.
-
-## Typical Usage
-
-Drivers expose a `data_dictionary` property (declared as an abstract property on `AsyncDriverAdapterBase` / `SyncDriverAdapterBase`) that returns an `AsyncDataDictionaryBase` / `SyncDataDictionaryBase` bound to that dialect. That is the runtime entry point.
-
-### Async
+## Capability-First Usage
 
 ```python
 from sqlspec.adapters.asyncpg import AsyncpgConfig
 
 
 config = AsyncpgConfig(
-    connection_config={"dsn": "postgresql://app:app@localhost/app"}
+    connection_config={"dsn": "postgresql://app:app@localhost/app"},
 )
 
 
-async def describe_table(table: str) -> None:
-    async with config.provide_session() as driver:
-        columns = await driver.data_dictionary.get_columns(driver, table=table)
-        for col in columns:
-            name = col.get("column_name")
-            data_type = col.get("data_type")
-            nullable = col.get("is_nullable")
-            print(f"{name}: {data_type} (nullable={nullable})")
+async def inspect_orders() -> None:
+    async with config.provide_session() as db:
+        profile = await db.data_dictionary.get_metadata_capabilities(db)
+        capability = profile.get("tables")
+        if capability.support != "supported":
+            return
+
+        result = await db.data_dictionary.get_table_details(
+            db,
+            "orders",
+            schema="public",
+        )
+        if result.capability.support == "supported":
+            for item in result.items:
+                ...
 ```
 
-Available driver-side methods (async signatures shown; sync drivers expose the same without `await`):
+Sync drivers expose the same contract without `await`.
 
-- `await driver.data_dictionary.get_version(driver)` → `VersionInfo | None`
-- `await driver.data_dictionary.get_feature_flag(driver, feature)` → `bool`
-- `await driver.data_dictionary.get_optimal_type(driver, logical_type)` → `str`
-- `await driver.data_dictionary.get_tables(driver, schema=None)` → `list[TableMetadata]`
-- `await driver.data_dictionary.get_columns(driver, table=None, schema=None)` → `list[ColumnMetadata]`
-- `await driver.data_dictionary.get_indexes(driver, table=None, schema=None)` → `list[IndexMetadata]`
-- `await driver.data_dictionary.get_foreign_keys(driver, table=None, schema=None)` → `list[ForeignKeyMetadata]`
+## Convenience Lists vs Result Envelopes
 
-ADBC adds an adapter-specific `get_statistics(driver, table, schema=None)` method that wraps the native `adbc_get_statistics` API and returns `list[TableStatisticsMetadata]`. It is separate from the shared data dictionary surface because SQLSpec does not define a portable SQL statistics contract. Unsupported ADBC drivers raise `OperationalError`; PostgreSQL provides approximate native statistics, SQLite and DuckDB currently raise, Flight SQL behavior is server-dependent, and BigQuery is unverified.
+These structural convenience methods return lists:
 
-### Sync
+- `get_tables(driver, schema=None)`
+- `get_columns(driver, table=None, schema=None)`
+- `get_indexes(driver, table=None, schema=None)`
+- `get_foreign_keys(driver, table=None, schema=None)`
+
+Richer domain methods return `MetadataResult`, including `get_objects()`, `get_table_details()`, and `get_dependencies()`. An unsupported result is distinct from a supported result containing no items.
+
+## DDL and Dependency Ordering
+
+`get_ddl()` returns one `DDLResult`. `get_schema_ddl()` returns a `MetadataResult` whose items are `DDLResult` objects.
 
 ```python
-from sqlspec.adapters.sqlite import SqliteConfig
+from sqlspec.data_dictionary import sort_ddl_results
 
 
-config = SqliteConfig(connection_config={"database": "app.db"})
-
-
-def list_user_tables() -> list[str]:
-    with config.provide_session() as driver:
-        tables = driver.data_dictionary.get_tables(driver)
-        return [t.get("table_name", "") for t in tables if t.get("table_name")]
+schema_result = await db.data_dictionary.get_schema_ddl(db, schema="public")
+if schema_result.capability.support == "supported":
+    ordered = sort_ddl_results(schema_result.items, order="create")
 ```
 
-## Integration With the Query Builder
+Fidelity values include native, generated, hybrid, lossy, partial, transport fallback, and unsupported. Review lossy, partial, or transport-fallback DDL before replay. `sort_ddl_results(..., order="drop")` reverses dependency direction and raises `DependencyCycleError` by default when a cycle prevents a complete order.
 
-The query builder (`sqlspec.builder`, entry point `from sqlspec import sql`) does **not** consult the data dictionary during statement construction — it relies on sqlglot for dialect conversion and parameter-style translation. The data dictionary is deliberately a runtime / introspection concern, separate from the parse-and-render pipeline. If you need schema-aware code generation, query the data dictionary explicitly and feed the result into your own logic.
+## System Metadata
 
-The migration tracker is the canonical consumer: `sqlspec/migrations/tracker.py` calls `driver.data_dictionary.get_columns(driver, self.version_table)` to detect missing columns on the tracking table and auto-add them when the runner upgrades.
-
-## Example: Introspect a Table's Columns
+System metadata is separate because it can expose SQL text, users, hosts, grants, topology, billing data, or license-gated diagnostics.
 
 ```python
-from sqlspec.adapters.asyncpg import AsyncpgConfig
+from sqlspec.data_dictionary import SystemMetadataRequest
 
 
-config = AsyncpgConfig(
-    connection_config={"dsn": "postgresql://app:app@localhost/app"}
+capabilities = await db.data_dictionary.get_system_metadata_capabilities(db)
+table_stats = next(
+    item for item in capabilities if item.domain == "table_statistics"
 )
-
-
-async def has_column(table: str, column: str) -> bool:
-    async with config.provide_session() as driver:
-        columns = await driver.data_dictionary.get_columns(driver, table=table)
-        return any(col.get("column_name") == column for col in columns)
-
-
-async def supports_jsonb() -> bool:
-    async with config.provide_session() as driver:
-        return await driver.data_dictionary.get_feature_flag(driver, "supports_jsonb")
+if table_stats.support == "supported":
+    request = SystemMetadataRequest(
+        "table_statistics",
+        include_performance=True,
+        schema="public",
+        table="orders",
+    )
+    result = await db.data_dictionary.get_system_metadata(db, request)
 ```
 
-## Static Config Access Without a Driver
+Branch on the domain capability before execution, then branch on the returned result capability. Keep redaction enabled unless the workflow explicitly authorizes sensitive diagnostics.
 
-When you need only the static config (e.g., in a module-level constant), use the registry directly:
+## Adapter Boundaries
+
+- PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, SQLite, DuckDB, BigQuery, and Spanner use database-specific catalog/query packs.
+- ADBC metadata can be a transport fallback. Treat transport-fallback or lossy output as inspection data, not lossless export.
+- BigQuery operational metadata can be region-scoped or billed.
+- Oracle diagnostics can require privileges or licensed packs.
+- Spanner has separate GoogleSQL and PostgreSQL metadata shapes.
+- Arrow ODBC does not expose a portable raw ODBC catalog bridge in Python.
+
+Use the runtime capability profile as the final answer; do not hard-code a static support matrix into application logic.
+
+## Version and Capability Caches
+
+Adapter data dictionaries cache server-version and capability probes at the config/pool scope. Oracle 0.56 shares server-version, JSON-storage, and extension-table capability detection through that cache. Do not create a second application-global cache for these probes.
+
+## Additive Schema Reconciliation
+
+Schema reconciliation is a migration utility, not a metadata-result API:
 
 ```python
-from sqlspec.data_dictionary import get_dialect_config
+from sqlspec.migrations import SchemaTarget, ensure_schema_async
 
 
-POSTGRES = get_dialect_config("postgres")
-assert POSTGRES.default_schema == "public"
-assert POSTGRES.get_feature_flag("supports_arrays") is True
-
-JSON_TYPE = POSTGRES.get_optimal_type("json")  # "JSONB"
+target = SchemaTarget.from_ddl(
+    "widgets",
+    "CREATE TABLE widgets (id INTEGER PRIMARY KEY, label VARCHAR(50))",
+    dialect="sqlite",
+)
+result = await ensure_schema_async(
+    db,
+    [target],
+    manage_schema=True,
+    create_schema=True,
+)
 ```
+
+It creates missing tables and adds missing columns derived from canonical DDL. It does not rename or drop columns or change incompatible types. Extension stores expose `manage_schema`, `create_schema`, and `run_migrations` controls around this lifecycle.
+
+## Query Builder Boundary
+
+The query builder does not consult live metadata while constructing a statement. Query the data dictionary explicitly, make a capability decision, then build the statement.
 
 ## Cross References
 
-- [adapters.md](adapters.md) — each adapter's dialect mapping.
-- [architecture.md](architecture.md) — where the data dictionary sits in the wider pipeline.
-- [migrations.md](migrations.md) — the tracking table uses `get_columns` for schema upgrades.
+- [adapters.md](adapters.md) — adapter selection.
+- [migrations.md](migrations.md) — migration runner and schema ownership.
+- [storage.md](storage.md) — extension schema lifecycle.

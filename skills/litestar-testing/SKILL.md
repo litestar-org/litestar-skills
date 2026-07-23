@@ -13,6 +13,7 @@ Litestar-specific testing patterns built on pytest + anyio. Covers:
 - Fixture patterns from canonical [litestar-fullstack](https://github.com/litestar-org/litestar-fullstack) tests
 - Mocking Guards and DI dependencies
 - Integration with `pytest-databases` (see `../pytest-databases/SKILL.md`)
+- Autowire discovery and cache isolation (see `../litestar-autowire/references/testing.md`)
 - Request body / form / multipart / header / cookie testing
 - Litestar-specific assertion patterns (Response, headers, cookies)
 
@@ -103,56 +104,62 @@ async def async_client(app: Litestar) -> AsyncGenerator[AsyncTestClient, None]:
 
 ### Mocking Guards
 
-Guards are functions of `(connection, route_handler) -> None`. Mock by overriding `dependencies` or by registering a no-op guard at the app level for tests:
+Guards are functions of `(connection, route_handler) -> None`. Test the real
+guard with fake identity or authorization providers. Build a fresh app with
+replacement providers; Litestar has no mutable `app.dependency_overrides`
+registry.
 
 ```python
-# conftest.py
-from litestar import Litestar
-
-from app import create_app
+from litestar.di import Provide
 
 
 @pytest.fixture
-async def app_with_no_auth() -> Litestar:
-    """App with auth Guard replaced by a no-op for tests."""
-    from app.domain.accounts.guards import requires_active_user
+async def async_client() -> AsyncGenerator[AsyncTestClient, None]:
+    fake_users_service = FakeUserService()
 
-    async def allow_all(connection, route_handler) -> None:
-        return None
+    async def provide_fake_users_service() -> UserService:
+        return fake_users_service
 
-    app = create_app()
-    # Swap the guard everywhere it's referenced (depends on app structure)
-    for route in app.route_handler_method_map.values():
-        ...
-    return app
-```
-
-Cleaner: use DI override (preferred). If the Guard depends on a service via DI, override the service:
-
-```python
-@pytest.fixture
-async def async_client(app: Litestar) -> AsyncGenerator[AsyncTestClient, None]:
-    from app.domain.accounts.services import UserService
-
-    class FakeUserService(UserService): ...
-
-    app.dependencies["users_service"] = lambda: FakeUserService(...)
-    async with AsyncTestClient(app=app) as client:
+    test_app = create_app(
+        dependencies={
+            "users_service": Provide(provide_fake_users_service),
+        },
+    )
+    async with AsyncTestClient(app=test_app) as client:
         yield client
 ```
 
 ### Mocking DI Dependencies
 
 ```python
+from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock
 
+import pytest
+from litestar.di import Provide
+from litestar.testing import AsyncTestClient
+
+
 @pytest.fixture
-async def async_client(app: Litestar) -> AsyncGenerator[AsyncTestClient, None]:
+async def async_client() -> AsyncGenerator[tuple[AsyncTestClient, AsyncMock], None]:
     fake_email = AsyncMock()
-    app.dependencies["email_service"] = lambda: fake_email
+
+    async def provide_fake_email() -> AsyncMock:
+        return fake_email
+
+    app = create_app(
+        dependencies={
+            "email_service": Provide(provide_fake_email),
+        },
+    )
     async with AsyncTestClient(app=app) as client:
         yield client, fake_email
 ```
+
+For isolated handler tests, pass replacements directly to
+`create_async_test_client(..., dependencies={...})`. Do not mutate a
+constructed app; rebuilding preserves dependency resolution and prevents
+parallel tests from sharing overrides.
 
 ### Integration with pytest-databases
 
@@ -279,11 +286,15 @@ If the app talks to a DB, layer in `pytest-databases` (`postgres_service`, `mysq
 
 ### Step 4: Override DI for Externals
 
-Mock `EmailService`, HTTP clients, and other side-effect-laden dependencies via `app.dependencies[name] = lambda: fake`. Avoid real network calls in tests.
+Mock `EmailService`, HTTP clients, and other side-effect-laden dependencies by
+constructing a fresh app or test client with replacement `Provide` instances.
+Avoid real network calls in tests.
 
 ### Step 5: Mock Guards When Needed
 
-For tests that should bypass auth, override the Guard's underlying service or register a no-op Guard. Prefer DI overrides over patching internals.
+Build a fresh app with fake identity or authorization providers. Register a
+no-op guard only when the test intentionally excludes authentication behavior;
+never patch route internals on a shared app.
 
 ### Step 6: Write Tests
 
@@ -306,6 +317,9 @@ For tests that should bypass auth, override the Guard's underlying service or re
 - **Always `async with AsyncTestClient(app=app)`** — without the context manager, plugin lifespans (Vite, SAQ, SQLAlchemy) never run, and tests see a half-initialized app.
 - **Prefer `AsyncTestClient` over `TestClient`** for new tests — the async client matches Litestar's runtime model.
 - **Mock side effects via DI override**, not patching — keeps tests isolated from import order and global state.
+- **Build a fresh app for dependency replacements** — Litestar has no mutable
+  dependency-override registry, and shared app mutation races under parallel
+  tests.
 - **Use `pytest-databases` for real DB testing** — never mock SQLAlchemy / sqlspec internals; assertions on mocked queries don't catch real bugs.
 - **Function-based tests** — no class-based test containers unless absolutely needed for shared setup.
 - **One assertion concern per test** — failures should pinpoint a single behavior.
@@ -326,7 +340,7 @@ Before delivering Litestar tests, verify:
 - [ ] `AsyncTestClient` is wrapped in `async with` (lifespan fires)
 - [ ] DI dependencies (email, HTTP clients) are overridden, not patched
 - [ ] DB-dependent tests use `pytest-databases` fixtures
-- [ ] Guards either pass real auth (with a fixture user) or are bypassed via DI override
+- [ ] Guards either pass real auth or use a fresh app with fake identity providers
 - [ ] One assertion concern per test; parametrize for input variations
 - [ ] HTMX-targeted handlers have tests with `HX-Request: true`
 - [ ] Coverage gate (`--cov-fail-under`) is set in CI
@@ -342,9 +356,11 @@ Before delivering Litestar tests, verify:
 ```python
 # conftest.py
 from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock, Mock
+
 import pytest
-from unittest.mock import AsyncMock
 from litestar import Litestar
+from litestar.di import Provide
 from litestar.testing import AsyncTestClient
 
 pytest_plugins = ["pytest_databases.docker.postgres"]
@@ -356,9 +372,16 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture
-async def app(postgres_service) -> Litestar:
+async def app(postgres_service) -> tuple[Litestar, AsyncMock]:
     from app import create_app
     from app.config import Settings
+
+    fake_queue = AsyncMock()
+    fake_task_queues = Mock()
+    fake_task_queues.get.return_value = fake_queue
+
+    async def provide_fake_task_queues() -> Mock:
+        return fake_task_queues
 
     settings = Settings(
         database_url=(
@@ -366,15 +389,23 @@ async def app(postgres_service) -> Litestar:
             f"@{postgres_service.host}:{postgres_service.port}/{postgres_service.database}"
         ),
     )
-    return create_app(settings=settings)
+    return (
+        create_app(
+            settings=settings,
+            dependencies={
+                "task_queues": Provide(provide_fake_task_queues),
+            },
+        ),
+        fake_queue,
+    )
 
 
 @pytest.fixture
-async def async_client(app: Litestar) -> AsyncGenerator[tuple[AsyncTestClient, AsyncMock], None]:
-    fake_queue = AsyncMock()
-    app.dependencies["task_queues"] = lambda: type("Q", (), {"get": lambda self, name: fake_queue})()
-
-    async with AsyncTestClient(app=app) as client:
+async def async_client(
+    app: tuple[Litestar, AsyncMock],
+) -> AsyncGenerator[tuple[AsyncTestClient, AsyncMock], None]:
+    test_app, fake_queue = app
+    async with AsyncTestClient(app=test_app) as client:
         yield client, fake_queue
 ```
 
@@ -435,6 +466,7 @@ For Vitest, Testing Library (React/Vue), and component testing, refer to upstrea
 ## Official References
 
 - <https://docs.litestar.dev/2/usage/testing.html>
+- <https://github.com/litestar-org/litestar/tree/v2.24.0>
 - <https://docs.pytest.org/en/stable/>
 - <https://anyio.readthedocs.io/en/stable/testing.html>
 

@@ -1,54 +1,48 @@
-# litestar-vite - Release Updates 0.24.0 to 0.25.0
+# litestar-vite - Release Updates 0.26.0 to 0.27.0
 
-Use this file when refreshing guidance against current upstream `litestar-vite` releases.
+This guidance is audited against immutable tag `v0.27.0`, commit
+`bc9e15770bf82cf0a63f40129aea262075361ef5`.
 
 ## Release Anchors
 
 | Version | Upstream change | Skill guidance |
 | --- | --- | --- |
-| `0.24.0` | SPA handler excludes its own routes from Litestar route-prefix detection. | Non-root `spa_path` values such as `/ui` remain reachable while real backend routes still win. If `/ui/...` fails with `Not an SPA route`, upgrade before adding local workarounds. |
-| `0.24.0` | Deferred Inertia props strip resolved keys from `deferredProps` on partial reload. | Initial responses still advertise deferred metadata. Partial reload responses remove only keys they resolved; unrequested deferred props remain advertised. |
-| `0.24.0` | Litestar 3 deprecation prep and Inertia integration cleanup. | Use `litestar.plugins.jinja.JinjaTemplateEngine` in examples. Keep `litestar-vite-plugin` as the Litestar bridge owner; do not add `@inertiajs/vite` to generated scaffolds by default. |
-| `0.24.1` | Structured Inertia handler returns bootstrap as HTML props. | `dict`, `msgspec.Struct`, dataclass, and Pydantic model returns are prop bags. Initial visits return HTML; Inertia visits spread fields as top-level props. |
-| `0.25.0` | Vite 8.1 HMR `server.ws.*` deprecation fix. | Vite 8.1+ HMR network fields belong under `server.ws`; Vite 7 / 8.0 use `server.hmr`; `server.hmr=false` still disables HMR. |
+| `0.26.0` | Four canonical modes with normalized aliases. | Use `spa`, `template`, `hybrid`, or `framework`. Treat `htmx`, `inertia`, `ssr`, and `ssg` as aliases. Replace deprecated `external` with `framework` plus `ExternalDevServer`. |
+| `0.26.0` | `ViteConfig.enabled` and `VITE_ENABLED`. | Set `enabled=False` for CLI, worker, and test processes that need config access without runtime routes, middleware, lifespans, static routers, or SPA handlers. |
+| `0.26.0` | Single-port proxy and hot-file recovery. | Keep browser HTTP and HMR WebSocket traffic on the Litestar origin. Legacy `VITE_PROXY_MODE=direct` warns and becomes `vite`; it is not a valid constructor mode. Let the bridge and hot file track the internal Vite target. |
+| `0.26.0` | Correct Inertia partial and asset-version protocol. | Partial data and partial except filter plain dict props independently; except wins on overlap. Partial responses omit `deferredProps`. Only stale `GET` visits receive `409` plus `X-Inertia-Location`; non-GET submissions continue. |
+| `0.26.0` | Infinite-scroll metadata shape. | Read `scrollProps.<propName>`; the protocol emits a record keyed by the returned data prop. |
+| `0.26.0` | Type generation hardening. | Production generation failures fail by default; dev-server failures warn. Set `fail_on_error=False` only for deliberate warn-only builds. Generated hey-api output lives under `output/api/`; static bridge types live in `static-props.ts`. |
+| `0.26.0` | Transactional, current scaffolds. | Use `assets init --template ...`; framework variants, current hey-api/TanStack/Vite APIs, dependency pins, collision handling, and non-interactive behavior come from the shipped template registry. |
+| `0.26.0` | Manifest and deploy fixes. | Resolve `<bundle_dir>/<manifest_name>` first and `.vite/<manifest_name>` second. `assets deploy` recursively detects nested changes. |
+| `0.26.1` | Build ordering fix. | `assets build` writes `.litestar.json` before pre-build generators and the JS typegen CLI read it. |
+| `0.27.0` | Lifecycle logging cleanup. | Routine start, stop, initialization, health-check success, and type-export success messages are silent. Quiet mode suppresses warnings; non-TTY warnings/errors use Python logging. Missing-manifest messages avoid absolute paths and point to `assets build`. |
 
-## Vite 8.1 HMR Shape
+## Inertia Protocol Boundary
 
-Prefer no explicit HMR network override in proxy mode. Let `litestar-vite-plugin` emit the version-gated shape from the `.litestar.json` bridge.
+- Initial non-Inertia visits return HTML; Inertia visits return JSON.
+- Structured handler returns become top-level props.
+- Initial responses advertise deferred groups.
+- Partial responses omit `deferredProps`, including unrequested groups.
+- `X-Inertia-Partial-Data` and `X-Inertia-Partial-Except` apply only when the
+  partial component matches the route component.
+- Asset versions come from the Vite asset loader. A stale `GET` receives a
+  protocol refresh response; stale mutation requests keep their method and body.
 
-When an override is required on Vite 8.1+:
+## Scaffolds
 
-```ts
-export default defineConfig({
-  server: {
-    ws: {
-      host: "localhost",
-      path: "vite-hmr",
-      clientPort: 8000,
-    },
-  },
-})
-```
-
-Do not place `host`, `port`, `clientPort`, `path`, `protocol`, or `timeout` under `server.hmr` on Vite 8.1+. Use that legacy shape only for Vite 7 or 8.0.
-
-## Inertia Behavior
-
-- Treat `dict`, `msgspec.Struct`, dataclass, and Pydantic model handler returns as shallow prop bags.
-- Initial non-Inertia visits return HTML bootstrap responses.
-- Inertia visits (`X-Inertia: true`) return JSON with fields as top-level props.
-- Deferred props are advertised on initial responses.
-- A partial reload that resolves a deferred prop removes that key from `deferredProps`; it does not remove unrelated deferred keys.
-- Keep `litestar-vite-plugin` responsible for the bridge, dev/prod asset resolution, proxy routing, type generation, CSRF helper wiring, and `resolvePageComponent()`.
+`litestar assets init --template <name>` ships React, React Router, React
+TanStack, React Inertia, Vue, Vue Inertia, Svelte, Svelte Inertia, SvelteKit,
+Nuxt, Astro, HTMX/Jinja, Angular Vite, and Angular CLI families. Inertia Jinja
+and SSR variants are separate template names. Use `--no-prompt` for automation
+and `--overwrite` only after reviewing collisions.
 
 ## Upstream Sources
 
-- `v0.24.0` release: <https://github.com/litestar-org/litestar-vite/releases/tag/v0.24.0>
-- `v0.24.1` release: <https://github.com/litestar-org/litestar-vite/releases/tag/v0.24.1>
-- `v0.25.0` release: <https://github.com/litestar-org/litestar-vite/releases/tag/v0.25.0>
-- SPA route exclusion: <https://github.com/litestar-org/litestar-vite/pull/264>
-- Deferred props partial reload fix: <https://github.com/litestar-org/litestar-vite/pull/265>
-- Litestar 3 and Inertia integration prep: <https://github.com/litestar-org/litestar-vite/pull/269>
-- Structured Inertia bootstrap returns: <https://github.com/litestar-org/litestar-vite/pull/277>
-- Vite 8.1 HMR shape: <https://github.com/litestar-org/litestar-vite/pull/293>
-- Vite server options: <https://vite.dev/config/server-options>
+- `v0.26.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.26.0>
+- `v0.26.1`: <https://github.com/litestar-org/litestar-vite/tree/v0.26.1>
+- `v0.27.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.27.0>
+- Tagged changelog: <https://github.com/litestar-org/litestar-vite/blob/v0.27.0/docs/changelog.rst>
+- Tagged configuration: <https://github.com/litestar-org/litestar-vite/tree/v0.27.0/src/py/litestar_vite/config>
+- Tagged Inertia tests: <https://github.com/litestar-org/litestar-vite/tree/v0.27.0/src/py/tests/unit/inertia>
+- Tagged CLI tests: <https://github.com/litestar-org/litestar-vite/tree/v0.27.0/src/py/tests>

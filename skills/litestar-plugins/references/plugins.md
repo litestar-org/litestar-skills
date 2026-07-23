@@ -64,6 +64,7 @@ These plugins ship as separate packages and have their own SKILLs in this repo. 
 | `litestar-vite` | `../../litestar-vite/SKILL.md` | Vite frontend integration, TypeGen, Inertia |
 | `litestar-mcp` | `../../litestar-mcp/SKILL.md` | MCP tools/resources over Streamable HTTP + JSON-RPC 2.0 |
 | `litestar-email` | `../../litestar-email/SKILL.md` | Email backends (SMTP, Resend, SendGrid, Mailgun) |
+| `litestar-autowire` | `../../litestar-autowire/SKILL.md` | Domain-package controller, listener, and optional task discovery |
 | `advanced-alchemy` | `../../advanced-alchemy/SKILL.md` | Repository/Service patterns, audit base |
 | `litestar-asyncpg` | (not yet) | Direct AsyncPG pool lifespan |
 | `litestar-oracledb` | (not yet) | OracleDB pool lifespan |
@@ -106,4 +107,5 @@ app = Litestar(
 
 - Plugin-supplied dependencies (e.g. `TaskQueues`, `EmailService`): see each sibling skill
 - Channels plugin (real-time pub/sub): [websockets.md](../../litestar-realtime/references/websockets.md)
-- DomainPlugin auto-discovery: [domains.md](../../litestar-routing/references/domains.md)
+- Domain-package auto-discovery:
+  [litestar-autowire](../../litestar-autowire/SKILL.md)

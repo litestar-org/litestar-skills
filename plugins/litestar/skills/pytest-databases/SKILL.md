@@ -1,48 +1,76 @@
 ---
 name: pytest-databases
-description: "Auto-activate for pytest_databases, Docker DB fixtures, PostgreSQL/pgvector/AlloyDB Omni/MySQL/Oracle/MSSQL/CockroachDB/Yugabyte/MongoDB/GizmoSQL/Redis/Spanner/BigQuery/Azurite/MinIO tests. Not for mocked DBs."
+description: "Auto-activate for pytest_databases, Docker DB fixtures, PostgreSQL/pgvector/ParadeDB/AlloyDB Omni, MySQL/MariaDB/Dolt, Oracle/SQL Server, CockroachDB/YugabyteDB, MongoDB, Redis/Valkey, Elasticsearch, BigQuery/Spanner, GizmoSQL, Azurite, MinIO, or RustFS tests. Not for mocked databases — use ordinary pytest fixtures."
 ---
 
 # pytest-databases
 
-A pytest plugin providing ready-made database fixtures for testing using Docker containers.
+`pytest-databases` provides session-scoped, container-backed service fixtures.
+This guidance targets the immutable `v0.19.0` tag. Load only the plugin modules
+the test suite uses. Consume a ready client fixture where one exists; otherwise
+connect with the client already used by the project.
 
----
+## Code Style Rules
 
-<workflow>
+- Keep database I/O consistent with the project driver. The package's
+  PostgreSQL connection fixtures use synchronous `psycopg`; do not `await`
+  their methods.
+- Type service fixtures with the service class from the same plugin module.
+- Prefer ready client fixtures when provided. For service-only plugins, build
+  the project's existing client from the service object's host, port, and
+  credentials.
+- Keep plugin declarations in the nearest `conftest.py`; do not load every
+  backend globally.
 
-## References Index
+## Quick Reference
 
-For detailed guides and code examples, refer to the following documents in `references/`:
+### Install and enable
 
-- **[Supported Databases](references/databases.md)**
-  - Examples for PostgreSQL, MySQL, Oracle with service/connection fixtures.
-- **[Complete Reference](references/reference.md)**
-  - Fixture tables for all supported SQL, KV, Search, and Object Storage databases.
-- **[Xdist Parallel Testing](references/xdist.md)**
-  - Isolation levels (database vs server) and helper functions.
-- **[Configuration](references/config.md)**
-  - Fixture overrides and environment variable support.
-- **[Troubleshooting](references/troubleshooting.md)**
-  - ARM architecture tips, port conflicts, and health checks.
-
-## Quick Start
-
-### 1. Enable in Project
-
-Add to `conftest.py`:
+```bash
+pip install "pytest-databases[postgres]"
+```
 
 ```python
+# conftest.py
 pytest_plugins = ["pytest_databases.docker.postgres"]
 ```
 
-### 2. Use Fixtures
+The core `pytest_databases` pytest entry point supplies `docker_client` and
+`docker_service`. Each database module supplies its own fixtures.
 
-```python
-def test_database(postgres_service):
-    # Use postgres_service.host, .port, etc.
-    pass
-```
+### Choose the fixture shape
+
+| Need | Use |
+| --- | --- |
+| A ready `psycopg` connection | `postgres_connection`, a versioned PostgreSQL-family connection, or `cockroachdb_connection` |
+| A ready vendor client | `bigquery_client`, `spanner_connection`, `mongodb_connection`, or an Azure Blob container client |
+| Service coordinates for the project's own client | The backend's `*_service` fixture |
+| A specific PostgreSQL-family release | Matching `*_NN_service`, `*_NN_connection`, and `*_NN_port` fixtures |
+| Parallel worker isolation | The backend's exact `*_xdist_isolation_level` fixture from [xdist.md](references/xdist.md) |
+
+See [reference.md](references/reference.md) for the exact plugin, service, and
+ready-client matrix. Do not infer a `*_connection` fixture from a
+`*_service` fixture's name.
+
+<workflow>
+
+## Workflow
+
+1. Install the extra matching the selected backend. Backends with no bundled
+   Python client, such as MySQL, MariaDB, SQL Server, and YugabyteDB, expose
+   service fixtures and expect the project to supply its own driver.
+2. Add only the required `pytest_databases.docker.<module>` entries to
+   `pytest_plugins`.
+3. Prefer a ready client fixture listed in
+   [reference.md](references/reference.md). Otherwise construct the project's
+   existing client from the typed service fixture.
+4. Override session-scoped configuration fixtures in `conftest.py`. Use
+   environment variables only where 0.19.0 explicitly reads them; see
+   [config.md](references/config.md).
+5. For `pytest-xdist`, keep the default `"database"` isolation when the service
+   supports logical namespaces. Override the backend's exact isolation fixture
+   to `"server"` when each worker needs its own container.
+6. Run the focused integration tests against a Docker-compatible daemon.
 
 </workflow>
 
@@ -50,10 +78,24 @@ def test_database(postgres_service):
 
 ## Guardrails
 
-- **Keep fixtures container-based.** Do not monkey-patch or mock the database client — prefer the real service fixture so tests cover driver behavior.
-- **Use `xdist` isolation helpers.** For parallel runs, select the `database`-level or `server`-level isolation fixtures from `references/xdist.md` instead of sharing one schema across workers.
-- **Do not hand-roll container lifecycle.** Rely on the plugin's fixtures; they handle startup, readiness, and teardown.
-- **Scope fixtures to the smallest unit that works.** A session-scoped Docker container with function-scoped schemas is almost always the right trade-off.
+- **Do not invent connection fixtures.** MySQL, MariaDB, SQL Server,
+  YugabyteDB, Dolt, Redis/KeyDB/Dragonfly, Valkey, MinIO, and RustFS provide no
+  ready `*_connection` fixture in 0.19.0.
+- **Do not use SQLite fixture names.** Version 0.19.0 ships no SQLite plugin.
+- **Use `azure_blob_*` names.** The module is
+  `pytest_databases.docker.azure_blob`, the service is `AzureBlobService`, and
+  the ready clients are `azure_blob_container_client` and
+  `azure_blob_async_container_client`.
+- **Keep synchronous fixtures synchronous.** `postgres_connection` is a
+  `psycopg.Connection`; call `execute()` directly.
+- **Do not assume every backend uses the same xdist fixture name.** Azure Blob
+  uses `azure_blob_xdist_isolation_level`; most others use
+  `xdist_<backend>_isolation_level`.
+- **Do not hand-roll container teardown.** The package owns labelled container
+  lifecycle through `docker_service`.
+- **Do not pin a host port without a reason.** Dynamic ports avoid conflicts.
+  Use the 0.19.0 `*_port` fixture or matching PostgreSQL-family environment
+  variable only when a rootless/container-network constraint requires it.
 
 </guardrails>
 
@@ -61,51 +103,70 @@ def test_database(postgres_service):
 
 ## Validation Checkpoint
 
-- [ ] `conftest.py` declares only the database plugins you actually use (`pytest_plugins = [...]`)
-- [ ] Tests pull the correct fixture (`postgres_service`, `mysql_service`, etc.) rather than opening raw connections
-- [ ] Parallel runs (`pytest -n auto`) produce isolated data — verified via `references/xdist.md`
-- [ ] CI runs Docker-in-Docker (or Podman) with enough resources for the requested fixtures
+- [ ] Installed version is `pytest-databases>=0.19.0`.
+- [ ] `pytest_plugins` names an existing module from
+      [reference.md](references/reference.md).
+- [ ] Every requested fixture exists in that module's 0.19.0 fixture row.
+- [ ] Service-only backends use the project's own client rather than a
+      fabricated `*_connection` fixture.
+- [ ] PostgreSQL connection examples use synchronous `psycopg` calls.
+- [ ] Configuration uses an actual fixture or environment variable from
+      [config.md](references/config.md).
+- [ ] Xdist overrides use the backend's exact isolation-fixture name.
+- [ ] Container-backed tests run against a Docker-compatible daemon.
 
 </validation>
 
 <example>
 
-## Example: PostgreSQL integration test
+## Example: synchronous PostgreSQL connection
 
 ```python
-import pytest
+import psycopg
 
 pytest_plugins = ["pytest_databases.docker.postgres"]
 
 
-@pytest.mark.anyio
-async def test_user_insert(postgres_service, postgres_connection):
-    await postgres_connection.execute(
-        "INSERT INTO users (email) VALUES ($1)", "alice@example.com"
-    )
-    row = await postgres_connection.fetchrow(
-        "SELECT email FROM users WHERE email = $1", "alice@example.com"
-    )
-    assert row["email"] == "alice@example.com"
+def test_postgres_is_ready(
+    postgres_connection: psycopg.Connection,
+) -> None:
+    row = postgres_connection.execute("SELECT 1").fetchone()
+
+    assert row == (1,)
 ```
+
+`postgres_connection` is a synchronous `psycopg.Connection`. Use an async
+driver only by constructing it separately from `postgres_service`.
 
 </example>
 
 ---
 
-## Cross-References
+## References Index
 
-- **[litestar-testing](../litestar-testing/SKILL.md)** — Litestar-specific testing patterns; integrates pytest-databases fixtures with `AsyncTestClient`.
+- [Supported database patterns](references/databases.md) — ready-client and
+  service-only examples.
+- [Complete fixture matrix](references/reference.md) — exact 0.19.0 modules,
+  classes, service fixtures, and client/provider fixtures.
+- [Xdist parallel testing](references/xdist.md) — supported isolation fixture
+  names and helper functions.
+- [Configuration](references/config.md) — fixture overrides and environment
+  variables implemented by 0.19.0.
+- [Troubleshooting](references/troubleshooting.md) — runtime, plugin, client,
+  and port failures.
+
+- [Litestar testing](../litestar-testing/SKILL.md) — integrate container-backed
+  services with Litestar test clients and dependency overrides.
 
 ## Official References
 
-- <https://github.com/litestar-org/pytest-databases>
-- <https://litestar-org.github.io/pytest-databases/latest/>
+- <https://pypi.org/project/pytest-databases/0.19.0/>
+- <https://github.com/litestar-org/pytest-databases/tree/v0.19.0>
+- <https://github.com/litestar-org/pytest-databases/tree/v0.19.0/src/pytest_databases/docker>
+- <https://github.com/litestar-org/pytest-databases/tree/v0.19.0/tests>
 
 ## Shared Styleguide Baseline
 
-- Use shared styleguides for generic language/framework rules to reduce duplication in this skill.
 - [General Principles](../litestar-styleguide/references/general.md)
 - [Testing](../litestar-styleguide/references/testing.md)
 - [Python](../litestar-styleguide/references/python.md)
-- Keep this skill focused on tool-specific workflows, edge cases, and integration details.

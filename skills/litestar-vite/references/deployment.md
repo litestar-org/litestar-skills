@@ -5,13 +5,16 @@ Production build, static hosting, and CDN patterns.
 ## Production Build
 
 ```bash
+litestar assets update          # refresh within package.json ranges, when intended
+litestar assets update --latest # deliberately ignore ranges
 litestar assets build
 ```
 
 Outputs (under `bundle_dir`):
 
 ```text
-manifest.json                    URL → hashed-asset map
+manifest.json or .vite/manifest.json
+                                 URL → hashed-asset map
 assets/main.<hash>.js            hashed JS bundles
 assets/main.<hash>.css           hashed CSS bundles
 <files from publicDir>           copied verbatim
@@ -33,23 +36,26 @@ In production:
 - `vite_hmr()` becomes a no-op
 - No proxy to Vite dev server
 
+Manifest resolution checks `<bundle_dir>/<manifest_name>` first and then
+`<bundle_dir>/.vite/<manifest_name>`. Keep the manifest beside the Litestar
+runtime even when a CDN serves the hashed assets.
+
 ## Static Hosting Options
 
 ### Litestar serves static (small/medium apps)
 
 ```python
-from litestar.static_files import create_static_files_router
+from litestar_vite import RuntimeConfig, ViteConfig, VitePlugin
 
-app = Litestar(
-    route_handlers=[
-        ...,
-        create_static_files_router(path="/static", directories=["public"]),
-    ],
-    plugins=[VitePlugin(config=vite_config)],
+vite_config = ViteConfig(
+    runtime=RuntimeConfig(set_static_folders=True),
+    dev_mode=False,
 )
+
+app = Litestar(plugins=[VitePlugin(config=vite_config)])
 ```
 
-Granian handles static asset serving acceptably for moderate traffic.
+The plugin registers production static routing from `PathConfig`.
 
 ### Reverse proxy (nginx, Caddy, Cloudflare)
 
@@ -57,17 +63,33 @@ Mount `bundle_dir` as a static volume; reverse proxy serves `/static/*` directly
 
 ### CDN (CloudFront, Cloudflare, Fastly)
 
-Push `bundle_dir/` to the CDN as part of CI. Set `base` / `assetUrl` to the CDN URL:
+Use the built-in fsspec deployer when the target has an fsspec backend:
 
-```ts
-// vite.config.ts
-export default defineConfig({
-  base: process.env.ASSET_URL ?? "/static/",   // CDN URL in prod
-  ...
-})
+```python
+from litestar_vite import DeployConfig, ViteConfig
+
+vite_config = ViteConfig(
+    deploy=DeployConfig(
+        storage_backend="s3://my-bucket/assets",
+        asset_url="https://cdn.example.com/assets/",
+        delete_orphaned=True,
+        include_manifest=True,
+    )
+)
 ```
 
-Set `ASSET_URL=https://cdn.example.com/assets/v123/` at deploy time.
+Install the provider separately (`s3fs`, `gcsfs`, or `adlfs`), then preview and
+apply:
+
+```bash
+litestar assets deploy --dry-run
+litestar assets deploy
+```
+
+The command builds first, recursively compares nested bundle assets, uploads
+changed files, and removes remote orphans when `delete_orphaned=True`. Use
+`--no-build` only for an already verified bundle and `--no-delete` for
+additive-only rollout.
 
 ## Cache Strategy
 
@@ -83,7 +105,7 @@ Set `ASSET_URL=https://cdn.example.com/assets/v123/` at deploy time.
 ```yaml
 # Example (GitHub Actions)
 - name: Install JS deps
-  run: npm ci
+  run: litestar --app app:app assets install
 
 - name: Generate types
   run: litestar --app app:app assets generate-types
@@ -94,10 +116,11 @@ Set `ASSET_URL=https://cdn.example.com/assets/v123/` at deploy time.
 - name: Build assets
   run: litestar --app app:app assets build
 
-- name: Push to CDN
-  env:
-    ASSET_URL: https://cdn.example.com/assets/${{ github.sha }}/
-  run: ./scripts/upload-to-cdn.sh public/
+- name: Preview CDN sync
+  run: litestar --app app:app assets deploy --no-build --dry-run
+
+- name: Deploy CDN assets
+  run: litestar --app app:app assets deploy --no-build
 ```
 
 ## Multi-Region / Edge
@@ -120,7 +143,9 @@ Because assets are hashed, old versions remain valid as long as they're still ho
 
 ## Pitfalls
 
-- **Forgetting `dev_mode=False` in prod** — proxies to a non-existent Vite server, all asset URLs 502.
+- **Forgetting `dev_mode=False` in prod** — proxies to a non-existent Vite server.
 - **`manifest.json` cached too long** — new deploys reference hashed files, but old manifest still served, so browsers fetch wrong filenames.
 - **Purging old hashed assets** — breaks rollbacks and clients with stale tabs.
 - **Mismatched `base` in dev vs prod** — prefer always reading from `process.env.ASSET_URL` with a sensible default.
+- **Deploying without a dry run** — remote orphan deletion may remove assets
+  still referenced by another release. Review `assets deploy --dry-run` first.

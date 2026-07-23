@@ -111,24 +111,24 @@ loader.load_sql(
 
 ## File Caching with Checksums
 
-Loaded SQL files are cached in the `file_cache` namespace. Each entry stores a content checksum (SHA-256). On subsequent loads:
+Loaded SQL files are cached in the `file` namespace. Each entry stores an MD5 content checksum used only for change detection. On subsequent loads:
 
 1. If the file has not been modified (checksum matches), the cached `SQL` object is returned.
 2. If the file has changed, the cache entry is invalidated and the file is re-parsed.
 
 ```python
-# Force cache invalidation
-loader.invalidate("get-user-by-id")
+# Clear loaded queries and file-cache entries
+loader.clear_cache()
 
-# Invalidate all cached files
-loader.invalidate_all()
+# Clear only the shared file-cache namespace
+loader.clear_file_cache()
 ```
 
 ---
 
 ## Storage Backends
 
-SQL files can be loaded from any URI supported by sqlspec's storage registry — local files, S3, GCS, Azure, in-memory. Pass URIs (or aliases registered with the storage registry) directly to `load_sql()`:
+SQL files can be loaded from local paths or any URI supported by SQLSpec's storage registry. Pass a URI or a registered alias path directly to `load_sql()`:
 
 ### Local Filesystem (Default)
 
@@ -140,16 +140,16 @@ loader.load_sql("./sql")
 ### S3 / GCS / Azure (via obstore)
 
 ```python
-from sqlspec.loader import default_storage_registry
+from sqlspec.storage import storage_registry
 
 # Register an alias for S3-hosted queries
-default_storage_registry.register_alias(
+storage_registry.register_alias(
     "queries",
     uri="s3://my-sql-queries/v2/",
 )
 
 loader = SQLFileLoader()
-loader.load_sql("queries://list-users.sql")
+loader.load_sql("queries/list-users.sql")
 ```
 
 The storage registry uses `sqlspec.storage.backends.obstore.ObStoreBackend` under the hood for `s3://`, `gs://`, and `az://` URIs. For pure-Python fsspec adapters use `sqlspec.storage.backends.fsspec.FSSpecBackend`. Local filesystem URIs (`file://`) and bare paths are handled by `sqlspec.storage.backends.local.LocalStore`.

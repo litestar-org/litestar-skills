@@ -1,12 +1,12 @@
 # SAQ Advanced Patterns
 
-> **See also:** [Sidecar Worker Pattern](postgres-native-sidecar-worker.md) — `TaskService + Worker + WorkerSidecar + WorkerPlugin` pattern for project-owned schemas, same-transaction outbox semantics, frontend channel updates, and execution-target routing.
+> **See also:** [Sidecar Worker Pattern](postgres-native-sidecar-worker.md) — `TaskService + Worker + WorkerSidecar + WorkerPlugin` pattern for a project-owned transactional outbox and job schema, frontend channel updates, and execution-target routing.
 
 ## Heartbeat Management
 
-SAQ uses heartbeats to detect stuck jobs. When a job is `active`, the worker periodically updates a heartbeat timestamp. If the timestamp goes stale (beyond the `heartbeat` interval), SAQ considers the job stuck and may re-queue it.
+SAQ uses the job's touched timestamp to detect stuck work. When a job is active and the time since its last touch exceeds `heartbeat`, SAQ considers it stuck and may re-queue it. A `heartbeat` value of `0` disables this stale check.
 
-**Rule of thumb:** set `heartbeat` to ~1/3 of expected job duration.
+`heartbeat` is the maximum silence before a job is stale, not the interval at which SAQ updates it. Set it longer than both the decorator's signal interval and the `HeartbeatManager` flush cadence.
 
 ```python
 # A job expected to run ~10 minutes
@@ -14,11 +14,11 @@ await queue.enqueue(
     "process_large_file",
     file_id=42,
     timeout=700,      # 700s hard timeout
-    heartbeat=200,    # update heartbeat every ~3 minutes
+    heartbeat=120,    # stale after 120 seconds without a touch
 )
 ```
 
-For tasks where duration is variable, prefer `monitored_job()` so the plugin's `HeartbeatManager` batches heartbeat updates. Use manual queue updates only when you need full control:
+Use `monitored_job()` so the plugin registers the current job and periodically signals its batched `HeartbeatManager`. With no explicit decorator interval, v0.8.0 uses half the job's `heartbeat` threshold, floored at one second; a disabled or unavailable threshold falls back to five seconds. Use manual updates only when task progress itself defines the correct touch points:
 
 ```python
 async def process_large_file(ctx: dict, *, file_id: int) -> None:
@@ -63,26 +63,20 @@ async def retry_all_failed(queue: Queue) -> int:
     return len(failed)
 ```
 
-### Exponential Backoff via `scheduled`
+### Native Retry and Exponential Backoff
 
 ```python
-import time
-
-async def send_notification(ctx: dict, *, user_id: int, attempt: int = 0) -> None:
-    try:
-        await _send(user_id)
-    except TransientError:
-        max_attempts = 5
-        if attempt < max_attempts:
-            backoff = 2 ** attempt  # 1, 2, 4, 8, 16 seconds
-            await ctx["queue"].enqueue(
-                "send_notification",
-                user_id=user_id,
-                attempt=attempt + 1,
-                scheduled=int(time.time()) + backoff,
-                timeout=30,
-            )
+job = await queue.enqueue(
+    "send_notification",
+    user_id=user_id,
+    timeout=30,
+    retries=5,
+    retry_delay=2.0,
+    retry_backoff=60.0,
+)
 ```
+
+Let SAQ retry task exceptions. `retry_delay` sets the first delay. Set `retry_backoff=True` for exponential backoff with jitter, or use a number such as `60.0` to cap the calculated delay. Do not implement a second attempt counter inside task kwargs.
 
 ## Job Chaining
 
@@ -180,7 +174,7 @@ QueueConfig(
 )
 ```
 
-Multi-process workers must be able to rebuild brokers in child processes. Prefer `dsn` over `broker_instance`; if you pass a live `broker_instance`, also provide `dsn` or run without child worker processes.
+Multi-process workers must be able to rebuild brokers in child processes. Configure a `dsn` for portable forkserver/spawn workers. Do not pass both `dsn` and `broker_instance`: `QueueConfig` rejects that construction. A `broker_instance`-only queue is limited to a parent worker or a platform using `fork`.
 
 | Aspect | Redis | Postgres |
 | --- | --- | --- |
@@ -188,16 +182,8 @@ Multi-process workers must be able to rebuild brokers in child processes. Prefer
 | Job history | Limited | Full SQL access |
 | Throughput | Higher | Lower (row locking) |
 | Infra | Redis | Existing Postgres |
-| Transactional enqueue | No | Yes |
 
-```python
-async def create_order_and_enqueue(session: AsyncSession, order_data: dict) -> None:
-    async with session.begin():
-        order = Order(**order_data)
-        session.add(order)
-        await session.flush()
-        await queue.enqueue("process_order", order_id=order.id, timeout=120)
-```
+The PostgreSQL broker persists jobs in PostgreSQL, but `queue.enqueue()` uses the broker's own pool and transaction. It does not share an application ORM session or atomically commit business data and the job. Use a project-owned outbox when those writes must commit together.
 
 ## Job Deduplication
 

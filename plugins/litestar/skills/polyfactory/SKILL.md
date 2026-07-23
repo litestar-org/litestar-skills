@@ -5,17 +5,16 @@ description: "Auto-activate for polyfactory, ModelFactory, DataclassFactory, Msg
 
 # polyfactory
 
-Polyfactory is a typed mock-data factory library: declare `ModelFactory[T]` (or `DataclassFactory`, `MsgspecFactory`, `AttrsFactory`, `TypedDictFactory`) and `.build()` returns a fully-populated, validation-passing instance of `T`. Because the factory inspects the model's annotations and constraints, generated data already respects `msgspec.Meta` ranges, Pydantic `Field` constraints, and attrs validators — no additional fixtures needed for happy-path tests.
+Polyfactory is a typed mock-data factory library: declare `ModelFactory[T]` (or `DataclassFactory`, `MsgspecFactory`, `AttrsFactory`, `TypedDictFactory`) and `.build()` returns a populated instance of `T`. The matching factory base inspects the model's annotations and supported constraints so tests do not need hand-written happy-path fixtures.
 
 In Litestar projects, polyfactory's pytest plugin is the canonical way to feed `TestClient.post(...)` / `AsyncTestClient.put(...)` payloads. The companion skill `litestar:litestar-testing` covers the request side.
 
 ## Code Style Rules
 
 - PEP 604 unions: `T | None`, never `Optional[T]`.
-- **`from __future__ import annotations` rule** — Modules that **define** factory subclasses with introspected `Meta` config (`__model__`, `__random_seed__`, `__set_as_default_factory_for_type__`) are library-like and SHOULD avoid future annotations on the factory module itself if the model class is also defined there. Test modules that *use* factories (call `.build()`, register fixtures) MAY and typically SHOULD use future annotations — they are pure consumer code. The same rule applies as msgspec/dishka/SAQ.
 - One factory per model. Don't reuse a factory across unrelated models — clarity beats DRY when the test fails at 3am.
-- Pick the right factory base by backend: `ModelFactory` (Pydantic), `DataclassFactory`, `MsgspecFactory`, `AttrsFactory`, `TypedDictFactory`. The wrong base silently degrades to attribute-by-attribute introspection and produces lower-quality data.
-- Prefer `register_fixture` over hand-rolled `@pytest.fixture` wrappers — it gives you both the fixture and the factory class with one decorator.
+- Pick the right factory base by backend: `ModelFactory` (Pydantic), `DataclassFactory`, `MsgspecFactory`, `AttrsFactory`, `TypedDictFactory`. A mismatched base raises `ConfigurationException`.
+- Prefer `register_fixture` over hand-rolled `@pytest.fixture` wrappers. Call it in a pytest-discovered test module or `conftest.py` so the injected fixture is collected.
 
 ## Quick Reference
 
@@ -46,7 +45,7 @@ class Order:
 
 
 class OrderFactory(DataclassFactory[Order]):
-    __model__ = Order
+    pass
 
 
 # Use it
@@ -54,7 +53,7 @@ one = OrderFactory.build()
 many = OrderFactory.batch(10)
 ```
 
-`build()` returns a single populated instance. `batch(n)` returns `list[T]` of size `n`. `coverage()` yields one instance per Union/Optional branch — useful for parametrized tests across discriminated unions.
+The single concrete generic argument lets Polyfactory infer `__model__`. `build()` returns one instance, `batch(n)` returns `list[T]`, and `coverage()` yields the smallest set of instances that covers the model's supported variants.
 
 ### Customizing fields
 
@@ -64,8 +63,6 @@ from polyfactory.factories import DataclassFactory
 
 
 class OrderFactory(DataclassFactory[Order]):
-    __model__ = Order
-
     # Plain literal — every build returns this exact value
     status = "pending"
 
@@ -78,11 +75,28 @@ class OrderFactory(DataclassFactory[Order]):
 
 `Use(callable, *args, **kwargs)` is re-invoked on every `build()`, so each generated instance gets a fresh value.
 
+Use `PostGenerated` when a field depends on values generated for the same instance:
+
+```python
+from typing import Any
+
+from polyfactory import PostGenerated
+
+
+def order_reference(name: str, values: dict[str, Any], prefix: str) -> str:
+    return f"{prefix}-{values['id']}"
+
+
+class OrderFactory(DataclassFactory[Order]):
+    reference = PostGenerated(order_reference, "order")
+```
+
+The callback signature is `(field_name, generated_values, *args, **kwargs)`. `generated_values` contains the non-post-generated fields.
+
 ### Determinism
 
 ```python
 class OrderFactory(DataclassFactory[Order]):
-    __model__ = Order
     __random_seed__ = 42  # same seed → same output across runs
 ```
 
@@ -92,7 +106,6 @@ Set `__random_seed__` (or `__faker__ = Faker(seed=...)` for finer Faker control)
 
 ```python
 class CustomerFactory(DataclassFactory[Customer]):
-    __model__ = Customer
     __set_as_default_factory_for_type__ = True
 
 
@@ -103,7 +116,7 @@ class Order:
 
 
 class OrderFactory(DataclassFactory[Order]):
-    __model__ = Order
+    pass
 ```
 
 When `__set_as_default_factory_for_type__ = True`, polyfactory uses that factory whenever the type appears as a field on another model — no manual nesting required.
@@ -111,40 +124,36 @@ When `__set_as_default_factory_for_type__ = True`, polyfactory uses that factory
 ### Pytest fixture from a factory
 
 ```python
-import pytest
 from polyfactory.pytest_plugin import register_fixture
 from polyfactory.factories import DataclassFactory
 
 
 @register_fixture
 class OrderFactory(DataclassFactory[Order]):
-    __model__ = Order
+    pass
 
 
-def test_order_total(order_factory: OrderFactory) -> None:
+def test_order_total(order_factory: type[OrderFactory]) -> None:
     order = order_factory.build()
     assert order.total_cents >= 0
 ```
 
-`@register_fixture` turns the class into a pytest fixture (snake-cased class name). The factory itself is still importable as `OrderFactory` for use outside fixtures.
+`@register_fixture` returns the class unchanged and injects a pytest fixture into the caller's module. The fixture name is the snake-cased class name and its value is the factory class.
 
 ### Cross-model relationships
 
 ```python
-import pytest
 from polyfactory import Use
 from polyfactory.pytest_plugin import register_fixture
 
 
 @register_fixture
 class CustomerFactory(DataclassFactory[Customer]):
-    __model__ = Customer
     __set_as_default_factory_for_type__ = True
 
 
 @register_fixture
 class OrderFactory(DataclassFactory[Order]):
-    __model__ = Order
     customer = Use(CustomerFactory.build)  # explicit local override
 ```
 
@@ -156,11 +165,11 @@ class OrderFactory(DataclassFactory[Order]):
 
 ### Step 1: Pick the factory base
 
-Match the base to your model backend (table above). Wrong base = silent degradation to generic attribute introspection. If your project uses multiple backends (e.g., Pydantic for HTTP DTOs + msgspec for internal events), import each base separately and don't try to share a factory across backends.
+Match the base to your model backend (table above). A mismatched base fails during factory class creation. If your project uses multiple backends (e.g., Pydantic for HTTP DTOs + msgspec for internal events), import each base separately and don't try to share a factory across backends.
 
 ### Step 2: Define one factory per model
 
-Subclass the appropriate base, set `__model__`. Keep the factory adjacent to the test files that consume it — typically `tests/factories.py` or `tests/<feature>/factories.py`. Don't put factories in production code paths.
+Subclass the appropriate base with one concrete generic argument and let Polyfactory infer `__model__`. Set `__model__` explicitly only when the generic declaration cannot identify exactly one model. Keep factories in `tests/factories.py` or `tests/<feature>/factories.py`, outside production code paths.
 
 ### Step 3: Customize only what the test cares about
 
@@ -168,7 +177,7 @@ If a field can take any valid value, leave it for the factory to randomize. Over
 
 ### Step 4: Register as a pytest fixture (if used widely)
 
-For factories used in many tests, decorate with `@register_fixture` and consume via the snake-cased fixture name. For one-off use, call `Factory.build()` directly inline.
+For factories used in many tests, decorate with `@register_fixture` in a pytest-discovered module and consume the snake-cased fixture name. For one-off use, call `Factory.build()` directly inline.
 
 ### Step 5: Wire cross-model relationships
 
@@ -184,13 +193,14 @@ Tests that assert on specific generated values need `__random_seed__`. Tests tha
 
 ## Guardrails
 
-- **Always set `__model__`.** The factory base reads `__model__` to introspect annotations; without it `.build()` errors at runtime, not at class definition.
+- **Use one concrete generic argument or set `__model__`.** Polyfactory infers `__model__` from `DataclassFactory[Order]`; an unparameterized concrete factory without `__model__` raises `ConfigurationException` during class creation.
 - **Don't override fields you're about to assert on with random values.** Either pin the value (`status = "pending"`) or assert on shape, not both.
 - **Don't reuse `__random_seed__` across factories that share a Faker instance.** They will collide and produce unexpected duplicates. Use a different seed per factory or a single shared seeded `__faker__`.
-- **Use the right base for the backend.** `ModelFactory` on a `msgspec.Struct` falls back to generic introspection and can produce values that violate `Meta` constraints. Always use `MsgspecFactory` for msgspec.
+- **Use the right base for the backend.** `ModelFactory` on a `msgspec.Struct` raises `ConfigurationException`; use `MsgspecFactory`.
 - **Factories belong under `tests/`.** Importing them from production modules ties test data to runtime code and is a refactor hazard.
-- **`coverage()` is a parametrize tool, not a build tool.** It returns one instance per Union/Optional branch, not per field — use it via `pytest.mark.parametrize` to fan out test cases over polymorphic shapes.
-- **`from __future__ import annotations`** — same rule as msgspec / dishka. The module that *defines* the factory + model SHOULD avoid future annotations if the model is runtime-introspected. Test modules that *use* factories MAY freely use future annotations.
+- **`coverage()` is not a Cartesian-product generator.** It emits a minimal representative set and reuses exhausted field variants; use Hypothesis for exhaustive input-space exploration.
+- **`__allow_none_optionals__` is boolean.** `True` allows random `None` values during `build()`; `False` always generates the wrapped type. It is not a probability.
+- **Async methods persist data.** `create_async()` and `create_batch_async()` require `__async_persistence__` or a backend factory that supplies it. Polyfactory has no `build_async()`.
 
 </guardrails>
 
@@ -201,13 +211,14 @@ Tests that assert on specific generated values need `__random_seed__`. Tests tha
 Before delivering polyfactory code, verify:
 
 - [ ] Factory base matches the model backend (Pydantic → `ModelFactory`, dataclass → `DataclassFactory`, msgspec → `MsgspecFactory`, attrs → `AttrsFactory`).
-- [ ] `__model__` is set on every factory subclass.
+- [ ] Each factory has one concrete generic model argument or an explicit `__model__`.
 - [ ] Factories live under `tests/` (or a sibling test-only module), never in production code.
 - [ ] Fields overridden in the factory match what the test asserts on; fields the test does not care about are left for randomization.
 - [ ] If the test asserts on exact values, `__random_seed__` is set; otherwise it is not.
 - [ ] `@register_fixture` is used for factories shared across more than ~2 test files; one-offs call `.build()` inline.
 - [ ] Cross-model relationships use `__set_as_default_factory_for_type__` or `Use(OtherFactory.build)`.
-- [ ] Factory module avoids `from __future__ import annotations` if and only if it co-defines runtime-introspected model classes.
+- [ ] `register_fixture` is invoked in a pytest-discovered module.
+- [ ] Async factory calls use `create_async()` / `create_batch_async()` only when persistence is configured.
 
 </validation>
 
@@ -218,32 +229,42 @@ Before delivering polyfactory code, verify:
 ```python
 # tests/factories.py
 from polyfactory.factories.msgspec_factory import MsgspecFactory
-from polyfactory.pytest_plugin import register_fixture
 
 from myapp.events import OrderCreatedEvent  # msgspec.Struct
 
 
-@register_fixture
 class OrderCreatedEventFactory(MsgspecFactory[OrderCreatedEvent]):
-    __model__ = OrderCreatedEvent
+    pass
+```
+
+```python
+# tests/conftest.py
+from polyfactory.pytest_plugin import register_fixture
+
+from tests.factories import OrderCreatedEventFactory
+
+
+register_fixture(OrderCreatedEventFactory)
 ```
 
 ```python
 # tests/test_orders.py
 from __future__ import annotations  # consumer module — fine to use future annotations
 
+import msgspec
+import pytest
 from litestar.testing import AsyncTestClient
 
-import pytest
+from tests.factories import OrderCreatedEventFactory
 
 
 @pytest.mark.anyio
 async def test_create_order_emits_event(
     client: AsyncTestClient,
-    order_created_event_factory: OrderCreatedEventFactory,
+    order_created_event_factory: type[OrderCreatedEventFactory],
 ) -> None:
     payload = order_created_event_factory.build()
-    response = await client.post("/orders", json=payload)
+    response = await client.post("/orders", json=msgspec.to_builtins(payload))
 
     assert response.status_code == 201
     assert response.json()["id"] == payload.id
@@ -259,14 +280,17 @@ The factory provides a fully-populated, validation-passing `OrderCreatedEvent`; 
 
 For detailed guides, refer to the following documents in `references/`:
 
-- **[Factories](references/factories.md)** — Per-backend factory bases (Pydantic / dataclass / msgspec / attrs / TypedDict / ODM), randomization control (`__random_seed__`, `__faker__`, `__allow_none_optionals__`), `__set_as_default_factory_for_type__` defaults, dynamic factories via `Factory.create_factory`, `coverage()` for discriminated unions.
-- **[Pytest integration](references/pytest-integration.md)** — `@register_fixture`, fixture scoping, the `polyfactory.pytest_plugin` module, async fixtures, and the difference between class-decorator and function-decorator forms.
+- **[Factories](references/factories.md)** — Per-backend factory bases, model inference, randomization control, `PostGenerated`, model coverage, persistence protocols, and SQLAlchemy 3.3 persistence behavior.
+- **[Pytest integration](references/pytest-integration.md)** — `@register_fixture`, separate registration from `conftest.py`, fixture scoping and naming, collection boundaries, and async persistence.
 - **[Litestar patterns](references/litestar-patterns.md)** — Using factories with `TestClient` / `AsyncTestClient`, parametrizing handler tests via `coverage()`, integrating with `litestar-testing` fixtures, msgspec DTOs, advanced-alchemy model factories, and SAQ task payload generation.
 
 ---
 
 ## Official References
 
+- <https://github.com/litestar-org/polyfactory/tree/v3.3.0/polyfactory> — immutable v3.3.0 source
+- <https://github.com/litestar-org/polyfactory/tree/v3.3.0/tests> — immutable v3.3.0 contract tests
+- <https://github.com/litestar-org/polyfactory/releases/tag/v3.3.0> — v3.3.0 release
 - <https://polyfactory.litestar.dev/>
 - <https://polyfactory.litestar.dev/usage/index.html>
 - <https://polyfactory.litestar.dev/usage/library_factories/index.html>

@@ -300,7 +300,7 @@ Every integration ensures one session per request with automatic cleanup:
 
 | Framework | Session Location | Cleanup Mechanism |
 | --- | --- | --- |
-| Litestar | DI (`db_session` parameter) | `commit_mode` middleware |
+| Litestar | DI (`db_session` parameter) | `before_send_handler` |
 | FastAPI | `Depends(alchemy.provide_session())` | ASGI middleware |
 | Flask | `alchemy.get_sync_session()` / app context | `teardown_appcontext` |
 | Starlette | `request.state.session` | ASGI middleware |
@@ -308,11 +308,15 @@ Every integration ensures one session per request with automatic cleanup:
 
 ### Transaction Management
 
-All integrations support the same `commit_mode` settings on the config class:
+FastAPI, Flask, Starlette, and Sanic support these `commit_mode` values:
 
 - `commit_mode="autocommit"`: auto-commits if no exception, rolls back on error
 - `commit_mode="autocommit_include_redirect"`: same behavior, also commits on 3xx redirect responses
 - `commit_mode="manual"` (default): omit autocommit and manage `session.commit()` / `session.rollback()` yourself
+
+Litestar instead accepts a `before_send_handler`, including the
+`"autocommit"` and `"autocommit_include_redirects"` string shortcuts. Do not
+pass `commit_mode` to the Litestar config.
 
 ### Multiple Database Support
 
@@ -340,11 +344,11 @@ alchemy = AdvancedAlchemy(config=[primary, analytics], app=app)
 | Feature | Litestar | FastAPI | Flask | Starlette | Sanic |
 | --- | --- | --- | --- | --- | --- |
 | Async sessions | Yes | Yes | Yes (Flask 2.0+) | Yes | Yes |
-| Sync sessions | Yes | Yes | Yes | Yes | No |
+| Sync sessions | Yes | Yes | Yes | Yes | Yes |
 | Auto-commit handler | Yes | Yes | Yes | Yes | Yes |
 | DTOs (SQLAlchemyDTO) | Yes | No | No | No | No |
 | Filter dependencies | Yes | Yes (`provide_filters`) | Manual | Manual | Manual |
-| CLI migrations | Yes (`litestar db`) | `alchemy` CLI | `alchemy` CLI | `alchemy` CLI | `alchemy` CLI |
+| CLI migrations | `litestar database` / `db` | FastAPI `database` / `db` group | Flask `database` / `db` group | Standalone `alchemy` | Standalone `alchemy` |
 | Lifespan integration | Built-in | `plugin.lifespan()` | `init_app()` | `init_app()` | `init_app()` |
 | Multiple databases | Yes | Yes | Yes | Yes | Yes |
 | Engine config | Yes | Yes | Yes | Yes | Yes |

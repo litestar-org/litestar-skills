@@ -252,7 +252,7 @@ Then:
 
 ```text
 fastapi dev app.py database upgrade head
-fastapi dev app.py database revision --autogenerate -m "add orders table"
+fastapi dev app.py database make-migrations -m "add orders table"
 ```
 
 ### As a standalone Click entry point
@@ -274,7 +274,10 @@ if __name__ == "__main__":
 
 Then `python app.py database upgrade head` works without FastAPI's own CLI entry point.
 
-The migration subcommands (`init`, `revision`, `upgrade`, `downgrade`, `history`, `current`, `stamp`, etc.) are the standard Alembic CLI surface — see the [migrations reference](migrations.md) for end-to-end usage.
+The command group uses Advanced Alchemy names: `make-migrations` and
+`show-current-revision`, plus `init`, `upgrade`, `downgrade`, `history`,
+`stamp`, `check`, `heads`, `merge`, and related Alembic operations. It does not
+expose `revision` or `current` command names.
 
 ## Example: full working handler
 

@@ -327,10 +327,10 @@ When does the portal get started? The plugin's `__init__` walks the registry and
 SQLSpec has a single migrations CLI that is framework-neutral. There is no per-framework subcommand.
 
 ```bash
-uv run sqlspec database upgrade
-uv run sqlspec database current
-uv run sqlspec database downgrade -n 1
-uv run sqlspec database revision -m "add orders table"
+uv run sqlspec upgrade
+uv run sqlspec show-current-revision
+uv run sqlspec downgrade -1
+uv run sqlspec create-migration -m "add orders table"
 ```
 
 Point the CLI at your registry via `SQLSPEC_APP=package.module:sqlspec`. The CLI iterates `sqlspec.configs.values()` and for each config with a `migration_config={...}` block runs the pending scripts against that bind's pool. Each bind keeps its own version table. For async configs, the CLI uses its own portal (sync entrypoint → async adapter), independent of the plugin's portal — this is transparent to you.
@@ -432,7 +432,7 @@ Request flow for `GET /orders?page=2&page_size=25&search=acme`:
 - [multi-database.md](multi-database.md) — multi-bind patterns, per-config `session_key` / `connection_key`, async + sync mixing in one app.
 - [filters.md](filters.md) — filter objects (`LimitOffsetFilter`, `OrderByFilter`, `SearchFilter`, `BeforeAfterFilter`, `InCollectionFilter`, `NotInCollectionFilter`, `NullFilter`, `NotNullFilter`).
 - [adapters.md](adapters.md) — adapter-specific pool configuration.
-- [migrations.md](migrations.md) — the global `sqlspec database ...` CLI.
+- [migrations.md](migrations.md) — the standalone `sqlspec ...` CLI.
 - [observability.md](observability.md) — correlation and sqlcommenter hooks, correlation extraction from headers.
 - [starlette-integration.md](starlette-integration.md) — the async ASGI sibling for plain Starlette apps.
 - [fastapi-integration.md](fastapi-integration.md) — the async ASGI sibling with DI-driven handlers and filter generation.

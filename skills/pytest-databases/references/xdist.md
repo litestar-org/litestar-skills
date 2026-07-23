@@ -1,38 +1,73 @@
 # Xdist Parallel Testing
 
-pytest-databases supports `pytest-xdist` for parallel test execution with two isolation strategies.
+`pytest-databases` uses worker-aware service naming and logical namespaces.
+Where exposed, an isolation fixture accepts exactly `"database"` or `"server"`.
 
-## 1. Database Isolation (Default)
+- `"database"` shares a container and selects a worker-specific logical
+  database/account where the backend implements one.
+- `"server"` creates a worker-specific transient container.
 
-Workers share one container but use separate databases.
+The default is `"database"`. Use `"server"` for engines without safe logical
+isolation or when tests mutate server-wide state.
+
+## Exact isolation fixtures
+
+| Plugin | Isolation fixture |
+| --- | --- |
+| Azure Blob | `azure_blob_xdist_isolation_level` |
+| BigQuery | `xdist_bigquery_isolation_level` |
+| CockroachDB | `xdist_cockroachdb_isolation_level` |
+| Dolt | `xdist_dolt_isolation_level` |
+| GizmoSQL | `xdist_gizmosql_isolation_level` |
+| MariaDB | `xdist_mariadb_isolation_level` |
+| MinIO | `xdist_minio_isolation_level` |
+| MongoDB | `xdist_mongodb_isolation_level` |
+| SQL Server | `xdist_mssql_isolation_level` |
+| MySQL | `xdist_mysql_isolation_level` |
+| PostgreSQL, pgvector, ParadeDB, AlloyDB Omni | `xdist_postgres_isolation_level` |
+| Redis, Dragonfly, KeyDB | `xdist_redis_isolation_level` |
+| RustFS | `xdist_rustfs_isolation_level` |
+| Valkey | `xdist_valkey_isolation_level` |
+| YugabyteDB | `xdist_yugabyte_isolation_level` |
+
+Oracle and Spanner select worker-specific service names internally. Elasticsearch
+does not expose an isolation fixture in 0.19.0.
+
+GizmoSQL always uses a worker-specific server name under xdist because its
+storage backend does not provide multi-database isolation. Override
+`xdist_gizmosql_isolation_level` to `"server"` so those worker containers are
+transient.
+
+## Override server isolation
 
 ```python
+import pytest
+
+from pytest_databases.types import XdistIsolationLevel
+
+
 @pytest.fixture(scope="session")
-def xdist_postgres_isolation_level() -> str:
-    return "database"  # Default
-```
-
-- Worker 0 uses `pytest_databases_0`
-- Worker 1 uses `pytest_databases_1`
-
-## 2. Server Isolation
-
-Each worker gets its own container.
-
-```python
-@pytest.fixture(scope="session")
-def xdist_postgres_isolation_level() -> str:
+def xdist_postgres_isolation_level() -> XdistIsolationLevel:
     return "server"
 ```
 
-- Worker 0 uses container `postgres_0`
-- Better isolation, more resources
+Keep the override session-scoped to match the package fixture.
 
-## Helper Functions
+## Worker helpers
 
 ```python
-from pytest_databases.helpers import get_xdist_worker_num, get_xdist_worker_id
+from pytest_databases.helpers import (
+    get_xdist_worker_count,
+    get_xdist_worker_id,
+    get_xdist_worker_num,
+)
 
-def test_parallel_aware():
-    worker_num = get_xdist_worker_num()  # 0, 1, 2... or None
+
+def test_worker_identity() -> None:
+    worker_id = get_xdist_worker_id()  # "gw0" under xdist; otherwise None
+    worker_num = get_xdist_worker_num()  # 0 under gw0; otherwise None
+    worker_count = get_xdist_worker_count()  # 1 without xdist
 ```
+
+Use helpers only for test data or resources the package does not isolate
+itself.

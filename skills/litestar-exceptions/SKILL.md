@@ -13,6 +13,8 @@ Use this skill for domain exception hierarchies, handler registration, and HTTP 
 - Keep route handlers free of repetitive try/except blocks.
 - Use domain exception classes when services need stable error contracts.
 - Keep validation errors aligned with DTO and OpenAPI behavior.
+- Use `ProblemDetailsPlugin` explicitly when the API contract requires RFC
+  9457. Native `HTTPException` responses are Litestar's JSON error envelope.
 
 ## Quick Reference
 
@@ -39,6 +41,8 @@ Use this skill for domain exception hierarchies, handler registration, and HTTP 
 - Do not leak database exception messages to API clients.
 - Do not return inconsistent error payloads from neighboring routes.
 - Do not replace Litestar validation behavior without a clear API reason.
+- Do not describe native `HTTPException` responses as Problem Details unless
+  `ProblemDetailsPlugin` is configured for them.
 
 </guardrails>
 
@@ -75,6 +79,7 @@ class ConflictError(ApplicationError):
 
 - <https://docs.litestar.dev/> - Litestar documentation
 - <https://docs.litestar.dev/latest/reference/> - Litestar API reference
+- <https://github.com/litestar-org/litestar/tree/v2.24.0> - Audited Litestar 2.24.0 source
 
 ## Shared Styleguide Baseline
 

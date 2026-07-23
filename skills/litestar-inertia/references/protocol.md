@@ -14,11 +14,18 @@ Inertia bridges server-side routing with client-side rendering:
 // app.tsx - Setup
 import { createInertiaApp } from "@inertiajs/react"
 import { createRoot } from "react-dom/client"
+import { csrfHeaders } from "litestar-vite-plugin/helpers"
+import { resolvePageComponent } from "litestar-vite-plugin/inertia-helpers"
 
 createInertiaApp({
-  resolve: (name) => {
-    const pages = import.meta.glob("./pages/**/*.tsx", { eager: true })
-    return pages[`./pages/${name}.tsx`]
+  resolve: (name) => resolvePageComponent(
+    `./pages/${name}.tsx`,
+    import.meta.glob("./pages/**/*.tsx"),
+  ),
+  defaults: {
+    visitOptions: (_href, options) => ({
+      headers: csrfHeaders(options.headers ?? {}),
+    }),
   },
   setup({ el, App, props }) {
     createRoot(el).render(<App {...props} />)
@@ -132,34 +139,48 @@ router.reload({ preserveScroll: true })
 router.reload({ preserveState: true })
 ```
 
+The client sends `X-Inertia-Partial-Component` with `X-Inertia-Partial-Data`
+and/or `X-Inertia-Partial-Except`. The server filters only when the component
+matches. Except wins when the same key appears in both sets. Initial responses
+advertise deferred groups; partial responses omit `deferredProps`.
+
 ## Lazy Loading Props (server side)
 
 ```python
 def get_users():
-    return InertiaResponse(
-        "Users/Index",
-        props={
-            "users": lazy(lambda: fetch_users()),    # Only loaded when needed
-            "stats": defer(lambda: fetch_stats()),   # Loaded after initial render
-        },
-    )
+    return InertiaResponse({
+        "users": lazy("users", fetch_users),
+        "stats": defer("stats", fetch_stats),
+    })
 ```
+
+The route must declare `component="Users/Index"`. `lazy()` loads only when
+explicitly requested; `defer()` advertises a post-render deferred group.
+
+## Asset Versions
+
+Each page includes the asset-loader version and responses expose
+`X-Inertia-Version`. When a stale version arrives on an Inertia `GET`, the
+middleware returns `409` with `X-Inertia-Location` so the client performs a
+full refresh. Non-`GET` submissions continue normally and keep their body.
 
 ## SSR Setup
 
 ```tsx
 // ssr.tsx
 import { createInertiaApp } from "@inertiajs/react"
-import ReactDOMServer from "react-dom/server"
+import createServer from "@inertiajs/react/server"
+import { renderToString } from "react-dom/server"
+import { resolvePageComponent } from "litestar-vite-plugin/inertia-helpers"
 
-export function render(page) {
-  return createInertiaApp({
-    page,
-    render: ReactDOMServer.renderToString,
-    resolve: (name) => require(`./pages/${name}`),
-    setup: ({ App, props }) => <App {...props} />,
-  })
-}
+const pages = import.meta.glob("./pages/**/*.tsx")
+
+createServer(async (page) => createInertiaApp({
+  page,
+  render: renderToString,
+  resolve: (name) => resolvePageComponent(`./pages/${name}.tsx`, pages),
+  setup: ({ App, props }) => <App {...props} />,
+}))
 ```
 
 ## Best Practices

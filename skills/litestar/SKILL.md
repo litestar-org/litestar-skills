@@ -7,6 +7,9 @@ description: "Auto-activate for litestar.toml, [tool.litestar], pyproject.toml L
 
 Use this skill to choose the right focused Litestar skill and keep app-level choices coherent. For implementation details, open the narrow skill that matches the task.
 
+This guidance targets the released Litestar 2.24.0 contract. Do not copy
+unreleased `main` APIs into consumer examples.
+
 ## Code Style Rules
 
 - Prefer first-party Litestar ecosystem packages and patterns.
@@ -88,6 +91,7 @@ This hub has no deep references. Open the focused skill that owns the topic.
 
 - <https://docs.litestar.dev/> - Litestar documentation
 - <https://docs.litestar.dev/latest/reference/> - Litestar API reference
+- <https://github.com/litestar-org/litestar/tree/v2.24.0> - Audited Litestar 2.24.0 source
 
 ## Shared Styleguide Baseline
 

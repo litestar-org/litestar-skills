@@ -156,6 +156,7 @@ Present this menu:
 8. **sqlspec** — Low-level SQL adapter + query builder + Arrow + framework extensions
 9. **pytest-databases** — Container-based database test fixtures
 10. **litestar-deployment** — Docker / Railway / K8s / Cloud Run / systemd scaffolding
+11. **litestar-autowire** — Domain-package controller, listener, and optional task discovery
 
 For each selected library:
 
@@ -174,6 +175,7 @@ For each selected library:
 - **advanced-alchemy**: if no models exist yet, scaffold an example domain using `/litestar:new-domain`
 - **sqlspec**: ask which database adapter (asyncpg, psycopg, oracledb, duckdb, etc.); scaffold the adapter config
 - **pytest-databases**: add to `[project.optional-dependencies.test]`, create `tests/conftest.py` with fixtures
+- **litestar-autowire**: configure `domain_packages`; add `dishka` or `queues` only when those integrations are already in the project
 
 ## Option 3: Environment Setup
 
@@ -223,33 +225,57 @@ Then in `asgi.py`: `app = Litestar(plugins=[ApplicationCore()])` — one plugin 
 
 **Why:** centralizes all wiring decisions in one auditable place. Plugins, middleware, exception handlers, OpenAPI config, CLI commands — all discoverable from one class.
 
-### B) `DomainPlugin` Auto-Discovery (from `litestar-fullstack`)
+### B) Litestar Autowire
 
-Automatically discovers and registers controllers, services, schemas, signals, and repositories from `domain/*/` subpackages — no manual imports needed:
+Use the published Autowire plugin when the app follows a domain-package layout
+and benefits from automatic controller and listener registration:
 
 ```python
-from litestar.plugins import InitPlugin
+from litestar import Litestar
+from litestar_autowire import AutowireConfig, AutowirePlugin
 
 
-class DomainPlugin(InitPlugin):
-    def on_app_init(self, app_config: AppConfig) -> AppConfig:
-        controllers = discover_domain_controllers(["app.domain"])
-        schemas = discover_domain_schemas(["app.domain"])
-        services = discover_domain_services(["app.domain"])
-        signals = discover_domain_signals(["app.domain"])
-
-        app_config.route_handlers.extend(controllers)
-        app_config.signature_namespace.update(schemas)
-        app_config.signature_namespace.update(services)
-        app_config.listeners.extend(signals)
-        return app_config
+autowire = AutowirePlugin(
+    AutowireConfig(
+        domain_packages=["app.domain"],
+        integrations=[],
+    )
+)
+app = Litestar(plugins=[autowire])
 ```
 
-**Why:** adding a new domain (via `/litestar:new-domain`) just creates the directory — the `DomainPlugin` picks it up automatically. No need to manually import and register each controller.
+Autowire discovers controllers and listeners from each configured domain
+package. Add the optional `"dishka"` or `"queues"` integration only when the
+project already uses that stack. It does not discover services, schemas, or
+repositories.
 
-**Trade-off:** discovery uses `importlib` to scan packages. Large apps with many domains benefit (20+ controllers). Small apps (2-3 domains) can just list controllers manually.
+**Trade-off:** import-based discovery reduces composition boilerplate in larger
+domain-oriented apps. Small apps remain clearer with explicit routers.
 
-### C) `plugins.py` Module Pattern
+### C) Manual Router and Plugin Composition
+
+Keep the dependency graph explicit when the app is small or discovery is not a
+good fit:
+
+```python
+from litestar import Litestar, Router
+
+from app.domain.accounts.controllers import AccountsController
+from app.domain.teams.controllers import TeamsController
+from app.plugins import alchemy, granian
+
+
+api_router = Router(
+    path="/api",
+    route_handlers=[AccountsController, TeamsController],
+)
+app = Litestar(
+    route_handlers=[api_router],
+    plugins=[alchemy, granian],
+)
+```
+
+### D) `plugins.py` Module Pattern
 
 Centralize all plugin instantiation in `server/plugins.py`:
 
@@ -260,7 +286,9 @@ structlog = StructlogPlugin(config=config.log)
 vite = VitePlugin(config=config.vite)
 alchemy = SQLAlchemyPlugin(config=config.alchemy)
 granian = GranianPlugin()
-domain = DomainPlugin()
+autowire = AutowirePlugin(
+    AutowireConfig(domain_packages=["app.domain"])
+)
 
 @cache
 def get_saq_plugin() -> SAQPlugin:

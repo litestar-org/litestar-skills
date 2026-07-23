@@ -385,14 +385,14 @@ Cross-bind `commit_mode` choices matter — pairing an `autocommit` primary with
 SQLSpec's migration CLI is framework-neutral. It reads the same registry the FastAPI plugin reads and runs `up`/`down` against each config that has a `migration_config={...}` block.
 
 ```bash
-uv run sqlspec database upgrade
-uv run sqlspec database current
-uv run sqlspec database downgrade -n 1
+uv run sqlspec upgrade
+uv run sqlspec show-current-revision
+uv run sqlspec downgrade -1
 ```
 
 Point the CLI at your registry via `SQLSPEC_APP=package.module:sqlspec` — the `sqlspec` attribute on that module must be the registry instance you registered your configs against. The CLI iterates `sqlspec.configs.values()` and for each config with migrations enabled runs the pending scripts against that bind's pool. Each bind has its own version table; there's no shared history across binds.
 
-There is no per-framework CLI shim. In particular, don't look for a `fastapi database ...` subcommand — the `sqlspec database ...` command is the only shape. See [migrations.md](migrations.md) for command reference, revision authoring, and rollback semantics.
+There is no FastAPI CLI shim. Run the standalone `sqlspec ...` commands. See [migrations.md](migrations.md) for command reference, revision authoring, and rollback semantics.
 
 ## Example: full working handler
 
@@ -492,7 +492,7 @@ Request flow for `GET /orders` with `?searchString=acme&currentPage=2&pageSize=2
 - [multi-database.md](multi-database.md) — per-bind `connection_key` / `session_key` / `pool_key`, validation, async + sync mixing.
 - [filters.md](filters.md) — the filter object catalog — `LimitOffsetFilter`, `OrderByFilter`, `SearchFilter`, `BeforeAfterFilter`, `InCollectionFilter`, `NotInCollectionFilter`, `NullFilter`, `NotNullFilter`.
 - [adapters.md](adapters.md) — adapter pool configuration (`min_size`, `max_size`, `conninfo`, `dsn`).
-- [migrations.md](migrations.md) — global `sqlspec database ...` CLI and revision workflow.
+- [migrations.md](migrations.md) — standalone `sqlspec ...` CLI and revision workflow.
 - [observability.md](observability.md) — correlation and sqlcommenter middleware that thread request metadata into driver logs. Note: in plain Starlette, this metadata lives on `request.state`; see [starlette-integration.md](starlette-integration.md).
 - [starlette-integration.md](starlette-integration.md) — the underlying plugin this FastAPI plugin extends.
 - [flask-integration.md](flask-integration.md) — the sync WSGI sibling with portal-based async bridging.

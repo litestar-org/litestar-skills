@@ -1,6 +1,6 @@
 ---
 name: litestar-plugins
-description: "Auto-activate for plugins=, InitPlugin, CLIPluginProtocol, SerializationPluginProtocol, OpenAPISchemaPluginProtocol, DomainPlugin, or app plugin lists. Not for package installation."
+description: "Auto-activate for plugins=, InitPlugin, CLIPluginProtocol, SerializationPluginProtocol, OpenAPISchemaPluginProtocol, AutowirePlugin, or app plugin lists. Not for package installation."
 ---
 
 # Litestar Plugins
@@ -17,7 +17,8 @@ Use this skill for plugin composition, first-party plugin setup, plugin protocol
 ## Quick Reference
 
 - Plugin patterns: [plugins.md](references/plugins.md)
-- Pair with [litestar-routing](../litestar-routing/SKILL.md) for DomainPlugin layout.
+- Pair with [litestar-autowire](../litestar-autowire/SKILL.md) for
+  domain-package controller and listener discovery.
 - Pair with focused first-party plugin skills when available.
 
 <workflow>
@@ -58,9 +59,15 @@ Use this skill for plugin composition, first-party plugin setup, plugin protocol
 ## Example
 
 ```python
+from litestar import Litestar
+from litestar_autowire import AutowireConfig, AutowirePlugin
+
 app = Litestar(
-    route_handlers=[UserController],
-    plugins=[DomainPlugin()],
+    plugins=[
+        AutowirePlugin(
+            AutowireConfig(domain_packages=["app.domain"]),
+        )
+    ],
 )
 ```
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-SQLSpec `v0.51.0` exposes native bulk ingest through three storage bridge methods:
+SQLSpec `v0.56.0` exposes adapter-gated bulk ingest through three storage bridge methods:
 
 - `load_from_arrow(table, source, *, overwrite=False)` -- load an Arrow table or coercible Arrow source.
 - `load_from_storage(table, source, *, file_format, overwrite=False)` -- load a local path or cloud URI.
@@ -39,6 +39,7 @@ Records normalize to Arrow and route through the adapter's `load_from_arrow()` p
 | --- | --- | --- |
 | `asyncpg` | `COPY` via `copy_records_to_table` | Always on; atomic with exact row counts |
 | `psycopg` sync/async | `COPY` streaming `write_row` | Always on; atomic with exact row counts |
+| `cockroach_asyncpg` / `cockroach_psycopg` | PostgreSQL-family `COPY` paths | Use the Cockroach-specific configs so retry and dialect behavior stay enabled |
 | `psqlpy` | Binary `COPY` with `INSERT` fallback | Always on |
 | `adbc` | `adbc_ingest` | Driver-dependent; Flight SQL may fall back per row |
 | `duckdb` | register Arrow table, then `INSERT ... SELECT` | Single connection transaction |

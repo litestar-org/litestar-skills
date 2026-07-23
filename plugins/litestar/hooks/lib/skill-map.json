@@ -96,6 +96,15 @@
       "reminder": "Plugin signals found. Use `litestar:litestar-plugins` for first-party and custom plugin protocols, init hooks, CLI registration, serialization plugins, and startup wiring."
     },
     {
+      "skill": "litestar-autowire",
+      "priority": 95,
+      "signals": [
+        { "type": "pyproject_dep", "name": "litestar-autowire" },
+        { "type": "python_import", "module": "litestar_autowire" }
+      ],
+      "reminder": "Litestar Autowire signals found. Use `litestar:litestar-autowire` for domain-package controller/listener discovery, optional task discovery, router wrapping, and Dishka or Queues integrations."
+    },
+    {
       "skill": "litestar-realtime",
       "priority": 95,
       "signals": [

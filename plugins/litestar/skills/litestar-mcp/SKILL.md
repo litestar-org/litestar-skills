@@ -69,7 +69,7 @@ The default MCP surface is:
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `base_path` | `str` | `"/mcp"` | URL prefix for the MCP Streamable HTTP endpoint |
-| `include_in_schema` | `bool` | `False` | Include MCP routes in OpenAPI |
+| `include_in_schema` | `bool` | `False` | Include the MCP router and all three `/.well-known/*` discovery routes in OpenAPI |
 | `name` | `str \| None` | `None` | Server name; defaults to OpenAPI title |
 | `instructions` | `str \| None` | `None` | Server instructions advertised to MCP clients |
 | `guards` | `list[Any] \| None` | `None` | Litestar guards applied to the MCP router |
@@ -83,6 +83,7 @@ The default MCP surface is:
 | `list_page_size` | `int` | `100` | Page size for `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list` (clients page via opaque cursors) |
 | `before_tool_call` | `BeforeToolCallHook \| None` | `None` | Observe each `tools/call` before dispatch |
 | `after_tool_call` | `AfterToolCallHook \| None` | `None` | Observe each `tools/call` result, exception, and duration |
+| `max_blob_bytes` | `int \| None` | `25 * 1024 * 1024` | Maximum raw byte length for base64-embedded blobs; `None` disables the cap |
 | `opt_keys` | `MCPOptKeys` | `MCPOptKeys()` | Rename the `handler.opt` keys the plugin reads (e.g. to avoid collisions) |
 | `session_store` | `Store \| None` | `None` | Litestar `Store` backing MCP sessions; defaults to an in-memory store |
 | `session_max_idle_seconds` | `float` | `3600.0` | Idle timeout before an MCP session is evicted |
@@ -187,6 +188,82 @@ if __name__ == "__main__":
 
 `mcp.run(transport="sse", port=8000)` starts the HTTP/SSE transport through the Litestar CLI, so expose `app = mcp.app` at module scope or set `LITESTAR_APP` for worker/reload discovery. `mcp.run(transport="stdio")` reads line-delimited JSON-RPC from stdin, writes responses to stdout, manually drives ASGI lifespan, and dispatches through the same JSON-RPC router with a synthetic request context.
 
+#### Direct stdio identity
+
+Stdio has no HTTP headers or authentication middleware. Resolve credentials in the host process and inject the resulting identity with the public `MCPStdioContext`:
+
+```python
+from litestar_mcp import MCP, MCPStdioContext
+
+
+mcp = MCP("inventory-mcp")
+stdio_context = MCPStdioContext(
+    client_id="desktop-agent",
+    owner_id="alice",
+    auth={"sub": "alice", "role": "operator"},
+    session={"tenant": "acme"},
+    state={"deployment": "production"},
+)
+mcp.run(transport="stdio", stdio_context=stdio_context)
+```
+
+The synthetic Litestar request exposes `user`, `auth`, `session`, and `state` to handlers, guards, resources, and dependency providers. Mapping values are copied per dispatch, so handler mutations do not alter the supplied context or leak into later calls. Task ownership resolves in this order: explicit `owner_id`, `auth["sub"]`, `user.id`, `user.sub`, then `"stdio"`.
+
+Do not send credentials as invented JSON-RPC headers. Stdio identity is an out-of-band host concern; `MCPStdioContext` carries the already-resolved principal.
+
+#### Stdio-to-Streamable-HTTP bridge
+
+Use the bridge when a local MCP client speaks stdio but the real server is an already-running Streamable HTTP endpoint:
+
+```bash
+pip install "litestar-mcp[bridge]"
+litestar mcp bridge \
+  --endpoint https://api.example.com/mcp \
+  --bearer-env MCP_ACCESS_TOKEN
+```
+
+The bridge forwards newline-delimited JSON-RPC, preserves the MCP session id and negotiated protocol version, and starts the optional GET SSE stream after `notifications/initialized`. A server that answers GET with `404` or `405` remains usable through POST responses. Stdout contains JSON-RPC only; transport diagnostics go to stderr.
+
+Use `--header "Name: value"` for static headers. Use exactly one of `--bearer-env` or `--bearer-cmd` for a token resolved per request; the bridge retries once with a fresh token after `401`. Match identity-proxy schemes with `--header-name` and `--token-prefix`. `--discover` resolves `endpoints.mcp` from `/.well-known/mcp-server.json`.
+
+For embedding, import `run_stdio_streamable_http_bridge` from `litestar_mcp.bridge`. It accepts injectable AnyIO stdin/stdout streams and a sync or async token provider, then returns process-style status `0` for clean EOF and `1` after emitting a bridge JSON-RPC error.
+
+The default stdin frame limit is 16 MiB. Set `--max-message-size`; use `-1` to disable that limit. This is separate from `MCPConfig.max_blob_bytes`, which limits decoded binary payloads produced by the server.
+
+### Binary Resources And Tool Results
+
+Return `MCPResourceLink` from a tool when a stable resource URI can be fetched later. Return `MCPBlobResource` only when the binary must be embedded immediately. Use `MCPToolResult` when one result needs mixed content blocks, `structuredContent`, `isError`, or `_meta`.
+
+```python
+from litestar import Response, get
+from litestar_mcp import MCPResourceLink
+
+
+@get("/reports/latest-link", mcp_tool="generate_report")
+async def generate_report() -> MCPResourceLink:
+    return MCPResourceLink(
+        name="report.pdf",
+        uri="litestar://latest_report",
+        mime_type="application/pdf",
+        size=4,
+    )
+
+
+@get(
+    "/reports/latest",
+    mcp_resource="latest_report",
+    mcp_resource_mime_type="application/pdf",
+)
+async def latest_report() -> Response[bytes]:
+    return Response(content=b"%PDF", media_type="application/pdf")
+```
+
+This produces a `resource_link` block from `tools/call`; `resources/read` returns the response bytes as a base64 `blob`. `MCPBlobResource(uri=..., data=..., mime_type=...)` produces an embedded `resource` block directly in a tool result. The plugin enforces `max_blob_bytes` before base64 encoding for helper objects, explicit resource blocks, and `resources/read`. An oversized tool payload becomes a tool result with `isError: true`; an oversized resource becomes a `Resource read failed` JSON-RPC error.
+
+Set resource MIME metadata with `mcp_resource_mime_type=` on a Litestar route, `mime_type=` on `@mcp_resource`, or `mime_type=` on `@mcp.resource`. The handler response `Content-Type` wins during `resources/read`; configured metadata is the fallback and the value advertised by resource listings. The default is `application/json`.
+
+Textual MIME types return `text`: `text/*`, JSON, XML, JavaScript, and YAML types are textual. Other MIME types return base64 `blob`; invalid UTF-8 under an otherwise textual MIME type also falls back to `blob`. Always return the real media type—do not label binary bytes as JSON to avoid blob handling.
+
 ### Hiding Routes
 
 Discovery is opt-in: a handler that carries no `mcp_*` marker never appears in MCP. There is no per-route exclude flag — `opt={"mcp_exclude": True}` is ignored.
@@ -238,6 +315,19 @@ Litestar `Provide(...)` factory parameters that are user inputs, such as paginat
 - MIME type: `application/json`
 - Method: `resources/read`
 
+This resource is always present in `resources/list`; `MCPConfig.include_in_schema` does not remove it.
+
+`include_in_schema=False` is the default. It hides the plugin-owned `/mcp` path and all three `/.well-known/*` discovery paths from generated OpenAPI, while ordinary application routes—including routes marked for MCP—keep their own OpenAPI visibility. It does not disable the MCP or discovery endpoints at runtime.
+
+Set `include_in_schema=True` to include all plugin-owned paths in OpenAPI:
+
+- `/mcp`
+- `/.well-known/oauth-protected-resource`
+- `/.well-known/agent-card.json`
+- `/.well-known/mcp-server.json`
+
+Do not use this setting to hide an application route. Set `include_in_schema=False` on that route separately, and leave it unmarked if it must also stay out of MCP.
+
 ### Auth
 
 Authentication is a Litestar middleware concern. Apps with existing auth middleware get `request.user` / `request.auth` before tool handlers run.
@@ -284,6 +374,28 @@ app = Litestar(
 )
 ```
 
+For an identity proxy that supplies a raw token in a custom header, configure the backend explicitly:
+
+```python
+from litestar.middleware import DefineMiddleware
+from litestar_mcp import MCPAuthBackend, OIDCProviderConfig
+
+
+DefineMiddleware(
+    MCPAuthBackend,
+    providers=[
+        OIDCProviderConfig(
+            issuer="https://cloud.google.com/iap",
+            audience="/projects/123/global/backendServices/456",
+        )
+    ],
+    header_name="X-Goog-IAP-JWT-Assertion",
+    token_prefix="",
+)
+```
+
+`header_name` is case-insensitive when read. `token_prefix=""` validates the entire non-empty header value; a non-empty prefix must match exactly and is stripped before validation. Match the bridge’s `--header-name` and `--token-prefix` when it connects through the same proxy.
+
 <workflow>
 
 ## Workflow
@@ -308,7 +420,7 @@ For public endpoints, configure bearer-token validation and `MCPAuthConfig` meta
 
 ### Step 5: Verify
 
-For Streamable HTTP, initialize first: `POST /mcp` with `initialize`, send `notifications/initialized`, then include the returned `Mcp-Session-Id` header on later `tools/list`, `resources/list`, `tools/call`, and `resources/read` requests. Confirm only marked routes appear, call one representative tool, and read one representative resource. For standalone stdio apps, send one line-delimited JSON-RPC request through stdin and confirm the response is written to stdout.
+For Streamable HTTP, initialize first: `POST /mcp` with `initialize`, send `notifications/initialized`, then include the returned `Mcp-Session-Id` header on later `tools/list`, `resources/list`, `tools/call`, and `resources/read` requests. Confirm only marked routes appear, call one representative tool, and read one representative resource. Verify both the `text` and `blob` resource paths when the app exposes binary data. For standalone stdio apps, send one line-delimited JSON-RPC request through stdin and confirm the response is written to stdout. For a bridge deployment, verify stdout purity, session continuity, and the configured auth refresh path.
 
 </workflow>
 
@@ -323,6 +435,9 @@ For Streamable HTTP, initialize first: `POST /mcp` with `initialize`, send `noti
 - **Keep DTOs precise** - loose `dict[str, Any]` request schemas produce weak tool contracts.
 - **Use `MCPAuthConfig` plus token validation for public MCP** - metadata alone does not authenticate requests.
 - **Set `allowed_origins` for browser-accessible MCP clients** - leave it `None` only for trusted server-to-server deployments.
+- **Prefer `MCPResourceLink` over inline blobs** - linked resources avoid base64 expansion and let the application enforce authorization when the client reads the resource.
+- **Keep `max_blob_bytes` bounded** - base64 embedding increases memory and wire size; disable the cap only behind a stricter application-owned limit.
+- **Resolve stdio credentials out of band** - inject the verified principal with `MCPStdioContext`; JSON-RPC messages are not an authentication channel.
 - **Treat `MCP` and `LitestarMCP` as public entry points** - avoid private router/service imports unless you are maintaining `litestar-mcp` transport internals.
 - **Keep observability callbacks side-effect safe** - `before_tool_call` / `after_tool_call` failures are swallowed, so callbacks must not enforce authorization or business invariants.
 
@@ -344,6 +459,11 @@ Before delivering an MCP integration, verify:
 - [ ] Provider-declared user inputs appear in tool `inputSchema`; Dishka-resolved service parameters do not
 - [ ] `before_tool_call` / `after_tool_call` callbacks are covered when configured, including failure paths
 - [ ] Standalone `MCP` SSE or stdio transport is smoke-tested for the chosen deployment mode
+- [ ] Direct stdio handlers and guards receive the intended `MCPStdioContext`; task ownership resolves to the intended principal
+- [ ] Stdio bridge stdout contains JSON-RPC only; static/dynamic auth, session continuity, SSE fallback, and frame limits match the deployment
+- [ ] Binary resource listings advertise the correct MIME type; reads return `text` or base64 `blob` as intended
+- [ ] `max_blob_bytes` accepts the largest intended payload and rejects an oversized tool result and resource read
+- [ ] OpenAPI contains ordinary application routes and hides plugin-owned paths by default; `include_in_schema=True` exposes all four plugin-owned paths when requested
 - [ ] Exposed handlers performing I/O are `async def`; sync standalone functions are pure/non-blocking and return JSON-serializable types
 - [ ] Tool argument DTOs are specific enough for generated schemas
 
@@ -390,11 +510,12 @@ app = Litestar(
 
 ## References Index
 
-- Use this skill for route marking, Streamable HTTP endpoint behavior, MCP auth metadata, and verification requests.
+- Use this skill for route marking, Streamable HTTP and stdio behavior, binary content, MCP auth metadata, and verification requests.
 - Use [litestar-auth-guards](../litestar-auth-guards/SKILL.md) when auth logic lives in normal Litestar guards or middleware.
 
 ## Official References
 
+- <https://github.com/cofin/litestar-mcp/tree/v0.11.1> — audited v0.11.1 source and tests
 - <https://cofin.github.io/litestar-mcp/>
 - <https://github.com/cofin/litestar-mcp>
 - <https://modelcontextprotocol.io/>

@@ -273,10 +273,11 @@ results = await service.get_many(
 `FilterGroup` joins several filters under one logical operator; `MultiFilter` builds a nested filter tree from a serialized dict (useful for client-driven advanced search).
 
 ```python
-from advanced_alchemy.filters import FilterGroup, BooleanFilter, ComparisonFilter
+from advanced_alchemy.filters import BooleanFilter, ComparisonFilter, FilterGroup
+from sqlalchemy import or_
 
 group = FilterGroup(
-    logical_operator="or",
+    logical_operator=or_,
     filters=[BooleanFilter("is_featured", True), ComparisonFilter("views", "ge", 1000)],
 )
 results = await service.get_many(group)
@@ -377,18 +378,28 @@ next_cursor = results[-1].created_at if results else None
 Automatically creates Litestar dependency providers that parse filter parameters from query strings.
 
 ```python
+from uuid import UUID
+
 from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
 
-# Creates dependencies for common filter patterns
 filter_deps = create_filter_dependencies(
-    id_filter=True,        # ?ids=uuid1,uuid2
-    search=True,           # ?search=term&search_field=name
-    created_at=True,       # ?created_before=...&created_after=...
-    updated_at=True,       # ?updated_before=...&updated_after=...
-    limit_offset=True,     # ?limit=20&offset=0
-    order_by=True,         # ?order_by=created_at&sort_order=desc
+    {
+        "id_filter": UUID,
+        "search": {"name", "email"},
+        "search_ignore_case": True,
+        "created_at": True,
+        "updated_at": True,
+        "pagination_type": "limit_offset",
+        "pagination_size": 20,
+        "sort_field": "created_at",
+        "sort_order": "desc",
+    }
 )
 ```
+
+The generated query names are `ids`, `searchString`,
+`searchIgnoreCase`, `createdBefore` / `createdAfter`, `updatedBefore` /
+`updatedAfter`, `currentPage` / `pageSize`, and `orderBy` / `sortOrder`.
 
 ### Using in Litestar Routes
 
@@ -421,9 +432,11 @@ from advanced_alchemy.extensions.litestar.providers import create_filter_depende
 class UserController(Controller):
     path = "/users"
     dependencies = create_filter_dependencies(
-        search=True,
-        limit_offset=True,
-        order_by=True,
+        {
+            "search": {"name", "email"},
+            "pagination_type": "limit_offset",
+            "sort_field": "created_at",
+        }
     )
 
     @get()

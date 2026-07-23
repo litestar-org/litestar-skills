@@ -124,7 +124,7 @@ Each branch below is driven by the answers from Step 1. Do NOT generate patterns
 
 ### Serialization ({serialization})
 
-- `msgspec`: `CamelizedBaseStruct` base with `Meta(rename="camel")` in `lib/schema.py`; all DTOs extend it.
+- `msgspec`: `CamelizedBaseStruct` base declared with the class option `rename="camel"` in `lib/schema.py`; all DTOs extend it.
 - `pydantic`: `BaseModel` with `alias_generator=to_camel` + `ConfigDict(populate_by_name=True)` in `lib/schema.py`.
 
 ### Background tasks ({saq_broker})

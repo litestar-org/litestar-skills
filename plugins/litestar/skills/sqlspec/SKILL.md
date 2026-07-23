@@ -5,13 +5,13 @@ description: "Auto-activate for sqlspec, SQLSpec, SQLFileLoader, drivers, query 
 
 # SQLSpec Skill
 
-SQLSpec is a **type-safe SQL query mapper for Python** -- NOT an ORM. It provides flexible connectivity with consistent interfaces across 18+ database adapters. Write raw SQL, use the builder API, or load SQL from files. Statements pass through a sqlglot-powered AST pipeline for validation, parameter handling, and dialect conversion.
+SQLSpec is a **type-safe SQL query mapper for Python** -- NOT an ORM. It provides flexible connectivity with consistent interfaces across 19 database adapter packages. Write raw SQL, use the builder API, or load SQL from files. Statements pass through a sqlglot-powered AST pipeline for validation, parameter handling, and dialect conversion.
 
 ## Match-Your-Framework — read first
 
 sqlspec ships first-party extensions for five web frameworks. If your project uses one of these, **jump directly to the matching integration guide and skip the others**:
 
-- **Litestar** — `SQLSpecPlugin` with full DI, CLI, observability. The rest of this SKILL.md covers Litestar by default; also see [`references/extensions.md`](references/extensions.md).
+- **Litestar** — register configs on `SQLSpec`, then pass that registry to `SQLSpecPlugin`. The plugin adds DI, the `litestar db` CLI, and request observability. See [`references/extensions.md`](references/extensions.md).
 - **FastAPI** → [`references/fastapi-integration.md`](references/fastapi-integration.md) — `Depends(plugin.provide_session())` DI, `Annotated[...]` handlers, filter providers.
 - **Flask** → [`references/flask-integration.md`](references/flask-integration.md) — `plugin.init_app(app)`, pull-based `plugin.get_session()`, async-via-portal.
 - **Starlette** → [`references/starlette-integration.md`](references/starlette-integration.md) — `request.state`-based session access, lifespan wrapping, middleware variants.
@@ -79,10 +79,11 @@ stmt = (
 
 # MERGE / upsert
 stmt = (
-    sql.merge_("inventory")
-    .using("updates", on="inventory.product_id = updates.product_id")
-    .when_matched().do_update(qty="updates.qty")
-    .when_not_matched().do_insert(product_id="updates.product_id", qty="updates.qty")
+    sql.merge("inventory", dialect="postgres")
+    .using("updates")
+    .on("inventory.product_id = updates.product_id")
+    .when_matched_then_update(qty="updates.qty")
+    .when_not_matched_then_insert(product_id="updates.product_id", qty="updates.qty")
     .to_statement()
 )
 ```
@@ -101,15 +102,15 @@ stmt = (
 | `select_to_arrow()` / `fetch_to_arrow()` | `ArrowResult` | Bulk data export, analytics |
 | `execute()` | `SQLResult` | INSERT/UPDATE/DELETE metadata |
 | `execute_many()` | `SQLResult` | Batch operation metadata |
-| `load_from_arrow()` | `StorageBridgeJob` | Native Arrow bulk ingest |
-| `load_from_storage()` | `StorageBridgeJob` | Load staged files or cloud URIs |
-| `load_from_records()` | `StorageBridgeJob` | Native bulk ingest for in-memory records |
+| `load_from_arrow()` | `StorageBridgeJob` | Adapter-supported Arrow ingest |
+| `load_from_storage()` | `StorageBridgeJob` | Adapter-supported staged-file ingest |
+| `load_from_records()` | `StorageBridgeJob` | Records normalized through the Arrow ingest path |
 
 ### Arrow Integration Basics
 
 ```python
-# Native Arrow on ADBC, DuckDB, BigQuery, Spanner, mssql-python, arrow-odbc,
-# and oracledb; conversion path on other adapters unless native_only=True.
+# Native Arrow export on adapters listed in references/adapters.md;
+# conversion fallback elsewhere unless native_only=True.
 arrow_result = await db.select_to_arrow(
     "SELECT * FROM large_dataset WHERE region = $1",
     region,
@@ -117,7 +118,7 @@ arrow_result = await db.select_to_arrow(
     batch_size=10_000,
 )
 
-# Bulk load from Arrow
+# Bulk load only when the selected adapter implements ingest.
 await db.load_from_arrow("users", arrow_result)
 
 # Bulk load records through the same native ingest path
@@ -142,7 +143,7 @@ await db.load_from_records("users", [{"id": 1, "name": "Ada"}])
 | Raw SQL strings | Driver methods | `select()`, `execute()` |
 | Dynamic queries | Query builder | `sql.select()...to_statement()` |
 | SQL from files | `SQLFileLoader` | Metadata directives, `-- param:` declarations, caching |
-| High-volume ingest | Storage bridge | `load_from_arrow()`, `load_from_storage()`, `load_from_records()` |
+| High-volume ingest | Storage bridge | Check the adapter matrix before selecting `load_from_arrow()`, `load_from_storage()`, or `load_from_records()` |
 
 ### Step 2: Implement
 
@@ -152,7 +153,7 @@ await db.load_from_records("users", [{"id": 1, "name": "Ada"}])
 4. Use `schema_type` parameter for typed results (Pydantic or msgspec models)
 5. Apply filters with `LimitOffsetFilter`, `OrderByFilter`, `SearchFilter`
 6. Use `select_stream(..., native_only=True)` when bounded-memory streaming is mandatory
-7. Use `load_from_records()` or `load_from_arrow()` for high-volume ingest; avoid row-by-row `execute_many()` for bulk pipelines
+7. Check adapter ingest capabilities, then use `load_from_records()` or `load_from_arrow()` for high-volume ingest
 
 ### Step 3: Validate
 
@@ -168,7 +169,7 @@ Run through the validation checkpoint below before considering the work complete
 - **Always use `schema_type`** for query results -- get typed objects, not raw dicts
 - **Always use context managers** for driver lifecycle -- `async with db_manager.provide_session(config) as db:`
 - **Prefer the query builder** for complex dynamic queries -- avoids string concatenation, handles dialect conversion
-- **Prefer `SQLFileLoader`** for static queries -- keeps SQL out of Python, enables caching
+- **Prefer `SQLFileLoader`** for static queries -- keeps SQL out of Python and reuses the global file-cache namespace
 - **Use `-- param:` declarations for named SQL files that cross service boundaries** -- load-time and execute-time validation catches name drift and required parameter omissions
 - **Use `native_only=True` for streaming or Arrow paths only when fallback is unacceptable** -- unsupported adapters otherwise use eager row conversion
 - **Pass regular query bind values as positional arguments** -- `await db.select("... WHERE id = $1", user_id, schema_type=User)`, not `await db.select(..., [user_id], ...)`
@@ -193,7 +194,7 @@ Before delivering SQLSpec code, verify:
 - [ ] Complex dynamic queries use the builder API, not string concatenation
 - [ ] Filters use SQLSpec filter objects (`LimitOffsetFilter`, etc.) not manual LIMIT/OFFSET
 - [ ] Streaming code uses context managers and sets `native_only=True` when eager fallback would be a bug
-- [ ] Bulk ingest code uses `load_from_arrow()`, `load_from_storage()`, or `load_from_records()` and checks adapter gates such as MySQL local-infile, Oracle direct path load, BigQuery Storage Write API, or Spanner Batch Write API
+- [ ] Bulk ingest code checks the adapter matrix before using `load_from_arrow()`, `load_from_storage()`, or `load_from_records()`
 - [ ] ADK stores are selected from supported adapter `adk` packages; BigQuery is not an ADK backend
 
 </validation>
@@ -264,7 +265,7 @@ async def get_user_count() -> int:
 
 ## References Index
 
-> **Choosing between `sqlspec` and `advanced-alchemy`:** `advanced-alchemy` gives you an opinionated ORM service layer with `UUIDAuditBase`, lifecycle hooks, repository / service / Alembic integration, and `OffsetPagination[T]` out of the box — pick it when you want a complete CRUD surface with attribute-style row access and you're happy inside the SQLAlchemy ecosystem. `sqlspec` gives you direct SQL control, 18+ driver adapters (asyncpg, oracledb, DuckDB, BigQuery, SQLite, and more), Arrow result paths for analytics, and a builder API when you need it — pick it when you want explicit SQL, heterogeneous database backends, or Arrow integration. Both skills integrate with Litestar via first-party plugins; see [`../advanced-alchemy/SKILL.md`](../advanced-alchemy/SKILL.md) for the ORM path.
+> **Choosing between `sqlspec` and `advanced-alchemy`:** `advanced-alchemy` gives you an opinionated ORM service layer with `UUIDAuditBase`, lifecycle hooks, repository / service / Alembic integration, and `OffsetPagination[T]` out of the box — pick it when you want a complete CRUD surface with attribute-style row access and you're happy inside the SQLAlchemy ecosystem. `sqlspec` gives you direct SQL control, 19 adapter packages (asyncpg, oracledb, DuckDB, BigQuery, SQLite, and more), Arrow result paths for analytics, and a builder API when you need it — pick it when you want explicit SQL, heterogeneous database backends, or Arrow integration. Both skills integrate with Litestar via first-party plugins; see [`../advanced-alchemy/SKILL.md`](../advanced-alchemy/SKILL.md) for the ORM path.
 
 For detailed instructions, patterns, and API guides, refer to the following documents:
 
@@ -278,7 +279,7 @@ For detailed instructions, patterns, and API guides, refer to the following docu
 
 ### Architecture & Performance
 
-- **[Architecture & Caching](references/architecture.md)** -- Core data flow, NamespacedCache system, statement/cache tuning, Mypyc compilation.
+- **[Architecture & Caching](references/architecture.md)** -- Core data flow, global cache configuration, namespaces, and driver-local statement caches.
 - **[Performance & Cloud Controls](references/performance.md)** -- Bounded async bridge, cache/fetch tuning, BigQuery job controls, Spanner session controls.
 - **[Data Dictionary](references/data-dictionary.md)** -- Dialect feature flags, runtime introspection (`get_tables`, `get_columns`, `get_indexes`), ADBC native metadata/statistics.
 
@@ -296,7 +297,7 @@ For detailed instructions, patterns, and API guides, refer to the following docu
 
 ### Adapters & Drivers
 
-- **[Adapter & Driver Registry](references/adapters.md)** -- Full 18+ adapter registry with dialects and parameter styles.
+- **[Adapter & Driver Registry](references/adapters.md)** -- Full 19-adapter registry with dialects and parameter styles.
 
 ### Framework & Storage Integrations
 
@@ -307,7 +308,7 @@ For detailed instructions, patterns, and API guides, refer to the following docu
 
 ### Migrations & Schema
 
-- **[Native Migration Runner](references/migrations.md)** -- `sqlspec database` CLI, timestamp versioning, `ddl_migrations` tracker, extension migrations, Litestar `litestar db` integration.
+- **[Native Migration Runner](references/migrations.md)** -- standalone `sqlspec` CLI, timestamp versioning, `ddl_migrations` tracker, extension migrations, and Litestar `litestar db` integration.
 
 ### Observability
 

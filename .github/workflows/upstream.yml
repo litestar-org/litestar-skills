@@ -1,0 +1,39 @@
+name: Upstream release contracts
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: upstream-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Setup Python
+        run: uv python install 3.12
+
+      - name: Install development and validation dependencies
+        run: uv sync --extra dev --extra validation
+
+      - name: Check audited releases
+        run: make check-upstream-releases
+
+      - name: Check upstream imports strictly
+        run: make check-upstream-imports-strict
+
+      - name: Run upstream package contracts
+        run: make upstream-contracts

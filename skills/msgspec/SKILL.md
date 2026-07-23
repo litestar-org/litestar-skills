@@ -1,18 +1,21 @@
 ---
 name: msgspec
-description: "Auto-activate for msgspec, Struct, Meta, msgspec.json, msgspec.msgpack, tagged unions, enc_hook, dec_hook, convert(), or Litestar DTO shapes. Not for Pydantic/ORM models."
+description: "Auto-activate for msgspec, Struct, Meta, msgspec.json, msgspec.msgpack, tagged unions, enc_hook, dec_hook, convert(), or Litestar DTO shapes. Not for Pydantic or ORM models — use their stack-specific skill."
 ---
 
 # msgspec Skill
 
-msgspec is a high-performance Python library for serialization, deserialization, and validation. Structs are ~5x more memory-efficient than regular classes and serialize faster than Pydantic or dataclasses.
+msgspec is a high-performance Python library for serialization, deserialization, and typed
+validation. This guidance targets the immutable `0.21.1` release.
 
 ## Code Style Rules
 
 - Use PEP 604 for unions: `T | None` (not `Optional[T]`)
 - **`from __future__ import annotations` rule** — Library/shared modules that define runtime-introspected `msgspec.Struct` subclasses should avoid postponed annotations unless the consuming tool resolves them. Consumer modules that only use Structs MAY use future annotations.
-- Always annotate all fields; msgspec requires type annotations
+- Annotate every serialized field; only annotated attributes become Struct fields
 - Use `kw_only=True` for Structs with more than 2 fields
+- Put wire-name configuration on `msgspec.field(name=...)` or the Struct's `rename=`
+  option; `msgspec.Meta` defines constraints and JSON Schema metadata, not field aliases
 
 ## Quick Reference
 
@@ -49,6 +52,10 @@ class ApiResponse(msgspec.Struct, rename="camel"):
     user_id: int         # serialized as "userId"
     created_at: str      # serialized as "createdAt"
 
+# Rename one field explicitly
+class Resource(msgspec.Struct):
+    resource_id: int = msgspec.field(name="id")
+
 # Reject unknown fields at API boundaries
 class StrictInput(msgspec.Struct, forbid_unknown_fields=True):
     name: str
@@ -58,7 +65,9 @@ class StrictInput(msgspec.Struct, forbid_unknown_fields=True):
 ### Validation Constraints
 
 ```python
+from datetime import datetime
 from typing import Annotated
+
 import msgspec
 from msgspec import Meta
 
@@ -67,7 +76,8 @@ class Product(msgspec.Struct):
     price: Annotated[float, Meta(gt=0)]
     quantity: Annotated[int, Meta(ge=0, le=10_000)]
     sku: Annotated[str, Meta(pattern=r"^[A-Z]{2}-\d{4}$")]
-    weight_kg: Annotated[float, Meta(multiple_of=0.001)]
+    batch_size: Annotated[int, Meta(multiple_of=5)]
+    expires_at: Annotated[datetime, Meta(tz=True)]
 
 # Reusable constraint aliases
 PositiveInt = Annotated[int, Meta(gt=0)]
@@ -100,27 +110,27 @@ user = msgspec.json.decode(b'...', type=User)
 data = msgspec.msgpack.encode(user)
 user = msgspec.msgpack.decode(data, type=User)
 
-# Custom hooks for non-native types (datetime, UUID, Decimal)
-from datetime import datetime
-import uuid
+# Hooks are only for unsupported custom types. datetime, UUID, Decimal, and
+# Enum are already supported.
 
 def enc_hook(obj: object) -> object:
-    if isinstance(obj, datetime):
-        return obj.isoformat()
-    if isinstance(obj, uuid.UUID):
-        return str(obj)
-    raise TypeError(f"Unsupported type: {type(obj)}")
+    if isinstance(obj, complex):
+        return (obj.real, obj.imag)
+    raise NotImplementedError(f"Unsupported type: {type(obj)}")
 
-def dec_hook(type: type, obj: object) -> object:
-    if type is datetime:
-        return datetime.fromisoformat(obj)
-    if type is uuid.UUID:
-        return uuid.UUID(obj)
-    raise TypeError(f"Unsupported type: {type}")
+def dec_hook(target_type: type, obj: object) -> object:
+    if target_type is complex:
+        real, imag = obj
+        return complex(real, imag)
+    raise NotImplementedError(f"Unsupported type: {target_type}")
 
 encoder = msgspec.json.Encoder(enc_hook=enc_hook)
 decoder = msgspec.json.Decoder(MyStruct, dec_hook=dec_hook)
 ```
+
+`dec_hook` runs only for unsupported custom annotations. `TypeError` and `ValueError` raised by
+the hook become path-aware `ValidationError`s. In 0.21.1, a `ValidationError` or `DecodeError`
+raised by the hook propagates directly and is not wrapped in another `ValidationError`.
 
 ### Canonical Litestar serializers (match-your-stack)
 
@@ -144,29 +154,17 @@ payload = to_json(order, as_bytes=True)
 await backend.publish(payload, channels=[f"orders:{order.id}:events"])
 ```
 
-**Branch B — sqlspec is not in-stack.** Hand-roll an `Encoder` with an `enc_hook`.
+**Branch B — sqlspec is not in-stack.** Use a plain msgspec `Encoder`; the package natively
+handles UUID, datetime, date, time, Decimal, Enum, dataclasses, attrs classes, and Structs.
 
 ```python
 # myapp/utils/serialization.py
-import datetime as _dt
-import json
 from typing import Any
-from uuid import UUID
 
 import msgspec
 
 
-def _default(value: Any) -> str:
-    if isinstance(value, UUID):
-        return str(value)
-    if isinstance(value, _dt.datetime):
-        return value.astimezone(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    if isinstance(value, _dt.date):
-        return value.isoformat()
-    return str(value)
-
-
-_encoder = msgspec.json.Encoder(enc_hook=_default)
+_encoder = msgspec.json.Encoder()
 
 
 def to_json(value: Any) -> bytes:
@@ -192,10 +190,10 @@ user = msgspec.convert(raw, User, strict=False)  # id coerced to 42
 data = {"1": "Alice", "2": "Bob"}
 result = msgspec.convert(data, dict[int, str], str_keys=True)
 
-# Convert with dec_hook for custom types
-user = msgspec.convert(raw, UserWithUUID, dec_hook=dec_hook)
+# Convert with dec_hook for an unsupported custom type
+measurement = msgspec.convert(raw_measurement, Measurement, dec_hook=dec_hook)
 
-# Convert dataclass/dict/object to Struct
+# Convert a dataclass or arbitrary object to a Struct by reading attributes
 from dataclasses import dataclass
 
 @dataclass
@@ -204,10 +202,12 @@ class LegacyUser:
     name: str
 
 legacy = LegacyUser(id=1, name="Alice")
-user = msgspec.convert(msgspec.structs.asdict(legacy), User)
-# Or directly:
-user = msgspec.convert(legacy, User)
+user = msgspec.convert(legacy, User, from_attributes=True)
 ```
+
+`from_attributes=False` is the default. Plain mappings convert to object-like output types
+without this option; dataclass, attrs, ORM, and other objects require `from_attributes=True`.
+`msgspec.structs.asdict()` accepts a `msgspec.Struct`, not an arbitrary dataclass.
 
 ### Dynamic Struct Creation
 
@@ -234,7 +234,6 @@ FlexModel = msgspec.defstruct("FlexModel", fields_with_defaults)
 
 ```python
 import msgspec
-from typing import Literal
 
 # Default tag field is "type", tag value is the class name
 class Dog(msgspec.Struct, tag=True):
@@ -271,6 +270,19 @@ class V2Request(msgspec.Struct, tag="v2", tag_field="version"):
 Request = V1Request | V2Request
 ```
 
+All Struct variants in a multi-Struct union must be tagged, use the same `tag_field`, use unique
+tag values, and use one tag type (`str` or `int`) consistently. A union may contain non-Struct
+types, but it may contain at most one untagged Struct.
+
+### Validation and 0.21 Behavior
+
+- Direct Struct construction trusts the caller and does not enforce field annotations.
+  Typed `decode()` and `convert()` perform runtime type and `Meta` constraint validation.
+- `msgspec.structs.replace()` and Python's `copy.replace()` call `__post_init__` as of 0.21.0.
+- `msgspec.json.schema()` and `schema_components()` accept
+  `ref_template="#/$defs/{name}"`; 0.21.1 includes the parameter in the type stub.
+- JSON Schema output marks `set` and `frozenset` fields with `uniqueItems`.
+
 <workflow>
 
 ## Workflow
@@ -285,7 +297,10 @@ Annotate fields with `Annotated[Type, Meta(...)]` for numeric ranges, string len
 
 ### Step 3: Choose Serialization Strategy
 
-Use `msgspec.json` for JSON APIs and `msgspec.msgpack` for binary protocols or internal messaging. Instantiate `Encoder`/`Decoder` once at module level as singletons. Add `enc_hook`/`dec_hook` for custom types (datetime, UUID, Decimal, Enum).
+Use `msgspec.json` for JSON APIs and `msgspec.msgpack` for binary protocols or internal
+messaging. Instantiate reusable `Encoder`/`Decoder` objects once at module level. Add
+`enc_hook`/`dec_hook` only for unsupported custom types; msgspec natively supports datetime,
+UUID, Decimal, and Enum.
 
 ### Step 4: Handle Polymorphism
 
@@ -301,11 +316,16 @@ Test round-trip encode/decode. Confirm `ValidationError` is raised for constrain
 
 ## Guardrails
 
-- **Always annotate all fields** -- msgspec requires type annotations; unannotated fields are ignored silently.
-- **Cache Encoder/Decoder as singletons** -- instantiation is expensive; create once at module level and reuse.
+- **Annotate every serialized field** -- only annotated attributes become Struct fields.
+- **Reuse Encoder/Decoder instances** -- configured codec objects are designed for repeated calls.
 - **Use `kw_only=True` for Structs with >2 fields** -- prevents positional argument confusion and makes instantiation self-documenting.
 - **Use `forbid_unknown_fields=True` at API boundaries** -- rejects payloads with unexpected keys, preventing silent data loss.
-- **Prefer `Meta` constraints over manual validation** -- zero runtime overhead; constraints are checked during decode, not after.
+- **Use `Meta` for supported field constraints** -- typed decode and `convert()` check these
+  constraints and report the failing path; direct Struct construction does not.
+- **Never pass `rename` to `Meta`** -- alias one field with `msgspec.field(name=...)` or configure
+  the Struct with `rename=`.
+- **Avoid non-integral float `multiple_of` constraints** -- binary floating-point precision may
+  reject mathematically valid values; use an integer unit when possible.
 - **Use `gc=False` for short-lived, non-circular objects** -- eliminates GC overhead for hot-path objects like request/response shapes.
 - **Tagged unions for polymorphism** -- faster than manual dispatch and eliminates `isinstance` chains.
 - **`from __future__ import annotations` rule** — Library/shared modules that define runtime-introspected types (advanced-alchemy models, sqlspec configs, msgspec Structs, dishka providers) avoid postponed annotations unless their consumers resolve them. Consumer applications MAY use it. The restriction applies only to modules that define introspected types, not handler/service/test modules that use them.
@@ -325,8 +345,12 @@ Before delivering msgspec code, verify:
 - [ ] Encoder/Decoder instances are module-level singletons (not created per-request)
 - [ ] API-boundary Structs use `forbid_unknown_fields=True`
 - [ ] Numeric/string constraints use `Meta` (not manual `if` checks)
-- [ ] `enc_hook`/`dec_hook` handle all non-native types used in Structs
+- [ ] Field aliases use `msgspec.field(name=...)` or Struct `rename=`; `Meta` does not accept `rename`.
+- [ ] Hooks are used only for unsupported custom types; native datetime/UUID/Decimal/Enum paths
+      do not duplicate built-in handling
+- [ ] Object-to-Struct conversion uses `from_attributes=True`
 - [ ] Tagged union tag values are unique across all variants in a union
+- [ ] Tagged union variants share one `tag_field` and one tag value type
 - [ ] `kw_only=True` on Structs with more than 2 fields
 - [ ] If sqlspec is in-stack, to_json is imported from sqlspec.utils.serializers (not hand-rolled)
 
@@ -344,9 +368,10 @@ Before delivering msgspec code, verify:
 
 ```python
 # events.py
-from typing import Annotated, Literal
-from datetime import datetime
+from datetime import UTC, datetime
+from typing import Annotated
 import uuid
+
 import msgspec
 from msgspec import Meta
 
@@ -369,24 +394,9 @@ class UserDeletedEvent(msgspec.Struct, tag="user.deleted", tag_field="event_type
 
 UserEvent = UserCreatedEvent | UserDeletedEvent
 
-# --- Custom hooks for datetime and UUID ---
-def enc_hook(obj: object) -> object:
-    if isinstance(obj, datetime):
-        return obj.isoformat()
-    if isinstance(obj, uuid.UUID):
-        return str(obj)
-    raise TypeError(f"Unsupported type: {type(obj)}")
-
-def dec_hook(type: type, obj: object) -> object:
-    if type is datetime:
-        return datetime.fromisoformat(obj)
-    if type is uuid.UUID:
-        return uuid.UUID(obj)
-    raise TypeError(f"Unsupported type: {type}")
-
-# --- Singleton codec ---
-_encoder = msgspec.json.Encoder(enc_hook=enc_hook)
-_decoder = msgspec.json.Decoder(UserEvent, dec_hook=dec_hook)
+# --- Reusable codec; datetime and UUID are supported natively ---
+_encoder = msgspec.json.Encoder()
+_decoder = msgspec.json.Decoder(UserEvent)
 
 def encode_event(event: UserEvent) -> bytes:
     return _encoder.encode(event)
@@ -399,7 +409,7 @@ event = UserCreatedEvent(
     event_id=uuid.uuid4(),
     user_id=42,
     email="alice@example.com",
-    occurred_at=datetime.utcnow(),
+    occurred_at=datetime.now(UTC),
 )
 payload = encode_event(event)
 # b'{"event_type":"user.created","event_id":"...","user_id":42,"email":"alice@example.com","occurred_at":"..."}'
@@ -424,14 +434,16 @@ For detailed guides and reference tables, refer to the following documents in `r
 
 ## Official References
 
-- <https://jcristharif.com/msgspec/>
-- <https://jcristharif.com/msgspec/structs.html>
-- <https://jcristharif.com/msgspec/constraints.html>
-- <https://jcristharif.com/msgspec/json.html>
-- <https://jcristharif.com/msgspec/msgpack.html>
-- <https://jcristharif.com/msgspec/converters.html>
-- <https://jcristharif.com/msgspec/api.html>
-- <https://github.com/jcrist/msgspec>
+- <https://pypi.org/project/msgspec/0.21.1/>
+- <https://github.com/jcrist/msgspec/tree/0.21.1>
+- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/structs.rst>
+- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/constraints.rst>
+- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/supported-types.rst>
+- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/jsonschema.rst>
+- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/converters.rst>
+- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/extending.rst>
+- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/api.rst>
+- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/changelog.md>
 
 ## Shared Styleguide Baseline
 

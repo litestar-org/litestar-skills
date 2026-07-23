@@ -244,10 +244,10 @@ SQLSpec exposes one unified migrations CLI that reads the registry the framework
 
 ```bash
 # Using `uv` (recommended)
-uv run sqlspec database upgrade
+uv run sqlspec upgrade
 
 # Or, in an activated venv
-sqlspec database upgrade
+sqlspec upgrade
 ```
 
 The CLI walks `sqlspec.configs.values()` and for each config with `migration_config={...}` runs the pending migrations against that bind's pool. Each bind keeps its own version table; there is no shared history across binds.
@@ -332,7 +332,7 @@ If step 4 had raised an exception, the middleware would have caught it, called `
 - [multi-database.md](multi-database.md) — per-config `connection_key` / `session_key` / `pool_key` for applications talking to more than one database.
 - [filters.md](filters.md) — the filter object catalog (`LimitOffsetFilter`, `SearchFilter`, `OrderByFilter`, `BeforeAfterFilter`, `InCollectionFilter`).
 - [adapters.md](adapters.md) — adapter-specific pool config (`min_size` / `max_size` / `conninfo` / `dsn`).
-- [migrations.md](migrations.md) — the global `sqlspec database ...` migration CLI and how it reads the registry.
+- [migrations.md](migrations.md) — the standalone `sqlspec ...` migration CLI and how it reads the registry.
 - [observability.md](observability.md) — correlation middleware, sqlcommenter middleware, and how they thread request context into driver-layer logs.
 - [fastapi-integration.md](fastapi-integration.md) — the DI-oriented sibling built on this same plugin class.
 - [flask-integration.md](flask-integration.md) — sync WSGI variant with the portal bridge for async drivers.

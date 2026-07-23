@@ -13,7 +13,7 @@ This reference documents a project-owned sidecar worker directly over PostgreSQL
 | Web dashboard / job retry UI | Yes (`web_enabled=True`) | No, build your own |
 | Postgres NOTIFY wake-ups | Yes with SAQ PostgreSQL broker | Yes |
 | `FOR UPDATE SKIP LOCKED` atomic claim | Yes with SAQ PostgreSQL broker | Yes |
-| Same-transaction outbox with business data | No | Yes |
+| Business write + outbox in one app transaction | No | Yes |
 | Project-owned job table/schema | No | Yes |
 | Multi-target execution routing | No | Yes (`local` / `cloudrun` / `immediate`) |
 | Minimal dependency surface | Queue package + broker | Existing PostgreSQL stack |
@@ -489,7 +489,7 @@ class ScheduleConfig:
 
 External one-shot workers must preserve local-worker semantics:
 
-- Read the job id from a generic environment variable such as `JOB_ID`.
+- Receive the job id through the execution backend's explicit invocation contract.
 - Claim the row with `TaskService.claim_task(job_id)`.
 - Start a `WorkerSidecar` before executing the task.
 - Register a claim-loss callback that cancels execution if heartbeats stop owning the row.
@@ -563,7 +563,7 @@ worker_plugin = WorkerPlugin(
 - Serialize operations on a single asyncpg sidecar connection with an `asyncio.Lock`.
 - Reinstall LISTEN callbacks after sidecar reconnects.
 - Keep the fallback poll even with NOTIFY; notifications are an optimization, not the only recovery path.
-- Use generic environment names and module names in documentation. Do not leak private app identifiers into reusable guidance.
+- Use neutral module names in documentation. Do not leak private app identifiers into reusable guidance.
 
 ## Cross-references
 

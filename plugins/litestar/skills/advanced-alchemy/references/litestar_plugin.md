@@ -6,7 +6,6 @@
 from advanced_alchemy.extensions.litestar import (
     SQLAlchemyAsyncConfig,
     SQLAlchemyPlugin,
-    async_autocommit_before_send_handler,
 )
 from sqlalchemy.ext.asyncio import AsyncEngine
 from litestar import Litestar
@@ -14,7 +13,7 @@ from litestar import Litestar
 
 db_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://user:pass@localhost:5432/mydb",
-    before_send_handler=async_autocommit_before_send_handler,
+    before_send_handler="autocommit",
 )
 
 app = Litestar(
@@ -41,7 +40,7 @@ db_config = SQLAlchemyAsyncConfig(
         pool_recycle=300,
         echo=False,
     ),
-    before_send_handler=async_autocommit_before_send_handler,
+    before_send_handler="autocommit",
 )
 ```
 
@@ -177,10 +176,14 @@ The Litestar plugin automatically manages sessions:
 - A new `AsyncSession` is created per request
 - Sessions are injected as `db_session` dependency
 - `before_send_handler` controls commit/rollback behavior:
-  - `async_autocommit_before_send_handler` — auto-commits if no exception occurred
-  - `async_autocommit_handler_maker(commit_on_redirect=False)` — customizable behavior
+  - unset — closes the session without committing or rolling back
+  - `"autocommit"` — commits 2xx responses and rolls back other statuses
+  - `"autocommit_include_redirects"` — also commits 3xx responses
+  - `async_autocommit_handler_maker(...)` — custom commit/rollback statuses
 
-**Do not manually commit or close sessions** when using the plugin — it handles the lifecycle.
+Do not close request sessions manually. Commit explicitly when using the
+default close-only handler; let an autocommit handler own the transaction when
+one is configured.
 
 ## Multiple Database Support
 
@@ -190,13 +193,18 @@ from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlche
 
 primary_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://localhost/primary",
-    before_send_handler=async_autocommit_before_send_handler,
+    before_send_handler="autocommit",
+    bind_key="primary",
+    session_dependency_key="primary_session",
+    engine_dependency_key="primary_engine",
 )
 
 analytics_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://localhost/analytics",
-    before_send_handler=async_autocommit_before_send_handler,
+    before_send_handler="autocommit",
     bind_key="analytics",
+    session_dependency_key="analytics_session",
+    engine_dependency_key="analytics_engine",
 )
 
 app = Litestar(
@@ -204,28 +212,40 @@ app = Litestar(
 )
 ```
 
-Access the secondary session via `bind_key` in your service configuration.
+Access each session through its configured Litestar dependency key. `bind_key`
+selects metadata and CLI configuration; it does not inject the session into a
+service automatically.
 
 ## Session backend + session store
 
 When you want Litestar server-side sessions persisted in your main database (instead of Redis or in-memory), Advanced Alchemy ships two integrations:
 
 - `advanced_alchemy.extensions.litestar.session` — `SQLAlchemyAsyncSessionBackend` / `SQLAlchemySyncSessionBackend` plus the `SessionModelMixin` declarative mixin. This is the Litestar `ServerSideSessionBackend` implementation that stores raw session bytes, keyed by session ID.
-- `advanced_alchemy.extensions.litestar.store` — `SQLAlchemyStore` (generic, supports both sync and async configs) plus `StoreModelMixin`. This is a generic `NamespacedStore` for Litestar's response-cache / rate-limit / arbitrary-value needs, keyed by `(key, namespace)`.
+- `advanced_alchemy.extensions.litestar.store` — `SQLAlchemyStore` (generic,
+  supports both sync and async configs) plus `StoreModelMixin`. Register it
+  under the `"sessions"` store name for Litestar's preferred store-based
+  server-side sessions, or use it as a general `NamespacedStore`.
 
 ### When to use
 
-Pick the session backend when you want `ServerSideSessionConfig` persistence colocated with your domain data — auditable, transactional, same backup strategy. Pick `SQLAlchemyStore` when you want a key/value store backed by SQLAlchemy for Litestar's `stores` registry (caching `@get` responses, rate-limit buckets, password-reset tokens).
+Prefer `SQLAlchemyStore` registered as `stores={"sessions": session_store}`
+when the application already uses Litestar's store-backed session
+configuration. Use `SQLAlchemyAsyncSessionBackend` or
+`SQLAlchemySyncSessionBackend` only when you need to wire a dedicated backend
+directly into `SessionMiddleware`.
 
 ### Config wiring
 
 ```python
+from functools import partial
+
 from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
 from advanced_alchemy.extensions.litestar.session import (
     SQLAlchemyAsyncSessionBackend,
     SessionModelMixin,
 )
 from litestar import Litestar
+from litestar.middleware.session import SessionMiddleware
 from litestar.middleware.session.server_side import ServerSideSessionConfig
 
 
@@ -244,9 +264,13 @@ session_backend = SQLAlchemyAsyncSessionBackend(
 app = Litestar(
     route_handlers=[],
     plugins=[SQLAlchemyPlugin(config=db_config)],
-    middleware=[session_backend.config.middleware],
+    middleware=[partial(SessionMiddleware, backend=session_backend)],
 )
 ```
+
+Do not use `session_backend.config.middleware` for a custom SQLAlchemy
+backend. `ServerSideSessionConfig.middleware` installs Litestar's configured
+built-in backend and ignores this backend instance.
 
 ### Table schema
 
@@ -261,7 +285,10 @@ app = Litestar(
 
 ### Migration
 
-Table creation is NOT automatic — both mixins are `__abstract__ = True`, and you must (a) subclass with a concrete `__tablename__` against a metadata registry that Alembic sees, and (b) generate a migration via `alembic revision --autogenerate`. The `UUIDv7Base` parent is already registered on the default metadata, so once the concrete subclass is imported at Alembic env time it will be picked up.
+Table creation is NOT automatic — both mixins are `__abstract__ = True`, and
+you must (a) subclass with a concrete `__tablename__` against metadata that the
+config sees, and (b) run `litestar database make-migrations`. Import the
+concrete model before migration autogeneration.
 
 ### Common pitfalls
 

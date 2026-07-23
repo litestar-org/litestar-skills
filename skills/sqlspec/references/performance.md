@@ -8,7 +8,7 @@ SQLSpec keeps performance controls explicit. Configure them through adapter `con
 
 ## Bounded Async Bridge
 
-`sqlspec.utils.sync_tools.async_()` wraps blocking callables for async code. In `v0.51.0`, SQLSpec uses a process-local managed `ThreadPoolExecutor` capped by default.
+`sqlspec.utils.sync_tools.async_()` wraps blocking callables for async code. In `v0.56.0`, SQLSpec uses a process-local managed `ThreadPoolExecutor` capped by default.
 
 Use an explicit executor when the call site owns the pool:
 
@@ -48,7 +48,7 @@ Precedence is explicit: `async_(fn, executor=...)` wins over `set_default_async_
 | `psycopg` | `connection_config={"prepare_threshold": N}` | Repeated queries amortize server-side planning | Rarely repeated queries or connection middleware changes sessions |
 | `oracledb` | `connection_config={"stmtcachesize": N}` | Same Oracle statement text repeats frequently | Statement text has high cardinality or memory pressure dominates |
 | `oracledb` | `driver_features={"arraysize": N, "prefetchrows": N}` | Large result sets spend time on network round trips | Single-row lookups or very wide rows dominate |
-| `oracledb` | `driver_features={"fetch_lobs": False, "fetch_decimals": True}` | You need native LOB or NUMBER fetch representation | Application expects SQLSpec defaults |
+| `oracledb` | `driver_features={"fetch_lobs": True, "fetch_decimals": True}` | Code needs native LOB locators or decimal materialization | Application expects SQLSpec's default LOB `str`/`bytes` materialization |
 | `bigquery` | `driver_features={"query_page_size": N, "query_max_results": N}` | Bound page size or total rows for SELECT result fetching | DML and scripts; these controls apply to result fetching |
 | `arrow_odbc` | `driver_features={"chunk_size": N, "max_bytes_per_batch": N}` | Tune Arrow batch memory and round trips | Downstream requires a fixed batch shape |
 | `arrow_odbc` | `driver_features={"max_text_size": N, "max_binary_size": N, "fetch_concurrently": bool}` | Bound text/binary columns or improve high-latency fetches | Truncation is unacceptable or the ODBC source is unstable under concurrent fetch |

@@ -234,11 +234,11 @@ Initializing the extension adds a `database` command group to `app.cli`. With `F
 
 ```text
 flask database init
-flask database revision --autogenerate -m "add orders table"
+flask database make-migrations -m "add orders table"
 flask database upgrade head
 flask database downgrade -1
 flask database history
-flask database current
+flask database show-current-revision
 ```
 
 Under the hood, `app.cli.add_command(database_group)` runs during `init_app()`, and `database_group` is decorated with `flask.cli.with_appcontext` so the Advanced Alchemy extension (and therefore the configs) is available to the Alembic commands. For end-to-end migration authoring (env.py, autogenerate gotchas, offline SQL), see the [migrations reference](migrations.md).
