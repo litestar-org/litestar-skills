@@ -38,10 +38,12 @@ dev = [
   "tomli>=2.0 ; python_version < '3.11'",
   "litestar-skills[validation]",
 ]
-# Libraries shipped guidance for. Install via `uv pip install -e '.[validation]'`
-# so `tools/check-upstream-imports.py` can verify every `from X import Y` in
-# skill code samples actually resolves against the installed version.
-# CI installs this group on every run; local dev opts in.
+# Libraries shipped guidance for. `tools/check-upstream-imports.py` verifies that
+# every `from X import Y` in skill code samples resolves against the installed
+# version, and `tests/upstream_contracts/` pins the API surface each skill claims.
+# The `dev` extra depends on this group, so `uv sync --extra dev` alone gives a
+# working environment — otherwise those checks silently run against stale or
+# missing upstreams.
 validation = [
   "advanced-alchemy[cli,cryptography,fsspec,obstore]>=1.11.0",
   "argon2-cffi>=23.1",  # advanced_alchemy.types.password_hash.argon2 imports argon2 at module load

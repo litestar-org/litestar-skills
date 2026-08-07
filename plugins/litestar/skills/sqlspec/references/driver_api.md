@@ -4,7 +4,7 @@
 
 All database interactions go through driver adapters. Async adapters extend `AsyncDriverAdapterBase`; sync adapters extend `SyncDriverAdapterBase`. The public method surface is parallel: async drivers use `await`, sync drivers do not.
 
-Use the current method names. `select_many()` and `copy_from_arrow()` are not public SQLSpec APIs in `v0.56.0`.
+Use the current method names. `select_many()` and `copy_from_arrow()` are not public SQLSpec APIs in `v0.58.3`.
 
 Bind normal query parameters as variadic positional arguments. Use `await db_session.select("... WHERE id = $1", user_id, schema_type=User)`, not `await db_session.select(..., [user_id], ...)`. Keep list or tuple containers for real batch/data payloads such as `execute_many()` parameter sets or `load_from_records()` rows.
 

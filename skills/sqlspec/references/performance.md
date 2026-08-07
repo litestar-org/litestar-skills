@@ -8,7 +8,7 @@ SQLSpec keeps performance controls explicit. Configure them through adapter `con
 
 ## Bounded Async Bridge
 
-`sqlspec.utils.sync_tools.async_()` wraps blocking callables for async code. In `v0.56.0`, SQLSpec uses a process-local managed `ThreadPoolExecutor` capped by default.
+`sqlspec.utils.sync_tools.async_()` wraps blocking callables for async code. In `v0.58.3`, SQLSpec uses a process-local managed `ThreadPoolExecutor` capped by default.
 
 Use an explicit executor when the call site owns the pool:
 

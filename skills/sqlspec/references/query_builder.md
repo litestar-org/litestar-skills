@@ -13,7 +13,8 @@ from sqlspec import sql
 ```python
 from sqlspec.loader import SQLFileLoader
 
-loader = SQLFileLoader(search_paths=["./sql"])
+loader = SQLFileLoader()
+loader.load_sql("./sql")
 
 # Base query loaded from file (e.g., sql/users.sql)
 # -- name: list-users

@@ -307,7 +307,6 @@ app = Litestar(plugins=[VitePlugin(config=vite_config)])
 ```python
 from litestar_vite import ViteConfig, VitePlugin
 from litestar_vite.inertia import InertiaConfig
-from litestar_vite.inertia import InertiaResponse
 
 app = Litestar(
     plugins=[
@@ -321,12 +320,9 @@ app = Litestar(
 )
 
 
-@get("/users")
-async def users_page() -> InertiaResponse:
-    return InertiaResponse(
-        "Users/Index",
-        props={"users": await fetch_users()},
-    )
+@get("/users", component="Users/Index")
+async def users_page() -> dict[str, list[User]]:
+    return {"users": await fetch_users()}
 ```
 
 ## CLI Commands

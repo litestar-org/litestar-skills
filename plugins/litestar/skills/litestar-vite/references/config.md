@@ -26,8 +26,9 @@ ViteConfig(
 
 The canonical modes are `spa`, `template`, `hybrid`, and `framework`.
 Aliases normalize immediately: `htmx` to `template`, `inertia` to `hybrid`,
-and `ssr` / `ssg` to `framework`. `external` is deprecated and requires
-`ExternalDevServer`; replace it with `mode="framework"`.
+and `ssr` / `ssg` to `framework`. `external` also normalizes to `framework`
+and additionally requires `runtime.external_dev_server`. All five aliases are
+permanent and normalize silently.
 
 `enabled=None` is the default auto-detection state and consults `VITE_ENABLED`.
 `enabled=False` registers no Vite routes, middleware, static routers, lifespans,
@@ -104,7 +105,7 @@ Import `LoggingConfig` from `litestar_vite.config`.
 | `suppress_vite_banner` | `False` | Hide the Vite startup banner |
 | `timestamps` | `False` | Prefix lifecycle output with timestamps |
 
-Release `0.27.0` removes routine success/start/stop chatter. Warnings honor
+Release `0.27.0` removed routine success/start/stop chatter. Warnings honor
 quiet mode, and non-TTY warnings and errors use Python logging. Missing assets
 stay quiet until a serving path needs them, then errors instruct the user to
 run `litestar assets build` without exposing absolute manifest paths.

@@ -6,7 +6,7 @@
 
 ## Status
 
-**v0.7.0 — early access.** Multi-host plumbing, 30 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
+**v0.7.0 — early access.** Multi-host plumbing, 31 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
 
 **Breaking host identity note:** host-facing marketplace, plugin, extension, managed-config, and skill namespace IDs are `litestar`. Existing installs under `litestar-skills` should be removed and reinstalled; no alias is shipped. The Python package and repository remain `litestar-skills`.
 
@@ -268,12 +268,12 @@ Per-host uninstall:
 
 ## What's In This Repo
 
-30 skills, focused references, ~28,500+ lines of canonical content:
+31 skills, focused references, ~28,500+ lines of canonical content:
 
 | Category | Skills |
 | --- | --- |
 | Core | `litestar` |
-| Litestar app surfaces | `litestar-routing`, `litestar-dto-openapi`, `litestar-auth-guards`, `litestar-di`, `litestar-data-services`, `litestar-settings`, `litestar-exceptions`, `litestar-middleware`, `litestar-plugins`, `litestar-realtime`, `litestar-ai-serving` |
+| Litestar app surfaces | `litestar-routing`, `litestar-dto-openapi`, `litestar-auth-guards`, `litestar-security`, `litestar-di`, `litestar-data-services`, `litestar-settings`, `litestar-exceptions`, `litestar-middleware`, `litestar-plugins`, `litestar-realtime`, `litestar-ai-serving` |
 | Foundation | `litestar-styleguide` |
 | Data | `advanced-alchemy`, `sqlspec`, `msgspec` |
 | Server | `litestar-granian` |

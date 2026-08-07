@@ -1,11 +1,13 @@
 ---
 name: litestar-mcp
-description: "Auto-activate for litestar_mcp, LitestarMCP, MCPConfig, or @mcp.tool. Not for non-Litestar MCP."
+description: "Auto-activate for litestar_mcp, LitestarMCP, MCP, MCPConfig, mcp.app, mcp.run(), @mcp.tool/resource/prompt, MCPAuthConfig, MCPAuthBackend, mcp_tool=, mcp_resource=, Streamable HTTP, stdio, or OIDC MCP endpoints. Not for non-Litestar MCP."
 ---
 
 # litestar-mcp
 
-`litestar-mcp` exposes explicitly marked Litestar route handlers as [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools, resources, and prompts over MCP Streamable HTTP and JSON-RPC 2.0.
+`litestar-mcp` exposes explicitly marked Litestar route handlers as [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools, resources, and prompts over JSON-RPC 2.0.
+
+`0.12.0` adopts stateless MCP (protocol `2026-07-28`) and is a breaking change. The transport is **POST-only and request-scoped**: the `initialize` handshake, sessions and `Mcp-Session-Id`, `ping`, the `GET` and `DELETE` transport handlers, replay, and the `/.well-known/mcp-server.json` manifest are all removed. Every request carries protocol, client, method, name, and custom-header metadata; call `server/discover` for capabilities. See [Stateless Protocol](references/stateless-protocol.md).
 
 Mark routes by passing `mcp_tool="name"`, `mcp_resource="name"`, or `mcp_prompt="name"` directly to the Litestar route decorator — Litestar funnels unknown kwargs into `handler.opt`, so no `opt={...}` wrapper is needed. The `@mcp_tool` / `@mcp_resource` / `@mcp_prompt` decorators (importable from `litestar_mcp`) still exist and are worth reaching for when you need the extra fields they expose — `output_schema`, `annotations`, `scopes`, `task_support`, prompt `title`, `arguments`, and `icons`. Route opt keys mirror those names (`mcp_prompt_title`, `mcp_prompt_arguments`, `mcp_prompt_icons`). There is no `opt={"mcp_tool_name": ...}` form and no `mcp_exclude` key; neither is read. To hide a route, simply leave it unmarked (discovery is opt-in).
 
@@ -57,10 +59,7 @@ The default MCP surface is:
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /mcp` | Server-Sent Events stream when requested by the client |
-| `POST /mcp` | JSON-RPC endpoint for `initialize`, `ping`, `tools/*`, `resources/*`, `prompts/*`, `completion/complete`, and optional task methods |
-| `DELETE /mcp` | Terminate the current MCP session |
-| `GET /.well-known/mcp-server.json` | MCP server manifest |
+| `POST /mcp` | The only transport route. JSON-RPC endpoint for `server/discover`, `tools/*`, `resources/*`, `prompts/*`, `completion/complete`, `subscriptions/listen`, and optional task methods |
 | `GET /.well-known/agent-card.json` | Agent card metadata |
 | `GET /.well-known/oauth-protected-resource` | OAuth protected-resource metadata (always registered; populated from `auth`) |
 
@@ -68,7 +67,7 @@ The default MCP surface is:
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `base_path` | `str` | `"/mcp"` | URL prefix for the MCP Streamable HTTP endpoint |
+| `base_path` | `str` | `"/mcp"` | URL prefix for the MCP transport endpoint |
 | `include_in_schema` | `bool` | `False` | Include the MCP router and all three `/.well-known/*` discovery routes in OpenAPI |
 | `name` | `str \| None` | `None` | Server name; defaults to OpenAPI title |
 | `instructions` | `str \| None` | `None` | Server instructions advertised to MCP clients |
@@ -87,6 +86,9 @@ The default MCP surface is:
 | `opt_keys` | `MCPOptKeys` | `MCPOptKeys()` | Rename the `handler.opt` keys the plugin reads (e.g. to avoid collisions) |
 | `subscription_max_streams` | `int` | `10000` | Max concurrent SSE streams |
 | `subscription_keepalive_seconds` | `float` | `15.0` | Seconds between SSE keepalive pings |
+| `subscription_channels` | `Any \| None` | `None` | Channels backend backing `subscriptions/listen` fan-out |
+| `cache_ttl_ms` | `int` | `0` | Response cache lifetime in milliseconds; `0` disables caching |
+| `cache_scope` | `Literal["private", "public"]` | `"private"` | Whether cached responses may be shared between callers |
 
 > Filters (`include_tags` / `exclude_tags` / `include_operations` / `exclude_operations`) gate both list responses and direct invocation. A filtered tool/resource/template behaves like an unknown name or URI in `tools/call` / `resources/read`; still use `guards` / auth for real access control.
 
@@ -220,9 +222,9 @@ litestar mcp bridge \
   --bearer-env MCP_ACCESS_TOKEN
 ```
 
-The bridge forwards newline-delimited JSON-RPC, preserves the MCP session id and negotiated protocol version, and starts the optional GET SSE stream after `notifications/initialized`. A server that answers GET with `404` or `405` remains usable through POST responses. Stdout contains JSON-RPC only; transport diagnostics go to stderr.
+The bridge forwards newline-delimited JSON-RPC. `0.12.0` made it concurrent: it forwards independent request-scoped POST streams in parallel, multiplexes subscription responses, maps cancellation to stream closure, and lazily maps annotated tool parameters to MCP headers. Stdout contains JSON-RPC only; transport diagnostics go to stderr.
 
-Use `--header "Name: value"` for static headers. Use exactly one of `--bearer-env` or `--bearer-cmd` for a token resolved per request; the bridge retries once with a fresh token after `401`. Match identity-proxy schemes with `--header-name` and `--token-prefix`. `--discover` resolves `endpoints.mcp` from `/.well-known/mcp-server.json`.
+Use `--header "Name: value"` for static headers. Use exactly one of `--bearer-env` or `--bearer-cmd` for a token resolved per request; the bridge retries once with a fresh token after `401`. Match identity-proxy schemes with `--header-name` and `--token-prefix`.
 
 For embedding, import `run_stdio_streamable_http_bridge` from `litestar_mcp.bridge`. It accepts injectable AnyIO stdin/stdout streams and a sync or async token provider, then returns process-style status `0` for clean EOF and `1` after emitting a bridge JSON-RPC error.
 
@@ -315,14 +317,13 @@ Litestar `Provide(...)` factory parameters that are user inputs, such as paginat
 
 This resource is always present in `resources/list`; `MCPConfig.include_in_schema` does not remove it.
 
-`include_in_schema=False` is the default. It hides the plugin-owned `/mcp` path and all three `/.well-known/*` discovery paths from generated OpenAPI, while ordinary application routes—including routes marked for MCP—keep their own OpenAPI visibility. It does not disable the MCP or discovery endpoints at runtime.
+`include_in_schema=False` is the default. It hides the plugin-owned `/mcp` path and both `/.well-known/*` discovery paths from generated OpenAPI, while ordinary application routes—including routes marked for MCP—keep their own OpenAPI visibility. It does not disable the MCP or discovery endpoints at runtime.
 
 Set `include_in_schema=True` to include all plugin-owned paths in OpenAPI:
 
 - `/mcp`
 - `/.well-known/oauth-protected-resource`
 - `/.well-known/agent-card.json`
-- `/.well-known/mcp-server.json`
 
 Do not use this setting to hide an application route. Set `include_in_schema=False` on that route separately, and leave it unmarked if it must also stay out of MCP.
 
@@ -418,7 +419,7 @@ For public endpoints, configure bearer-token validation and `MCPAuthConfig` meta
 
 ### Step 5: Verify
 
-For Streamable HTTP, initialize first: `POST /mcp` with `initialize`, send `notifications/initialized`, then include the returned `Mcp-Session-Id` header on later `tools/list`, `resources/list`, `tools/call`, and `resources/read` requests. Confirm only marked routes appear, call one representative tool, and read one representative resource. Verify both the `text` and `blob` resource paths when the app exposes binary data. For standalone stdio apps, send one line-delimited JSON-RPC request through stdin and confirm the response is written to stdout. For a bridge deployment, verify stdout purity, session continuity, and the configured auth refresh path.
+There is no handshake. `POST /mcp` each JSON-RPC request directly — `server/discover` for capabilities, then `tools/list`, `resources/list`, `tools/call`, and `resources/read`. Confirm only marked routes appear, call one representative tool, and read one representative resource. Verify both the `text` and `blob` resource paths when the app exposes binary data. For standalone stdio apps, send one line-delimited JSON-RPC request through stdin and confirm the response is written to stdout. For a bridge deployment, verify stdout purity, concurrent request-scoped streams, and the configured auth refresh path.
 
 </workflow>
 
@@ -458,10 +459,10 @@ Before delivering an MCP integration, verify:
 - [ ] `before_tool_call` / `after_tool_call` callbacks are covered when configured, including failure paths
 - [ ] Standalone `MCP` SSE or stdio transport is smoke-tested for the chosen deployment mode
 - [ ] Direct stdio handlers and guards receive the intended `MCPStdioContext`; task ownership resolves to the intended principal
-- [ ] Stdio bridge stdout contains JSON-RPC only; static/dynamic auth, session continuity, SSE fallback, and frame limits match the deployment
+- [ ] Stdio bridge stdout contains JSON-RPC only; static/dynamic auth, concurrent request-scoped streams, and frame limits match the deployment
 - [ ] Binary resource listings advertise the correct MIME type; reads return `text` or base64 `blob` as intended
 - [ ] `max_blob_bytes` accepts the largest intended payload and rejects an oversized tool result and resource read
-- [ ] OpenAPI contains ordinary application routes and hides plugin-owned paths by default; `include_in_schema=True` exposes all four plugin-owned paths when requested
+- [ ] OpenAPI contains ordinary application routes and hides plugin-owned paths by default; `include_in_schema=True` exposes all three plugin-owned paths when requested
 - [ ] Exposed handlers performing I/O are `async def`; sync standalone functions are pure/non-blocking and return JSON-serializable types
 - [ ] Tool argument DTOs are specific enough for generated schemas
 
@@ -508,12 +509,16 @@ app = Litestar(
 
 ## References Index
 
-- Use this skill for route marking, Streamable HTTP and stdio behavior, binary content, MCP auth metadata, and verification requests.
+- **[Stateless Protocol](references/stateless-protocol.md)** — the `0.12.0` POST-only transport, `server/discover`, `subscriptions/listen`, the tasks extension, MRTR results, response caching, and client migration.
+
+## Cross-References
+
+- Use this skill for route marking, transport and stdio behavior, binary content, MCP auth metadata, and verification requests.
 - Use [litestar-auth-guards](../litestar-auth-guards/SKILL.md) when auth logic lives in normal Litestar guards or middleware.
 
 ## Official References
 
-- <https://github.com/cofin/litestar-mcp/tree/v0.11.1> — audited v0.11.1 source and tests
+- <https://github.com/cofin/litestar-mcp/tree/v0.12.0> — audited v0.12.0 source and tests
 - <https://cofin.github.io/litestar-mcp/>
 - <https://github.com/cofin/litestar-mcp>
 - <https://modelcontextprotocol.io/>

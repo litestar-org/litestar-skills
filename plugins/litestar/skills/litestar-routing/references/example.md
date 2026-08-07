@@ -237,7 +237,7 @@ app = Litestar(
                     QueueConfig(
                         name="default",
                         dsn=settings.redis.url,
-                        jobs=[notify_task_due_job],
+                        tasks=[notify_task_due_job],
                     )
                 ],
             )

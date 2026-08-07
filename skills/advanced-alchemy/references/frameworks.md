@@ -242,8 +242,14 @@ db_config = SQLAlchemyAsyncConfig(
 )
 
 app = Sanic("MyApp")
-alchemy = AdvancedAlchemy(config=db_config, app=app)
+alchemy = AdvancedAlchemy(sqlalchemy_config=db_config, sanic_app=app)
 ```
+
+Sanic is the one framework whose keywords differ: `sqlalchemy_config=` and
+`sanic_app=`, both keyword-only. Copying `AdvancedAlchemy(config=..., app=...)`
+from another framework's section raises
+`TypeError: unexpected keyword argument 'config'`. See
+[Sanic integration](sanic-integration.md).
 
 ### Route Handlers
 
