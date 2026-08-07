@@ -74,10 +74,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from advanced_alchemy.base import UUIDBase
 
+
 class OrderModel(UUIDBase):
     __tablename__ = "order"
     customer_email: Mapped[str] = mapped_column()
     total_cents: Mapped[int] = mapped_column()
+
 
 @app.route("/orders", methods=["GET"])
 def list_orders():
@@ -94,6 +96,7 @@ def list_orders():
 from flask import Blueprint, current_app, jsonify
 
 orders_bp = Blueprint("orders", __name__)
+
 
 @orders_bp.route("/orders", methods=["GET"])
 def list_orders():
@@ -123,11 +126,13 @@ alchemy = AdvancedAlchemy(
     )
 )
 
+
 def create_app() -> Flask:
     app = Flask(__name__)
     alchemy.init_app(app)
 
     from .routes import orders_bp
+
     app.register_blueprint(orders_bp)
     return app
 ```
@@ -154,15 +159,18 @@ from advanced_alchemy.extensions.flask import (
     SQLAlchemySyncConfig,
 )
 
+
 class OrderModel(UUIDBase):
     __tablename__ = "order"
     customer_email: Mapped[str] = mapped_column()
     total_cents: Mapped[int] = mapped_column()
 
+
 class OrderSchema(Struct):
     customer_email: str
     total_cents: int
     id: UUID | None = None
+
 
 class OrderService(
     SQLAlchemySyncRepositoryService[OrderModel],
@@ -173,6 +181,7 @@ class OrderService(
 
     repository_type = Repo
 
+
 app = Flask(__name__)
 alchemy = AdvancedAlchemy(
     SQLAlchemySyncConfig(
@@ -181,6 +190,7 @@ alchemy = AdvancedAlchemy(
     ),
     app,
 )
+
 
 @app.route("/orders", methods=["POST"])
 def create_order():
@@ -197,6 +207,7 @@ The Flask extension does not ship a filter aggregator. Build filters from `reque
 
 ```python
 from advanced_alchemy import filters
+
 
 @app.route("/orders", methods=["GET"])
 def list_orders():
@@ -220,9 +231,7 @@ def list_orders():
 
     orders_service = OrderService(session=alchemy.get_sync_session())
     results, total = orders_service.get_many_and_count(*applied_filters)
-    payload = orders_service.to_schema(
-        results, total, filters=applied_filters, schema_type=OrderSchema
-    )
+    payload = orders_service.to_schema(results, total, filters=applied_filters, schema_type=OrderSchema)
     return orders_service.jsonify(payload)
 ```
 
@@ -265,6 +274,7 @@ alchemy = AdvancedAlchemy(
     app,
 )
 
+
 @app.route("/orders")
 def list_orders():
     session = alchemy.get_async_session()
@@ -300,15 +310,18 @@ from advanced_alchemy.extensions.flask import (
     SQLAlchemySyncConfig,
 )
 
+
 class OrderModel(UUIDBase):
     __tablename__ = "order"
     customer_email: Mapped[str] = mapped_column()
     total_cents: Mapped[int] = mapped_column()
 
+
 class OrderSchema(Struct):
     customer_email: str
     total_cents: int
     id: UUID | None = None
+
 
 class OrderService(
     SQLAlchemySyncRepositoryService[OrderModel],
@@ -318,6 +331,7 @@ class OrderService(
         model_type = OrderModel
 
     repository_type = Repo
+
 
 app = Flask(__name__)
 alchemy = AdvancedAlchemy(
@@ -329,19 +343,17 @@ alchemy = AdvancedAlchemy(
     app,
 )
 
+
 @app.route("/orders", methods=["GET"])
 def list_orders():
     current_page = request.args.get("currentPage", 1, type=int)
     page_size = request.args.get("pageSize", 20, type=int)
-    limit_offset = filters.LimitOffset(
-        limit=page_size, offset=page_size * (current_page - 1)
-    )
+    limit_offset = filters.LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
     orders_service = OrderService(session=alchemy.get_sync_session())
     results, total = orders_service.get_many_and_count(limit_offset)
-    payload = orders_service.to_schema(
-        results, total, filters=[limit_offset], schema_type=OrderSchema
-    )
+    payload = orders_service.to_schema(results, total, filters=[limit_offset], schema_type=OrderSchema)
     return orders_service.jsonify(payload)
+
 
 @app.route("/orders", methods=["POST"])
 def create_order():
@@ -349,17 +361,20 @@ def create_order():
     obj = orders_service.create(**request.get_json())
     return orders_service.jsonify(orders_service.to_schema(obj, schema_type=OrderSchema))
 
+
 @app.route("/orders/<uuid:order_id>", methods=["GET"])
 def get_order(order_id: UUID):
     orders_service = OrderService(session=alchemy.get_sync_session())
     obj = orders_service.get(order_id)
     return orders_service.jsonify(orders_service.to_schema(obj, schema_type=OrderSchema))
 
+
 @app.route("/orders/<uuid:order_id>", methods=["PATCH"])
 def update_order(order_id: UUID):
     orders_service = OrderService(session=alchemy.get_sync_session())
     obj = orders_service.update(**request.get_json(), item_id=order_id)
     return orders_service.jsonify(orders_service.to_schema(obj, schema_type=OrderSchema))
+
 
 @app.route("/orders/<uuid:order_id>", methods=["DELETE"])
 def delete_order(order_id: UUID):

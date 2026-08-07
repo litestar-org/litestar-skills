@@ -32,15 +32,11 @@ class AgentServiceProvider(Provider):
         return OracleAsyncADKStore(config=config)
 
     @provide(scope=Scope.APP)
-    def get_session_service(
-        self, store: OracleAsyncADKStore
-    ) -> SQLSpecSessionService:
+    def get_session_service(self, store: OracleAsyncADKStore) -> SQLSpecSessionService:
         return SQLSpecSessionService(store)
 
     @provide(scope=Scope.APP)
-    def get_adk_runner(
-        self, session_service: SQLSpecSessionService
-    ) -> AIRunner:
+    def get_adk_runner(self, session_service: SQLSpecSessionService) -> AIRunner:
         return AIRunner(session_service=session_service)
 ```
 
@@ -219,31 +215,13 @@ from dataclasses import dataclass, field
 
 @dataclass
 class VertexAISettings:
-    PROJECT_ID: str = field(
-        default_factory=lambda: os.getenv("VERTEX_AI_PROJECT_ID", "")
-    )
-    LOCATION: str = field(
-        default_factory=lambda: os.getenv("VERTEX_AI_LOCATION") or "us-central1"
-    )
-    API_KEY: str | None = field(
-        default_factory=lambda: (
-            os.getenv("VERTEX_AI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        )
-    )
-    EMBEDDING_MODEL: str = field(
-        default_factory=lambda: os.getenv(
-            "VERTEX_AI_EMBEDDING_MODEL", "gemini-embedding-001"
-        )
-    )
+    PROJECT_ID: str = field(default_factory=lambda: os.getenv("VERTEX_AI_PROJECT_ID", ""))
+    LOCATION: str = field(default_factory=lambda: os.getenv("VERTEX_AI_LOCATION") or "us-central1")
+    API_KEY: str | None = field(default_factory=lambda: os.getenv("VERTEX_AI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+    EMBEDDING_MODEL: str = field(default_factory=lambda: os.getenv("VERTEX_AI_EMBEDDING_MODEL", "gemini-embedding-001"))
     EMBEDDING_DIMENSIONS: int = 768
-    CHAT_MODEL: str = field(
-        default_factory=lambda: os.getenv(
-            "VERTEX_AI_CHAT_MODEL", "gemini-1.5-flash-001"
-        )
-    )
-    CACHE_TTL_SECONDS: int = field(
-        default_factory=lambda: int(os.getenv("VERTEX_AI_CACHE_TTL_SECONDS", "3600"))
-    )
+    CHAT_MODEL: str = field(default_factory=lambda: os.getenv("VERTEX_AI_CHAT_MODEL", "gemini-1.5-flash-001"))
+    CACHE_TTL_SECONDS: int = field(default_factory=lambda: int(os.getenv("VERTEX_AI_CACHE_TTL_SECONDS", "3600")))
 ```
 
 **Match-Your-Stack:** if the project is already on `pydantic_settings`, use `BaseSettings` with `env_prefix="VERTEX_AI_"` instead of the bare `@dataclass`. Both approaches read the same environment variables.

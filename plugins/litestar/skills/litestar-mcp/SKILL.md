@@ -1,6 +1,6 @@
 ---
 name: litestar-mcp
-description: "Auto-activate for litestar_mcp, LitestarMCP, MCP, MCPConfig, mcp.app, mcp.run(), @mcp.tool/resource/prompt, MCPAuthConfig, MCPAuthBackend, mcp_tool=, mcp_resource=, Streamable HTTP, stdio, or OIDC MCP endpoints. Not for non-Litestar MCP."
+description: "Auto-activate for litestar_mcp, LitestarMCP, MCPConfig, or @mcp.tool. Not for non-Litestar MCP."
 ---
 
 # litestar-mcp
@@ -79,16 +79,14 @@ The default MCP surface is:
 | `include_tags` | `list[str] \| None` | `None` | Only expose routes with matching OpenAPI tags |
 | `exclude_tags` | `list[str] \| None` | `None` | Exclude routes with matching OpenAPI tags |
 | `auth` | `MCPAuthConfig \| None` | `None` | OAuth protected-resource metadata |
-| `tasks` | `bool \| MCPTaskConfig` | `False` | Enable experimental in-memory MCP task support |
+| `tasks` | `bool \| MCPTaskConfig` | `False` | Enable experimental MCP task support. Pass `MCPTaskConfig` to configure the backing `Store` (defaults to in-memory) and TTLs. |
 | `list_page_size` | `int` | `100` | Page size for `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list` (clients page via opaque cursors) |
 | `before_tool_call` | `BeforeToolCallHook \| None` | `None` | Observe each `tools/call` before dispatch |
 | `after_tool_call` | `AfterToolCallHook \| None` | `None` | Observe each `tools/call` result, exception, and duration |
 | `max_blob_bytes` | `int \| None` | `25 * 1024 * 1024` | Maximum raw byte length for base64-embedded blobs; `None` disables the cap |
 | `opt_keys` | `MCPOptKeys` | `MCPOptKeys()` | Rename the `handler.opt` keys the plugin reads (e.g. to avoid collisions) |
-| `session_store` | `Store \| None` | `None` | Litestar `Store` backing MCP sessions; defaults to an in-memory store |
-| `session_max_idle_seconds` | `float` | `3600.0` | Idle timeout before an MCP session is evicted |
-| `sse_max_streams` | `int` | `10000` | Max concurrent SSE streams |
-| `sse_max_idle_seconds` | `float` | `3600.0` | Idle timeout for an SSE stream |
+| `subscription_max_streams` | `int` | `10000` | Max concurrent SSE streams |
+| `subscription_keepalive_seconds` | `float` | `15.0` | Seconds between SSE keepalive pings |
 
 > Filters (`include_tags` / `exclude_tags` / `include_operations` / `exclude_operations`) gate both list responses and direct invocation. A filtered tool/resource/template behaves like an unknown name or URI in `tools/call` / `resources/read`; still use `guards` / auth for real access control.
 

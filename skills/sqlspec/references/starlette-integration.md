@@ -53,10 +53,12 @@ from contextlib import asynccontextmanager
 
 original_lifespan = app.router.lifespan_context
 
+
 @asynccontextmanager
 async def combined_lifespan(app):
     async with db_plugin.lifespan(app), original_lifespan(app):
         yield
+
 
 app.router.lifespan_context = combined_lifespan
 ```

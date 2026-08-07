@@ -26,20 +26,14 @@ base = loader.get("list-users")
 # The SQL object supports chaining — append WHERE/ORDER BY/LIMIT
 # directly to the loaded statement via the AST
 query = (
-    base
-    .where_eq("u.status", "active")
+    base.where_eq("u.status", "active")
     .where("u.created_at > :since", since=cutoff_date)
     .order_by("u.created_at", desc=True)
     .limit(50)
 )
 
 # Same base query, different filters for a different use case
-admin_query = (
-    base
-    .where_eq("t.name", "engineering")
-    .where_in("u.role", ["admin", "superadmin"])
-    .order_by("u.name")
-)
+admin_query = base.where_eq("t.name", "engineering").where_in("u.role", ["admin", "superadmin"]).order_by("u.name")
 ```
 
 You can also pass SQLSpec filter objects directly to driver methods — the driver applies them to the SQL statement automatically:
@@ -79,12 +73,7 @@ Build SELECT statements with a fluent API:
 
 ```python
 query = (
-    sql.select("id", "name", "email")
-    .from_("users")
-    .where("active = true")
-    .order_by("name ASC")
-    .limit(20)
-    .offset(40)
+    sql.select("id", "name", "email").from_("users").where("active = true").order_by("name ASC").limit(20).offset(40)
 )
 ```
 
@@ -139,17 +128,9 @@ query = (
 ### Pivot / Unpivot
 
 ```python
-query = (
-    sql.select("*")
-    .from_("sales")
-    .pivot("SUM", "revenue", "quarter", ["Q1", "Q2", "Q3", "Q4"])
-)
+query = sql.select("*").from_("sales").pivot("SUM", "revenue", "quarter", ["Q1", "Q2", "Q3", "Q4"])
 
-query = (
-    sql.select("*")
-    .from_("quarterly_sales")
-    .unpivot("revenue", "quarter", ["q1", "q2", "q3", "q4"])
-)
+query = sql.select("*").from_("quarterly_sales").unpivot("revenue", "quarter", ["q1", "q2", "q3", "q4"])
 ```
 
 ---
@@ -159,11 +140,7 @@ query = (
 ```python
 # Simple insert with values
 query = (
-    sql.insert()
-    .into("users")
-    .columns("name", "email")
-    .values(name="Alice", email="alice@example.com")
-    .returning("id")
+    sql.insert().into("users").columns("name", "email").values(name="Alice", email="alice@example.com").returning("id")
 )
 
 # Insert from SELECT
@@ -171,11 +148,7 @@ query = (
     sql.insert()
     .into("user_archive")
     .columns("id", "name", "email")
-    .from_select(
-        sql.select("id", "name", "email")
-        .from_("users")
-        .where_eq("deleted", True)
-    )
+    .from_select(sql.select("id", "name", "email").from_("users").where_eq("deleted", True))
 )
 
 # Upsert with ON CONFLICT
@@ -194,12 +167,7 @@ query = (
 ## sql.update()
 
 ```python
-query = (
-    sql.update("users")
-    .set(name="Bob", updated_at="now()")
-    .where_eq("id", 1)
-    .returning("id", "name")
-)
+query = sql.update("users").set(name="Bob", updated_at="now()").where_eq("id", 1).returning("id", "name")
 
 # UPDATE with FROM (PostgreSQL)
 query = (
@@ -216,12 +184,7 @@ query = (
 ## sql.delete()
 
 ```python
-query = (
-    sql.delete()
-    .from_("users")
-    .where_eq("id", 1)
-    .returning("id")
-)
+query = sql.delete().from_("users").where_eq("id", 1).returning("id")
 ```
 
 ---

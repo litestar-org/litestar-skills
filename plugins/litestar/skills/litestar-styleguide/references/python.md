@@ -8,8 +8,8 @@ Modern Python development standards with async-first patterns.
 
 ```python
 # Use PEP 604 union syntax
-def get_user(id: int) -> User | None:
-    ...
+def get_user(id: int) -> User | None: ...
+
 
 # Avoid typing.Optional — prefer PEP 604
 # Bad: from typing import Optional
@@ -34,6 +34,7 @@ async def fetch_data(url: str) -> dict:
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
         return response.json()
+
 
 # Use AsyncIterable for generators with cleanup
 async def provide_session() -> AsyncIterable[AsyncSession]:
@@ -77,15 +78,19 @@ def calculate_total(items: list[Item], tax_rate: float) -> Decimal:
 from dataclasses import dataclass
 from uuid import UUID
 
+
 @dataclass
 class UserCreate:
     """Data for creating a new user."""
+
     email: str
     name: str | None = None
+
 
 @dataclass
 class User:
     """User entity."""
+
     id: UUID
     email: str
     name: str | None
@@ -98,9 +103,11 @@ class User:
 # Create specific exceptions
 class UserNotFoundError(Exception):
     """Raised when a user cannot be found."""
+
     def __init__(self, user_id: UUID) -> None:
         self.user_id = user_id
         super().__init__(f"User not found: {user_id}")
+
 
 # Catch specific exceptions, never bare except
 try:
@@ -113,6 +120,7 @@ except UserNotFoundError:
 
 ```python
 from dishka import Provider, Scope, provide
+
 
 class ServiceProvider(Provider):
     """Provider for domain services."""
@@ -174,19 +182,25 @@ from app.domain.users.service import UserService
 ```python
 import pytest
 
+
 # Function-based tests (not class-based)
 def test_user_creation():
     user = User(id=uuid4(), email="test@example.com", name=None)
     assert user.is_active is True
 
+
 # Parametrized tests
-@pytest.mark.parametrize("email,valid", [
-    ("test@example.com", True),
-    ("invalid", False),
-    ("", False),
-])
+@pytest.mark.parametrize(
+    "email,valid",
+    [
+        ("test@example.com", True),
+        ("invalid", False),
+        ("", False),
+    ],
+)
 def test_email_validation(email: str, valid: bool):
     assert validate_email(email) == valid
+
 
 # Async tests
 @pytest.mark.anyio
@@ -218,17 +232,23 @@ For performance-critical paths:
 ```python
 # Bad: Using Optional
 from typing import Optional
+
+
 def bad(x: Optional[str]) -> Optional[int]: ...
+
 
 # Good: Use union syntax
 def good(x: str | None) -> int | None: ...
 
+
 # Bad: Mutable default arguments
 def bad(items: list = []): ...
+
 
 # Good: Use None and create inside
 def good(items: list | None = None):
     items = items or []
+
 
 # Bad: Bare except
 try:
@@ -271,8 +291,10 @@ uv run script.py
 Usage:
     python script.py [options] <arguments>
 """
+
 import argparse
 import sys
+
 
 def main() -> int:
     """Main entry point."""
@@ -287,6 +309,7 @@ def main() -> int:
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())
@@ -306,15 +329,18 @@ ruff check . --fix
 # tests/test_example.py
 import pytest
 
+
 def test_function_success():
     """Test the happy path."""
     result = my_function(valid_input)
     assert result == expected_output
 
+
 def test_function_error():
     """Test error handling."""
     with pytest.raises(ValueError, match="Invalid input"):
         my_function(invalid_input)
+
 
 @pytest.fixture
 def sample_data():
@@ -328,9 +354,10 @@ def sample_data():
 # Bad: Global mutable state
 config = {}  # Modified by multiple functions
 
+
 # Good: Pass configuration explicitly
-def process(data: dict, config: Config) -> Result:
-    ...
+def process(data: dict, config: Config) -> Result: ...
+
 
 # Bad: Hardcoded configuration
 DATABASE_URL = "postgres://localhost/db"

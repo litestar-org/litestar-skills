@@ -34,9 +34,7 @@ class DomainServiceProvider(Provider):
         return PostService(driver)
 
     @provide
-    def provide_notification_service(
-        self, driver: AsyncDriverAdapterBase
-    ) -> NotificationService:
+    def provide_notification_service(self, driver: AsyncDriverAdapterBase) -> NotificationService:
         return NotificationService(driver)
 ```
 
@@ -138,9 +136,7 @@ class DomainServiceProvider(Provider):
         return PostService(driver)
 
     @provide
-    def provide_notification_service(
-        self, driver: AsyncDriverAdapterBase
-    ) -> NotificationService:
+    def provide_notification_service(self, driver: AsyncDriverAdapterBase) -> NotificationService:
         return NotificationService(driver)
 
 
@@ -175,16 +171,18 @@ from app.domains.orders.services import OrderService
 from app.lib.di import Inject
 from app.schemas import Order
 
-dependencies = create_filter_dependencies({
-    "id_filter": UUID,
-    "search": "reference,status",
-    "pagination_type": "limit_offset",
-    "pagination_size": 20,
-    "created_at": True,
-    "updated_at": True,
-    "sort_field": "created_at",
-    "sort_order": "desc",
-})
+dependencies = create_filter_dependencies(
+    {
+        "id_filter": UUID,
+        "search": "reference,status",
+        "pagination_type": "limit_offset",
+        "pagination_size": 20,
+        "created_at": True,
+        "updated_at": True,
+        "sort_field": "created_at",
+        "sort_order": "desc",
+    }
+)
 
 
 @get("/orders", dependencies=dependencies, operation_id="ListOrders")

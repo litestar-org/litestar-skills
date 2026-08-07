@@ -9,8 +9,8 @@ from litestar_mcp import (
 )
 
 
-def test_litestar_mcp_0111_stdio_binary_and_schema_contract() -> None:
-    assert version("litestar-mcp") == "0.11.1"
+def test_litestar_mcp_0120_stdio_binary_and_schema_contract() -> None:
+    assert version("litestar-mcp") == "0.12.0"
     config = MCPConfig()
     assert config.max_blob_bytes == 25 * 1024 * 1024
     assert config.include_in_schema is False

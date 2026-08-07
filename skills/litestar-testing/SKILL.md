@@ -41,6 +41,7 @@ For JS-side testing (Vitest, Testing Library, Playwright), use the upstream Vite
 # AsyncTestClient — preferred
 from litestar.testing import AsyncTestClient
 
+
 async def test_index(async_client: AsyncTestClient):
     resp = await async_client.get("/")
     assert resp.status_code == 200
@@ -49,6 +50,7 @@ async def test_index(async_client: AsyncTestClient):
 ```python
 # TestClient — legacy / sync
 from litestar.testing import TestClient
+
 
 def test_index(client: TestClient):
     resp = client.get("/")
@@ -61,6 +63,7 @@ def test_index(client: TestClient):
 # conftest.py
 import pytest
 
+
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
@@ -70,9 +73,9 @@ def anyio_backend() -> str:
 # tests/test_x.py
 import pytest
 
+
 @pytest.mark.anyio
-async def test_something():
-    ...
+async def test_something(): ...
 ```
 
 Litestar's runtime is anyio-based; do not use `pytest-asyncio` — it conflicts.
@@ -175,7 +178,9 @@ async def app(postgres_service) -> Litestar:
     from app import create_app
     from app.config import Settings
 
-    settings = Settings(database_url=f"postgresql+asyncpg://{postgres_service.user}:{postgres_service.password}@{postgres_service.host}:{postgres_service.port}/{postgres_service.database}")
+    settings = Settings(
+        database_url=f"postgresql+asyncpg://{postgres_service.user}:{postgres_service.password}@{postgres_service.host}:{postgres_service.port}/{postgres_service.database}"
+    )
     return create_app(settings=settings)
 ```
 
@@ -250,11 +255,15 @@ assert "session" in resp.cookies
 ```python
 import pytest
 
-@pytest.mark.parametrize("payload, expected_status", [
-    ({"name": "valid", "email": "a@b.co"}, 201),
-    ({"name": "", "email": "a@b.co"}, 400),
-    ({"name": "valid", "email": "not-email"}, 400),
-])
+
+@pytest.mark.parametrize(
+    "payload, expected_status",
+    [
+        ({"name": "valid", "email": "a@b.co"}, 201),
+        ({"name": "", "email": "a@b.co"}, 400),
+        ({"name": "valid", "email": "not-email"}, 400),
+    ],
+)
 @pytest.mark.anyio
 async def test_create_user_validation(async_client, payload, expected_status):
     resp = await async_client.post("/api/users", json=payload)
@@ -433,11 +442,14 @@ async def test_create_account_persists_and_queues_email(async_client):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("payload, expected_status", [
-    ({"email": "valid@example.com", "name": "Valid"}, 201),
-    ({"email": "", "name": "Valid"}, 400),
-    ({"email": "valid@example.com", "name": ""}, 400),
-])
+@pytest.mark.parametrize(
+    "payload, expected_status",
+    [
+        ({"email": "valid@example.com", "name": "Valid"}, 201),
+        ({"email": "", "name": "Valid"}, 400),
+        ({"email": "valid@example.com", "name": ""}, 400),
+    ],
+)
 async def test_create_account_validation(async_client, payload, expected_status):
     client, _ = async_client
     resp = await client.post("/api/accounts", json=payload)

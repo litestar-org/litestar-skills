@@ -49,3 +49,6 @@ build/
 *.db
 .beads-credential-key
 .python-version
+
+# Local uv config
+uv.toml

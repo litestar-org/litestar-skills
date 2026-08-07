@@ -181,6 +181,7 @@ Wrap user-supplied identifiers using `parse_one` for AST validation before use:
 ```python
 from sqlglot import parse_one, exp
 
+
 def sanitize_table(user_input: str) -> str:
     parsed = parse_one(f"SELECT * FROM {user_input}")
     table = parsed.find(exp.Table)
@@ -200,6 +201,7 @@ Programmatically enforce multi-tenancy by injecting WHERE clauses into the AST:
 ```python
 from sqlglot import parse_one, exp
 
+
 def add_tenant_guard(raw_sql: str, tenant_id: int) -> str:
     ast = parse_one(raw_sql)
     if select := ast.find(exp.Select):
@@ -211,6 +213,7 @@ def add_tenant_guard(raw_sql: str, tenant_id: int) -> str:
 
 ```python
 from sqlglot import parse_one, exp, select
+
 
 def build_projection(columns: list[str], table: str) -> str:
     query = select(*[exp.column(c) for c in columns]).from_(table)

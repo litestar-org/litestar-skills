@@ -86,11 +86,10 @@ The extension reads `sqlspec.configs.values()` at startup, builds one `SQLSpecCo
 The framework extensions expose `get_session(request, key=None)` and `get_connection(request, key=None)` for runtime lookup. From upstream:
 
 ```python
-def get_session(self, request: Request, key: str | None = None) -> Any:
-    ...
+def get_session(self, request: Request, key: str | None = None) -> Any: ...
 
-def get_connection(self, request: Request, key: str | None = None) -> Any:
-    ...
+
+def get_connection(self, request: Request, key: str | None = None) -> Any: ...
 ```
 
 When `key=None`, the lookup uses the *first* registered config — convenient for the single-bind case. When `key` is set, it must match the `session_key` (for `get_session`) or `connection_key` (for `get_connection`) of one of the registered configs.
@@ -115,13 +114,11 @@ from sqlspec.adapters.psycopg import PsycopgSyncConfig
 
 primary = AsyncpgConfig(
     connection_config={"dsn": "postgresql://app:app@primary:5432/orders"},
-    extension_config={"starlette": {"commit_mode": "autocommit",
-                                     "session_key": "primary_session"}},
+    extension_config={"starlette": {"commit_mode": "autocommit", "session_key": "primary_session"}},
 )
 analytics = PsycopgSyncConfig(
     connection_config={"conninfo": "postgresql://reader:reader@warehouse:5432/analytics"},
-    extension_config={"starlette": {"commit_mode": "manual",
-                                     "session_key": "analytics_session"}},
+    extension_config={"starlette": {"commit_mode": "manual", "session_key": "analytics_session"}},
 )
 
 sqlspec = SQLSpec()
@@ -144,8 +141,7 @@ primary = AsyncpgConfig(
         "min_size": 5,
         "max_size": 20,
     },
-    extension_config={"starlette": {"commit_mode": "autocommit",
-                                     "pool_key": "primary_pool"}},
+    extension_config={"starlette": {"commit_mode": "autocommit", "pool_key": "primary_pool"}},
 )
 
 analytics = AsyncpgConfig(
@@ -154,8 +150,7 @@ analytics = AsyncpgConfig(
         "min_size": 1,
         "max_size": 5,
     },
-    extension_config={"starlette": {"commit_mode": "manual",
-                                     "pool_key": "analytics_pool"}},
+    extension_config={"starlette": {"commit_mode": "manual", "pool_key": "analytics_pool"}},
 )
 ```
 
@@ -172,13 +167,11 @@ from sqlspec.adapters.sqlite import SqliteConfig
 
 primary = PsycopgSyncConfig(
     connection_config={"conninfo": "postgresql://app:app@primary:5432/orders"},
-    extension_config={"starlette": {"commit_mode": "autocommit",
-                                     "session_key": "primary_session"}},
+    extension_config={"starlette": {"commit_mode": "autocommit", "session_key": "primary_session"}},
 )
 reports = SqliteConfig(
     connection_config={"database": ":memory:"},
-    extension_config={"starlette": {"commit_mode": "manual",
-                                     "session_key": "reports_session"}},
+    extension_config={"starlette": {"commit_mode": "manual", "session_key": "reports_session"}},
 )
 sqlspec = SQLSpec()
 sqlspec.add_config(primary)

@@ -30,8 +30,8 @@ class User(CamelizedBaseStruct):
     id: UUID
     name: str
     email: str
-    is_active: bool = True       # → "isActive"
-    created_at: datetime         # → "createdAt"
+    is_active: bool = True  # → "isActive"
+    created_at: datetime  # → "createdAt"
 
 
 class UserCreate(CamelizedBaseStruct):

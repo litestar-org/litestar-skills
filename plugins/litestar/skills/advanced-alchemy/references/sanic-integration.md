@@ -89,10 +89,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from advanced_alchemy.base import UUIDBase
 
+
 class OrderModel(UUIDBase):
     __tablename__ = "order"
     customer_email: Mapped[str] = mapped_column()
     total_cents: Mapped[int] = mapped_column()
+
 
 @app.get("/orders")
 async def list_orders(request: Request):
@@ -109,6 +111,7 @@ The extension registers `AsyncSession` (and the engine, and the session maker) a
 from sanic import Request, json
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 
 @app.get("/orders")
 async def list_orders(request: Request, session: AsyncSession):
@@ -128,11 +131,13 @@ from sanic import Request, json
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
 
+
 class OrderService(SQLAlchemyAsyncRepositoryService[OrderModel]):
     class Repo(SQLAlchemyAsyncRepository[OrderModel]):
         model_type = OrderModel
 
     repository_type = Repo
+
 
 @app.post("/orders")
 async def create_order(request: Request):
@@ -150,6 +155,7 @@ The Sanic extension does not ship a filter aggregator. Build filters from `reque
 ```python
 from advanced_alchemy import filters
 
+
 @app.get("/orders")
 async def list_orders(request: Request):
     current_page = int(request.args.get("currentPage", "1"))
@@ -160,11 +166,7 @@ async def list_orders(request: Request):
         filters.LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
     ]
     if search_term:
-        applied_filters.append(
-            filters.SearchFilter(
-                field_name={"customer_email"}, value=search_term, ignore_case=True
-            )
-        )
+        applied_filters.append(filters.SearchFilter(field_name={"customer_email"}, value=search_term, ignore_case=True))
 
     orders_service = OrderService(session=alchemy.get_async_session(request))
     results, total = await orders_service.get_many_and_count(*applied_filters)
@@ -193,16 +195,19 @@ from advanced_alchemy.extensions.sanic import (
     SQLAlchemyAsyncConfig,
 )
 
+
 class OrderModel(UUIDBase):
     __tablename__ = "order"
     customer_email: Mapped[str] = mapped_column()
     total_cents: Mapped[int] = mapped_column()
+
 
 class OrderService(SQLAlchemyAsyncRepositoryService[OrderModel]):
     class Repo(SQLAlchemyAsyncRepository[OrderModel]):
         model_type = OrderModel
 
     repository_type = Repo
+
 
 alchemy_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://app:app@localhost:5432/orders",
@@ -215,11 +220,13 @@ app = Sanic("orders-service")
 alchemy = AdvancedAlchemy(sqlalchemy_config=alchemy_config)
 alchemy.register(app)
 
+
 @app.get("/orders")
 async def list_orders(request: Request):
     session = alchemy.get_async_session(request)
     rows = (await session.execute(select(OrderModel))).scalars().all()
     return json([{"id": str(r.id), "total": r.total_cents} for r in rows])
+
 
 @app.post("/orders")
 async def create_order(request: Request):

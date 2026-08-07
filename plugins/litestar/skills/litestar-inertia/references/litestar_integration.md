@@ -15,11 +15,11 @@ session_backend = CookieBackendConfig(secret=b"development-only-secret-32-chars"
 
 vite = VitePlugin(
     config=ViteConfig(
-        mode="hybrid",                                      # Inertia mode
+        mode="hybrid",  # Inertia mode
         paths=PathConfig(resource_dir="resources"),
         inertia=InertiaConfig(root_template="base.html"),
         types=TypeGenConfig(
-            generate_page_props=True,                       # Inertia page props
+            generate_page_props=True,  # Inertia page props
             output="resources/generated",
         ),
     )
@@ -43,6 +43,7 @@ from litestar_vite.inertia import (
     share,
 )
 
+
 @get("/users", component="Users/Index")
 async def users_page() -> InertiaResponse:
     return InertiaResponse(
@@ -52,10 +53,12 @@ async def users_page() -> InertiaResponse:
         },
     )
 
+
 @get("/dashboard", component="Dashboard")
 async def dashboard(request: Request) -> InertiaResponse:
     share(request, "auth", {"user": request.user})
     return InertiaResponse(content={"summary": await load_summary()})
+
 
 @post("/users")
 async def create_user(request: Request, data: UserCreate) -> InertiaBack:
@@ -157,14 +160,17 @@ export default function Dashboard() {
 from litestar import Request, get, post
 from litestar_vite.inertia import InertiaRedirect, precognition
 
+
 @post("/users")
 @precognition
 async def create_user(request: Request, data: CreateUserDTO) -> InertiaRedirect:
     user = await save_user(data)
     return InertiaRedirect(request, "/users")
 
+
 # History encryption
 inertia_config = InertiaConfig(encrypt_history=True)
+
 
 # Clear history on sensitive pages
 @get("/login", component="Auth/Login")

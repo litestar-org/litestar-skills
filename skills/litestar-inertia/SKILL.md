@@ -179,10 +179,11 @@ router.reload({ only: ["notifications"] });
 from litestar import get
 from litestar_vite.inertia import lazy
 
+
 @get("/reports", component="reports/Index")
 async def reports_page(self, reports_service) -> dict:
     return {
-        "summary": await reports_service.summary(),            # eager
+        "summary": await reports_service.summary(),  # eager
         "fullExport": lazy("fullExport", reports_service.export),
     }
 ```
@@ -297,16 +298,17 @@ class ProjectsController(Controller):
     guards = [requires_active_user]
 
     @get("/", component="projects/Index")
-    async def index(
-        self, projects_service: ProjectService, request: Request
-    ) -> dict[str, list[Project]]:
+    async def index(self, projects_service: ProjectService, request: Request) -> dict[str, list[Project]]:
         return {
             "projects": await projects_service.list_for_user(request.user.id),
         }
 
     @post("/")
     async def create(
-        self, data: ProjectCreate, projects_service: ProjectService, request: Request,
+        self,
+        data: ProjectCreate,
+        projects_service: ProjectService,
+        request: Request,
     ) -> InertiaBack:
         if await projects_service.exists(name=data.name, owner_id=request.user.id):
             error(request, "name", "You already have a project with this name.")

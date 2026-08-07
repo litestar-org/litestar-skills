@@ -31,6 +31,7 @@ Timezone-aware datetime that always stores and returns UTC. On databases that su
 ```python
 from advanced_alchemy.types import DateTimeUTC
 
+
 class Event(UUIDAuditBase):
     __tablename__ = "event"
 
@@ -50,6 +51,7 @@ Cross-database UUID type. Uses native UUID columns where the dialect supports th
 ```python
 from advanced_alchemy.types import GUID
 
+
 class Token(UUIDAuditBase):
     __tablename__ = "token"
 
@@ -68,6 +70,7 @@ Cross-database JSONB type. Uses native `JSONB` on PostgreSQL/CockroachDB (with i
 
 ```python
 from advanced_alchemy.types import JsonB
+
 
 class Config(UUIDAuditBase):
     __tablename__ = "config"
@@ -89,6 +92,7 @@ Oracle-compatible JSONB type. Uses native `sqlalchemy.dialects.oracle.JSON` on S
 ```python
 from advanced_alchemy.types import ORA_JSONB
 
+
 class OracleModel(UUIDAuditBase):
     __tablename__ = "oracle_model"
 
@@ -106,6 +110,7 @@ Auto-incrementing `BigInteger` primary key type. Used internally by `BigIntBase`
 
 ```python
 from advanced_alchemy.types import BigIntIdentity
+
 
 class LegacyRecord(UUIDAuditBase):
     __tablename__ = "legacy_record"
@@ -347,11 +352,7 @@ Similarity search uses the dialect-aware distance operators on the column's `.co
 ```python
 from sqlalchemy import select
 
-stmt = (
-    select(Document)
-    .order_by(Document.embedding.cosine_distance(query_vector))
-    .limit(10)
-)
+stmt = select(Document).order_by(Document.embedding.cosine_distance(query_vector)).limit(10)
 ```
 
 ## TOTP and One-Time Codes

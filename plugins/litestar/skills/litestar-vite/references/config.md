@@ -10,15 +10,15 @@ from litestar_vite.config import ExternalDevServer, LoggingConfig
 from litestar_vite.inertia import InertiaConfig
 
 ViteConfig(
-    mode="spa",                          # spa | template | hybrid | framework
-    enabled=True,                        # False keeps CLI access but disables runtime wiring
+    mode="spa",  # spa | template | hybrid | framework
+    enabled=True,  # False keeps CLI access but disables runtime wiring
     paths=PathConfig(...),
     runtime=RuntimeConfig(...),
     types=TypeGenConfig(generate_page_props=False),
-    inertia=None,                        # True or InertiaConfig(...) for Inertia
+    inertia=None,  # True or InertiaConfig(...) for Inertia
     logging=LoggingConfig(...),
     deploy=DeployConfig(...),
-    dev_mode=False,                      # env-toggled; True in dev
+    dev_mode=False,  # env-toggled; True in dev
 )
 ```
 

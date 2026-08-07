@@ -84,6 +84,7 @@ router = APIRouter()
 
 DatabaseSession = Annotated[AsyncSession, Depends(alchemy.provide_session())]
 
+
 @router.get("/orders")
 async def list_orders(db_session: DatabaseSession) -> list[dict]:
     rows = (await db_session.execute(select(OrderModel))).scalars().all()
@@ -124,10 +125,12 @@ from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
 
+
 class OrderModel(UUIDBase):
     __tablename__ = "order"
     customer_email: Mapped[str] = mapped_column()
     total_cents: Mapped[int] = mapped_column()
+
 
 class OrderService(SQLAlchemyAsyncRepositoryService[OrderModel]):
     class Repo(SQLAlchemyAsyncRepository[OrderModel]):
@@ -135,23 +138,28 @@ class OrderService(SQLAlchemyAsyncRepositoryService[OrderModel]):
 
     repository_type = Repo
 
+
 class Order(BaseModel):
     id: UUID | None = None
     customer_email: str
     total_cents: int
 
+
 class OrderCreate(BaseModel):
     customer_email: str
     total_cents: int
+
 
 router = APIRouter()
 
 Orders = Annotated[OrderService, Depends(alchemy.provide_service(OrderService))]
 
+
 @router.get("/orders/{order_id}")
 async def get_order(order_id: UUID, orders: Orders) -> Order:
     obj = await orders.get(order_id)
     return orders.to_schema(obj, schema_type=Order)
+
 
 @router.post("/orders")
 async def create_order(data: OrderCreate, orders: Orders) -> Order:
@@ -192,6 +200,7 @@ from advanced_alchemy import filters
 from advanced_alchemy.service import OffsetPagination
 
 router = APIRouter()
+
 
 @router.get("/orders")
 async def list_orders(
@@ -302,10 +311,12 @@ from advanced_alchemy.extensions.fastapi import (
     assign_cli_group,
 )
 
+
 class OrderModel(UUIDBase):
     __tablename__ = "order"
     customer_email: Mapped[str] = mapped_column()
     total_cents: Mapped[int] = mapped_column()
+
 
 class OrderService(SQLAlchemyAsyncRepositoryService[OrderModel]):
     class Repo(SQLAlchemyAsyncRepository[OrderModel]):
@@ -313,18 +324,22 @@ class OrderService(SQLAlchemyAsyncRepositoryService[OrderModel]):
 
     repository_type = Repo
 
+
 class Order(BaseModel):
     id: UUID | None = None
     customer_email: str
     total_cents: int
 
+
 class OrderCreate(BaseModel):
     customer_email: str
     total_cents: int
 
+
 class OrderUpdate(BaseModel):
     customer_email: str | None = None
     total_cents: int | None = None
+
 
 alchemy_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://app:app@localhost:5432/orders",
@@ -340,6 +355,7 @@ assign_cli_group(app)
 router = APIRouter()
 
 Orders = Annotated[OrderService, Depends(alchemy.provide_service(OrderService))]
+
 
 @router.get("/orders")
 async def list_orders(
@@ -363,24 +379,29 @@ async def list_orders(
     results, total = await orders.get_many_and_count(*applied_filters)
     return orders.to_schema(results, total, filters=applied_filters, schema_type=Order)
 
+
 @router.post("/orders")
 async def create_order(orders: Orders, data: OrderCreate) -> Order:
     obj = await orders.create(data)
     return orders.to_schema(obj, schema_type=Order)
+
 
 @router.get("/orders/{order_id}")
 async def get_order(orders: Orders, order_id: UUID) -> Order:
     obj = await orders.get(order_id)
     return orders.to_schema(obj, schema_type=Order)
 
+
 @router.patch("/orders/{order_id}")
 async def update_order(orders: Orders, order_id: UUID, data: OrderUpdate) -> Order:
     obj = await orders.update(data, item_id=order_id)
     return orders.to_schema(obj, schema_type=Order)
 
+
 @router.delete("/orders/{order_id}")
 async def delete_order(orders: Orders, order_id: UUID) -> None:
     _ = await orders.delete(order_id)
+
 
 app.include_router(router)
 ```

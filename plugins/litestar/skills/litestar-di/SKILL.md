@@ -71,8 +71,10 @@ maps, provider factories, request-scoped resources, and Dishka integration.
 ```python
 from litestar.di import NamedDependency, Provide
 
+
 async def provide_user_service(db_session: NamedDependency[AsyncSession]) -> UserService:
     return UserService(session=db_session)
+
 
 dependencies = {"users_service": Provide(provide_user_service)}
 ```

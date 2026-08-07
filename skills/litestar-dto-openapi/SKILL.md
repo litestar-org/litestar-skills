@@ -63,6 +63,7 @@ Use this skill for DTO selection, msgspec-first schemas, request/response typing
 ```python
 from litestar.dto import DTOConfig, MsgspecDTO
 
+
 class UserWriteDTO(MsgspecDTO[UserWrite]):
     config = DTOConfig(exclude={"id", "created_at"})
 ```

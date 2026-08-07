@@ -1,6 +1,6 @@
 ---
 name: litestar-vite
-description: "Auto-activate for litestar_vite, VitePlugin, ViteConfig, PathConfig, RuntimeConfig, TypeGenConfig, InertiaConfig, vite.config.ts, HMR, typegen, assets, or modes. Not for plain Vite."
+description: "Auto-activate for litestar_vite, VitePlugin, ViteConfig, or vite.config.ts. Not for plain Vite."
 ---
 
 # litestar-vite
@@ -36,11 +36,11 @@ vite_config = ViteConfig(
     mode="spa",
     enabled=True,
     paths=PathConfig(
-        resource_dir="resources",       # frontend source root
-        bundle_dir="public",            # built assets land here
-        hot_file="hot",                 # written to the .litestar.json bridge
+        resource_dir="resources",  # frontend source root
+        bundle_dir="public",  # built assets land here
+        hot_file="hot",  # written to the .litestar.json bridge
     ),
-    dev_mode=True,                      # toggled by env in production
+    dev_mode=True,  # toggled by env in production
 )
 
 app = Litestar(plugins=[VitePlugin(config=vite_config)])
@@ -89,13 +89,17 @@ Decision tree:
 
 ```python
 from litestar_vite import (
-    ViteConfig, VitePlugin, PathConfig, RuntimeConfig, TypeGenConfig,
+    ViteConfig,
+    VitePlugin,
+    PathConfig,
+    RuntimeConfig,
+    TypeGenConfig,
 )
 
 vite_config = ViteConfig(
     mode="spa",
-    enabled=True,             # False makes runtime wiring inert; CLI remains available
-    dev_mode=False,           # True in dev, False in prod (env-toggled)
+    enabled=True,  # False makes runtime wiring inert; CLI remains available
+    dev_mode=False,  # True in dev, False in prod (env-toggled)
     paths=PathConfig(
         root=".",
         resource_dir="src",
@@ -133,7 +137,7 @@ TypeGenConfig(
     generate_sdk=True,
     generate_routes=True,
     generate_schemas=True,
-    generate_page_props=True,    # Inertia only
+    generate_page_props=True,  # Inertia only
     output="src/generated",
 )
 ```
@@ -207,6 +211,7 @@ from litestar.response import Template
 from litestar_vite import ViteAssetLoader
 
 loader = ViteAssetLoader(config=vite_config)
+
 
 @get("/")
 async def index() -> Template:

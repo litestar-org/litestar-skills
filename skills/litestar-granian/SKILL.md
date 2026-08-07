@@ -1,19 +1,18 @@
 ---
 name: litestar-granian
-description: "Auto-activate for litestar_granian, GranianPlugin, litestar run Granian options, runtime threads, HTTP/2, TLS, access logs, metrics, static mounts, or Granian worker lifecycle. Not for another ASGI server's native CLI — use that server's documentation."
+description: "Auto-activate for litestar_granian or GranianPlugin. Not for other ASGI servers (Uvicorn, Hypercorn)."
 ---
 
 # litestar-granian
 
-`litestar-granian` 0.15.0 replaces Litestar's `run` command with a Granian-backed
+`litestar-granian` 0.16.0 replaces Litestar's `run` command with a Granian-backed
 command and integrates Granian loggers with Litestar logging. It requires
 Granian 2.7 or later.
 
 ## Code Style Rules
 
 - Keep handlers async when they perform I/O.
-- Configure the server at the command line. `GranianPlugin()` has no constructor
-  options.
+- Configure the server at the command line. `GranianPlugin` accepts optional `static` mode keyword argument.
 - Use the `litestar run` option names documented here. Do not substitute
   similarly named options from older Granian or Uvicorn releases.
 

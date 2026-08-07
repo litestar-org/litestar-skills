@@ -67,6 +67,7 @@ from litestar.connection import ASGIConnection
 from litestar.exceptions import PermissionDeniedException
 from litestar.handlers import BaseRouteHandler
 
+
 async def requires_active_user(connection: ASGIConnection, _: BaseRouteHandler) -> None:
     if not connection.user or not connection.user.is_active:
         raise PermissionDeniedException("Authentication required")

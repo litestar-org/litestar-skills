@@ -67,7 +67,7 @@ export default defineConfig({
 return ViteConfig(
     paths=PathConfig(
         root=BASE_DIR.parent,
-        bundle_dir=Path("app/domain/web/public"),   # ← inside app/ (the Python package)
+        bundle_dir=Path("app/domain/web/public"),  # ← inside app/ (the Python package)
         resource_dir=Path("resources"),
     ),
 )

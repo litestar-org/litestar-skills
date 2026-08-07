@@ -68,6 +68,7 @@ Use this skill for route handlers, Controllers, Routers, domain clustering, and 
 from litestar import Controller, get
 from litestar.di import NamedDependency
 
+
 class UserController(Controller):
     path = "/users"
 

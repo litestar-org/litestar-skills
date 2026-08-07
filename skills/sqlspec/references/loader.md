@@ -101,9 +101,9 @@ Pass any number of file or directory paths to `load_sql()`. Directories are walk
 ```python
 loader = SQLFileLoader()
 loader.load_sql(
-    "./sql/shared",        # Shared across projects (loaded first)
-    "./sql/queries",       # Standard queries
-    "./sql/overrides",     # Project-specific overrides (win on conflict)
+    "./sql/shared",  # Shared across projects (loaded first)
+    "./sql/queries",  # Standard queries
+    "./sql/overrides",  # Project-specific overrides (win on conflict)
 )
 ```
 

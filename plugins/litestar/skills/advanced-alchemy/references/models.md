@@ -43,7 +43,10 @@ class User(UUIDAuditBase):
 
     # String with max length
     username: Mapped[str | None] = mapped_column(
-        String(length=30), unique=True, index=True, default=None,
+        String(length=30),
+        unique=True,
+        index=True,
+        default=None,
     )
 
     # Boolean with default
@@ -54,7 +57,8 @@ class User(UUIDAuditBase):
 
     # Foreign key
     team_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("team.id", ondelete="CASCADE"), default=None,
+        ForeignKey("team.id", ondelete="CASCADE"),
+        default=None,
     )
 
     # Relationships
@@ -119,11 +123,11 @@ result on that session.
 
 ```python
 from advanced_alchemy.types import (
-    DateTimeUTC,       # Timezone-aware UTC normalization
-    GUID,              # Backend-aware UUID mapping
-    JsonB,             # Dialect-aware JSON storage
-    EncryptedString,   # Encrypted at rest (Fernet or PGCrypto)
-    EncryptedText,     # Encrypted text (larger payloads)
+    DateTimeUTC,  # Timezone-aware UTC normalization
+    GUID,  # Backend-aware UUID mapping
+    JsonB,  # Dialect-aware JSON storage
+    EncryptedString,  # Encrypted at rest (Fernet or PGCrypto)
+    EncryptedText,  # Encrypted text (larger payloads)
 )
 from advanced_alchemy.types.file_object import FileObject, StoredObject
 ```
@@ -182,7 +186,8 @@ class User(UUIDAuditBase):
         deferred_group="security_sensitive",
     )
     totp_secret: Mapped[str | None] = mapped_column(
-        deferred_group="security_sensitive", default=None,
+        deferred_group="security_sensitive",
+        default=None,
     )
 ```
 
@@ -217,7 +222,8 @@ class User(UUIDAuditBase):
     __tablename__ = "user_account"
 
     team_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("team.id", ondelete="CASCADE"), default=None,
+        ForeignKey("team.id", ondelete="CASCADE"),
+        default=None,
     )
     team: Mapped[Team | None] = relationship(back_populates="members", lazy="selectin")
 ```

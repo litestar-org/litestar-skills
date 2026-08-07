@@ -14,6 +14,7 @@ Cross-dialect native upsert — dispatches to PostgreSQL / SQLite / DuckDB `ON C
 from advanced_alchemy.operations import OnConflictUpsert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+
 async def upsert_order(session: AsyncSession, order_table, values: dict) -> None:
     dialect_name = session.bind.dialect.name
     if not OnConflictUpsert.supports_native_upsert(dialect_name):
@@ -82,7 +83,7 @@ Library-wide JSON encoder / decoder — msgspec first, orjson fallback, stdlib `
 from advanced_alchemy.utils.serialization import encode_json, decode_json
 
 payload = encode_json({"id": "abc", "total": 99})  # str
-parsed = decode_json(payload)                        # dict
+parsed = decode_json(payload)  # dict
 ```
 
 The msgspec `Encoder` is configured with an `enc_hook` that serializes `datetime` / `date` / `Enum` / pydantic `BaseModel` by delegating to `_type_to_string`. For round-trippable encoding of `Decimal`, `UUID`, `bytes`, `set`, `timedelta`, use `encode_complex_type` / `decode_complex_type` — they wrap values in `{"__type__": ..., "value": ...}` markers.

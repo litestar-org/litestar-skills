@@ -285,6 +285,7 @@ from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.types.file_object import FileObject, StoredObject
 from sqlalchemy.orm import Mapped, mapped_column
 
+
 class UserProfile(UUIDAuditBase):
     __tablename__ = "user_profile"
 
@@ -299,6 +300,7 @@ class UserProfile(UUIDAuditBase):
 
 ```python
 from advanced_alchemy.types.file_object import FileObject, FileObjectList, StoredObject
+
 
 class Document(UUIDAuditBase):
     __tablename__ = "document"
@@ -358,11 +360,13 @@ await session.commit()
 
 ```python
 # Append a file
-doc.attachments.append(FileObject(
-    backend="s3-uploads",
-    filename=f"docs/{doc.id}/new_file.pdf",
-    content=pdf_bytes,
-))
+doc.attachments.append(
+    FileObject(
+        backend="s3-uploads",
+        filename=f"docs/{doc.id}/new_file.pdf",
+        content=pdf_bytes,
+    )
+)
 await session.commit()
 
 # Remove a file
@@ -371,9 +375,11 @@ await session.commit()
 # Removed file is deleted from storage
 
 # Replace entire list
-doc.attachments = MutableList([
-    FileObject(backend="s3-uploads", filename="docs/a.pdf", content=a_bytes),
-])
+doc.attachments = MutableList(
+    [
+        FileObject(backend="s3-uploads", filename="docs/a.pdf", content=a_bytes),
+    ]
+)
 await session.commit()
 # Old files not in new list are deleted, new files are saved
 ```
@@ -406,6 +412,7 @@ engine = create_async_engine(url, execution_options={"enable_file_object_listene
 ```python
 from pydantic import BaseModel
 from advanced_alchemy.types.file_object import FileObject
+
 
 class ProfileSchema(BaseModel):
     name: str

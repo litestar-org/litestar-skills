@@ -148,10 +148,12 @@ advertise deferred groups; partial responses omit `deferredProps`.
 
 ```python
 def get_users():
-    return InertiaResponse({
-        "users": lazy("users", fetch_users),
-        "stats": defer("stats", fetch_stats),
-    })
+    return InertiaResponse(
+        {
+            "users": lazy("users", fetch_users),
+            "stats": defer("stats", fetch_stats),
+        }
+    )
 ```
 
 The route must declare `component="Users/Index"`. `lazy()` loads only when

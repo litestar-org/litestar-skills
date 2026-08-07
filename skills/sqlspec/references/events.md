@@ -69,10 +69,12 @@ finally:
 ## Batch Publication
 
 ```python
-event_ids = await channel.publish_many([
-    ("orders", {"type": "order.created", "id": "o-1"}, None),
-    ("orders", {"type": "order.created", "id": "o-2"}, None),
-])
+event_ids = await channel.publish_many(
+    [
+        ("orders", {"type": "order.created", "id": "o-1"}, None),
+        ("orders", {"type": "order.created", "id": "o-2"}, None),
+    ]
+)
 ```
 
 Each item is `(channel, payload, metadata)`. Returned IDs preserve input order. Batch-capable backends publish a grouped call atomically. Backends without `publish_many()`, including Oracle native transports, use an ordered per-event fallback that is not atomic across the batch.

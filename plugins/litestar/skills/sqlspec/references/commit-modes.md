@@ -54,10 +54,7 @@ def _should_commit(self, status_code: int) -> bool:
         return False
     if HTTP_200_OK <= status_code < HTTP_300_MULTIPLE_CHOICES:
         return True
-    return bool(
-        self.include_redirect
-        and HTTP_300_MULTIPLE_CHOICES <= status_code < HTTP_400_BAD_REQUEST
-    )
+    return bool(self.include_redirect and HTTP_300_MULTIPLE_CHOICES <= status_code < HTTP_400_BAD_REQUEST)
 ```
 
 Use `autocommit` for standard CRUD endpoints where "2xx response means the work succeeded; anything else means undo it".
@@ -78,8 +75,8 @@ config = AsyncpgConfig(
     extension_config={
         "starlette": {
             "commit_mode": "autocommit",
-            "extra_commit_statuses": {422},   # commit even on 422
-            "extra_rollback_statuses": {201}, # roll back even on 201
+            "extra_commit_statuses": {422},  # commit even on 422
+            "extra_rollback_statuses": {201},  # roll back even on 201
         },
     },
 )

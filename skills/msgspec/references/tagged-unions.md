@@ -17,13 +17,16 @@ validation. Every Struct in that union must be tagged.
 ```python
 import msgspec
 
+
 class Dog(msgspec.Struct, tag=True):
     name: str
     breed: str
 
+
 class Cat(msgspec.Struct, tag=True):
     name: str
     indoor: bool
+
 
 Animal = Dog | Cat
 
@@ -44,15 +47,18 @@ class CreateEvent(msgspec.Struct, tag="create"):
     resource_id: int
     created_by: str
 
+
 class UpdateEvent(msgspec.Struct, tag="update"):
     resource_id: int
     updated_by: str
     changes: dict[str, object]
 
+
 class DeleteEvent(msgspec.Struct, tag="delete"):
     resource_id: int
     deleted_by: str
     soft: bool = True
+
 
 Event = CreateEvent | UpdateEvent | DeleteEvent
 ```
@@ -67,9 +73,11 @@ Event = CreateEvent | UpdateEvent | DeleteEvent
 class V1Request(msgspec.Struct, tag="v1", tag_field="version", kw_only=True):
     payload: str
 
+
 class V2Request(msgspec.Struct, tag="v2", tag_field="version", kw_only=True):
     payload: str
     metadata: dict[str, str] = {}
+
 
 Request = V1Request | V2Request
 ```
@@ -84,8 +92,10 @@ Tags can be integers (binary protocols, compact representations).
 class PingMessage(msgspec.Struct, tag=1):
     seq: int
 
+
 class PongMessage(msgspec.Struct, tag=2):
     seq: int
+
 
 Message = PingMessage | PongMessage
 ```
@@ -122,16 +132,19 @@ Message = Started | Stopped
 class TextContent(msgspec.Struct, tag="text"):
     text: str
 
+
 class ImageContent(msgspec.Struct, tag="image"):
     url: str
     alt: str | None = None
 
+
 Content = TextContent | ImageContent
+
 
 class Post(msgspec.Struct, kw_only=True):
     id: int
     author: str
-    content: Content   # union — dispatched at decode
+    content: Content  # union — dispatched at decode
 ```
 
 ---
@@ -143,14 +156,17 @@ class CreateUserV1(msgspec.Struct, tag="v1", tag_field="api_version", kw_only=Tr
     username: str
     email: str
 
+
 class CreateUserV2(msgspec.Struct, tag="v2", tag_field="api_version", kw_only=True):
     username: str
     email: str
     display_name: str | None = None
     locale: str = "en"
 
+
 CreateUserRequest = CreateUserV1 | CreateUserV2
 _decoder = msgspec.json.Decoder(CreateUserRequest)
+
 
 async def handle_create_user(body: bytes) -> dict:
     request = _decoder.decode(body)
@@ -169,6 +185,7 @@ async def handle_create_user(body: bytes) -> dict:
 import uuid
 from datetime import datetime
 
+
 class OrderPlaced(msgspec.Struct, tag="order.placed", tag_field="event_type", kw_only=True, gc=False):
     event_id: uuid.UUID
     order_id: uuid.UUID
@@ -176,11 +193,13 @@ class OrderPlaced(msgspec.Struct, tag="order.placed", tag_field="event_type", kw
     total: float
     placed_at: datetime
 
+
 class OrderShipped(msgspec.Struct, tag="order.shipped", tag_field="event_type", kw_only=True, gc=False):
     event_id: uuid.UUID
     order_id: uuid.UUID
     tracking_number: str
     shipped_at: datetime
+
 
 OrderEvent = OrderPlaced | OrderShipped
 ```
@@ -195,13 +214,16 @@ class SendEmailCommand(msgspec.Struct, tag="send_email", kw_only=True):
     subject: str
     body: str
 
+
 class GenerateReportCommand(msgspec.Struct, tag="generate_report", kw_only=True):
     report_type: str
     filters: dict[str, object] = {}
     requested_by: int
 
+
 Command = SendEmailCommand | GenerateReportCommand
 _decoder = msgspec.json.Decoder(Command)
+
 
 async def dispatch_command(payload: bytes) -> None:
     command = _decoder.decode(payload)
@@ -221,11 +243,18 @@ async def dispatch_command(payload: bytes) -> None:
 ```python
 # WRONG
 class A(msgspec.Struct, tag="a", tag_field="type"): ...
+
+
 class B(msgspec.Struct, tag="b", tag_field="kind"): ...
+
+
 AB = A | B  # decode error
+
 
 # CORRECT
 class A(msgspec.Struct, tag="a", tag_field="kind"): ...
+
+
 class B(msgspec.Struct, tag="b", tag_field="kind"): ...
 ```
 
@@ -234,10 +263,15 @@ class B(msgspec.Struct, tag="b", tag_field="kind"): ...
 ```python
 # WRONG
 class A(msgspec.Struct, tag="same"): ...
+
+
 class B(msgspec.Struct, tag="same"): ...
+
 
 # CORRECT
 class A(msgspec.Struct, tag="type_a"): ...
+
+
 class B(msgspec.Struct, tag="type_b"): ...
 ```
 

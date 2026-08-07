@@ -62,12 +62,15 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from os import getenv
 
+
 def get_env(key: str, default: str) -> str:
     return getenv(key, default)
+
 
 @dataclass(frozen=True)
 class AppSettings:
     name: str = field(default_factory=lambda: get_env("APP_NAME", "api"))
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> AppSettings:

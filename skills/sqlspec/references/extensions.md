@@ -46,10 +46,12 @@ The plugin automatically provides driver sessions via dependency injection:
 from litestar import get, post
 from sqlspec.adapters.asyncpg import AsyncpgDriver
 
+
 @get("/users")
 async def list_users(db_session: AsyncpgDriver) -> list[dict[str, object]]:
     result = await db_session.select("SELECT * FROM users")
     return result
+
 
 @post("/users")
 async def create_user(db_session: AsyncpgDriver, data: UserCreate) -> dict:
@@ -166,9 +168,9 @@ from sqlspec.builder import Explain
 
 explain = (
     Explain("SELECT * FROM users", dialect="postgres")
-    .analyze()      # Execute and show actual stats
-    .verbose()      # Additional information
-    .format("json") # Output format
+    .analyze()  # Execute and show actual stats
+    .verbose()  # Additional information
+    .format("json")  # Output format
     .build()
 )
 ```

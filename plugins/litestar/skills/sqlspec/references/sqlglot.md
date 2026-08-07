@@ -38,6 +38,7 @@ parse_one(sql, read="dialect")
 
 # Programmatic construction
 from sqlglot import select
+
 select("*").from_("users").where("id = 1")
 ```
 

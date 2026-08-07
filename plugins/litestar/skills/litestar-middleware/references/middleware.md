@@ -19,11 +19,15 @@ logger = structlog.get_logger()
 
 
 class TimingMiddleware(ASGIMiddleware):
-    scopes = (ScopeType.HTTP,)                   # HTTP only; skip WebSocket
+    scopes = (ScopeType.HTTP,)  # HTTP only; skip WebSocket
     exclude_path_pattern = ("/health", "/metrics")
 
     async def handle(
-        self, scope: Scope, receive: Receive, send: Send, next_app: ASGIApp,
+        self,
+        scope: Scope,
+        receive: Receive,
+        send: Send,
+        next_app: ASGIApp,
     ) -> None:
         start = time.perf_counter()
         await next_app(scope, receive, send)

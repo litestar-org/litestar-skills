@@ -66,12 +66,14 @@ from litestar_vite import ViteConfig, VitePlugin, PathConfig, TypeGenConfig
 
 here = Path(__file__).parent
 
-vite = VitePlugin(config=ViteConfig(
-    mode="spa",
-    dev_mode=DEV_MODE,
-    paths=PathConfig(root=here),
-    types=TypeGenConfig(output=Path("src/generated")),
-))
+vite = VitePlugin(
+    config=ViteConfig(
+        mode="spa",
+        dev_mode=DEV_MODE,
+        paths=PathConfig(root=here),
+        types=TypeGenConfig(output=Path("src/generated")),
+    )
+)
 ```
 
 TypeGen output path convention: **`./src/generated`** for SPAs.
@@ -98,11 +100,13 @@ from litestar_vite import ViteConfig, VitePlugin, PathConfig
 from litestar.plugins.jinja import JinjaTemplateEngine
 from litestar.template.config import TemplateConfig
 
-vite = VitePlugin(config=ViteConfig(
-    mode="template",
-    dev_mode=DEV_MODE,
-    paths=PathConfig(root=here, resource_dir="resources"),
-))
+vite = VitePlugin(
+    config=ViteConfig(
+        mode="template",
+        dev_mode=DEV_MODE,
+        paths=PathConfig(root=here, resource_dir="resources"),
+    )
+)
 templates = TemplateConfig(directory=here / "templates", engine=JinjaTemplateEngine)
 
 app = Litestar(plugins=[vite], template_config=templates)
@@ -192,6 +196,7 @@ Single-item variant (properties accessible directly via prototype inheritance):
 
 ```python
 from litestar_htmx import HTMXTemplate
+
 
 @get("/fragments/book/{book_id:int}")
 async def book_fragment(self, book_id: int) -> Template:

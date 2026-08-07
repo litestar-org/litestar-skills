@@ -9,17 +9,23 @@ from advanced_alchemy.base import (
     # No predefined primary key
     DefaultBase,
     # UUID v4
-    UUIDBase, UUIDAuditBase,
+    UUIDBase,
+    UUIDAuditBase,
     # UUID v6 (time-sortable)
-    UUIDv6Base, UUIDv6AuditBase,
+    UUIDv6Base,
+    UUIDv6AuditBase,
     # UUID v7 (time-sortable, preferred)
-    UUIDv7Base, UUIDv7AuditBase,
+    UUIDv7Base,
+    UUIDv7AuditBase,
     # BigInt auto-increment
-    BigIntBase, BigIntAuditBase,
+    BigIntBase,
+    BigIntAuditBase,
     # NanoID string
-    NanoIDBase, NanoIDAuditBase,
+    NanoIDBase,
+    NanoIDAuditBase,
     # Registry
-    orm_registry, metadata_registry,
+    orm_registry,
+    metadata_registry,
 )
 from advanced_alchemy.mixins import AuditColumns, SlugKey, UniqueMixin
 ```
@@ -270,9 +276,7 @@ class User(UUIDAuditBase):
 ```python
 class User(UUIDAuditBase):
     __tablename__ = "user_account"
-    __table_args__ = (
-        {"comment": "User accounts for the application"},
-    )
+    __table_args__ = ({"comment": "User accounts for the application"},)
     # Or with constraints:
     __table_args__ = (
         UniqueConstraint("email", "tenant_id", name="uq_user_email_tenant"),
@@ -330,11 +334,13 @@ from advanced_alchemy.mixins import AuditColumns, SlugKey
 
 class ProjectBase(UUIDv7Base, AuditColumns):
     """Custom base with UUIDv7 PK and audit timestamps."""
+
     __abstract__ = True
 
 
 class ContentBase(UUIDv7Base, AuditColumns, SlugKey):
     """Custom base for content models with slugs."""
+
     __abstract__ = True
 
 

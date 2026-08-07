@@ -52,11 +52,9 @@ The `config=` parameter accepts either a single config or a `Sequence` of config
 ```python
 def __init__(
     self,
-    config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig
-        | Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig],
+    config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig],
     app: Starlette | None = None,
-) -> None:
-    ...
+) -> None: ...
 ```
 
 Constructor keywords differ by framework: FastAPI, Flask, and Starlette use

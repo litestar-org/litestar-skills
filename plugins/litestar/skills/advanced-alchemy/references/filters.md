@@ -231,8 +231,8 @@ results, total = await service.get_many_and_count(
 ```python
 from advanced_alchemy.filters import NullFilter, NotNullFilter
 
-results = await service.get_many(NullFilter(field_name="deleted_at"))       # only un-deleted
-results = await service.get_many(NotNullFilter(field_name="verified_at"))   # only verified
+results = await service.get_many(NullFilter(field_name="deleted_at"))  # only un-deleted
+results = await service.get_many(NotNullFilter(field_name="verified_at"))  # only verified
 ```
 
 ### ComparisonFilter
@@ -340,7 +340,10 @@ async def list_users(
     filters = [LimitOffset(limit=limit, offset=offset)]
     results, total = await user_service.get_many_and_count(*filters)
     return user_service.to_schema(
-        results, total, filters=filters, schema_type=UserSchema,
+        results,
+        total,
+        filters=filters,
+        schema_type=UserSchema,
     )
 ```
 
@@ -416,7 +419,10 @@ async def list_users(
 ) -> OffsetPagination[UserSchema]:
     results, total = await user_service.get_many_and_count(*filters)
     return user_service.to_schema(
-        results, total, filters=filters, schema_type=UserSchema,
+        results,
+        total,
+        filters=filters,
+        schema_type=UserSchema,
     )
 ```
 
@@ -447,7 +453,10 @@ class UserController(Controller):
     ) -> OffsetPagination[UserSchema]:
         results, total = await user_service.get_many_and_count(*filters)
         return user_service.to_schema(
-            results, total, filters=filters, schema_type=UserSchema,
+            results,
+            total,
+            filters=filters,
+            schema_type=UserSchema,
         )
 ```
 

@@ -13,8 +13,8 @@ SAQ uses the job's touched timestamp to detect stuck work. When a job is active 
 await queue.enqueue(
     "process_large_file",
     file_id=42,
-    timeout=700,      # 700s hard timeout
-    heartbeat=120,    # stale after 120 seconds without a touch
+    timeout=700,  # 700s hard timeout
+    heartbeat=120,  # stale after 120 seconds without a touch
 )
 ```
 
@@ -39,8 +39,7 @@ from litestar_saq import monitored_job
 
 
 @monitored_job()
-async def long_running_export(ctx: dict, *, export_id: int) -> dict:
-    ...
+async def long_running_export(ctx: dict, *, export_id: int) -> dict: ...
 ```
 
 ## Dead Letter / Failed Job Handling
@@ -48,13 +47,16 @@ async def long_running_export(ctx: dict, *, export_id: int) -> dict:
 ```python
 from saq import Job, Status
 
+
 async def get_failed_jobs(queue: Queue) -> list[Job]:
     return [job async for job in queue.iter_jobs(statuses=[Status.FAILED])]
+
 
 async def retry_job(queue: Queue, job_id: str) -> None:
     job = await queue.job(job_id)
     if job and job.status == Status.FAILED:
         await job.retry("manual retry")
+
 
 async def retry_all_failed(queue: Queue) -> int:
     failed = [job async for job in queue.iter_jobs(statuses=[Status.FAILED])]
@@ -84,8 +86,12 @@ Let SAQ retry task exceptions. `retry_delay` sets the first delay. Set `retry_ba
 async def step_one(ctx: dict, *, record_id: int) -> None:
     result = await process_step_one(record_id)
     await ctx["queue"].enqueue(
-        "step_two", record_id=record_id, step_one_result=result, timeout=120,
+        "step_two",
+        record_id=record_id,
+        step_one_result=result,
+        timeout=120,
     )
+
 
 async def step_two(ctx: dict, *, record_id: int, step_one_result: dict) -> None:
     await process_step_two(record_id, step_one_result)
@@ -97,10 +103,7 @@ Fan-out:
 ```python
 async def fan_out_coordinator(ctx: dict, *, batch_ids: list[int]) -> None:
     queue: Queue = ctx["queue"]
-    results = await asyncio.gather(*[
-        queue.apply("process_item", item_id=item_id)
-        for item_id in batch_ids
-    ])
+    results = await asyncio.gather(*[queue.apply("process_item", item_id=item_id) for item_id in batch_ids])
 ```
 
 ## Queue Priorities (Multiple Queues)
@@ -130,12 +133,15 @@ async def startup(ctx: dict) -> None:
     ctx["db"] = create_async_engine(...)
     ctx["http"] = httpx.AsyncClient(timeout=10.0)
 
+
 async def shutdown(ctx: dict) -> None:
     await ctx["db"].dispose()
     await ctx["http"].aclose()
 
+
 async def before_process(ctx: dict) -> None:
     ctx["session"] = ctx["db"].connect()
+
 
 async def after_process(ctx: dict) -> None:
     if "session" in ctx:
@@ -190,21 +196,28 @@ The PostgreSQL broker persists jobs in PostgreSQL, but `queue.enqueue()` uses th
 ```python
 # Per-user sync
 await queue.enqueue(
-    "sync_user_data", user_id=user_id,
-    key=f"sync-user-{user_id}", timeout=300,
+    "sync_user_data",
+    user_id=user_id,
+    key=f"sync-user-{user_id}",
+    timeout=300,
 )
 
 # Per-resource version
 await queue.enqueue(
-    "reindex_document", doc_id=doc_id,
-    key=f"reindex-doc-{doc_id}", timeout=60,
+    "reindex_document",
+    doc_id=doc_id,
+    key=f"reindex-doc-{doc_id}",
+    timeout=60,
 )
 
 # Time-windowed (one report per hour)
 import datetime
+
 hour = datetime.datetime.utcnow().strftime("%Y%m%d%H")
 await queue.enqueue(
-    "generate_hourly_report", org_id=org_id,
-    key=f"report-{org_id}-{hour}", timeout=120,
+    "generate_hourly_report",
+    org_id=org_id,
+    key=f"report-{org_id}-{hour}",
+    timeout=120,
 )
 ```

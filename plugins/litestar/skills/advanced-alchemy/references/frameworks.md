@@ -207,6 +207,7 @@ db_config = SQLAlchemyAsyncConfig(
 
 async def list_users(request):
     from starlette.responses import JSONResponse
+
     session = request.state.session
     service = UserService(session=session)
     results = await service.get_many()
@@ -273,7 +274,7 @@ All framework integrations follow the same configuration pattern. The non-Litest
 ```python
 from advanced_alchemy.extensions.fastapi import (
     AdvancedAlchemy,
-    SQLAlchemyAsyncConfig,   # or SQLAlchemySyncConfig
+    SQLAlchemyAsyncConfig,  # or SQLAlchemySyncConfig
     EngineConfig,
 )
 

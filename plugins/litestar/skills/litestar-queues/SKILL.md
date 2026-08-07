@@ -1,11 +1,11 @@
 ---
 name: litestar-queues
-description: "Auto-activate for litestar_queues, QueuePlugin, QueueConfig, WorkerConfig, QueueService, @task, QueuedBackgroundTask, QueueEventsConfig, SQLAlchemyBackendConfig, SQLSpecBackendConfig, litestar queues run/run-task/run-maintenance/status/scheduler-health, queue backends, workers, schedules, uniqueness, maintenance, or task progress events. Not for litestar-saq/SAQ, Celery, RQ, or Dramatiq — those use different APIs and worker lifecycles."
+description: "Auto-activate for litestar_queues, QueuePlugin, QueueConfig, QueueService, @task, or QueuedBackgroundTask. Not for litestar-saq/SAQ, Celery, RQ, or Dramatiq."
 ---
 
 # litestar-queues
 
-`litestar-queues` 0.5.0 is the first-party Litestar worker abstraction for task registration, durable queue state, worker lifecycle, schedules, uniqueness, bounded maintenance, and application-facing task events.
+`litestar-queues` 0.8.0 is the first-party Litestar worker abstraction for task registration, durable queue state, worker lifecycle, schedules, uniqueness, bounded maintenance, and application-facing task events.
 
 Keep persistence and placement separate:
 
@@ -80,8 +80,7 @@ async def render_report(report_id: str, *, format: str = "pdf") -> str:
 
 
 @task("reports.refresh", interval=timedelta(minutes=15), jitter=30)
-async def refresh_reports() -> None:
-    ...
+async def refresh_reports() -> None: ...
 
 
 async def queue_report(queue_service: QueueService, report_id: str) -> str:
@@ -132,6 +131,7 @@ queue_config = QueueConfig(
 
 ```bash
 LITESTAR_APP=app:app litestar queues run --queue reports --max-concurrency 4 --drain-timeout 60
+LITESTAR_APP=app:app litestar queues run-consumer --backend sqs --max-concurrency 4 --drain-timeout 60
 LITESTAR_APP=app:app litestar queues status --json
 LITESTAR_APP=app:app litestar queues scheduler-health --minutes 5
 ```
@@ -325,8 +325,7 @@ from litestar_queues import QueuedBackgroundTask, task
 
 
 @task("imports.process")
-async def process_import(path: str) -> None:
-    ...
+async def process_import(path: str) -> None: ...
 
 
 @post("/imports")
@@ -490,14 +489,14 @@ LITESTAR_APP=app:app litestar queues run-maintenance --json
 
 ## Official References
 
-- <https://github.com/cofin/litestar-queues/tree/v0.5.0>
-- <https://github.com/cofin/litestar-queues/releases/tag/v0.5.0>
-- <https://github.com/cofin/litestar-queues/blob/v0.5.0/src/litestar_queues/config.py>
-- <https://github.com/cofin/litestar-queues/blob/v0.5.0/src/litestar_queues/task.py>
-- <https://github.com/cofin/litestar-queues/blob/v0.5.0/src/litestar_queues/_cli.py>
-- <https://github.com/cofin/litestar-queues/blob/v0.5.0/src/litestar_queues/backends/sqlspec/config.py>
-- <https://github.com/cofin/litestar-queues/blob/v0.5.0/src/litestar_queues/backends/advanced_alchemy/config.py>
-- <https://github.com/cofin/litestar-queues/blob/v0.5.0/src/litestar_queues/maintenance.py>
+- <https://github.com/cofin/litestar-queues/tree/v0.8.0>
+- <https://github.com/cofin/litestar-queues/releases/tag/v0.8.0>
+- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/config.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/task.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/_cli.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/backends/sqlspec/config.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/backends/advanced_alchemy/config.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/maintenance.py>
 
 ## Shared Styleguide Baseline
 

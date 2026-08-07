@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "litestar-skills"
-version = "0.6.0"
+version = "0.7.0"
 description = "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -36,6 +36,7 @@ dev = [
   "pyyaml>=6.0",
   "types-pyyaml>=6.0",
   "tomli>=2.0 ; python_version < '3.11'",
+  "litestar-skills[validation]",
 ]
 # Libraries shipped guidance for. Install via `uv pip install -e '.[validation]'`
 # so `tools/check-upstream-imports.py` can verify every `from X import Y` in
@@ -49,18 +50,19 @@ validation = [
   "litestar[jinja,jwt]>=2.24.0",
   "litestar-autowire>=0.2.0",
   "litestar-email>=0.4.0",
-  "litestar-granian>=0.15.0",
+  "litestar-granian>=0.16.0",
   "litestar-htmx>=0.5.0",
-  "litestar-mcp>=0.11.1",
-  "litestar-queues[advanced-alchemy,sqlspec]>=0.5.0",
+  "litestar-mcp>=0.12.0",
+  "litestar-queues[advanced-alchemy,sqlspec]>=0.8.0",
   "litestar-saq[psycopg]>=0.8.0",
-  "litestar-vite>=0.27.0",
+  "litestar-security>=0.3.0",
+  "litestar-vite>=0.29.1",
   "msgspec>=0.21.1",
   "polyfactory[beanie,sqlalchemy]>=3.3.0",
   "pytest-databases>=0.19.0",
   "sanic[ext]>=24.6",  # advanced_alchemy.extensions.sanic imports sanic_ext at module load
   "sqlmodel>=0.0.27",
-  "sqlspec[adk,asyncpg,duckdb,oracledb,performance,psycopg]>=0.56.0",
+  "sqlspec[adk,asyncpg,duckdb,oracledb,performance,psycopg]>=0.58.3",
 ]
 
 [project.urls]
@@ -169,7 +171,7 @@ exclude_lines = [
 # bump-my-version — atomic multi-manifest version sync
 # ============================================================
 [tool.bumpversion]
-current_version = "0.6.0"
+current_version = "0.7.0"
 commit = false
 tag = false
 tag_name = "v{new_version}"

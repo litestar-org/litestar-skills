@@ -77,6 +77,7 @@ from sqlalchemy import text
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+
 async def healthcheck(request: Request) -> JSONResponse:
     session = alchemy.get_async_session(request)
     result = await session.execute(text("SELECT 1"))
@@ -100,16 +101,19 @@ from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
 
+
 class OrderModel(UUIDBase):
     __tablename__ = "order"
     customer_email: Mapped[str] = mapped_column()
     total_cents: Mapped[int] = mapped_column()
+
 
 class OrderService(SQLAlchemyAsyncRepositoryService[OrderModel]):
     class Repo(SQLAlchemyAsyncRepository[OrderModel]):
         model_type = OrderModel
 
     repository_type = Repo
+
 
 async def list_orders(request: Request) -> JSONResponse:
     session = alchemy.get_async_session(request)
@@ -127,6 +131,7 @@ from advanced_alchemy.filters import LimitOffset, SearchFilter
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+
 async def list_orders(request: Request) -> JSONResponse:
     session = alchemy.get_async_session(request)
     orders_service = OrderService(session=session)
@@ -137,9 +142,7 @@ async def list_orders(request: Request) -> JSONResponse:
 
     filters = [LimitOffset(limit=page_size, offset=page_size * (page - 1))]
     if search_term:
-        filters.append(
-            SearchFilter(field_name={"customer_email"}, value=search_term, ignore_case=True)
-        )
+        filters.append(SearchFilter(field_name={"customer_email"}, value=search_term, ignore_case=True))
 
     results, total = await orders_service.get_many_and_count(*filters)
     return JSONResponse({"items": [...], "total": total})
@@ -168,10 +171,12 @@ from advanced_alchemy.extensions.starlette import (
     SQLAlchemyAsyncConfig,
 )
 
+
 class OrderModel(UUIDBase):
     __tablename__ = "order"
     customer_email: Mapped[str] = mapped_column()
     total_cents: Mapped[int] = mapped_column()
+
 
 alchemy_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://app:app@localhost:5432/orders",
@@ -180,10 +185,12 @@ alchemy_config = SQLAlchemyAsyncConfig(
     create_all=True,
 )
 
+
 async def list_orders(request: Request) -> JSONResponse:
     session = alchemy.get_async_session(request)
     rows = (await session.execute(select(OrderModel))).scalars().all()
     return JSONResponse([{"id": str(r.id), "total": r.total_cents} for r in rows])
+
 
 app = Starlette(routes=[Route("/orders", list_orders)])
 alchemy = AdvancedAlchemy(config=alchemy_config, app=app)

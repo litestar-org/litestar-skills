@@ -66,7 +66,7 @@ strategy:
 **5. `tools/bundler.py`:**
 
 ```python
-DEFAULT_PYTHON_VERSION = "3.14"           # ← bump
+DEFAULT_PYTHON_VERSION = "3.14"  # ← bump
 
 # Update PBS URLs for the new patch version. Get the latest release tag from:
 # https://github.com/astral-sh/python-build-standalone/releases
@@ -182,11 +182,11 @@ Update **one** location:
 ```python
 # tools/bundler.py:45-62
 DEFAULT_URLS: dict[str, str] = {
-    "x86_64-unknown-linux-gnu":  "https://github.com/astral-sh/python-build-standalone/releases/download/<NEW_RELEASE_TAG>/cpython-<VERSION>%2B<NEW_RELEASE_TAG>-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+    "x86_64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/<NEW_RELEASE_TAG>/cpython-<VERSION>%2B<NEW_RELEASE_TAG>-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
     "aarch64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/<NEW_RELEASE_TAG>/cpython-<VERSION>%2B<NEW_RELEASE_TAG>-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz",
-    "x86_64-apple-darwin":       "...",
-    "aarch64-apple-darwin":      "...",
-    "x86_64-pc-windows-msvc":    "...",
+    "x86_64-apple-darwin": "...",
+    "aarch64-apple-darwin": "...",
+    "x86_64-pc-windows-msvc": "...",
 }
 ```
 
@@ -226,7 +226,7 @@ The logic that generates the Rust expression from `--install-root` is in `bundle
 
 ```python
 # src/py/<app>/cli/commands/manage.py
-default="~/.<app>"                        # ← update to match --install-root
+default = "~/.<app>"  # ← update to match --install-root
 ```
 
 ## Add a new target platform

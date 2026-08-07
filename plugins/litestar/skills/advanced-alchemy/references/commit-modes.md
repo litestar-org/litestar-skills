@@ -31,7 +31,7 @@ Use `manual` when:
 The middleware commits if the response status code is in the `200`-`299` range; otherwise it rolls back. Exceptions raised by the handler always roll back. The exact predicate from the upstream source is:
 
 ```python
-if (commit_mode == "autocommit" and 200 <= status_code < 300):
+if commit_mode == "autocommit" and 200 <= status_code < 300:
     await session.commit()
 else:
     await session.rollback()

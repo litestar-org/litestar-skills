@@ -110,8 +110,8 @@ results, total = await users_service.get_many_and_count(*filters)
 return users_service.to_schema(
     results,
     total,
-    filters=filters,           # so it can read limit/offset back out
-    schema_type=User,          # the camelized msgspec DTO
+    filters=filters,  # so it can read limit/offset back out
+    schema_type=User,  # the camelized msgspec DTO
 )
 ```
 

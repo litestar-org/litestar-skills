@@ -91,8 +91,8 @@ class RealtimeActor(CamelizedBaseStruct, kw_only=True):
 class RealtimeEntityRef(CamelizedBaseStruct, kw_only=True):
     """Reference to the domain object the event concerns."""
 
-    type: str   # e.g. "order", "post", "task"
-    id: str     # stringified primary key
+    type: str  # e.g. "order", "post", "task"
+    id: str  # stringified primary key
 ```
 
 ## Channel naming factories
