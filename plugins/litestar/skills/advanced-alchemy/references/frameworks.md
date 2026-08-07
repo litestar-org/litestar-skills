@@ -207,6 +207,7 @@ db_config = SQLAlchemyAsyncConfig(
 
 async def list_users(request):
     from starlette.responses import JSONResponse
+
     session = request.state.session
     service = UserService(session=session)
     results = await service.get_many()
@@ -241,8 +242,14 @@ db_config = SQLAlchemyAsyncConfig(
 )
 
 app = Sanic("MyApp")
-alchemy = AdvancedAlchemy(config=db_config, app=app)
+alchemy = AdvancedAlchemy(sqlalchemy_config=db_config, sanic_app=app)
 ```
+
+Sanic is the one framework whose keywords differ: `sqlalchemy_config=` and
+`sanic_app=`, both keyword-only. Copying `AdvancedAlchemy(config=..., app=...)`
+from another framework's section raises
+`TypeError: unexpected keyword argument 'config'`. See
+[Sanic integration](sanic-integration.md).
 
 ### Route Handlers
 
@@ -273,7 +280,7 @@ All framework integrations follow the same configuration pattern. The non-Litest
 ```python
 from advanced_alchemy.extensions.fastapi import (
     AdvancedAlchemy,
-    SQLAlchemyAsyncConfig,   # or SQLAlchemySyncConfig
+    SQLAlchemyAsyncConfig,  # or SQLAlchemySyncConfig
     EngineConfig,
 )
 

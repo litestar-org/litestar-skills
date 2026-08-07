@@ -12,6 +12,7 @@ uv add --dev anyio pytest
 # conftest.py
 import pytest
 
+
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
@@ -29,6 +30,7 @@ anyio_backend = "asyncio"
 ```python
 import pytest
 
+
 @pytest.mark.anyio
 async def test_async_operation():
     result = await some_async_function()
@@ -43,6 +45,7 @@ async def test_async_operation():
 import pytest
 from litestar.testing import AsyncTestClient
 
+
 @pytest.fixture
 async def async_client(app) -> AsyncTestClient:
     async with AsyncTestClient(app=app) as client:
@@ -55,6 +58,7 @@ async def async_client(app) -> AsyncTestClient:
 from collections.abc import AsyncGenerator
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
 
 @pytest.fixture
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
@@ -71,6 +75,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 @pytest.fixture(scope="session")
 def anyio_backend() -> str:
     return "asyncio"
+
 
 @pytest.fixture(scope="session")
 async def engine():
@@ -105,11 +110,13 @@ async def test_context_manager_cleanup_on_error():
 ```python
 from unittest.mock import AsyncMock, MagicMock
 
+
 def make_async_cm(return_value):
     cm = MagicMock()
     cm.__aenter__ = AsyncMock(return_value=return_value)
     cm.__aexit__ = AsyncMock(return_value=False)
     return cm
+
 
 @pytest.mark.anyio
 async def test_with_mocked_cm():
@@ -130,7 +137,9 @@ async def test_with_mocked_cm():
 @pytest.mark.anyio
 async def test_bad():
     import asyncio
+
     result = asyncio.run(some_coro())  # RuntimeError
+
 
 # Good
 @pytest.mark.anyio
@@ -146,6 +155,7 @@ async def test_good():
 async def test_sneaky_pass():
     result = some_async_function()  # missing await
     assert result  # passes incorrectly
+
 
 # Good
 @pytest.mark.anyio
@@ -200,9 +210,11 @@ For one-off sync tests with a tiny ad-hoc app, use `create_test_client`:
 from litestar.testing import create_test_client
 from litestar import get
 
+
 @get("/")
 async def handler() -> dict:
     return {"ok": True}
+
 
 def test_inline_app():
     with create_test_client([handler]) as client:

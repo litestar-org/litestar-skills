@@ -122,16 +122,19 @@ db_config = SQLAlchemyAsyncConfig(
     ),
 )
 
+
 # 2. Use services normally — caching is transparent
 class UserService(SQLAlchemyAsyncRepositoryService[User]):
     class Repo(SQLAlchemyAsyncRepository[User]):
         model_type = User
+
     repository_type = Repo
 
+
 # These calls are automatically cached:
-user = await user_service.get(user_id)        # Cache hit or DB + populate
-users = await user_service.get_many()          # Version-keyed list cache
-await user_service.update(user_id, data=...)   # Auto-invalidates on commit
+user = await user_service.get(user_id)  # Cache hit or DB + populate
+users = await user_service.get_many()  # Version-keyed list cache
+await user_service.update(user_id, data=...)  # Auto-invalidates on commit
 ```
 
 ### Stampede Protection
@@ -183,6 +186,7 @@ Listeners are scoped to the session maker (not global) when using config-based s
 
 # For manual global registration:
 from advanced_alchemy.cache import setup_cache_listeners
+
 setup_cache_listeners()
 ```
 
@@ -221,11 +225,14 @@ user_copy: User = default_deserializer(data, User)
 ```python
 import msgpack
 
+
 def msgpack_serializer(model: Any) -> bytes:
     return msgpack.packb(model_to_dict(model))
 
+
 def msgpack_deserializer(data: bytes, model_class: type[T]) -> T:
     return model_class(**msgpack.unpackb(data))
+
 
 cache_config = CacheConfig(
     backend="dogpile.cache.redis",
@@ -256,6 +263,7 @@ For backends not supported by dogpile (e.g., a custom in-house cache), provide a
 ```python
 def my_region_factory(config: CacheConfig) -> SyncCacheRegionProtocol:
     return MyCustomRegion(ttl=config.expiration_time)
+
 
 cache_config = CacheConfig(
     region_factory=my_region_factory,

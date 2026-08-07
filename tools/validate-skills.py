@@ -92,7 +92,7 @@ _H2_HEADING_PATTERNS = {
     for name in REQUIRED_SECTIONS
 }
 
-LINK_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+LINK_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)\n]+)\)")
 
 # Match any shipped-content reference to a ``.agents/`` path, then allow only
 # host-owned convention paths. This defaults new framework authoring paths to

@@ -81,10 +81,10 @@ from sqlspec.core import OffsetPagination
 
 # Returned by SQLSpecAsyncService.paginate() / SQLSpecSyncService.paginate()
 result: OffsetPagination[User]
-result.items    # list[User] - current page rows
-result.total    # int - total matching rows
-result.limit    # int - page size
-result.offset   # int - current offset
+result.items  # list[User] - current page rows
+result.total  # int - total matching rows
+result.limit  # int - page size
+result.offset  # int - current offset
 ```
 
 ---
@@ -150,14 +150,17 @@ from sqlspec.core import FilterTypes, OffsetPagination
 from sqlspec.extensions.litestar.providers import create_filter_dependencies
 from sqlspec.service import SQLSpecAsyncService
 
-filter_deps = create_filter_dependencies({
-    "pagination_type": "limit_offset",
-    "pagination_size": 20,
-    "sort_field": "created_at",
-    "sort_order": "desc",
-    "search": "name,email",
-    "search_ignore_case": True,
-})
+filter_deps = create_filter_dependencies(
+    {
+        "pagination_type": "limit_offset",
+        "pagination_size": 20,
+        "sort_field": "created_at",
+        "sort_order": "desc",
+        "search": "name,email",
+        "search_ignore_case": True,
+    }
+)
+
 
 # Use in a Litestar route handler
 @get("/users", dependencies=filter_deps)

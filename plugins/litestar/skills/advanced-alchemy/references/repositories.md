@@ -210,8 +210,8 @@ instance = await repo.add(model_instance)
 instances = await repo.add_many([model1, model2])
 
 # Get
-instance = await repo.get(id)                          # Raises NotFoundError
-instance = await repo.get_one_or_none(email="x@y.com") # Returns None
+instance = await repo.get(id)  # Raises NotFoundError
+instance = await repo.get_one_or_none(email="x@y.com")  # Returns None
 
 # List
 results = await repo.get_many()

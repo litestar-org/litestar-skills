@@ -86,8 +86,13 @@ class UserService(SQLAlchemyAsyncRepositoryService[User]):
     repository_type = UserRepository
 
     async def active_user_emails_by_org(self, org_id: UUID) -> list[str]:
-        stmt = select(User.email).join(OrgMember).where(
-            OrgMember.org_id == org_id, User.is_active.is_(True),
+        stmt = (
+            select(User.email)
+            .join(OrgMember)
+            .where(
+                OrgMember.org_id == org_id,
+                User.is_active.is_(True),
+            )
         )
         result = await self.repository.session.execute(stmt)
         return list(result.scalars())

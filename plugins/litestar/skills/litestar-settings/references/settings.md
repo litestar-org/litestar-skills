@@ -71,7 +71,7 @@ Group related settings into their own `@dataclass` (e.g. `DatabaseSettings`, `Re
 from app.lib.settings import get_settings
 
 settings = get_settings()
-print(settings.database.url)        # nested access
+print(settings.database.url)  # nested access
 print(settings.redis.url)
 ```
 

@@ -37,8 +37,7 @@ class OrderFactory(DataclassFactory[Order]):
     pass
 
 
-def test_x(orders: type[OrderFactory]) -> None:
-    ...
+def test_x(orders: type[OrderFactory]) -> None: ...
 ```
 
 ## Scope
@@ -142,6 +141,5 @@ Factory methods are class methods, so module-level coverage generation is valid 
 
 ```python
 @pytest.mark.parametrize("contact", list(ContactFactory.coverage()))
-def test_contact_dispatch(contact: Contact) -> None:
-    ...
+def test_contact_dispatch(contact: Contact) -> None: ...
 ```

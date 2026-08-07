@@ -116,7 +116,8 @@ class TaskController(Controller):
         filters: NamedDependency[SkipValidation[list[FilterTypes]]],
     ) -> OffsetPagination[Task]:
         results, total = await tasks_service.get_many_and_count(
-            *filters, owner_id=request.user.id,
+            *filters,
+            owner_id=request.user.id,
         )
         return tasks_service.to_schema(results, total, filters=filters, schema_type=Task)
 
@@ -149,8 +150,11 @@ class TaskController(Controller):
 
     @patch("/{task_id:uuid}")
     async def update_task(
-        self, task_id: FromPath[UUID], data: TaskUpdate,
-        tasks_service: NamedDependency[TaskService], request: Request,
+        self,
+        task_id: FromPath[UUID],
+        data: TaskUpdate,
+        tasks_service: NamedDependency[TaskService],
+        request: Request,
     ) -> Task:
         db_task = await tasks_service.update(
             {**to_builtins(data), "id": task_id},
@@ -226,14 +230,18 @@ app = Litestar(
     plugins=[
         GranianPlugin(),
         SQLAlchemyPlugin(config=SQLAlchemyAsyncConfig(connection_string=settings.database.url)),
-        SAQPlugin(config=SAQConfig(
-            use_server_lifespan=True,
-            queue_configs=[QueueConfig(
-                name="default",
-                dsn=settings.redis.url,
-                jobs=[notify_task_due_job],
-            )],
-        )),
+        SAQPlugin(
+            config=SAQConfig(
+                use_server_lifespan=True,
+                queue_configs=[
+                    QueueConfig(
+                        name="default",
+                        dsn=settings.redis.url,
+                        tasks=[notify_task_due_job],
+                    )
+                ],
+            )
+        ),
         channels,
     ],
 )

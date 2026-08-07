@@ -93,10 +93,12 @@ app = Litestar(
     plugins=[
         GranianPlugin(),
         SQLAlchemyPlugin(config=SQLAlchemyAsyncConfig(connection_string=settings.database.url)),
-        SAQPlugin(config=SAQConfig(
-            use_server_lifespan=True,
-            queue_configs=[QueueConfig(name="default", dsn=settings.redis.url)],
-        )),
+        SAQPlugin(
+            config=SAQConfig(
+                use_server_lifespan=True,
+                queue_configs=[QueueConfig(name="default", dsn=settings.redis.url)],
+            )
+        ),
         VitePlugin(config=ViteConfig(dev_mode=settings.debug)),
         LitestarMCP(MCPConfig(name=settings.name)),
     ],

@@ -1,6 +1,6 @@
 ---
 name: litestar-exceptions
-description: "Auto-activate for exception_handlers, HTTPException, ApplicationError, NotFoundError, ValidationException, PermissionDeniedException, RFC 9457, or domain error mapping. Not for client-side errors."
+description: "Auto-activate for exception_handlers, HTTPException, ApplicationError, NotFoundException, ValidationException, PermissionDeniedException, RFC 9457, or domain error mapping. Not for client-side errors."
 ---
 
 # Litestar Exceptions
@@ -64,6 +64,7 @@ Use this skill for domain exception hierarchies, handler registration, and HTTP 
 ```python
 class ApplicationError(HTTPException):
     status_code = 500
+
 
 class ConflictError(ApplicationError):
     status_code = 409

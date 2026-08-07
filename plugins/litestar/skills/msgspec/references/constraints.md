@@ -45,6 +45,7 @@ PriceCents = Annotated[int, Meta(ge=0, multiple_of=1)]
 Port = Annotated[int, Meta(ge=1, le=65535)]
 Rating = Annotated[int, Meta(ge=1, le=5)]
 
+
 class Product(msgspec.Struct, kw_only=True):
     id: PositiveInt
     price_cents: PriceCents
@@ -73,6 +74,7 @@ Slug = Annotated[str, Meta(pattern=r"^[a-z0-9-]+$", min_length=1, max_length=64)
 SKU = Annotated[str, Meta(pattern=r"^[A-Z]{2}-\d{4}$")]
 UUIDStr = Annotated[str, Meta(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")]
 
+
 class Article(msgspec.Struct, kw_only=True):
     slug: Slug
     title: ShortStr
@@ -92,6 +94,7 @@ class Article(msgspec.Struct, kw_only=True):
 ```python
 Token = Annotated[bytes, Meta(min_length=32, max_length=32)]
 Blob = Annotated[bytes, Meta(max_length=65536)]
+
 
 class SecurePayload(msgspec.Struct):
     token: Token
@@ -177,7 +180,8 @@ ISODate = Annotated[
 ProductCode = Annotated[
     str,
     Meta(
-        min_length=3, max_length=20,
+        min_length=3,
+        max_length=20,
         pattern=r"^[A-Z0-9-]+$",
         title="Product Code",
         examples=["ABC-123", "XYZ-999"],
@@ -187,7 +191,8 @@ ProductCode = Annotated[
 Latitude = Annotated[
     float,
     Meta(
-        ge=-90.0, le=90.0,
+        ge=-90.0,
+        le=90.0,
         title="Latitude",
         extra_json_schema={"format": "double"},
     ),
@@ -196,11 +201,13 @@ Latitude = Annotated[
 Longitude = Annotated[
     float,
     Meta(
-        ge=-180.0, le=180.0,
+        ge=-180.0,
+        le=180.0,
         title="Longitude",
         extra_json_schema={"format": "double"},
     ),
 ]
+
 
 class Coordinate(msgspec.Struct, frozen=True, gc=False):
     lat: Latitude
@@ -216,8 +223,10 @@ import msgspec
 
 Price = Annotated[float, Meta(gt=0.0)]
 
+
 class Item(msgspec.Struct):
     price: Price
+
 
 try:
     msgspec.json.decode(b'{"price": -1.0}', type=Item)
@@ -241,17 +250,17 @@ from typing import Annotated
 from msgspec import Meta
 
 PositiveInt = Annotated[int, Meta(gt=0)]
-NonNegInt   = Annotated[int, Meta(ge=0)]
-Port        = Annotated[int, Meta(ge=1, le=65535)]
-Rating      = Annotated[int, Meta(ge=1, le=5)]
+NonNegInt = Annotated[int, Meta(ge=0)]
+Port = Annotated[int, Meta(ge=1, le=65535)]
+Rating = Annotated[int, Meta(ge=1, le=5)]
 
-Probability  = Annotated[float, Meta(ge=0.0, le=1.0)]
-Percentage   = Annotated[float, Meta(ge=0.0, le=100.0)]
-PriceCents   = Annotated[int, Meta(ge=0, multiple_of=1)]
+Probability = Annotated[float, Meta(ge=0.0, le=1.0)]
+Percentage = Annotated[float, Meta(ge=0.0, le=100.0)]
+PriceCents = Annotated[int, Meta(ge=0, multiple_of=1)]
 
-NonEmptyStr  = Annotated[str, Meta(min_length=1)]
-ShortStr     = Annotated[str, Meta(min_length=1, max_length=255)]
-Slug         = Annotated[str, Meta(pattern=r"^[a-z0-9-]+$", min_length=1, max_length=64)]
+NonEmptyStr = Annotated[str, Meta(min_length=1)]
+ShortStr = Annotated[str, Meta(min_length=1, max_length=255)]
+Slug = Annotated[str, Meta(pattern=r"^[a-z0-9-]+$", min_length=1, max_length=64)]
 
 NonEmptyList = Annotated[list, Meta(min_length=1)]
 ```

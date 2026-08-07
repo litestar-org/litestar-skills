@@ -116,9 +116,7 @@ async def get_or_create_session(
     existing = await service.get_session(app_name=app_name, user_id=user_id, session_id=session_id)
     if existing is not None:
         return existing
-    return await service.create_session(
-        app_name=app_name, user_id=user_id, session_id=session_id, state={}
-    )
+    return await service.create_session(app_name=app_name, user_id=user_id, session_id=session_id, state={})
 ```
 
 The ADK `Runner` then takes this `service` wherever it needs a `BaseSessionService`.

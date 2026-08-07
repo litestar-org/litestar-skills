@@ -35,5 +35,8 @@ jobs:
       - name: Check upstream imports strictly
         run: make check-upstream-imports-strict
 
+      - name: Check sample keyword arguments
+        run: make check-sample-kwargs
+
       - name: Run upstream package contracts
         run: make upstream-contracts

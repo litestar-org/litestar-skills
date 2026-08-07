@@ -18,9 +18,7 @@ pytest_plugins = ["pytest_databases.docker.postgres"]
 def test_postgres_connection(
     postgres_connection: psycopg.Connection,
 ) -> None:
-    row = postgres_connection.execute(
-        "SELECT current_database()"
-    ).fetchone()
+    row = postgres_connection.execute("SELECT current_database()").fetchone()
 
     assert row is not None
 ```

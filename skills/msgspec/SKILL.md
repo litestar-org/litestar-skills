@@ -24,17 +24,21 @@ validation. This guidance targets the immutable `0.21.1` release.
 ```python
 import msgspec
 
+
 # Basic struct
 class User(msgspec.Struct):
     id: int
     name: str
     email: str | None = None
 
+
 # Performance options
 class Event(msgspec.Struct, frozen=True, gc=False):
     """frozen=True: immutable + hashable. gc=False: skip GC for short-lived objects."""
+
     event_type: str
     payload: dict[str, object]
+
 
 # Keyword-only (recommended for >2 fields)
 class Config(msgspec.Struct, kw_only=True):
@@ -42,19 +46,23 @@ class Config(msgspec.Struct, kw_only=True):
     port: int = 5432
     ssl: bool = False
 
+
 # Array-like encoding (tuple encoding, more compact)
 class Point(msgspec.Struct, array_like=True):
     x: float
     y: float
 
+
 # Rename fields for serialization
 class ApiResponse(msgspec.Struct, rename="camel"):
-    user_id: int         # serialized as "userId"
-    created_at: str      # serialized as "createdAt"
+    user_id: int  # serialized as "userId"
+    created_at: str  # serialized as "createdAt"
+
 
 # Rename one field explicitly
 class Resource(msgspec.Struct):
     resource_id: int = msgspec.field(name="id")
+
 
 # Reject unknown fields at API boundaries
 class StrictInput(msgspec.Struct, forbid_unknown_fields=True):
@@ -71,6 +79,7 @@ from typing import Annotated
 import msgspec
 from msgspec import Meta
 
+
 class Product(msgspec.Struct):
     name: Annotated[str, Meta(min_length=1, max_length=100)]
     price: Annotated[float, Meta(gt=0)]
@@ -79,10 +88,12 @@ class Product(msgspec.Struct):
     batch_size: Annotated[int, Meta(multiple_of=5)]
     expires_at: Annotated[datetime, Meta(tz=True)]
 
+
 # Reusable constraint aliases
 PositiveInt = Annotated[int, Meta(gt=0)]
 NonEmptyStr = Annotated[str, Meta(min_length=1)]
 Percentage = Annotated[float, Meta(ge=0.0, le=100.0)]
+
 
 class Order(msgspec.Struct):
     id: PositiveInt
@@ -99,12 +110,12 @@ import msgspec
 encoder = msgspec.json.Encoder()
 decoder = msgspec.json.Decoder(User)
 
-data = encoder.encode(user)          # bytes
+data = encoder.encode(user)  # bytes
 user = decoder.decode(b'{"id":1,"name":"Alice"}')
 
 # Functional API (convenience, slightly slower)
 data = msgspec.json.encode(user)
-user = msgspec.json.decode(b'...', type=User)
+user = msgspec.json.decode(b"...", type=User)
 
 # MessagePack (binary, more compact)
 data = msgspec.msgpack.encode(user)
@@ -113,16 +124,19 @@ user = msgspec.msgpack.decode(data, type=User)
 # Hooks are only for unsupported custom types. datetime, UUID, Decimal, and
 # Enum are already supported.
 
+
 def enc_hook(obj: object) -> object:
     if isinstance(obj, complex):
         return (obj.real, obj.imag)
     raise NotImplementedError(f"Unsupported type: {type(obj)}")
+
 
 def dec_hook(target_type: type, obj: object) -> object:
     if target_type is complex:
         real, imag = obj
         return complex(real, imag)
     raise NotImplementedError(f"Unsupported type: {target_type}")
+
 
 encoder = msgspec.json.Encoder(enc_hook=enc_hook)
 decoder = msgspec.json.Decoder(MyStruct, dec_hook=dec_hook)
@@ -196,10 +210,12 @@ measurement = msgspec.convert(raw_measurement, Measurement, dec_hook=dec_hook)
 # Convert a dataclass or arbitrary object to a Struct by reading attributes
 from dataclasses import dataclass
 
+
 @dataclass
 class LegacyUser:
     id: int
     name: str
+
 
 legacy = LegacyUser(id=1, name="Alice")
 user = msgspec.convert(legacy, User, from_attributes=True)
@@ -225,7 +241,7 @@ DynamicModel = msgspec.defstruct("DynamicModel", fields, kw_only=True)
 # With defaults
 fields_with_defaults = [
     ("id", int),
-    ("active", bool, True),   # (name, type, default)
+    ("active", bool, True),  # (name, type, default)
 ]
 FlexModel = msgspec.defstruct("FlexModel", fields_with_defaults)
 ```
@@ -235,37 +251,46 @@ FlexModel = msgspec.defstruct("FlexModel", fields_with_defaults)
 ```python
 import msgspec
 
+
 # Default tag field is "type", tag value is the class name
 class Dog(msgspec.Struct, tag=True):
     name: str
     breed: str
 
+
 class Cat(msgspec.Struct, tag=True):
     name: str
     indoor: bool
+
 
 Animal = Dog | Cat
 
 # Deserialize: inspects "type" field to pick correct class
 animal = msgspec.json.decode(b'{"type":"Dog","name":"Rex","breed":"Lab"}', type=Animal)
 
+
 # Custom tag values
 class CreateEvent(msgspec.Struct, tag="create"):
     resource: str
+
 
 class DeleteEvent(msgspec.Struct, tag="delete"):
     resource: str
     soft: bool = True
 
+
 Event = CreateEvent | DeleteEvent
+
 
 # Custom tag field name
 class V1Request(msgspec.Struct, tag="v1", tag_field="version"):
     payload: str
 
+
 class V2Request(msgspec.Struct, tag="v2", tag_field="version"):
     payload: str
     metadata: dict[str, str] = {}
+
 
 Request = V1Request | V2Request
 ```
@@ -379,6 +404,7 @@ from msgspec import Meta
 NonEmptyStr = Annotated[str, Meta(min_length=1, max_length=255)]
 PositiveInt = Annotated[int, Meta(gt=0)]
 
+
 # --- Event variants (tagged union) ---
 class UserCreatedEvent(msgspec.Struct, tag="user.created", tag_field="event_type", kw_only=True, gc=False):
     event_id: uuid.UUID
@@ -386,11 +412,13 @@ class UserCreatedEvent(msgspec.Struct, tag="user.created", tag_field="event_type
     email: NonEmptyStr
     occurred_at: datetime
 
+
 class UserDeletedEvent(msgspec.Struct, tag="user.deleted", tag_field="event_type", kw_only=True, gc=False):
     event_id: uuid.UUID
     user_id: PositiveInt
     occurred_at: datetime
     reason: str | None = None
+
 
 UserEvent = UserCreatedEvent | UserDeletedEvent
 
@@ -398,11 +426,14 @@ UserEvent = UserCreatedEvent | UserDeletedEvent
 _encoder = msgspec.json.Encoder()
 _decoder = msgspec.json.Decoder(UserEvent)
 
+
 def encode_event(event: UserEvent) -> bytes:
     return _encoder.encode(event)
 
+
 def decode_event(data: bytes) -> UserEvent:
     return _decoder.decode(data)
+
 
 # --- Usage ---
 event = UserCreatedEvent(

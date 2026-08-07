@@ -64,6 +64,7 @@ For workspace-scoped apps, the workspace dimension lives in guards and channel n
 # domain/workspaces/guards.py
 async def requires_workspace_membership(connection, _) -> None: ...
 
+
 # domain/workspaces/controllers.py
 class WorkspaceController(Controller):
     path = "/api/workspaces/{workspace_id:uuid}"

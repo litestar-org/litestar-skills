@@ -25,8 +25,8 @@ TypeGenConfig(
     generate_sdk=True,
     generate_routes=True,
     generate_schemas=True,
-    generate_page_props=True,    # Inertia only
-    fail_on_error=None,          # fail builds, warn in dev
+    generate_page_props=True,  # Inertia only
+    fail_on_error=None,  # fail builds, warn in dev
     output="src/generated",
 )
 ```

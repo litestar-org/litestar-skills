@@ -13,14 +13,16 @@ from litestar.handlers import BaseRouteHandler
 
 
 async def requires_active_user(
-    connection: ASGIConnection, _: BaseRouteHandler,
+    connection: ASGIConnection,
+    _: BaseRouteHandler,
 ) -> None:
     if not connection.user or not connection.user.is_active:
         raise PermissionDeniedException("Authentication required")
 
 
 async def requires_superuser(
-    connection: ASGIConnection, _: BaseRouteHandler,
+    connection: ASGIConnection,
+    _: BaseRouteHandler,
 ) -> None:
     if not connection.user or not connection.user.is_superuser:
         raise PermissionDeniedException("Superuser permission required")
@@ -39,8 +41,10 @@ class AdminController(Controller):
 ```python
 from litestar.security.jwt import Token
 
+
 async def requires_jwt_auth(
-    connection: ASGIConnection, _: BaseRouteHandler,
+    connection: ASGIConnection,
+    _: BaseRouteHandler,
 ) -> None:
     auth = connection.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
@@ -62,7 +66,8 @@ For JWT auth as middleware (auto-loading the user onto `connection.user`), see [
 
 ```python
 async def requires_workspace_membership(
-    connection: ASGIConnection, _: BaseRouteHandler,
+    connection: ASGIConnection,
+    _: BaseRouteHandler,
 ) -> None:
     user = connection.user
     if user is None:
@@ -99,7 +104,8 @@ from litestar.exceptions import WebSocketException
 
 
 async def requires_websocket_auth(
-    connection: ASGIConnection, _: BaseRouteHandler,
+    connection: ASGIConnection,
+    _: BaseRouteHandler,
 ) -> None:
     token_str = connection.cookies.get("access_token")
     if not token_str:
@@ -130,7 +136,8 @@ membership check. Adapted from `_websocket.py:L72–105`.
 
 ```python
 async def requires_websocket_workspace_member(
-    connection: ASGIConnection, _: BaseRouteHandler,
+    connection: ASGIConnection,
+    _: BaseRouteHandler,
 ) -> None:
     user = getattr(connection.state, "user", None)
     if user is None:
@@ -152,7 +159,8 @@ match the token user. Adapted from `_websocket.py:L108–121`.
 
 ```python
 async def requires_websocket_user_subject(
-    connection: ASGIConnection, _: BaseRouteHandler,
+    connection: ASGIConnection,
+    _: BaseRouteHandler,
 ) -> None:
     user = getattr(connection.state, "user", None)
     if user is None:
@@ -169,7 +177,8 @@ Allows only users with a full-access role (e.g., admin / superuser). Adapted fro
 
 ```python
 async def requires_websocket_global_access(
-    connection: ASGIConnection, _: BaseRouteHandler,
+    connection: ASGIConnection,
+    _: BaseRouteHandler,
 ) -> None:
     user = getattr(connection.state, "user", None)
     if user is None:

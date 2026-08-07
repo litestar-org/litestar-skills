@@ -161,4 +161,5 @@ def test_shell_env_exposes_plugin_root(tmp_path: Path) -> None:
     assert isinstance(env, dict)
     plugin_root: str = env.get("LITESTAR_SKILLS_PLUGIN_ROOT", "")
     assert isinstance(plugin_root, str)
-    assert plugin_root.endswith("litestar-skills")
+    assert Path(plugin_root).is_dir()
+    assert (Path(plugin_root) / "skills").is_dir()

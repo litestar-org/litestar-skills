@@ -119,8 +119,8 @@ from advanced_alchemy.filters import LimitOffset, OrderBy, SearchFilter
 user = await service.create({"email": "test@example.com", "name": "Test"})
 
 # Get by ID
-user = await service.get(user_id)                          # Raises NotFoundError
-user = await service.get_one_or_none(id=user_id)           # Returns None
+user = await service.get(user_id)  # Raises NotFoundError
+user = await service.get_one_or_none(id=user_id)  # Returns None
 
 # Get by field
 user = await service.get_one_or_none(email="test@example.com")

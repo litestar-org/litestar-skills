@@ -60,19 +60,19 @@ Three things make this different from simple hatch-binary:
 DEFAULT_URLS: dict[str, str] = {
     "x86_64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
     "aarch64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz",
-    "x86_64-apple-darwin":       "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-x86_64-apple-darwin-install_only_stripped.tar.gz",
-    "aarch64-apple-darwin":      "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-aarch64-apple-darwin-install_only_stripped.tar.gz",
-    "x86_64-pc-windows-msvc":    "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+    "x86_64-apple-darwin": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-x86_64-apple-darwin-install_only_stripped.tar.gz",
+    "aarch64-apple-darwin": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-aarch64-apple-darwin-install_only_stripped.tar.gz",
+    "x86_64-pc-windows-msvc": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
 }
 
 # uv --python-platform values (NOT PEP 425 wheel tags)
 # manylinux_2_28 required because duckdb only provides wheels for glibc 2.28+
 DEFAULT_PLATFORMS: dict[str, str] = {
-    "x86_64-unknown-linux-gnu":  "x86_64-manylinux_2_28",
+    "x86_64-unknown-linux-gnu": "x86_64-manylinux_2_28",
     "aarch64-unknown-linux-gnu": "aarch64-manylinux_2_28",
-    "x86_64-apple-darwin":       "x86_64-apple-darwin",
-    "aarch64-apple-darwin":      "aarch64-apple-darwin",
-    "x86_64-pc-windows-msvc":    "x86_64-pc-windows-msvc",
+    "x86_64-apple-darwin": "x86_64-apple-darwin",
+    "aarch64-apple-darwin": "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc": "x86_64-pc-windows-msvc",
 }
 ```
 

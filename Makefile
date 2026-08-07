@@ -229,6 +229,12 @@ check-upstream-imports-strict:                      ## CI import check; fail whe
 	@uv run python tools/check-upstream-imports.py --strict-missing
 	@echo "${OK} Strict upstream imports verified ✨"
 
+.PHONY: check-sample-kwargs
+check-sample-kwargs:                                ## Verify keyword arguments in skill code samples match installed upstream signatures
+	@echo "${INFO} Checking sample keyword arguments... 🔍"
+	@uv run python tools/check-sample-kwargs.py
+	@echo "${OK} Sample keyword arguments verified ✨"
+
 .PHONY: check-upstream-releases
 check-upstream-releases:                            ## Verify audited releases match PyPI, validation floors, and uv.lock
 	@echo "${INFO} Checking audited upstream releases... 🔍"
@@ -260,7 +266,7 @@ validate-codex-manifest:                            ## Validate Codex marketplac
 	@echo "${OK} Codex manifests valid"
 
 .PHONY: validate
-validate: agents-check validate-skills sync-manifests validate-codex-manifest check-upstream-imports  ## Run all repo-integrity validators
+validate: agents-check validate-skills sync-manifests validate-codex-manifest check-upstream-imports check-sample-kwargs  ## Run all repo-integrity validators
 	@echo "${OK} All validators passed ✨"
 
 # -----------------------------------------------------------------------------

@@ -70,12 +70,7 @@ stmt = (
 )
 
 # INSERT
-stmt = (
-    sql.insert("users")
-    .columns("name", "email")
-    .values(name="Alice", email="alice@example.com")
-    .to_statement()
-)
+stmt = sql.insert("users").columns("name", "email").values(name="Alice", email="alice@example.com").to_statement()
 
 # MERGE / upsert
 stmt = (
@@ -214,6 +209,7 @@ from sqlspec.core.filters import LimitOffsetFilter, OrderByFilter
 
 # --- Typed model ---
 
+
 @dataclass
 class User:
     id: int
@@ -237,6 +233,7 @@ db_manager.add_config(config)
 
 # --- Query execution ---
 
+
 async def list_active_users(page: int = 1, page_size: int = 25) -> list[User]:
     filters = [
         OrderByFilter(field_name="name", sort_order="asc"),
@@ -255,9 +252,7 @@ async def list_active_users(page: int = 1, page_size: int = 25) -> list[User]:
 
 async def get_user_count() -> int:
     async with db_manager.provide_session(config) as db:
-        count = await db.select_value(
-            "SELECT COUNT(*) FROM users WHERE active = $1", True
-        )
+        count = await db.select_value("SELECT COUNT(*) FROM users WHERE active = $1", True)
         return count
 ```
 

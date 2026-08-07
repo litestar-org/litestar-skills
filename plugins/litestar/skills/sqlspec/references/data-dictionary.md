@@ -80,9 +80,7 @@ from sqlspec.data_dictionary import SystemMetadataRequest
 
 
 capabilities = await db.data_dictionary.get_system_metadata_capabilities(db)
-table_stats = next(
-    item for item in capabilities if item.domain == "table_statistics"
-)
+table_stats = next(item for item in capabilities if item.domain == "table_statistics")
 if table_stats.support == "supported":
     request = SystemMetadataRequest(
         "table_statistics",

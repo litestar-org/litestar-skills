@@ -40,13 +40,13 @@ def create_saq_plugin() -> SAQPlugin:
     settings = get_settings()
     return SAQPlugin(
         config=SAQConfig(
-            use_server_lifespan=True,            # worker child processes follow server lifespan
+            use_server_lifespan=True,  # worker child processes follow server lifespan
             web_enabled=settings.saq.web_enabled,
-            enable_otel=None,                    # auto-detect if OpenTelemetry is installed and configured
+            enable_otel=None,  # auto-detect if OpenTelemetry is installed and configured
             queue_configs=[
                 QueueConfig(
                     name="default",
-                    dsn=settings.redis.url,      # redis://... — Redis broker
+                    dsn=settings.redis.url,  # redis://... — Redis broker
                     tasks=["app.domain.system.tasks.send_email"],
                     scheduled_tasks=[
                         CronJob(
@@ -77,7 +77,7 @@ def create_saq_plugin_pg() -> SAQPlugin:
             queue_configs=[
                 QueueConfig(
                     name="default",
-                    dsn=settings.database.url,   # postgresql://... — PG broker
+                    dsn=settings.database.url,  # postgresql://... — PG broker
                     tasks=["app.domain.system.tasks.send_email"],
                 ),
             ],

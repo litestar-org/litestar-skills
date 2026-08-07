@@ -92,6 +92,7 @@ from google.cloud.sql.connector import Connector
 
 connector = Connector()
 
+
 async def get_connection():
     return await connector.connect_async(
         "my-project:us-central1:my-instance",

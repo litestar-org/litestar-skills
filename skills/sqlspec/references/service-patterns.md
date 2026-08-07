@@ -130,6 +130,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from sqlspec.core.filters import FilterTypes
 
+
 async def list_orders(self, *filters: "FilterTypes") -> "OffsetPagination[Order]":
     return await self.paginate(
         db_manager.get_sql("list-orders"),
@@ -168,16 +169,18 @@ from uuid import UUID
 
 from app.schemas import Order
 
-dependencies = create_filter_dependencies({
-    "id_filter": UUID,
-    "search": "name,reference",
-    "pagination_type": "limit_offset",
-    "pagination_size": 20,
-    "created_at": True,
-    "updated_at": True,
-    "sort_field": "created_at",
-    "sort_order": "desc",
-})
+dependencies = create_filter_dependencies(
+    {
+        "id_filter": UUID,
+        "search": "name,reference",
+        "pagination_type": "limit_offset",
+        "pagination_size": 20,
+        "created_at": True,
+        "updated_at": True,
+        "sort_field": "created_at",
+        "sort_order": "desc",
+    }
+)
 ```
 
 ### Handler signature — Dishka + Inject pattern

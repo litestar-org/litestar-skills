@@ -8,17 +8,18 @@
 # PROHIBITED - Never use future annotations
 from __future__ import annotations
 
+
 # REQUIRED - Stringified type hints for non-builtins
-def process_config(config: "SQLConfig") -> "SessionResult":
-    ...
+def process_config(config: "SQLConfig") -> "SessionResult": ...
+
 
 # REQUIRED - PEP 604 pipe syntax for unions
-def get_value(key: str) -> str | None:
-    ...
+def get_value(key: str) -> str | None: ...
+
 
 # REQUIRED - Stringified built-in generics
-def get_items() -> "list[str]":
-    ...
+def get_items() -> "list[str]": ...
+
 
 # REQUIRED - Tuple for __all__ definitions
 __all__ = ("MyClass", "my_function", "CONSTANT")
@@ -64,10 +65,10 @@ def test_config_validation():
     config = AsyncpgConfig(connection_config={"dsn": "postgresql://..."})
     assert config.is_async is True
 
+
 # BAD - Class-based test (PROHIBITED)
 class TestConfig:
-    def test_validation(self):
-        ...
+    def test_validation(self): ...
 ```
 
 **Guidelines:**
@@ -83,7 +84,7 @@ Use guards from `sqlspec.utils.type_guards` instead of `hasattr()`:
 
 ```python
 # BAD - Defensive programming
-if hasattr(obj, 'method') and obj.method:
+if hasattr(obj, "method") and obj.method:
     result = obj.method()
 
 # GOOD - Use type guards
@@ -144,6 +145,7 @@ _DEFAULT_MAX_RETRIES: Final[int] = 10
 _DEFAULT_BASE_DELAY_MS: Final[float] = 50.0
 _DEFAULT_ENABLE_LOGGING: Final[bool] = True
 
+
 @dataclass(frozen=True)
 class RetryConfig:
     """Configuration with factory method pattern."""
@@ -188,9 +190,11 @@ Avoid `@runtime_checkable` on Protocol classes in mypyc-compiled modules:
 # BAD - Incompatible with mypyc
 from typing import Protocol, runtime_checkable
 
+
 @runtime_checkable  # This breaks mypyc
 class MyProtocol(Protocol):
     def method(self) -> None: ...
+
 
 # GOOD - Remove decorator if isinstance checks aren't needed
 class MyProtocol(Protocol):

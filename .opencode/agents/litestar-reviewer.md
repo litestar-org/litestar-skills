@@ -55,18 +55,19 @@ Apply each criterion against THAT stack only. A `sqlspec` project that uses `SQL
 
 7. **Settings** — one consistent pattern per project: `@dataclass(frozen=True)` + `get_env()` + `@lru_cache` (canonical when Pydantic is not already in-stack) OR `pydantic_settings.BaseSettings` (canonical when Pydantic is already in-stack) — pick the branch that matches your project. Flag mixed patterns (half-dataclass, half-`BaseSettings`) and `msgspec.Struct` used for runtime config.
 
-8. **Async / background work** — all I/O handlers are `async def`; never use `asyncio.create_task()` for background work. Dispatch to a queue worker instead:
-   - SAQ + Redis broker (canonical on most stacks)
+8. **Async / background work** — all I/O handlers are `async def`; never use `asyncio.create_task()` for background work. Dispatch to a queue worker instead. `litestar-queues` and SAQ are parallel first-party choices; review against whichever the project picked and do not push one onto a project committed to the other:
+   - `litestar-queues` with a SQLSpec, Advanced Alchemy, Redis, or Valkey queue backend — see `skills/litestar-queues/`
+   - SAQ + Redis broker (canonical on most SAQ stacks)
    - SAQ + Postgres broker (single-DB deploys) — see `skills/litestar-saq/`
-   - Custom PG-native `TaskService` pattern (`FOR UPDATE SKIP LOCKED` + `pg_notify`) when SAQ is rejected
+   - Custom PG-native `TaskService` pattern (`FOR UPDATE SKIP LOCKED` + `pg_notify`) when neither is adopted
 
 9. **Controllers** — domain-clustered (`/api/accounts`, `/api/teams`), not HTTP-method-clustered.
 
 10. **Plugins** — first-party plugins where available, matching the project's chosen stack:
     - ASGI server: Granian or uvicorn (the one the project picked)
-    - Background work: SAQ (Redis or PG broker) where SAQ is used
+    - Background work: `litestar-queues` or SAQ (Redis or PG broker) — parallel first-party choices; review against whichever the project picked, do not push one onto a project committed to the other
     - Frontend: `litestar-vite` when a frontend is present
-    - Other ecosystem plugins: `litestar-mcp`, `litestar-email`, etc.
+    - Other ecosystem plugins: `litestar-security`, `litestar-mcp`, `litestar-email`, etc.
     - Data access: `advanced-alchemy` and `sqlspec` are parallel first-party choices — do not prefer one over the other in projects already committed to the other
 
 11. **Return types** — explicit annotations on all handler return values.

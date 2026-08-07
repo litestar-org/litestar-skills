@@ -60,6 +60,7 @@ Use this skill for WebSockets, SSE, ChannelsPlugin backends, realtime event cont
 ```python
 from litestar import websocket
 
+
 @websocket("/ws")
 async def stream(socket: WebSocket) -> None:
     await socket.accept()

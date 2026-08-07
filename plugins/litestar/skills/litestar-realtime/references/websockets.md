@@ -50,8 +50,8 @@ async def handle_websocket(socket: WebSocket) -> None:
     try:
         # 2. Send/receive loop
         while True:
-            data = await socket.receive_json()       # receive from client
-            await socket.send_json({"status": "ok"}) # send to client
+            data = await socket.receive_json()  # receive from client
+            await socket.send_json({"status": "ok"})  # send to client
     except WebSocketDisconnect:
         # 3. Client closed connection - normal, no logging needed
         pass
@@ -122,7 +122,8 @@ from litestar.security.jwt import Token
 
 
 async def requires_websocket_auth(
-    connection: ASGIConnection, _: BaseRouteHandler,
+    connection: ASGIConnection,
+    _: BaseRouteHandler,
 ) -> None:
     """Authenticate WebSocket via query param token."""
     token_str = connection.query_params.get("token")
@@ -157,7 +158,8 @@ Layer guards to enforce tenant isolation. Each guard checks a different level of
 
 ```python
 async def requires_websocket_membership(
-    connection: ASGIConnection, _: BaseRouteHandler,
+    connection: ASGIConnection,
+    _: BaseRouteHandler,
 ) -> None:
     """Verify user is a member of the workspace in the path."""
     user = getattr(connection.state, "user", None)
@@ -178,7 +180,8 @@ async def requires_websocket_membership(
 
 
 async def requires_websocket_subject(
-    connection: ASGIConnection, _: BaseRouteHandler,
+    connection: ASGIConnection,
+    _: BaseRouteHandler,
 ) -> None:
     """Restrict user stream subscriptions to the authenticated subject."""
     user = getattr(connection.state, "user", None)
@@ -197,6 +200,7 @@ class WorkspaceStreamController(Controller):
     guards = [requires_websocket_auth, requires_websocket_membership]  # shared
     # ...
 
+
 class RealtimeStreamController(Controller):
     guards = [requires_websocket_auth]  # shared base auth
 
@@ -204,15 +208,13 @@ class RealtimeStreamController(Controller):
         path="/users/{user_id:uuid}/stream",
         guards=[requires_websocket_subject],  # per-handler
     )
-    async def stream_user_events(self, socket: WebSocket, user_id: UUID) -> None:
-        ...
+    async def stream_user_events(self, socket: WebSocket, user_id: UUID) -> None: ...
 
     @websocket(
         path="/global/stream",
         guards=[requires_websocket_global_access],  # per-handler
     )
-    async def stream_global_events(self, socket: WebSocket) -> None:
-        ...
+    async def stream_global_events(self, socket: WebSocket) -> None: ...
 ```
 
 ---
@@ -283,11 +285,11 @@ from redis.asyncio import Redis
 
 channels = ChannelsPlugin(
     backend=RedisChannelsPubSubBackend(redis=Redis.from_url("redis://localhost:6379/0")),
-    channels=["notifications", "workspace:*"],   # subscribable channel names / globs
-    arbitrary_channels_allowed=True,             # allow dynamic channels
-    create_ws_route_handlers=True,               # exposes /ws/{channel} automatically
+    channels=["notifications", "workspace:*"],  # subscribable channel names / globs
+    arbitrary_channels_allowed=True,  # allow dynamic channels
+    create_ws_route_handlers=True,  # exposes /ws/{channel} automatically
     ws_handler_base_path="/ws",
-    subscriber_max_backlog=1000,                 # buffer messages during slow consumers
+    subscriber_max_backlog=1000,  # buffer messages during slow consumers
     subscriber_backlog_strategy="backoff",
 )
 
@@ -614,7 +616,7 @@ from redis.asyncio import Redis
 async def main() -> None:
     backend = RedisChannelsPubSubBackend(redis=Redis.from_url("redis://localhost:6379/0"))
     channels = ChannelsPlugin(backend=backend, channels=[], arbitrary_channels_allowed=True)
-    async with channels:                          # lifespan context — opens pub/sub
+    async with channels:  # lifespan context — opens pub/sub
         await channels.wait_published({"type": "deploy.finished"}, "notifications")
 
 
@@ -644,7 +646,8 @@ class SqlExecutionLogObserver:
             return
         channel = f"workspace:{workspace_id}:etl"
         await self.backend.publish(
-            to_json(payload, as_bytes=True), channels=[channel],
+            to_json(payload, as_bytes=True),
+            channels=[channel],
         )
 ```
 

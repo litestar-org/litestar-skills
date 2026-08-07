@@ -9,20 +9,26 @@ Testing patterns for Python (pytest) and TypeScript (Vitest).
 ```python
 import pytest
 
+
 # Function-based tests (preferred over class-based)
 def test_addition():
     assert 1 + 1 == 2
+
 
 def test_division_by_zero():
     with pytest.raises(ZeroDivisionError):
         1 / 0
 
+
 # Parametrized tests
-@pytest.mark.parametrize("input,expected", [
-    ("hello", 5),
-    ("", 0),
-    ("world", 5),
-])
+@pytest.mark.parametrize(
+    "input,expected",
+    [
+        ("hello", 5),
+        ("", 0),
+        ("world", 5),
+    ],
+)
 def test_string_length(input: str, expected: int):
     assert len(input) == expected
 ```
@@ -32,6 +38,7 @@ def test_string_length(input: str, expected: int):
 ```python
 import pytest
 from httpx import AsyncClient
+
 
 @pytest.mark.anyio
 async def test_async_endpoint(client: AsyncClient):
@@ -47,15 +54,18 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from collections.abc import AsyncGenerator
 
+
 @pytest.fixture
 def sample_user() -> User:
     return User(name="Test", email="test@example.com")
+
 
 @pytest.fixture
 async def db_session(engine) -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSession(engine) as session:
         yield session
         await session.rollback()
+
 
 @pytest.fixture(scope="module")
 def client(app) -> TestClient:
@@ -67,12 +77,14 @@ def client(app) -> TestClient:
 ```python
 from unittest.mock import AsyncMock, MagicMock, patch
 
+
 def test_with_mock():
     with patch("module.external_api") as mock_api:
         mock_api.return_value = {"status": "ok"}
         result = function_that_calls_api()
         assert result["status"] == "ok"
         mock_api.assert_called_once()
+
 
 @pytest.fixture
 def mock_service():
@@ -86,9 +98,11 @@ def mock_service():
 ```python
 from litestar.testing import TestClient
 
+
 def test_get_items(client: TestClient):
     response = client.get("/items")
     assert response.status_code == 200
+
 
 def test_create_item(client: TestClient):
     response = client.post("/items", json={"name": "Test"})

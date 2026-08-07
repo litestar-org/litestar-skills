@@ -162,7 +162,7 @@ return ViteConfig(
     runtime=RuntimeConfig(executor="bun", trusted_proxies="*"),
     paths=PathConfig(
         root=BASE_DIR.parent,
-        bundle_dir=Path("app/domain/web/public"),   # ← inside `app/` package
+        bundle_dir=Path("app/domain/web/public"),  # ← inside `app/` package
         resource_dir=Path("resources"),
     ),
 )

@@ -187,31 +187,13 @@ from dataclasses import dataclass, field
 
 @dataclass
 class VertexAISettings:
-    PROJECT_ID: str = field(
-        default_factory=lambda: os.getenv("VERTEX_AI_PROJECT_ID", "")
-    )
-    LOCATION: str = field(
-        default_factory=lambda: os.getenv("VERTEX_AI_LOCATION") or "us-central1"
-    )
-    API_KEY: str | None = field(
-        default_factory=lambda: (
-            os.getenv("VERTEX_AI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        )
-    )
-    EMBEDDING_MODEL: str = field(
-        default_factory=lambda: os.getenv(
-            "VERTEX_AI_EMBEDDING_MODEL", "gemini-embedding-001"
-        )
-    )
+    PROJECT_ID: str = field(default_factory=lambda: os.getenv("VERTEX_AI_PROJECT_ID", ""))
+    LOCATION: str = field(default_factory=lambda: os.getenv("VERTEX_AI_LOCATION") or "us-central1")
+    API_KEY: str | None = field(default_factory=lambda: os.getenv("VERTEX_AI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+    EMBEDDING_MODEL: str = field(default_factory=lambda: os.getenv("VERTEX_AI_EMBEDDING_MODEL", "gemini-embedding-001"))
     EMBEDDING_DIMENSIONS: int = 768
-    CHAT_MODEL: str = field(
-        default_factory=lambda: os.getenv(
-            "VERTEX_AI_CHAT_MODEL", "gemini-1.5-flash-001"
-        )
-    )
-    CACHE_TTL_SECONDS: int = field(
-        default_factory=lambda: int(os.getenv("VERTEX_AI_CACHE_TTL_SECONDS", "3600"))
-    )
+    CHAT_MODEL: str = field(default_factory=lambda: os.getenv("VERTEX_AI_CHAT_MODEL", "gemini-1.5-flash-001"))
+    CACHE_TTL_SECONDS: int = field(default_factory=lambda: int(os.getenv("VERTEX_AI_CACHE_TTL_SECONDS", "3600")))
 ```
 
 ## pgvector branch (short)

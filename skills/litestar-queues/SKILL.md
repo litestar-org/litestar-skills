@@ -1,11 +1,11 @@
 ---
 name: litestar-queues
-description: "Auto-activate for litestar_queues, QueuePlugin, QueueConfig, WorkerConfig, QueueService, @task, QueuedBackgroundTask, QueueEventsConfig, SQLAlchemyBackendConfig, SQLSpecBackendConfig, litestar queues run/run-task/run-maintenance/status/scheduler-health, queue backends, workers, schedules, uniqueness, maintenance, or task progress events. Not for litestar-saq/SAQ, Celery, RQ, or Dramatiq — those use different APIs and worker lifecycles."
+description: "Auto-activate for litestar_queues, QueuePlugin, QueueConfig, WorkerConfig, QueueService, @task, QueuedBackgroundTask, QueueEventsConfig, SQLAlchemyBackendConfig, SQLSpecBackendConfig, litestar queues run/run-consumer/run-task/run-maintenance/status/scheduler-health, schedules, uniqueness, maintenance, or task progress events. Not for litestar-saq/SAQ, Celery, RQ, or Dramatiq."
 ---
 
 # litestar-queues
 
-`litestar-queues` 0.5.0 is the first-party Litestar worker abstraction for task registration, durable queue state, worker lifecycle, schedules, uniqueness, bounded maintenance, and application-facing task events.
+`litestar-queues` 0.8.0 is the first-party Litestar worker abstraction for task registration, durable queue state, worker lifecycle, schedules, uniqueness, bounded maintenance, and application-facing task events.
 
 Keep persistence and placement separate:
 
@@ -50,13 +50,23 @@ app = Litestar(
     route_handlers=[create_sync_job],
     plugins=[
         QueuePlugin(
-            QueueConfig(worker=WorkerConfig(run_in_app=True)),
+            QueueConfig(worker=WorkerConfig(placement="server")),
         ),
     ],
 )
 ```
 
-The defaults use memory persistence, local execution, and an in-app worker. Keep that shape for tests, development, and small single-process deployments only.
+`QueueConfig()` with no arguments defaults to `queue_backend="ephemeral"`, `execution_backend="local"`, and `placement="server"` — a private per-invocation SQLite database plus one CLI-owned worker process, with no broker, port, or extra dependency. Keep that shape for tests, development, and small single-process deployments only.
+
+Process-local `"memory"` storage is no longer the default and must be asked for explicitly, together with a placement that shares the process:
+
+```python
+from litestar_queues import QueueConfig, WorkerConfig
+
+QueueConfig(queue_backend="memory", worker=WorkerConfig(placement="asgi"))
+```
+
+Storage, execution, and placement combinations that cannot work are rejected at startup with a message naming the fix, rather than failing at first claim.
 
 ### Task Options, Scheduling, and Uniqueness
 
@@ -80,8 +90,7 @@ async def render_report(report_id: str, *, format: str = "pdf") -> str:
 
 
 @task("reports.refresh", interval=timedelta(minutes=15), jitter=30)
-async def refresh_reports() -> None:
-    ...
+async def refresh_reports() -> None: ...
 
 
 async def queue_report(queue_service: QueueService, report_id: str) -> str:
@@ -118,7 +127,7 @@ from litestar_queues import QueueConfig, WorkerConfig
 queue_config = QueueConfig(
     queue_backend=...,  # shared persistent backend
     worker=WorkerConfig(
-        run_in_app=False,
+        placement="external",
         batch_size=10,
         max_concurrency=4,
         queues=("accounts", "reports"),
@@ -132,27 +141,39 @@ queue_config = QueueConfig(
 
 ```bash
 LITESTAR_APP=app:app litestar queues run --queue reports --max-concurrency 4 --drain-timeout 60
+LITESTAR_APP=app:app litestar queues run-consumer --backend sqs --max-concurrency 4 --drain-timeout 60
 LITESTAR_APP=app:app litestar queues status --json
 LITESTAR_APP=app:app litestar queues scheduler-health --minutes 5
 ```
 
-`WorkerConfig.run_in_app=True` starts a worker in the Litestar lifespan. Set it to `False` when web and worker processes scale separately. Standalone workers use `WorkerConfig.queues`, `max_concurrency`, and `graceful_shutdown_timeout` unless CLI flags override them.
+`WorkerConfig.placement` decides which process owns the worker. `"server"` (the default) gives each `litestar run` invocation exactly one worker in the CLI server lifespan. `"asgi"` starts one worker per ASGI worker inside its own application lifespan, so the count multiplies with the web-worker count. `"external"` starts nothing automatically — use it when web and worker processes scale separately and a process manager runs `litestar queues run`. Standalone workers use `WorkerConfig.queues`, `max_concurrency`, and `graceful_shutdown_timeout` unless CLI flags override them.
 
 The worker adaptively backs off empty polling from `poll_interval` toward `poll_backoff_max`, using `poll_backoff_multiplier` and `poll_jitter`. Backend notifications can end the wait early; they never replace polling or durable state checks.
 
 ### Backend Selection
 
+Queue backends own persistence:
+
 | Existing stack or need | Queue backend | Import |
 | --- | --- | --- |
-| Tests and single-process local apps | `"memory"` | Core package |
+| Default; dev and single-invocation apps | `"ephemeral"` | Core package (stdlib `sqlite3`) |
+| Process-local tests, shared-process placement only | `"memory"` | Core package |
 | SQLSpec-managed SQL persistence | `SQLSpecBackendConfig(...)` | `litestar_queues.backends.sqlspec` |
 | Advanced Alchemy / SQLAlchemy models | `SQLAlchemyBackendConfig(...)` | `litestar_queues.backends.advanced_alchemy` |
 | Existing Redis infrastructure | `RedisBackendConfig(...)` | `litestar_queues.backends.redis` |
 | Existing Valkey infrastructure | `ValkeyBackendConfig(...)` | `litestar_queues.backends.valkey` |
-| Inline completion in tests/scripts | Any queue backend + `"immediate"` execution | Core package |
-| Isolated Google Cloud Run Jobs | Persistent queue backend + `CloudRunExecutionConfig(...)` | `litestar_queues.execution.cloudrun` |
 
-Match the project's existing data stack. Memory cannot coordinate separate processes. Cloud Run is an execution backend, never queue persistence.
+Execution backends decide where a claimed task runs, and never own queue state:
+
+| Need | Execution backend | Import |
+| --- | --- | --- |
+| Default in-process workers | `"local"` | Core package |
+| Inline completion in tests/scripts | `"immediate"` | Core package |
+| Isolated Google Cloud Run Jobs | `CloudRunExecutionConfig(...)` | `litestar_queues.execution.cloudrun` |
+| Serverless delivery with no worker process | `CloudTasksExecutionConfig(...)` | `litestar_queues.execution.cloudtasks` |
+| Amazon SQS delivery | `SqsExecutionConfig(...)` | `litestar_queues.execution.sqs` |
+
+Match the project's existing data stack. Memory cannot coordinate separate processes. See [Execution Backends](references/execution-backends.md) for the managed transports.
 
 ### SQLSpec Backend
 
@@ -325,8 +346,7 @@ from litestar_queues import QueuedBackgroundTask, task
 
 
 @task("imports.process")
-async def process_import(path: str) -> None:
-    ...
+async def process_import(path: str) -> None: ...
 
 
 @post("/imports")
@@ -380,10 +400,10 @@ async def create_import() -> Response[dict[str, str]]:
 
 ## Validation Checkpoint
 
-- [ ] The dependency floor is `litestar-queues>=0.5.0`
+- [ ] The dependency floor is `litestar-queues>=0.8.0`
 - [ ] `QueuePlugin` receives one `QueueConfig`
 - [ ] Worker options live under `QueueConfig.worker`
-- [ ] `WorkerConfig.run_in_app` matches the deployment topology
+- [ ] `WorkerConfig.placement` matches the deployment topology
 - [ ] Standalone workers use a shared persistent queue backend
 - [ ] The backend matches the project's SQLSpec, Advanced Alchemy, Redis, or Valkey stack
 - [ ] SQLSpec uses `sqlspec_config` and the normal migration workflow
@@ -449,7 +469,7 @@ queue_config = QueueConfig(
     queue_backend=SQLSpecBackendConfig(sqlspec_config=sqlspec_config),
     execution_backend="local",
     worker=WorkerConfig(
-        run_in_app=False,
+        placement="external",
         max_concurrency=4,
         queues=("reports",),
     ),
@@ -478,6 +498,11 @@ LITESTAR_APP=app:app litestar queues run-maintenance --json
 
 ## References Index
 
+- **[Execution Backends](references/execution-backends.md)** — local, immediate, Cloud Run, Cloud Tasks, SQS, delivery fencing, and lost-delivery repair.
+- **[Namespacing and Expiry](references/namespacing.md)** — `namespace=`, not-started deadlines and the `expired` state, event-stream configuration.
+
+## Cross-References
+
 - **[litestar](../litestar/SKILL.md)** — Litestar app setup, plugin lists, DI, and lifespan.
 - **[litestar-routing](../litestar-routing/SKILL.md)** — Route handlers and controllers for enqueue endpoints.
 - **[litestar-di](../litestar-di/SKILL.md)** — `NamedDependency` and service injection.
@@ -490,14 +515,14 @@ LITESTAR_APP=app:app litestar queues run-maintenance --json
 
 ## Official References
 
-- <https://github.com/cofin/litestar-queues/tree/v0.5.0>
-- <https://github.com/cofin/litestar-queues/releases/tag/v0.5.0>
-- <https://github.com/cofin/litestar-queues/blob/v0.5.0/src/litestar_queues/config.py>
-- <https://github.com/cofin/litestar-queues/blob/v0.5.0/src/litestar_queues/task.py>
-- <https://github.com/cofin/litestar-queues/blob/v0.5.0/src/litestar_queues/_cli.py>
-- <https://github.com/cofin/litestar-queues/blob/v0.5.0/src/litestar_queues/backends/sqlspec/config.py>
-- <https://github.com/cofin/litestar-queues/blob/v0.5.0/src/litestar_queues/backends/advanced_alchemy/config.py>
-- <https://github.com/cofin/litestar-queues/blob/v0.5.0/src/litestar_queues/maintenance.py>
+- <https://github.com/cofin/litestar-queues/tree/v0.8.0>
+- <https://github.com/cofin/litestar-queues/releases/tag/v0.8.0>
+- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/config.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/task.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/_cli.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/backends/sqlspec/config.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/backends/advanced_alchemy/config.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/maintenance.py>
 
 ## Shared Styleguide Baseline
 

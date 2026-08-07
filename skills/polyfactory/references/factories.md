@@ -198,8 +198,7 @@ import pytest
 
 
 @pytest.mark.parametrize("contact", list(ContactFactory.coverage()))
-def test_contact_dispatch(contact: Contact) -> None:
-    ...
+def test_contact_dispatch(contact: Contact) -> None: ...
 ```
 
 Optional fields contribute both the wrapped form and `None` to coverage. Collection coverage contains the available child variants, while `__min_collection_length__` and `__max_collection_length__` are ignored. Recursive-model coverage is unsupported. For exhaustive input-space exploration, use [Hypothesis](https://hypothesis.readthedocs.io/).

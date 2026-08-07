@@ -157,6 +157,7 @@ Present this menu:
 9. **pytest-databases** — Container-based database test fixtures
 10. **litestar-deployment** — Docker / Railway / K8s / Cloud Run / systemd scaffolding
 11. **litestar-autowire** — Domain-package controller, listener, and optional task discovery
+12. **litestar-security** — Declarative auth: sessions, MFA, passkeys, OAuth/OIDC, role/scope guards, CSP
 
 For each selected library:
 
