@@ -16,16 +16,8 @@ from sqlspec.loader import SQLFileLoader
 loader = SQLFileLoader()
 loader.load_sql("./sql")
 
-# Base query loaded from file (e.g., sql/users.sql)
-# -- name: list-users
-# SELECT u.id, u.name, u.email, u.status, u.created_at
-# FROM users u
-# JOIN teams t ON u.team_id = t.id
-
 base = loader.get("list-users")
 
-# The SQL object supports chaining — append WHERE/ORDER BY/LIMIT
-# directly to the loaded statement via the AST
 query = (
     base.where_eq("u.status", "active")
     .where("u.created_at > :since", since=cutoff_date)
@@ -33,7 +25,6 @@ query = (
     .limit(50)
 )
 
-# Same base query, different filters for a different use case
 admin_query = base.where_eq("t.name", "engineering").where_in("u.role", ["admin", "superadmin"]).order_by("u.name")
 ```
 
@@ -44,17 +35,13 @@ from sqlspec.core.filters import LimitOffsetFilter, OrderByFilter, SearchFilter
 
 base = loader.get("list-users")
 
-# Filters compose with the base query at execution time
 filters = [
     SearchFilter(field_name="name", value="alice"),
     OrderByFilter(field_name="created_at", sort_order="desc"),
     LimitOffsetFilter(limit=20, offset=0),
 ]
 
-# The driver applies filters to the AST before execution
 rows = await db_session.select(base, *filters, schema_type=User)
-
-# Or with pagination (returns items + total count)
 rows, total = await db_session.select_with_total(base, *filters, schema_type=User)
 ```
 
@@ -116,8 +103,7 @@ query = (
     .where("total > 100")
 )
 
-# Alternative with_ syntax
-query = (
+query_with = (
     sql.select("*")
     .with_("top_customers", "SELECT user_id, SUM(total) as total FROM orders GROUP BY user_id")
     .from_("top_customers")
@@ -139,21 +125,18 @@ query = sql.select("*").from_("quarterly_sales").unpivot("revenue", "quarter", [
 ## sql.insert()
 
 ```python
-# Simple insert with values
 query = (
     sql.insert().into("users").columns("name", "email").values(name="Alice", email="alice@example.com").returning("id")
 )
 
-# Insert from SELECT
-query = (
+query_from_select = (
     sql.insert()
     .into("user_archive")
     .columns("id", "name", "email")
     .from_select(sql.select("id", "name", "email").from_("users").where_eq("deleted", True))
 )
 
-# Upsert with ON CONFLICT
-query = (
+query_on_conflict = (
     sql.insert()
     .into("users")
     .columns("id", "name", "email")
@@ -170,8 +153,7 @@ query = (
 ```python
 query = sql.update("users").set(name="Bob", updated_at="now()").where_eq("id", 1).returning("id", "name")
 
-# UPDATE with FROM (PostgreSQL)
-query = (
+query_from = (
     sql.update("users")
     .set(department="Engineering")
     .from_("department_changes")
@@ -190,7 +172,7 @@ query = sql.delete().from_("users").where_eq("id", 1).returning("id")
 
 ---
 
-## `sql.merge()`
+## sql.merge() and sql.upsert()
 
 Use `sql.merge(table, dialect=...)` when the target table or dialect is known. `sql.merge_` is a no-argument property shorthand; never call it as a function.
 
@@ -202,6 +184,56 @@ query = (
     .when_matched_then_update(name="src.name", updated_at="now()")
     .when_not_matched_then_insert(id="src.id", name="src.name")
 )
+```
+
+`sql.upsert(table, dialect=...)` automatically generates either MERGE or ON CONFLICT SQL depending on dialect capabilities.
+
+---
+
+## Window Functions & Expressions
+
+SQLSpec provides fluent window function helpers and expression builders:
+
+```python
+query = sql.select(
+    "id",
+    "department",
+    sql.row_number(partition_by="department", order_by="salary DESC").as_("rank"),
+    sql.sum_over("salary", partition_by="department").as_("dept_total"),
+    sql.lag("salary", partition_by="department", order_by="hire_date").as_("prev_salary"),
+).from_("employees")
+```
+
+### Vector Distance Expressions
+
+For vector similarity search across dialects (PostgreSQL pgvector, Oracle, MySQL, BigQuery, DuckDB):
+
+```python
+query_vector = [0.1, 0.2, 0.3]
+distance = sql.column("embedding").vector_distance(query_vector, metric="cosine")
+
+query = sql.select("id", "title").from_("documents").where(distance < 0.3).order_by(distance.asc()).limit(10)
+```
+
+Supported metrics: `"cosine"`, `"euclidean"`, `"inner_product"`, `"euclidean_squared"`.
+
+---
+
+## Statement Stacks
+
+`StatementStack` provides an immutable builder for batching heterogeneous SQL operations:
+
+```python
+from sqlspec import StatementStack
+
+stack = (
+    StatementStack()
+    .push_execute("INSERT INTO audit_log (action) VALUES ($1)", "user_created")
+    .push_execute_many("INSERT INTO user_roles (user_id, role) VALUES ($1, $2)", [(1, "admin"), (1, "member")])
+    .push_execute_script("ANALYZE users;")
+)
+
+results = await db_session.execute_stack(stack)
 ```
 
 ---
@@ -216,7 +248,6 @@ Convert a builder chain into an executable `SQL` object:
 query = sql.select("*").from_("users").where_eq("active", True)
 stmt = query.to_statement()
 
-# Execute via driver
 rows = await db_session.select(stmt, schema_type=User)
 ```
 

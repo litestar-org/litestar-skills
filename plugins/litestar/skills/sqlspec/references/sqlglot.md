@@ -23,9 +23,8 @@
 ## Core Patterns
 
 ```python
-from sqlglot import ErrorLevel, transpile, parse_one, exp
+from sqlglot import ErrorLevel, exp, parse_one, select, transpile
 
-# Canonical transpilation with strict unsupported handling
 sql_out = transpile(
     sql,
     read="source_dialect",
@@ -33,24 +32,23 @@ sql_out = transpile(
     unsupported_level=ErrorLevel.RAISE,
 )[0]
 
-# Canonical AST parsing
-parse_one(sql, read="dialect")
-
-# Programmatic construction
-from sqlglot import select
-
-select("*").from_("users").where("id = 1")
+parsed = parse_one(sql, read="dialect")
+constructed = select("*").from_("users").where("id = 1")
 ```
 
 ### Avoid Unnecessary Copies (MANDATORY)
 
+Mutate in-place with `copy=False`:
+
 ```python
-# GOOD: Mutate in-place with copy=False
 predicate = parse_one("user_id = :id")
 query = select("*").from_("users").where(predicate, copy=False)
+```
 
-# BAD: copy=True triggers deep clone of the expression tree
-query = select("*").from_("users").where(predicate, copy=True)
+Avoid `copy=True` as it triggers a deep clone of the expression tree:
+
+```python
+query_slow = select("*").from_("users").where(predicate, copy=True)
 ```
 
 **Why copy=False**:

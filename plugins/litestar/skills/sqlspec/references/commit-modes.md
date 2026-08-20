@@ -75,8 +75,8 @@ config = AsyncpgConfig(
     extension_config={
         "starlette": {
             "commit_mode": "autocommit",
-            "extra_commit_statuses": {422},  # commit even on 422
-            "extra_rollback_statuses": {201},  # roll back even on 201
+            "extra_commit_statuses": {422},
+            "extra_rollback_statuses": {201},
         },
     },
 )

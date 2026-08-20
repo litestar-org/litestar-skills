@@ -189,7 +189,7 @@ dependencies = create_filter_dependencies(
 from dishka.integrations.litestar import FromDishka as Inject, inject
 from litestar import get
 from litestar.di import NamedDependency
-from litestar.params import SkipValidation  # Litestar >= 2.23
+from litestar.params import SkipValidation
 from sqlspec.core import OffsetPagination
 from sqlspec.core.filters import FilterTypes
 
@@ -211,7 +211,7 @@ async def list_orders(
 ```python
 from litestar import get
 from litestar.di import NamedDependency, Provide
-from litestar.params import SkipValidation  # Litestar >= 2.23
+from litestar.params import SkipValidation
 from sqlspec.adapters.asyncpg import AsyncpgDriver
 from sqlspec.core import OffsetPagination
 from sqlspec.core.filters import FilterTypes

@@ -1,11 +1,11 @@
 ---
 name: litestar-queues
-description: "Auto-activate for litestar_queues, QueuePlugin, QueueConfig, WorkerConfig, QueueService, @task, QueuedBackgroundTask, QueueEventsConfig, SQLAlchemyBackendConfig, SQLSpecBackendConfig, litestar queues run/run-consumer/run-task/run-maintenance/status/scheduler-health, schedules, uniqueness, maintenance, or task progress events. Not for litestar-saq/SAQ, Celery, RQ, or Dramatiq."
+description: "Auto-activate for litestar_queues, QueuePlugin, QueueConfig, WorkerConfig, QueueService, @task, QueuedBackgroundTask, QueueEventsConfig, SQLSpecBackendConfig, SQLAlchemyBackendConfig, litestar queues, or task events. Not for litestar-saq, Celery, RQ, or Dramatiq."
 ---
 
 # litestar-queues
 
-`litestar-queues` 0.8.0 is the first-party Litestar worker abstraction for task registration, durable queue state, worker lifecycle, schedules, uniqueness, bounded maintenance, and application-facing task events.
+`litestar-queues` 0.9.0 is the first-party Litestar worker abstraction for task registration, durable queue state, worker lifecycle, schedules, uniqueness, bounded maintenance, execution dispatch, and application-facing task events.
 
 Keep persistence and placement separate:
 
@@ -18,9 +18,9 @@ Keep persistence and placement separate:
 - Use `QueuePlugin` to wire lifecycle, application state, DI, task discovery, schedules, workers, and CLI commands.
 - Put worker settings under `QueueConfig(worker=WorkerConfig(...))`.
 - Inject `QueueService` with `NamedDependency[QueueService]`; never use a module-level service from handlers.
-- Import public core types from `litestar_queues`. Import optional backend configuration from its backend submodule.
+- Import public core types from `litestar_queues`. Import optional backend configuration from its backend submodule (`.sqlspec`, `.advanced_alchemy`, `.redis`, `.valkey`) and execution configs from `litestar_queues` or their respective submodules.
 - Keep persistent-backend arguments and metadata JSON-serializable. Pass stable object IDs instead of large payloads.
-- Use PEP 604 unions and async I/O. Prefer `msgspec` for event/client DTOs unless the project already uses Pydantic.
+- Use PEP 604 unions (`T | None`) and async I/O. Prefer `msgspec` for event/client DTOs unless the project already uses Pydantic.
 
 ## Quick Reference
 
@@ -58,12 +58,12 @@ app = Litestar(
 
 `QueueConfig()` with no arguments defaults to `queue_backend="ephemeral"`, `execution_backend="local"`, and `placement="server"` — a private per-invocation SQLite database plus one CLI-owned worker process, with no broker, port, or extra dependency. Keep that shape for tests, development, and small single-process deployments only.
 
-Process-local `"memory"` storage is no longer the default and must be asked for explicitly, together with a placement that shares the process:
+Process-local `"memory"` storage must be asked for explicitly, together with a placement that shares the process:
 
 ```python
 from litestar_queues import QueueConfig, WorkerConfig
 
-QueueConfig(queue_backend="memory", worker=WorkerConfig(placement="asgi"))
+config = QueueConfig(queue_backend="memory", worker=WorkerConfig(placement="asgi"))
 ```
 
 Storage, execution, and placement combinations that cannot work are rejected at startup with a message naming the fix, rather than failing at first claim.
@@ -73,24 +73,30 @@ Storage, execution, and placement combinations that cannot work are rejected at 
 ```python
 from datetime import timedelta
 
-from litestar_queues import QueueService, task
+from litestar_queues import QueueService, RetryBackoff, non_retryable, task
 
 
 @task(
     "reports.render",
     queue="reports",
     priority=10,
-    retries=2,
+    retries=3,
+    retry_backoff=RetryBackoff(initial_delay=2.0, multiplier=2.0, max_delay=60.0),
     timeout=120,
     run_after=30,
+    expires_in=timedelta(minutes=30),
     unique_by="arguments",
+    unique_until="terminal",
 )
 async def render_report(report_id: str, *, format: str = "pdf") -> str:
+    if report_id == "invalid":
+        non_retryable("Report ID does not exist")
     return f"{report_id}.{format}"
 
 
 @task("reports.refresh", interval=timedelta(minutes=15), jitter=30)
-async def refresh_reports() -> None: ...
+async def refresh_reports() -> None:
+    pass
 
 
 async def queue_report(queue_service: QueueService, report_id: str) -> str:
@@ -118,35 +124,82 @@ Do not combine a configured `key` with `unique_by`. Do not set `unique_until="fo
 
 Use `interval` or five-field `cron`, never both. Use `task_modules=("app.tasks",)` or `discover_tasks("app.domain")` before string enqueueing or schedule initialization.
 
+To mark a failure permanent and bypass retries, call `non_retryable("message")` or raise `NonRetryableError`. To cooperatively cancel execution from within a handler, call `job_cancelled("message")` or raise `JobCancelledError`.
+
+### Dependency Injection and Error Sanitization
+
+Supply attempt-scoped dependencies to task handlers through `task_dependency_resolver` or `task_dependency_provider`:
+
+```python
+from collections.abc import AsyncIterator, Mapping
+from contextlib import asynccontextmanager
+from typing import Any
+
+from litestar_queues import QueueConfig, Task, TaskExecutionContext, QueuedTaskRecord
+
+
+@asynccontextmanager
+async def provide_task_dependencies(
+    task: Task[Any, Any],
+    record: QueuedTaskRecord,
+    context: TaskExecutionContext,
+) -> AsyncIterator[Mapping[str, Any]]:
+    yield {"attempt_id": str(record.id)}
+
+
+def sanitize_task_error(exc: BaseException, record: QueuedTaskRecord) -> str:
+    return "An internal error occurred during task processing"
+
+
+queue_config = QueueConfig(
+    queue_backend="sqlspec",
+    task_dependency_provider=provide_task_dependencies,
+    error_sanitizer=sanitize_task_error,
+    stale_requeue_priority="preserve",
+)
+```
+
+`task_dependency_provider` enters an async context manager for each attempt, merges the yielded mapping into task keyword arguments, and guarantees clean exit on success, error, timeout, or cancellation.
+
+`error_sanitizer` converts a raw exception into the task's persisted error string.
+
+`stale_requeue_priority` controls priority on stale task recovery (`"preserve"`, an `int`, or a `Callable[[int], int]`).
+
 ### Worker Configuration and CLI
 
 ```python
 from litestar_queues import QueueConfig, WorkerConfig
 
-
 queue_config = QueueConfig(
-    queue_backend=...,  # shared persistent backend
+    queue_backend="sqlspec",
     worker=WorkerConfig(
         placement="external",
         batch_size=10,
-        max_concurrency=4,
-        queues=("accounts", "reports"),
+        max_concurrency=8,
+        queue_concurrency={"high_priority": 4, "default": 4},
+        queues=("high_priority", "default"),
         poll_interval=0.25,
         heartbeat_interval=30,
         heartbeat_miss_threshold=2,
         graceful_shutdown_timeout=60,
+        requeue_on_shutdown=False,
     ),
 )
 ```
 
 ```bash
-LITESTAR_APP=app:app litestar queues run --queue reports --max-concurrency 4 --drain-timeout 60
+LITESTAR_APP=app:app litestar queues run --queue default --max-concurrency 4 --drain-timeout 60
 LITESTAR_APP=app:app litestar queues run-consumer --backend sqs --max-concurrency 4 --drain-timeout 60
 LITESTAR_APP=app:app litestar queues status --json
 LITESTAR_APP=app:app litestar queues scheduler-health --minutes 5
+LITESTAR_APP=app:app litestar queues run-maintenance --json
 ```
 
-`WorkerConfig.placement` decides which process owns the worker. `"server"` (the default) gives each `litestar run` invocation exactly one worker in the CLI server lifespan. `"asgi"` starts one worker per ASGI worker inside its own application lifespan, so the count multiplies with the web-worker count. `"external"` starts nothing automatically — use it when web and worker processes scale separately and a process manager runs `litestar queues run`. Standalone workers use `WorkerConfig.queues`, `max_concurrency`, and `graceful_shutdown_timeout` unless CLI flags override them.
+`WorkerConfig.placement` decides which process owns the worker:
+
+- `"server"` (the default): exactly one worker in the CLI server lifespan (`litestar run`).
+- `"asgi"`: starts one worker per ASGI worker in the application lifespan.
+- `"external"`: starts nothing automatically; managed processes run `litestar queues run` or `litestar queues run-consumer`.
 
 The worker adaptively backs off empty polling from `poll_interval` toward `poll_backoff_max`, using `poll_backoff_multiplier` and `poll_jitter`. Backend notifications can end the wait early; they never replace polling or durable state checks.
 
@@ -171,7 +224,10 @@ Execution backends decide where a claimed task runs, and never own queue state:
 | Inline completion in tests/scripts | `"immediate"` | Core package |
 | Isolated Google Cloud Run Jobs | `CloudRunExecutionConfig(...)` | `litestar_queues.execution.cloudrun` |
 | Serverless delivery with no worker process | `CloudTasksExecutionConfig(...)` | `litestar_queues.execution.cloudtasks` |
-| Amazon SQS delivery | `SqsExecutionConfig(...)` | `litestar_queues.execution.sqs` |
+| Apache Kafka continuous consumer fleet | `KafkaExecutionConfig(...)` | `litestar_queues.execution.kafka` |
+| GCP Pub/Sub continuous consumer fleet | `PubSubExecutionConfig(...)` | `litestar_queues.execution.pubsub` |
+| RabbitMQ continuous consumer fleet | `RabbitMQExecutionConfig(...)` | `litestar_queues.execution.rabbitmq` |
+| Amazon SQS continuous consumer fleet | `SqsExecutionConfig(...)` | `litestar_queues.execution.sqs` |
 
 Match the project's existing data stack. Memory cannot coordinate separate processes. See [Execution Backends](references/execution-backends.md) for the managed transports.
 
@@ -182,7 +238,6 @@ from sqlspec.adapters.aiosqlite import AiosqliteConfig
 
 from litestar_queues import QueueConfig
 from litestar_queues.backends.sqlspec import SQLSpecBackendConfig
-
 
 sqlspec_config = AiosqliteConfig(
     connection_config={"database": "queue.db"},
@@ -199,7 +254,7 @@ queue_config = QueueConfig(
 
 `QueuePlugin` registers the package migration with the supplied SQLSpec configuration. Run it through the application's normal SQLSpec migration workflow; opening the backend does not migrate the database. Use explicit `create_schema()` only for local bootstrap.
 
-`SQLSpecBackendConfig.worker_wakeups` defaults to `SQLSpecWorkerWakeupConfig()`. Capable PostgreSQL adapters use `notify_queue`, DuckDB uses `poll_queue`, and other adapters fall back to polling. Set `worker_wakeups=None` to disable native wakeups. Override `transport`, `channel_name`, `queue_table_name`, or `poll_interval` only when the project's infrastructure requires it.
+`SQLSpecBackendConfig.worker_wakeups` defaults to native wakeups. Capable PostgreSQL adapters use `notify_queue`, DuckDB uses `poll_queue`, and other adapters fall back to polling.
 
 ### Advanced Alchemy Backend
 
@@ -208,7 +263,6 @@ from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig
 
 from litestar_queues import QueueConfig
 from litestar_queues.backends.advanced_alchemy import SQLAlchemyBackendConfig
-
 
 alchemy_config = SQLAlchemyAsyncConfig(
     connection_string="sqlite+aiosqlite:///queue.db",
@@ -223,21 +277,20 @@ queue_config = QueueConfig(
 )
 ```
 
-Use the application's Advanced Alchemy metadata and migration lifecycle. The backend does not create its four tables. Compose the package mixins into adopter-owned models when custom bases, table names, or binds are required, then pass all matching model classes:
+Use the application's Advanced Alchemy metadata and migration lifecycle. Compose the package mixins into adopter-owned models when custom bases, table names, or binds are required, then pass all matching model classes:
 
 - `model_class`
 - `event_history_model_class`
 - `maintenance_model_class`
 - `task_reservation_model_class`
 
-Set `worker_wakeups=True` only for a supported PostgreSQL dialect. `heartbeat_session_maker` may isolate heartbeat writes while targeting the same database.
+Set `worker_wakeups=True` only for a supported PostgreSQL dialect.
 
 ### Redis and Valkey Backends
 
 ```python
 from litestar_queues import QueueConfig
 from litestar_queues.backends.redis import RedisBackendConfig
-
 
 queue_config = QueueConfig(
     queue_backend=RedisBackendConfig(
@@ -253,30 +306,33 @@ Use `ValkeyBackendConfig` from `litestar_queues.backends.valkey` for Valkey. Bot
 
 ### Persistent Schema
 
-SQL-backed deployments can require four package-owned concerns:
+SQL-backed deployments use queue records, maintenance coordination, and
+forever-uniqueness reservations. Add durable event history only when
+`QueueEventsConfig.history` is configured:
 
 | Concern | Default table |
 | --- | --- |
 | Queue records | `queue_task` |
-| Durable event history | `queue_task_event_history` |
 | Distributed maintenance coordination | `queue_maintenance` |
 | Forever-uniqueness reservations | `queue_task_reservation` |
+| Durable event history (when enabled) | `queue_task_event_history` |
 
 SQLSpec's packaged `0001_create_queue_tasks` migration provisions the enabled tables and supports explicit table-name overrides. Advanced Alchemy applications own equivalent models and Alembic migrations. Redis and Valkey use namespaced keys and require no SQL migration.
 
 Do not delete the reservation table during ordinary task or event retention. Forever identities are removed only through `QueueService.reset_task_identity()`.
 
-### Events and Progress
+### Events, Logging, and Progress
 
 ```python
 from litestar_queues import QueueConfig, task
 from litestar_queues.events import (
     EventDeliveryConfig,
     QueueEventsConfig,
+    beat,
+    publish_task_event,
     publish_task_log,
     publish_task_progress,
 )
-
 
 queue_config = QueueConfig(
     events=QueueEventsConfig(
@@ -290,22 +346,42 @@ queue_config = QueueConfig(
 
 @task("imports.process", timeout=300)
 async def process_import(path: str) -> None:
+    beat("validating")
     await publish_task_log("Import started", payload={"path": path})
     await publish_task_progress(current=50, total=100, message="Halfway")
+    await publish_task_event("custom.checkpoint", message="Checkpoint reached")
 ```
 
-`QueueEventsConfig` groups live `delivery`, application `stream`, and durable `history`. It must enable at least one capability. A Channels backend by itself is unused unless delivery or streaming is enabled.
+`QueueEventsConfig` groups live `delivery`, application `stream`, and durable `history`. It must enable at least one capability. Task events are separate from worker wakeups.
 
-Task events are separate from worker wakeups. Configure a shared Channels backend or explicit sinks for live cross-process delivery. Configure `EventHistoryConfig` when durable history is required.
+### Observability and Telemetry
+
+```python
+from litestar_queues import QueueConfig
+from litestar_queues.observability import ObservabilityConfig
+
+queue_config = QueueConfig(
+    queue_backend="sqlspec",
+    observability=ObservabilityConfig(
+        enable_otel=True,
+        enable_prometheus=True,
+        enable_sqlcommenter=True,
+    ),
+    scheduler_canary_task="health.canary",
+)
+```
+
+`ObservabilityConfig` configures OpenTelemetry tracing and Prometheus metrics. OpenTelemetry trace contexts and correlation IDs propagate across dispatchers, broker execution backends, and workers.
+
+The scheduler health command (`litestar queues scheduler-health --minutes 5`) verifies that the configured canary task completed within the specified window.
 
 ### Bounded Maintenance
 
 ```python
 from litestar_queues import QueueConfig, QueueMaintenanceConfig
 
-
 queue_config = QueueConfig(
-    queue_backend=...,  # persistent backend
+    queue_backend="sqlspec",
     maintenance=QueueMaintenanceConfig(
         time_budget=300,
         coordination_timeout=360,
@@ -313,7 +389,6 @@ queue_config = QueueConfig(
         stale_limit=100,
         terminal_retention=30 * 24 * 60 * 60,
         terminal_limit=1000,
-        event_retention=7 * 24 * 60 * 60,
         event_limit=1000,
     ),
 )
@@ -326,7 +401,7 @@ LITESTAR_APP=app:app litestar queues run-maintenance --phase stale --phase termi
 
 One maintenance invocation runs bounded phases in fixed order: external reconciliation, stale recovery, terminal retention, then event retention. It never starts a worker, executes queued work, or loops to drain a backlog.
 
-Schedule one external six-hour or daily invocation. Retention phases have no destructive defaults: `stale_after`, `terminal_retention`, and `event_retention` remain disabled when `None`. `coordination_timeout` must exceed `time_budget`.
+Schedule one external six-hour or daily invocation. Retention phases have no destructive defaults: `stale_after`, `terminal_retention`, and event rules remain disabled when `None`. `coordination_timeout` must exceed `time_budget`.
 
 ### External One-Task Execution
 
@@ -346,7 +421,8 @@ from litestar_queues import QueuedBackgroundTask, task
 
 
 @task("imports.process")
-async def process_import(path: str) -> None: ...
+async def process_import(path: str) -> None:
+    pass
 
 
 @post("/imports")
@@ -365,13 +441,13 @@ async def create_import() -> Response[dict[str, str]]:
 
 1. **Identify the work shape.** Use Litestar Queues for durable task state, worker placement, schedules, progress/events, task uniqueness, or bounded maintenance.
 2. **Match the queue backend.** Use memory for same-process tests, SQLSpec for SQLSpec apps, Advanced Alchemy for SQLAlchemy apps, Redis for Redis infrastructure, or Valkey for Valkey infrastructure.
-3. **Pick execution placement.** Use local workers by default, immediate execution for tests/scripts, and Cloud Run only for isolated external jobs.
+3. **Pick execution placement.** Use local workers by default, immediate execution for tests/scripts, broker consumers (Kafka, PubSub, RabbitMQ, SQS) for distributed broker dispatch, and Cloud Run for isolated external jobs.
 4. **Configure the worker.** Put every worker setting under `WorkerConfig`; decide explicitly whether it runs in the app lifespan.
 5. **Provision persistent storage.** Run SQLSpec migrations or add all required Advanced Alchemy models to application-owned migrations.
 6. **Define and discover tasks.** Decorate callables with `@task`; import their modules before string enqueueing or schedule initialization.
 7. **Enqueue through DI.** Inject `QueueService`, enqueue a decorated task or registered name, and wait only when the caller truly needs the terminal state.
-8. **Add optional capabilities separately.** Configure worker wakeups, task-event delivery/history, permanent uniqueness, and maintenance only when their storage and operational lifecycles are owned.
-9. **Place operational commands.** Run standalone workers continuously, `run-task` only in external one-task executors, and maintenance from one infrequent external schedule.
+8. **Add optional capabilities separately.** Configure worker wakeups, task-event delivery/history, permanent uniqueness, observability, and maintenance only when their storage and operational lifecycles are owned.
+9. **Place operational commands.** Run standalone workers or continuous broker consumers (`run-consumer`) continuously, `run-task` only in external one-task executors, and maintenance from one infrequent external schedule.
 
 </workflow>
 
@@ -400,7 +476,7 @@ async def create_import() -> Response[dict[str, str]]:
 
 ## Validation Checkpoint
 
-- [ ] The dependency floor is `litestar-queues>=0.8.0`
+- [ ] The dependency floor is `litestar-queues>=0.9.0`
 - [ ] `QueuePlugin` receives one `QueueConfig`
 - [ ] Worker options live under `QueueConfig.worker`
 - [ ] `WorkerConfig.placement` matches the deployment topology
@@ -416,7 +492,7 @@ async def create_import() -> Response[dict[str, str]]:
 - [ ] Uniqueness uses one identity source and the intended lifetime
 - [ ] `max_argument_identity_bytes` bounds untrusted argument-derived identity inputs
 - [ ] Maintenance thresholds and one external schedule are explicit
-- [ ] `run`, `run-task`, and `run-maintenance` are used for their distinct lifecycles
+- [ ] `run`, `run-consumer`, `run-task`, and `run-maintenance` are used for their distinct lifecycles
 
 </validation>
 
@@ -498,7 +574,7 @@ LITESTAR_APP=app:app litestar queues run-maintenance --json
 
 ## References Index
 
-- **[Execution Backends](references/execution-backends.md)** — local, immediate, Cloud Run, Cloud Tasks, SQS, delivery fencing, and lost-delivery repair.
+- **[Execution Backends](references/execution-backends.md)** — local, immediate, Cloud Run, Cloud Tasks, Kafka, Pub/Sub, RabbitMQ, SQS, delivery fencing, and lost-delivery repair.
 - **[Namespacing and Expiry](references/namespacing.md)** — `namespace=`, not-started deadlines and the `expired` state, event-stream configuration.
 
 ## Cross-References
@@ -515,14 +591,14 @@ LITESTAR_APP=app:app litestar queues run-maintenance --json
 
 ## Official References
 
-- <https://github.com/cofin/litestar-queues/tree/v0.8.0>
-- <https://github.com/cofin/litestar-queues/releases/tag/v0.8.0>
-- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/config.py>
-- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/task.py>
-- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/_cli.py>
-- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/backends/sqlspec/config.py>
-- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/backends/advanced_alchemy/config.py>
-- <https://github.com/cofin/litestar-queues/blob/v0.8.0/src/litestar_queues/maintenance.py>
+- <https://github.com/cofin/litestar-queues/tree/v0.9.0>
+- <https://github.com/cofin/litestar-queues/releases/tag/v0.9.0>
+- <https://github.com/cofin/litestar-queues/blob/v0.9.0/src/litestar_queues/config.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.9.0/src/litestar_queues/task.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.9.0/src/litestar_queues/_cli.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.9.0/src/litestar_queues/backends/sqlspec/config.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.9.0/src/litestar_queues/backends/advanced_alchemy/config.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.9.0/src/litestar_queues/maintenance.py>
 
 ## Shared Styleguide Baseline
 

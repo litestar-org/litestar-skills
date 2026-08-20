@@ -33,7 +33,6 @@ The rest of this SKILL.md covers framework-agnostic topics: adapter setup, query
 from sqlspec import SQLSpec
 from sqlspec.adapters.asyncpg import AsyncpgConfig
 
-# Configure the adapter with connection details
 config = AsyncpgConfig(
     connection_config={
         "dsn": "postgresql://user:pass@localhost:5432/mydb",
@@ -44,7 +43,6 @@ config = AsyncpgConfig(
 db_manager = SQLSpec()
 db_manager.add_config(config)
 
-# Use SQLSpec's session provider for connection lifecycle
 async with db_manager.provide_session(config) as db:
     users = await db.select(
         "SELECT * FROM users WHERE active = $1",
@@ -58,7 +56,6 @@ async with db_manager.provide_session(config) as db:
 ```python
 from sqlspec import sql
 
-# SELECT with filters
 stmt = (
     sql.select("id", "name", "email")
     .from_("users")
@@ -69,11 +66,11 @@ stmt = (
     .to_statement()
 )
 
-# INSERT
-stmt = sql.insert("users").columns("name", "email").values(name="Alice", email="alice@example.com").to_statement()
+insert_stmt = (
+    sql.insert("users").columns("name", "email").values(name="Alice", email="alice@example.com").to_statement()
+)
 
-# MERGE / upsert
-stmt = (
+merge_stmt = (
     sql.merge("inventory", dialect="postgres")
     .using("updates")
     .on("inventory.product_id = updates.product_id")
@@ -97,6 +94,8 @@ stmt = (
 | `select_to_arrow()` / `fetch_to_arrow()` | `ArrowResult` | Bulk data export, analytics |
 | `execute()` | `SQLResult` | INSERT/UPDATE/DELETE metadata |
 | `execute_many()` | `SQLResult` | Batch operation metadata |
+| `execute_script()` | `SQLResult` | Multi-statement SQL script execution |
+| `execute_stack()` | `tuple[StackResult, ...]` | Ordered statement-stack execution |
 | `load_from_arrow()` | `StorageBridgeJob` | Adapter-supported Arrow ingest |
 | `load_from_storage()` | `StorageBridgeJob` | Adapter-supported staged-file ingest |
 | `load_from_records()` | `StorageBridgeJob` | Records normalized through the Arrow ingest path |
@@ -104,8 +103,6 @@ stmt = (
 ### Arrow Integration Basics
 
 ```python
-# Native Arrow export on adapters listed in references/adapters.md;
-# conversion fallback elsewhere unless native_only=True.
 arrow_result = await db.select_to_arrow(
     "SELECT * FROM large_dataset WHERE region = $1",
     region,
@@ -113,10 +110,7 @@ arrow_result = await db.select_to_arrow(
     batch_size=10_000,
 )
 
-# Bulk load only when the selected adapter implements ingest.
 await db.load_from_arrow("users", arrow_result)
-
-# Bulk load records through the same native ingest path
 await db.load_from_records("users", [{"id": 1, "name": "Ada"}])
 ```
 
@@ -171,7 +165,7 @@ Run through the validation checkpoint below before considering the work complete
 - **Never concatenate SQL strings** -- use parameterized queries or the query builder
 - **Never hold connections outside context managers** -- connection leaks exhaust the pool
 - **Match parameter style to adapter**: `$1` for asyncpg, `%s` for psycopg, `?` for sqlite, `:name` for oracledb
-- **Do not invent adapter APIs** -- BigQuery job controls live in `driver_features`; Spanner request controls live in `driver_features` or `provide_session()` kwargs
+- **Cloud adapter controls** -- BigQuery job controls live in `driver_features`; Spanner request controls live in `driver_features` or `provide_session()` kwargs
 - **Adapter config / driver modules avoid `from __future__ import annotations`**. Consumer app modules MAY use it.
 
 </guardrails>
@@ -207,9 +201,6 @@ from sqlspec.adapters.asyncpg import AsyncpgConfig
 from sqlspec.core.filters import LimitOffsetFilter, OrderByFilter
 
 
-# --- Typed model ---
-
-
 @dataclass
 class User:
     id: int
@@ -217,8 +208,6 @@ class User:
     email: str
     active: bool
 
-
-# --- Adapter setup ---
 
 config = AsyncpgConfig(
     connection_config={
@@ -229,9 +218,6 @@ config = AsyncpgConfig(
 )
 db_manager = SQLSpec()
 db_manager.add_config(config)
-
-
-# --- Query execution ---
 
 
 async def list_active_users(page: int = 1, page_size: int = 25) -> list[User]:

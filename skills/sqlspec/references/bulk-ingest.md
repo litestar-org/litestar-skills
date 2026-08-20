@@ -2,7 +2,7 @@
 
 ## Overview
 
-SQLSpec `v0.58.3` exposes adapter-gated bulk ingest through three storage bridge methods:
+SQLSpec `v0.62.0` exposes adapter-gated bulk ingest through three storage bridge methods:
 
 - `load_from_arrow(table, source, *, overwrite=False)` -- load an Arrow table or coercible Arrow source.
 - `load_from_storage(table, source, *, file_format, overwrite=False)` -- load a local path or cloud URI.
@@ -75,4 +75,4 @@ Spanner Batch Write API uses independently committed mutation groups. Treat it a
 - Use `load_from_arrow()` when the upstream step already produced Arrow.
 - Use `load_from_storage()` for staged files and cloud URIs. BigQuery requires `gs://` staging for load paths.
 - Check `config.storage_capabilities()` before building generic ingest tooling.
-- Keep adapter gates in configuration. Do not pass invented per-call flags to `load_from_arrow()`.
+- Keep adapter gates in configuration rather than per-call overrides.

@@ -1,18 +1,18 @@
 ---
 name: litestar-security
-description: "Auto-activate for litestar_security, SecurityPlugin, SecurityConfig, CurrentUser, Principal, SecurityContext, requires_role, requires_scope, requires_authenticated, requires_tenant, or requires_capability. Not for raw auth guards alone — use litestar-auth-guards."
+description: "Auto-activate for litestar_security, SecurityPlugin, SecurityConfig, CurrentUser, Principal, SecurityContext, requires_role, requires_scope, requires_authenticated, requires_tenant, requires_tenant_role, requires_capability, or requires_assurance. Not for raw auth guards alone — use litestar-auth-guards."
 ---
 
 # Litestar Security
 
-`litestar-security` 0.3.0 is a declarative authentication and authorization framework for Litestar. It provides credential slots and mechanisms, unified session management, local accounts, MFA, WebAuthn passkeys, OAuth/OIDC, API keys, workload JWTs, and browser hardening.
+`litestar-security` 0.6.0 is a declarative authentication and authorization framework for Litestar. It provides credential slots and mechanisms, unified session management, local accounts, MFA, WebAuthn passkeys, OAuth/OIDC, API keys, workload JWTs, and browser hardening.
 
 Two separate axes, wired through two separate Litestar keywords:
 
 - **Authentication** — *who is calling* — is a policy on `auth=` (or `opt={"auth": ...}`).
 - **Authorization** — *what they may do* — is a predicate in Litestar's native `guards=[...]`.
 
-Do not conflate them: the policy helpers (`public`, `required`, `any_of`, `all_of`, `at_least`) take **mechanism names**, while the guard combinators (`guard_any_of`, `guard_all_of`, `guard_at_least`, `guard_one_of`) take **predicates**.
+Do not conflate them: the policy helpers (`public`, `required`, `any_of`, `all_of`, `at_least`, `optional`, `exclude`, `mechanism`) take **mechanism names**, while the guard combinators (`requires_any_of`, `requires_all_of`, `requires_at_least`, `requires_one_of`) take **predicates**.
 
 ## Code Style Rules
 
@@ -20,8 +20,9 @@ Do not conflate them: the policy helpers (`public`, `required`, `any_of`, `all_o
 - **Keep authorization in `guards=[...]`.** Litestar's `security=` parameter is reserved for the OpenAPI requirements projected from `auth`.
 - **Inject the user with `CurrentUser[T]`.** Use `NamedDependency[CurrentUser[UserType]]`; it rejects anonymous and userless service principals. `principal` and `security_context` stay typed on public routes too.
 - **Authorize from the snapshot.** Guards read the `AuthorizationSnapshot` produced by the configured `authorization_resolver`. Never query the database inside a guard.
-- **Exclude other plugins' routes by path.** Static assets and dashboards carry no `auth` and compile to implicit `required()`, so they answer `401` until listed in `SecurityConfig(exclude=[...])`.
-- **Secure WebSockets with connect tokens.** Browsers cannot set handshake headers; mint a short-lived token over authenticated HTTP.
+- **Compose predicates with `requires_*`.** Use `requires_any_of`, `requires_all_of`, `requires_at_least`, `requires_one_of` for predicate composition.
+- **Exclude other plugins' routes by path.** Static assets and dashboards carry no `auth` and compile to implicit `required()`, so they answer `401` until listed in `SecurityConfig(exclude=[...])`. Inspect routes with `litestar security routes`.
+- **Secure WebSockets with connect tokens.** Browsers cannot set handshake headers; mint a short-lived token over authenticated HTTP via `WebSocketConnectTokenService` or `WebSocketConnectTokenIssuer`.
 - **Load protector keys from a secret store.** MFA and OAuth protectors need application-owned 32-byte AES-256-GCM keys, never source literals.
 
 ## Quick Reference
@@ -59,12 +60,12 @@ With mechanisms configured and no inherited policy, routes default to implicit `
 from litestar import Controller, get
 from litestar_security import all_of, any_of, at_least, public, required
 
-required()  # any configured mechanism
-required("session")  # one named mechanism
-any_of("session", "api_key")  # either
-all_of("api_key", "workload_jwt")  # both, same subject
-at_least(2, "session", "api_key", "passkey")  # N of M
-public()  # no authentication, excluded from native CSRF
+policy_default = required()
+policy_session = required("session")
+policy_either = any_of("session", "api-key")
+policy_both = all_of("api-key", "service-jwt")
+policy_threshold = at_least(2, "session", "api-key", "service-jwt")
+policy_public = public()
 ```
 
 Apply it at whichever layer owns the decision:
@@ -85,7 +86,7 @@ Custom controller class attributes are not propagated by Litestar — policy mus
 
 ```python
 from litestar import Controller, get
-from litestar_security import guard_any_of, requires_role, requires_scope
+from litestar_security import requires_any_of, requires_role, requires_scope
 
 
 class ReportsController(Controller):
@@ -93,8 +94,9 @@ class ReportsController(Controller):
     opt = {"auth": required("session")}
     guards = [requires_role("analyst")]
 
-    @get("/", guards=[guard_any_of(requires_scope("read:all"), requires_scope("read:reports"))])
-    async def list_reports(self) -> list[dict[str, str]]: ...
+    @get("/", guards=[requires_any_of(requires_scope("read:all"), requires_scope("read:reports"))])
+    async def list_reports(self) -> list[dict[str, str]]:
+        return []
 ```
 
 ### Reserved Dependency Names
@@ -122,7 +124,7 @@ The plugin registers these; do not shadow them.
 
 ### Step 1: Install the capabilities in use
 
-Core install covers JWT/JWKS validation, API keys, IAP, and OIDC token verification. Add an extra only for what the application uses: `[mfa]`, `[passkeys]`, `[oauth]`, `[argon2]`, or `[all]`.
+Core install covers JWT/JWKS validation, API keys, IAP, and OIDC token verification. Use `[argon2,mfa]` for `LocalAuth`; add `[passkeys]` or `[oauth]` only when needed, or use `[all]`.
 
 ### Step 2: Choose providers
 
@@ -130,20 +132,21 @@ Pick where identity is established — local accounts, OAuth/OIDC, Google IAP, A
 
 ### Step 3: Implement the authorization resolver
 
-Write a callable taking the authenticated `Principal` and returning an `AuthorizationSnapshot` of granted roles, scopes, capabilities, teams, and tenants. It runs once per request, which is why guards must not perform I/O.
+Implement an async `resolve(principal)` method that returns an `AuthorizationSnapshot` of granted roles, scopes, capabilities, tenant roles, and tenant IDs. Return `InvalidCredentials` or `VerificationUnavailable` for expected denial or dependency failure. It runs once per request, so guards must not perform I/O.
 
 ```python
 from litestar_security import AuthorizationSnapshot, Principal
 
 
-async def resolve_user_authorization(principal: Principal[User]) -> AuthorizationSnapshot:
-    if not principal.is_authenticated:
-        return AuthorizationSnapshot()
-    user = principal.require_user()
-    return AuthorizationSnapshot(
-        roles=frozenset(user.roles),
-        scopes=frozenset(user.scopes),
-    )
+class AppAuthorizationResolver:
+    async def resolve(self, principal: Principal[User]) -> AuthorizationSnapshot:
+        if not principal.is_authenticated:
+            return AuthorizationSnapshot()
+        user = principal.require_user()
+        return AuthorizationSnapshot(
+            roles=frozenset(user.roles),
+            scopes=frozenset(user.scopes),
+        )
 ```
 
 ### Step 4: Register the plugin and set default policy
@@ -164,7 +167,7 @@ Apply `SecurityHeadersConfig.hardened()`, supply every CSP directive explicitly,
 
 ## Guardrails
 
-- **Do not pass predicates to `any_of` / `all_of` / `at_least`.** Those compose authentication mechanisms. Use `guard_any_of`, `guard_all_of`, `guard_at_least`, or `guard_one_of` for predicates.
+- **Do not pass predicates to `any_of` / `all_of` / `at_least`.** Those compose authentication mechanisms. Use `requires_any_of`, `requires_all_of`, `requires_at_least`, or `requires_one_of` for predicates.
 - **Do not shadow reserved dependencies.** Avoid naming providers `principal`, `security_context`, `current_user`, or `websocket_connect_tokens`.
 - **Do not perform I/O in predicates.** Guards evaluate synchronously against the snapshot; put database checks in the `authorization_resolver`.
 - **Do not use `guards=` for authentication or `auth=` for authorization.** They compile to different things — runtime admission plus OpenAPI projection versus permission checks.
@@ -182,7 +185,7 @@ Apply `SecurityHeadersConfig.hardened()`, supply every CSP directive explicitly,
 - [ ] `SecurityPlugin` is registered in application `plugins`.
 - [ ] Every route's authentication policy is declared via `auth=` or inherited `opt={"auth": ...}`.
 - [ ] Authorization uses `guards=[...]` with predicates, never the mechanism combinators.
-- [ ] A custom `authorization_resolver` returns an `AuthorizationSnapshot`.
+- [ ] A custom `authorization_resolver` implements async `resolve()` and returns an `AuthorizationSnapshot`, `InvalidCredentials`, or `VerificationUnavailable`.
 - [ ] No handler or guard queries the database to perform authorization checks.
 - [ ] Handler injection uses `CurrentUser[UserType]` or `NamedDependency[CurrentUser[UserType]]`.
 - [ ] Routes registered by other plugins are excluded by anchored path pattern or given an explicit policy.
@@ -208,9 +211,9 @@ from litestar_security import (
     SecurityConfig,
     SecurityHeadersConfig,
     SecurityPlugin,
-    guard_any_of,
     public,
     required,
+    requires_any_of,
     requires_role,
     requires_scope,
 )
@@ -224,14 +227,15 @@ class User:
     scopes: list[str] = field(default_factory=list)
 
 
-async def auth_resolver(principal: Principal[User]) -> AuthorizationSnapshot:
-    if not principal.is_authenticated:
-        return AuthorizationSnapshot()
-    user = principal.require_user()
-    return AuthorizationSnapshot(
-        roles=frozenset(user.roles),
-        scopes=frozenset(user.scopes),
-    )
+class AppAuthorizationResolver:
+    async def resolve(self, principal: Principal[User]) -> AuthorizationSnapshot:
+        if not principal.is_authenticated:
+            return AuthorizationSnapshot()
+        user = principal.require_user()
+        return AuthorizationSnapshot(
+            roles=frozenset(user.roles),
+            scopes=frozenset(user.scopes),
+        )
 
 
 @get("/health", auth=public())
@@ -241,7 +245,7 @@ async def health() -> dict[str, str]:
 
 @get(
     "/orders",
-    guards=[guard_any_of(requires_scope("read:all"), requires_scope("read:orders"))],
+    guards=[requires_any_of(requires_scope("read:all"), requires_scope("read:orders"))],
 )
 async def list_orders(current_user: NamedDependency[CurrentUser[User]]) -> dict[str, str]:
     return {"owner": current_user.username}
@@ -255,7 +259,7 @@ async def admin_orders() -> list[dict[str, str]]:
 api = Router(path="/api", route_handlers=[list_orders, admin_orders], opt={"auth": required("session")})
 
 security_config = SecurityConfig[User](
-    authorization_resolver=auth_resolver,
+    authorization_resolver=AppAuthorizationResolver(),
     headers=SecurityHeadersConfig.hardened(),
     exclude=["^/static"],
 )
@@ -271,7 +275,7 @@ app = Litestar(
 ## References Index
 
 - **[Authentication](references/authentication.md)** — policy helpers, ownership layers, controller base classes, CSRF interaction.
-- **[Authorization](references/authorization.md)** — snapshots, resolvers, predicates, combinators, tenant and team checks, assurance.
+- **[Authorization](references/authorization.md)** — snapshots, resolvers, predicates, combinators, tenant checks, assurance.
 - **[Providers](references/providers.md)** — local accounts, OAuth/OIDC, IAP, API keys, workload JWTs, transaction protectors.
 - **[Composition](references/composition.md)** — excluding routes other plugins register, and the patterns per plugin.
 - **[Hardening](references/hardening.md)** — CSP, security headers, secrets, key rotation, MFA operational rules.
@@ -286,8 +290,8 @@ app = Litestar(
 ## Official References
 
 - <https://github.com/cofin/litestar-security>
-- <https://github.com/cofin/litestar-security/tree/v0.3.0/docs>
-- <https://github.com/cofin/litestar-security/tree/v0.3.0/examples>
+- <https://github.com/cofin/litestar-security/tree/v0.6.0/docs>
+- <https://github.com/cofin/litestar-security/tree/v0.6.0/examples>
 
 ## Shared Styleguide Baseline
 

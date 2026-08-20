@@ -110,11 +110,12 @@ storages.register_backend("s3://my-bucket/uploads", key="uploads")
 When `obstore` is not installed or for protocols not supported by obstore, use the `fsspec` backend:
 
 ```python
+from advanced_alchemy.types.file_object import storages
 from advanced_alchemy.types.file_object.backends.fsspec import FSSpecBackend
 
 backend = FSSpecBackend(
     key="gcs-data",
-    fs="gcs",  # protocol string -- fsspec resolves to gcsfs
+    fs="gcs",
     prefix="my-bucket/data",
     token="google_default",
 )
@@ -132,22 +133,11 @@ The `StorageRegistry` is a process-wide singleton:
 ```python
 from advanced_alchemy.types.file_object import storages
 
-# Register
 storages.register_backend(backend)
-
-# Retrieve
 backend = storages.get_backend("s3-uploads")
-
-# Check
-storages.is_registered("s3-uploads")  # True
-
-# List all
-storages.registered_backends()  # ["local", "s3-uploads", ...]
-
-# Remove
+is_registered = storages.is_registered("s3-uploads")
+all_backends = storages.registered_backends()
 storages.unregister_backend("s3-uploads")
-
-# Clear all
 storages.clear_backends()
 ```
 
@@ -164,7 +154,6 @@ The default backend class is `ObstoreBackend` when `obstore` is installed, other
 ```python
 from advanced_alchemy.types.file_object import FileObject
 
-# With pending content (saved later by session tracker or explicit save)
 avatar = FileObject(
     backend="s3-uploads",
     filename="avatars/user123.jpg",
@@ -173,7 +162,6 @@ avatar = FileObject(
     metadata={"user_id": "123", "original_name": "photo.jpg"},
 )
 
-# With pending source path
 document = FileObject(
     backend="local",
     filename="documents/report.pdf",
@@ -181,7 +169,6 @@ document = FileObject(
     content_type="application/pdf",
 )
 
-# Metadata-only (file already exists in storage)
 existing = FileObject(
     backend="s3-uploads",
     filename="documents/report.pdf",
@@ -212,19 +199,15 @@ You cannot provide both `content` and `source_path` -- pick one.
 ### Content Operations
 
 ```python
-# Read content
 content: bytes = file_obj.get_content()
 content: bytes = await file_obj.get_content_async()
 
-# Save (explicit)
 file_obj.save(data=b"file contents")
 await file_obj.save_async(data=b"file contents")
 
-# Save pending content (set during init)
 file_obj.save()
 await file_obj.save_async()
 
-# Delete from storage
 file_obj.delete()
 await file_obj.delete_async()
 ```
@@ -235,7 +218,7 @@ await file_obj.delete_async()
 await file_obj.save_async(
     data=large_file_bytes,
     use_multipart=True,
-    chunk_size=10 * 1024 * 1024,  # 10MB chunks
+    chunk_size=10 * 1024 * 1024,
     max_concurrency=8,
 )
 ```
@@ -243,11 +226,7 @@ await file_obj.save_async(
 ### Serialization
 
 ```python
-# To dict (for JSON serialization)
 data = file_obj.to_dict()
-# {"filename": "...", "backend": "s3-uploads", "content_type": "...", ...}
-
-# Update metadata
 file_obj.update_metadata({"processed": True, "dimensions": "800x600"})
 ```
 
@@ -258,14 +237,10 @@ file_obj.update_metadata({"processed": True, "dimensions": "800x600"})
 Both `ObstoreBackend` and (partially) `FSSpecBackend` support signed URL generation:
 
 ```python
-# Download URL (default 1 hour expiry)
 download_url = file_obj.sign()
 download_url = await file_obj.sign_async()
-
-# With custom expiry
 download_url = file_obj.sign(expires_in=3600)
 
-# Upload URL (presigned PUT)
 upload_url = file_obj.sign(for_upload=True, expires_in=900)
 upload_url = await file_obj.sign_async(for_upload=True, expires_in=900)
 ```
@@ -299,7 +274,9 @@ class UserProfile(UUIDAuditBase):
 ### Multiple Files Column
 
 ```python
-from advanced_alchemy.types.file_object import FileObject, FileObjectList, StoredObject
+from advanced_alchemy.base import UUIDAuditBase
+from advanced_alchemy.types.file_object import FileObjectList, StoredObject
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class Document(UUIDAuditBase):
@@ -334,16 +311,13 @@ AA registers session event listeners that coordinate file operations with databa
 ### Single File Lifecycle
 
 ```python
-# Create with pending content
 profile.avatar = FileObject(
     backend="s3-uploads",
     filename=f"avatars/{profile.id}.jpg",
     content=uploaded_bytes,
 )
 await session.commit()
-# File is saved to S3 after commit
 
-# Update (old file is deleted, new file is saved)
 profile.avatar = FileObject(
     backend="s3-uploads",
     filename=f"avatars/{profile.id}_v2.jpg",
@@ -351,7 +325,6 @@ profile.avatar = FileObject(
 )
 await session.commit()
 
-# Delete record (file is deleted from storage)
 await session.delete(profile)
 await session.commit()
 ```
@@ -359,7 +332,6 @@ await session.commit()
 ### Multiple Files Lifecycle
 
 ```python
-# Append a file
 doc.attachments.append(
     FileObject(
         backend="s3-uploads",
@@ -369,19 +341,15 @@ doc.attachments.append(
 )
 await session.commit()
 
-# Remove a file
 removed = doc.attachments.pop(0)
 await session.commit()
-# Removed file is deleted from storage
 
-# Replace entire list
-doc.attachments = MutableList(
+doc.attachments = FileObjectList(
     [
         FileObject(backend="s3-uploads", filename="docs/a.pdf", content=a_bytes),
     ]
 )
 await session.commit()
-# Old files not in new list are deleted, new files are saved
 ```
 
 ### Error Handling
@@ -389,17 +357,14 @@ await session.commit()
 By default (`raise_on_error=True`), file operation failures raise exceptions. Set `raise_on_error=False` for graceful degradation:
 
 ```python
-# Via session info
 session.info["file_object_raise_on_error"] = False
 ```
 
 ### Enabling/Disabling File Listeners
 
 ```python
-# Via session info
 session.info["enable_file_object_listener"] = False
 
-# Via engine execution options
 engine = create_async_engine(url, execution_options={"enable_file_object_listener": False})
 ```
 

@@ -73,7 +73,7 @@ from litestar_channels.backends.base import ChannelsBackend
 class AppSingletonsProvider(Provider):
     @provide(scope=Scope.APP)
     def provide_channels_backend(self, app: Litestar) -> ChannelsBackend:
-        return app.channels._backend  # noqa: SLF001
+        return app.channels._backend
 ```
 
 ## `FromDishka as Inject` alias
@@ -89,7 +89,6 @@ Cited from `litestar-sqlstack/src/sqlstack/lib/di.py:L42`.
 Import this alias once in a `app/lib/di.py` re-export module and use `Inject[SomeService]` in all handler signatures:
 
 ```python
-# app/lib/di.py
 from dishka.integrations.litestar import FromDishka as Inject, inject
 
 __all__ = ["Inject", "inject"]
@@ -150,7 +149,7 @@ class LitestarPersistenceProvider(Provider):
 class AppSingletonsProvider(Provider):
     @provide(scope=Scope.APP)
     def provide_channels_backend(self, app: Litestar) -> ChannelsBackend:
-        return app.channels._backend  # noqa: SLF001
+        return app.channels._backend
 ```
 
 ## Handler injection pattern
@@ -162,7 +161,7 @@ from dishka.integrations.litestar import inject
 from litestar import get
 from litestar.di import NamedDependency
 from sqlspec.core import OffsetPagination
-from litestar.params import SkipValidation  # Litestar >= 2.23
+from litestar.params import SkipValidation
 from sqlspec.core.filters import FilterTypes
 from sqlspec.extensions.litestar.providers import create_filter_dependencies
 from uuid import UUID

@@ -550,7 +550,7 @@ settings = get_settings()
 
 worker_plugin = WorkerPlugin(
     auto_discover=True,
-    start_worker=settings.worker.in_process_worker,  # True only on worker replicas.
+    start_worker=settings.worker.in_process_worker,
 )
 ```
 

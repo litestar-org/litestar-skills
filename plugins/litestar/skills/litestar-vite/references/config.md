@@ -5,20 +5,27 @@ Full reference for the Python `ViteConfig` family, the generated `.litestar.json
 ## ViteConfig
 
 ```python
-from litestar_vite import DeployConfig, PathConfig, RuntimeConfig, TypeGenConfig, ViteConfig
-from litestar_vite.config import ExternalDevServer, LoggingConfig
-from litestar_vite.inertia import InertiaConfig
+from litestar_vite import (
+    DeployConfig,
+    InertiaConfig,
+    PathConfig,
+    RuntimeConfig,
+    TypeGenConfig,
+    ViteConfig,
+)
+from litestar_vite.config import LoggingConfig, SPAConfig
 
 ViteConfig(
-    mode="spa",  # spa | template | hybrid | framework
-    enabled=True,  # False keeps CLI access but disables runtime wiring
-    paths=PathConfig(...),
-    runtime=RuntimeConfig(...),
+    mode="spa",
+    enabled=True,
+    paths=PathConfig(),
+    runtime=RuntimeConfig(),
     types=TypeGenConfig(generate_page_props=False),
-    inertia=None,  # True or InertiaConfig(...) for Inertia
-    logging=LoggingConfig(...),
-    deploy=DeployConfig(...),
-    dev_mode=False,  # env-toggled; True in dev
+    inertia=None,
+    spa=SPAConfig(),
+    logging=LoggingConfig(),
+    deploy=DeployConfig(),
+    dev_mode=False,
 )
 ```
 
@@ -64,6 +71,9 @@ available.
 | `set_static_folders` | `True` | Register static folders for production assets |
 | `detect_nodeenv` | `False` | Prefer a nodeenv-managed Node runtime when available |
 | `extra_route_prefixes` | `()` | Additional Litestar paths excluded from SPA/framework fallback routing |
+| `http2` | `True` | Enable HTTP/2 proxy support when `h2` is installed |
+| `csp_nonce` | `None` | CSP nonce injected into script tags |
+| `spa_handler` | `True` | Enable SPA catch-all route handler |
 
 `RuntimeConfig.proxy_mode` accepts `"vite"`, `"proxy"`, or `None`. Legacy
 `VITE_PROXY_MODE=direct` emits `DeprecationWarning` and becomes `"vite"`.
@@ -93,6 +103,41 @@ non-Vite frontend server owns HTML.
 The JS generator writes hey-api output under `output/api/`, plus
 `page-props.ts`, `schemas.ts`, and `static-props.ts` when enabled.
 
+## InertiaConfig & InertiaSSRConfig
+
+Import `InertiaConfig` and `InertiaSSRConfig` from `litestar_vite` or
+`litestar_vite.config`. Import `InertiaTypeGenConfig` from
+`litestar_vite.config`.
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `root_template` | `"index.html"` | Root HTML template / shell for initial page visit |
+| `component_opt_keys` | `("component", "page")` | Route handler opt keys used to match Inertia page components |
+| `redirect_unauthorized_to` | `None` | Named route or path to redirect 401/403 exceptions |
+| `redirect_404` | `None` | Named route or path to redirect 404 exceptions |
+| `extra_static_page_props` | `{}` | Static props shared across all Inertia pages |
+| `extra_session_page_props` | `set()` / `{}` | Keys pulled from session and merged into page props |
+| `shared_page_prop_types` | `None` | Type mappings for shared props (injected into generated `inertia.d.ts`) |
+| `encrypt_history` | `False` | Enable Inertia browser history encryption |
+| `type_gen` | `None` | `InertiaTypeGenConfig(include_default_auth=True, include_default_flash=True)` |
+| `ssr` | `None` | `InertiaSSRConfig(...)` or `bool` for SSR server integration |
+| `use_script_element` | `True` | Embed page JSON inside `<script type="application/json">` tag |
+| `precognition` | `False` | Enable Laravel Precognition compatible real-time validation exception handler |
+
+`InertiaSSRConfig` options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `enabled` | `True` | Enable SSR rendering |
+| `url` | `"http://127.0.0.1:13714/render"` | Local SSR renderer endpoint |
+| `timeout` | `2.0` | HTTP timeout in seconds for SSR render requests |
+| `target_selector` | `"#app"` | Container selector to replace with SSR output |
+| `command` | `None` | Command to spawn SSR node process (e.g. `["node", "resources/ssr.js"]`) |
+| `cwd` | `None` | Working directory for the SSR process |
+| `auto_start` | `True` | Automatically start and stop the SSR process with the Litestar lifespan |
+| `health_check` | `False` | Check SSR server availability on startup |
+| `health_check_timeout` | `10.0` | Maximum wait time in seconds for SSR server health check |
+
 ## LoggingConfig
 
 Import `LoggingConfig` from `litestar_vite.config`.
@@ -105,10 +150,9 @@ Import `LoggingConfig` from `litestar_vite.config`.
 | `suppress_vite_banner` | `False` | Hide the Vite startup banner |
 | `timestamps` | `False` | Prefix lifecycle output with timestamps |
 
-Release `0.27.0` removed routine success/start/stop chatter. Warnings honor
-quiet mode, and non-TTY warnings and errors use Python logging. Missing assets
-stay quiet until a serving path needs them, then errors instruct the user to
-run `litestar assets build` without exposing absolute manifest paths.
+Warnings honor quiet mode, and non-TTY warnings and errors use Python logging.
+Missing assets stay quiet until a serving path needs them, then errors instruct
+the user to run `litestar assets build` without exposing absolute manifest paths.
 
 ## DeployConfig
 
@@ -125,7 +169,7 @@ The JS-side plugin (`litestar-vite-plugin` from npm) reads `.litestar.json`. Kee
 import litestar from "litestar-vite-plugin"
 
 litestar({
-  input: ["src/main.tsx", "src/styles.css"],   // under ViteConfig.paths.resource_dir
+  input: ["src/main.tsx", "src/styles.css"],
 })
 ```
 

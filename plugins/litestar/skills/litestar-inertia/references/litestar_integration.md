@@ -5,21 +5,34 @@ For full litestar-vite reference, see `../../litestar-vite/SKILL.md`.
 ## Python Backend Setup
 
 ```python
-from litestar import Litestar, get
+from litestar import Litestar
 from litestar.middleware.session.client_side import CookieBackendConfig
-from litestar_vite import PathConfig, TypeGenConfig, ViteConfig, VitePlugin
-from litestar_vite.inertia import InertiaConfig
-from litestar_vite.inertia import InertiaRedirect, InertiaResponse
+from litestar_vite import (
+    InertiaConfig,
+    InertiaSSRConfig,
+    PathConfig,
+    TypeGenConfig,
+    ViteConfig,
+    VitePlugin,
+)
 
 session_backend = CookieBackendConfig(secret=b"development-only-secret-32-chars")
 
 vite = VitePlugin(
     config=ViteConfig(
-        mode="hybrid",  # Inertia mode
+        mode="hybrid",
         paths=PathConfig(resource_dir="resources"),
-        inertia=InertiaConfig(root_template="base.html"),
+        inertia=InertiaConfig(
+            root_template="base.html",
+            precognition=True,
+            ssr=InertiaSSRConfig(
+                enabled=True,
+                url="http://127.0.0.1:13714/render",
+                command=["node", "resources/ssr.js"],
+            ),
+        ),
         types=TypeGenConfig(
-            generate_page_props=True,  # Inertia page props
+            generate_page_props=True,
             output="resources/generated",
         ),
     )
@@ -38,30 +51,42 @@ from litestar import Request, get, post
 from litestar_vite.inertia import (
     InertiaBack,
     InertiaResponse,
+    always,
     defer,
     error,
+    lazy,
+    merge,
+    once,
+    optional,
     share,
 )
 
 
 @get("/users", component="Users/Index")
 async def users_page() -> InertiaResponse:
+    """Render users page with deferred, lazy, and merge props."""
     return InertiaResponse(
         content={
             "users": await fetch_users(),
+            "auth": always("auth", {"canCreate": True}),
+            "settings": once("settings", fetch_settings),
+            "comments": optional("comments", fetch_comments),
             "stats": defer("stats", fetch_stats),
+            "feed": merge("feed", await fetch_feed(), strategy="append"),
         },
     )
 
 
 @get("/dashboard", component="Dashboard")
 async def dashboard(request: Request) -> InertiaResponse:
+    """Render dashboard page and share authentication state."""
     share(request, "auth", {"user": request.user})
     return InertiaResponse(content={"summary": await load_summary()})
 
 
 @post("/users")
 async def create_user(request: Request, data: UserCreate) -> InertiaBack:
+    """Validate and create a user, flashing errors on conflict."""
     if await email_exists(data.email):
         error(request, "email", "Email already exists")
         return InertiaBack(request)
@@ -74,7 +99,7 @@ async def create_user(request: Request, data: UserCreate) -> InertiaBack:
 ```ts
 // vite.config.ts
 import { defineConfig } from "vite"
-import react from "@vitejs/plugin-react"   // or vue, svelte
+import react from "@vitejs/plugin-react"
 import litestar from "litestar-vite-plugin"
 
 export default defineConfig({
@@ -82,7 +107,7 @@ export default defineConfig({
     react(),
     litestar({
       input: ["resources/app.tsx"],
-      ssr: "resources/ssr.tsx",   // optional SSR entry
+      ssr: "resources/ssr.tsx",
     }),
   ],
 })
@@ -137,7 +162,7 @@ declare module "@inertiajs/react" {
 import { usePage } from "@inertiajs/react"
 
 export default function Dashboard() {
-  const { auth, flash } = usePage().props   // fully typed
+  const { auth, flash } = usePage().props
 }
 ```
 
@@ -153,30 +178,32 @@ export default function Dashboard() {
   Non-`GET` submissions continue to their handlers.
 - Infinite-scroll metadata is `scrollProps.<propName>`, not one flat object.
 
-## Inertia Features
+## Precognition & History Encryption
 
 ```python
-# Precognition (form validation preview)
 from litestar import Request, get, post
-from litestar_vite.inertia import InertiaRedirect, precognition
+from litestar_vite.inertia import InertiaConfig, InertiaRedirect, InertiaResponse, precognition
+
+inertia_config = InertiaConfig(encrypt_history=True, precognition=True)
 
 
 @post("/users")
 @precognition
-async def create_user(request: Request, data: CreateUserDTO) -> InertiaRedirect:
+async def create_user_precognition(request: Request, data: CreateUserDTO) -> InertiaRedirect:
+    """Create a user for a non-Precognition submission."""
     user = await save_user(data)
-    return InertiaRedirect(request, "/users")
+    return InertiaRedirect(request, f"/users/{user.id}")
 
 
-# History encryption
-inertia_config = InertiaConfig(encrypt_history=True)
-
-
-# Clear history on sensitive pages
 @get("/login", component="Auth/Login")
 async def login_page() -> InertiaResponse:
+    """Start a page with a new browser history-encryption key."""
     return InertiaResponse(content={}, clear_history=True)
 ```
+
+`@precognition` returns `204 No Content` only for a request with
+`Precognition: true` after DTO validation succeeds. `InertiaConfig(precognition=True)`
+installs the matching validation-error handler.
 
 ## CLI
 
@@ -185,4 +212,5 @@ litestar assets install
 litestar assets serve
 litestar assets build
 litestar assets generate-types
+litestar assets doctor
 ```

@@ -7,28 +7,31 @@ verified principal.
 
 ## Choosing a Provider
 
-| Provider | Use for |
-| --- | --- |
-| Local accounts | Session, token, and hybrid applications |
-| OAuth / OpenID Connect | Browser sign-in and account linking |
-| Google IAP | Verifying the assertion added by the IAP proxy, for one exact audience |
-| API keys | Service clients, from a digest-only application store |
-| Workload JWTs | Non-user services, through a pinned issuer, audience, and JWKS endpoint |
+| Provider | Use for | Configuration |
+| --- | --- | --- |
+| Local accounts | Session cookies, bearer tokens, or hybrid; requires `[argon2,mfa]` | `SecurityConfig(local_auth=LocalAuth.session(...) / .tokens(...) / .hybrid(...))` |
+| OAuth / OpenID Connect | Browser sign-in, account linking, OIDC identity | `SecurityConfig(oauth=OAuthConfig(...))` |
+| Google IAP | Verifying Google Identity-Aware Proxy JWT assertions | `SecurityConfig(iap=GoogleIAPConfig(...))` |
+| API keys | Machine/service clients with digest-only storage | `SecurityConfig(api_key=APIKeyConfig(...))` |
+| Local JWKS | Exposing application public keys for issued JWTs | `SecurityConfig(local_jwks=LocalJWKSConfig(...))` |
+| Service tokens | Validating incoming workload JWTs from external OIDC issuers | `SecurityConfig(service_token=ServiceTokenConfig(...))` |
+| MFA | TOTP, recovery codes, and step-up authentication | `SecurityConfig(mfa=MFAConfig(...))` |
+| Passkeys | WebAuthn FIDO2 registration, assertion, and step-up | `SecurityConfig(passkeys=PasskeyConfig(...))` |
 
 ## Installation Extras
 
-Core install already covers JWT/JWKS validation, API-key authentication, IAP
+Core install covers JWT/JWKS validation, API-key authentication, IAP
 verification, and OIDC token verification.
 
 | Install | Enables |
 | --- | --- |
-| `litestar-security[mfa]` | TOTP, recovery codes, step-up; includes the reference `SecretProtector` |
+| `litestar-security[mfa]` | TOTP, recovery codes, step-up; includes reference `SecretProtector` |
 | `litestar-security[passkeys]` | WebAuthn passkeys |
-| `litestar-security[oauth]` | OAuth/OIDC provider tree (capability marker; adds no distribution) |
+| `litestar-security[oauth]` | OAuth/OIDC provider tree |
 | `litestar-security[argon2]` | Argon2-backed local-password authentication |
 | `litestar-security[all]` | Every optional capability |
 
-## OAuth Transaction and Token Protection
+## OAuth Transaction and Account Protection
 
 The in-memory OAuth references require an `OAuthTransactionProtector` so the
 PKCE verifier, nonce, and refreshable provider tokens are never kept as
@@ -38,8 +41,8 @@ stores:
 ```python
 from litestar_security.providers.oauth import (
     AESGCMOAuthTransactionProtector,
+    MemoryOAuthAccountStore,
     MemoryOAuthTransactionStore,
-    MemoryTokenVault,
     OAuthTransactionProtectorKey,
 )
 
@@ -57,7 +60,7 @@ protector = AESGCMOAuthTransactionProtector(
     ),
 )
 transactions = MemoryOAuthTransactionStore(protector=protector)
-token_vault = MemoryTokenVault(
+account_store = MemoryOAuthAccountStore(
     provider="github",
     client_id="github-client-id",
     protector=protector,
@@ -84,21 +87,21 @@ narrows rather than widens authority:
 ```python
 from litestar import get
 
-from litestar_security import all_of, required, requires_team_role
+from litestar_security import all_of, required, requires_tenant_role
 
 
-@get("/teams/{team_id:str}/exports", auth=all_of("api_key", "workload_jwt"))
-async def team_exports(team_id: str) -> dict[str, str]:
-    return {"team_id": team_id}
+@get("/tenants/{tenant_id:str}/exports", auth=all_of("api-key", "service-jwt"))
+async def tenant_exports(tenant_id: str) -> dict[str, str]:
+    return {"tenant_id": tenant_id}
 
 
 @get(
-    "/teams/{team_id:str}",
+    "/tenants/{tenant_id:str}",
     auth=required(),
-    guards=[requires_team_role(team_parameter="team_id", roles={"owner"})],
+    guards=[requires_tenant_role(tenant_parameter="tenant_id", roles={"owner"})],
 )
-async def team_settings(team_id: str) -> dict[str, str]:
-    return {"team_id": team_id}
+async def tenant_settings(tenant_id: str) -> dict[str, str]:
+    return {"tenant_id": tenant_id}
 ```
 
 Both credentials must resolve to the same subject, and the effective grants are
@@ -112,7 +115,7 @@ the intersection of what each carries.
 
 ## Official References
 
-- <https://github.com/cofin/litestar-security/blob/v0.3.0/docs/providers.rst>
-- <https://github.com/cofin/litestar-security/blob/v0.3.0/docs/jwt-and-jwks.rst>
-- <https://github.com/cofin/litestar-security/blob/v0.3.0/docs/accounts.rst>
-- <https://github.com/cofin/litestar-security/blob/v0.3.0/docs/resource-server.rst>
+- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/providers.rst>
+- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/jwt-and-jwks.rst>
+- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/accounts.rst>
+- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/resource-server.rst>

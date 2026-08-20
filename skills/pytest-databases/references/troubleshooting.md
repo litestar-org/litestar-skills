@@ -40,8 +40,8 @@ Start the selected daemon and verify the current user can access its socket.
 ## Image or health check times out
 
 Confirm the selected image supports the machine architecture and that the
-container runtime can pull it. Override the backend's image or `platform`
-fixture in `conftest.py`; do not invent an image environment variable.
+container runtime can pull it. Override the backend-specific image fixture or
+the shared `platform` fixture in `conftest.py`.
 
 ```python
 import pytest

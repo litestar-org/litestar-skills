@@ -37,7 +37,7 @@ Check the adapter config flags before building generic tooling:
 
 | Capability | Native adapters | Caveats |
 | --- | --- | --- |
-| Native row streaming | All adapters except `duckdb` and `spanner` | `select_stream(..., native_only=True)` rejects unsupported adapters. ADBC, Arrow ODBC, and `mssql_python` expose native stream implementations in 0.56. |
+| Native row streaming | All adapters except `duckdb` and `spanner` | `select_stream(..., native_only=True)` rejects unsupported adapters. ADBC, Arrow ODBC, and `mssql_python` expose native stream implementations. |
 | Native Arrow export | All adapters except `pymssql` | Availability also requires PyArrow. `supports_arrow_streaming` is a separate capability and is not implied by native table export. |
 | Native Arrow import | All adapters except `bigquery` and `pymssql` | Check `config.storage_capabilities()` at runtime. `load_from_records()` normalizes through Arrow. |
 | ADK session/event and memory stores | Adapter-local `adk` packages, including PostgreSQL, CockroachDB, MySQL, SQLite, Oracle, DuckDB, ADBC, and Spanner families | BigQuery is not an ADK backend. Verify the concrete store export for the selected adapter instead of inferring it from database support. |

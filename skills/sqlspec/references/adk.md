@@ -12,11 +12,11 @@ All store classes live under `sqlspec.extensions.adk`. Each has an async base (u
 
 | Store | Purpose | Service | Record type |
 | --- | --- | --- | --- |
-| `BaseAsyncADKStore` / `BaseSyncADKStore` | Conversation sessions + full event history | `SQLSpecSessionService` | `SessionRecord`, `EventRecord` |
-| `BaseAsyncADKMemoryStore` / `BaseSyncADKMemoryStore` | Long-term memory entries searchable per user | `SQLSpecMemoryService`, `SQLSpecSyncMemoryService` | `MemoryRecord` |
-| `BaseAsyncADKArtifactStore` / `BaseSyncADKArtifactStore` | Versioned artifact **metadata** contract (content lives in object storage) | `SQLSpecArtifactService` | `ArtifactRecord` |
+| `BaseAsyncADKStore` / `BaseSyncADKStore` | Conversation sessions + full event history | `SQLSpecSessionService` | `StoredSession`, `StoredEvent` |
+| `BaseAsyncADKMemoryStore` / `BaseSyncADKMemoryStore` | Long-term memory entries searchable per user | `SQLSpecMemoryService`, `SQLSpecSyncMemoryService` | `StoredMemory` |
+| `BaseAsyncADKArtifactStore` / `BaseSyncADKArtifactStore` | Versioned artifact **metadata** contract (content lives in object storage) | `SQLSpecArtifactService` (async store) | `StoredArtifact` |
 
-All records are `TypedDict`s (see `sqlspec/extensions/adk/_types.py`, `memory/_types.py`, `artifact/_types.py`) so mypyc can compile the service layer without pulling in Pydantic at runtime. Adapter support guarantees cover session/event and memory stores. Adapter-specific concrete artifact metadata stores are not part of the support matrix.
+All records are `TypedDict`s (see `sqlspec/extensions/adk/_types.py`, `memory/_types.py`, `artifact/_types.py`). Adapter support guarantees cover session/event and memory stores. Adapter-specific concrete artifact metadata stores are not part of the support matrix.
 
 ### Session store
 
@@ -24,7 +24,32 @@ Stores one row per session plus N rows per event. The full ADK `Event` is dumped
 
 ### Memory store
 
-Holds searchable memory entries extracted from completed sessions. The `SQLSpecMemoryService.add_session_to_memory(session)` method walks the events and writes one `MemoryRecord` per message with both structured `content_json` and flattened `content_text` (used for LIKE / FTS search).
+Holds searchable memory entries extracted from completed sessions. The `SQLSpecMemoryService.add_session_to_memory(session)` method walks the events and writes one `StoredMemory` record per message with both structured `content_json` and flattened `content_text` (used for LIKE / FTS search).
+
+### Bounded session reads and lists
+
+Pass ADK's `GetSessionConfig` to bound event history when loading a transcript. SQLSpec also adds deterministic ordering and offset pagination to session lists:
+
+```python
+from google.adk.sessions.base_session_service import GetSessionConfig
+
+session = await service.get_session(
+    app_name="support-bot",
+    user_id=user_id,
+    session_id=session_id,
+    config=GetSessionConfig(num_recent_events=200),
+)
+recent_sessions = await service.list_sessions(
+    app_name="support-bot",
+    user_id=user_id,
+    order_by="update_time",
+    descending=True,
+    limit=20,
+    offset=0,
+)
+```
+
+`GetSessionConfig.after_timestamp` filters events after a Unix timestamp. `list_sessions()` accepts only `create_time` or `update_time` for `order_by`; a positive `offset` requires a finite `limit`.
 
 ### Artifact store
 
@@ -156,6 +181,32 @@ async def new_conversation(tenant_id: int, user_id: str) -> str:
 
 `SQLSpecSessionService` accepts async and sync stores. Sync store calls are bridged through SQLSpec's bounded async bridge because ADK's `BaseSessionService` interface is async. Memory has both `SQLSpecMemoryService` and `SQLSpecSyncMemoryService` surfaces.
 
+## Maintenance & Pruning
+
+`sqlspec.extensions.adk` provides retention helpers for sessions, events, memory, user state, and artifacts. They accept a compatible store or database config, except `prune_artifacts()`, which requires an `SQLSpecArtifactService` because it also removes content objects.
+
+- `prune_sessions(target, idle_days=..., app_name=...)` / `prune_sessions_sync(...)`
+- `prune_events(target, older_than_days=..., app_name=...)` / `prune_events_sync(...)`
+- `prune_memory(target, older_than_days=..., app_name=..., scope=...)` / `prune_memory_sync(...)`
+- `prune_artifacts(service, older_than_days=..., app_name=...)` / `prune_artifacts_sync(...)`
+- `prune_user_state(target, idle_days=..., app_name=...)` / `prune_user_state_sync(...)`
+
+Each function returns a `PruneReport` TypedDict with `deleted_count`, `elapsed_ms`, and `table`.
+
+Use `scope="user"` or `scope="app"` with `prune_memory()` to limit retention to that memory scope; `scope="all"` covers both.
+
+### CLI Commands
+
+The `sqlspec` CLI includes ADK memory maintenance commands:
+
+```bash
+# Clean up memory older than 30 days
+sqlspec adk memory cleanup --days 30
+
+# Verify memory store integrity
+sqlspec adk memory verify
+```
+
 ## Public API Summary
 
 Top-level exports from `sqlspec.extensions.adk`:
@@ -164,7 +215,9 @@ Top-level exports from `sqlspec.extensions.adk`:
 - `BaseAsyncADKStore`, `BaseSyncADKStore`
 - `BaseAsyncADKMemoryStore`, `BaseSyncADKMemoryStore`
 - `BaseAsyncADKArtifactStore`, `BaseSyncADKArtifactStore`
-- `SessionRecord`, `EventRecord`, `MemoryRecord`, `ArtifactRecord`
+- `StoredSession`, `StoredEvent`, `StoredMemory`, `StoredArtifact`
+- `PruneReport`, `SessionOrderBy`
+- `prune_sessions`, `prune_events`, `prune_memory`, `prune_artifacts`, `prune_user_state`
 - `ADKConfig` (TypedDict describing `extension_config["adk"]`)
 
 `SQLSpecSessionService.append_event()` uses the store's `append_event_and_update_state()` as the durable write boundary. The event insert, session state update, and app/user scoped-state upserts succeed together. `temp:` state is stripped before persistence; `app:` and `user:` state live in separate tables and are merged back when sessions load.
@@ -174,3 +227,4 @@ Top-level exports from `sqlspec.extensions.adk`:
 - [extensions.md](extensions.md) — the wider Litestar plugin surface.
 - [storage.md](storage.md) — storage backends used for artifact content.
 - [migrations.md](migrations.md) — how ADK tables get created via `include_extensions=["adk"]`.
+- [vector-search.md](vector-search.md) — vector search and semantic retrieval for agent workflows.

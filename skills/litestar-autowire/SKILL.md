@@ -1,6 +1,6 @@
 ---
 name: litestar-autowire
-description: "Auto-activate for litestar_autowire, AutowirePlugin, AutowireConfig, domain_packages, AutowireIntegration, AutowireLoader, clear_autowire_cache, or automatic controller/listener/task discovery. Not for manual Router composition — keep explicit wiring when discovery adds no value."
+description: "Auto-activate for litestar_autowire, AutowirePlugin, AutowireConfig, domain_packages, AutowireIntegration, AutowireLoader, or clear_autowire_cache. Not for manual Router composition — use explicit routes."
 ---
 
 # litestar-autowire
@@ -16,12 +16,11 @@ consistent convention.
 
 ## Code Style Rules
 
-- Configure dotted package roots with `domain_packages`; never use the removed
-  `packages` name.
+- Configure dotted package roots with `domain_packages`.
 - Import public APIs from `litestar_autowire`.
 - Keep controllers and listeners in their owning domain package.
 - Keep route handlers and listeners async when they perform I/O.
-- Use `integrations`, never the rejected `extensions` compatibility argument.
+- Configure third-party loaders via `integrations` (`DishkaIntegration()`, `QueuesIntegration()`).
 - Configure Dishka and Litestar Queues separately; Autowire only discovers or
   wraps their domain-owned components.
 - Call `clear_autowire_cache()` when tests create, replace, or remove modules.
@@ -175,7 +174,6 @@ project already uses Dishka and needs `DishkaRouter`. See
 ## Example
 
 ```python
-# my_app/domains/accounts/controllers.py
 from litestar import Controller, get
 
 
@@ -188,7 +186,6 @@ class AccountController(Controller):
 ```
 
 ```python
-# my_app/app.py
 from litestar import Litestar
 from litestar_autowire import AutowireConfig, AutowirePlugin
 

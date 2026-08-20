@@ -4,31 +4,26 @@
 
 ### Type Annotation Rules
 
+Stringified type hints for non-builtins and built-in generics without `__future__.annotations` in core/driver code:
+
 ```python
-# PROHIBITED - Never use future annotations
-from __future__ import annotations
-
-
-# REQUIRED - Stringified type hints for non-builtins
 def process_config(config: "SQLConfig") -> "SessionResult": ...
 
 
-# REQUIRED - PEP 604 pipe syntax for unions
 def get_value(key: str) -> str | None: ...
 
 
-# REQUIRED - Stringified built-in generics
 def get_items() -> "list[str]": ...
 
 
-# REQUIRED - Tuple for __all__ definitions
-__all__ = ("MyClass", "my_function", "CONSTANT")
+__all__ = ("CONSTANT", "MyClass", "my_function")
 ```
 
 ### Import Standards
 
+Order: stdlib -> third-party -> first-party. Use `TYPE_CHECKING` for type-only imports:
+
 ```python
-# Order: stdlib -> third-party -> first-party
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -37,7 +32,6 @@ from sqlglot import exp
 from sqlspec.core.result import SQLResult
 from sqlspec.protocols import HasWhereProtocol
 
-# Use TYPE_CHECKING for type-only imports
 if TYPE_CHECKING:
     from sqlspec.core.statement import SQL
 ```
@@ -59,17 +53,15 @@ if TYPE_CHECKING:
 
 ### Testing Standards
 
+Use function-based tests:
+
 ```python
-# GOOD - Function-based test (REQUIRED)
 def test_config_validation():
     config = AsyncpgConfig(connection_config={"dsn": "postgresql://..."})
     assert config.is_async is True
-
-
-# BAD - Class-based test (PROHIBITED)
-class TestConfig:
-    def test_validation(self): ...
 ```
+
+Do not use class-based tests.
 
 **Guidelines:**
 
@@ -83,11 +75,6 @@ class TestConfig:
 Use guards from `sqlspec.utils.type_guards` instead of `hasattr()`:
 
 ```python
-# BAD - Defensive programming
-if hasattr(obj, "method") and obj.method:
-    result = obj.method()
-
-# GOOD - Use type guards
 from sqlspec.utils.type_guards import supports_where
 
 if supports_where(obj):
@@ -134,13 +121,12 @@ class MyMetadata:
 When using `@dataclass` with a `@classmethod` factory that references defaults, use module-level `Final` constants:
 
 ```python
-from typing import TYPE_CHECKING, Any, Final
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-# Module-level constants for mypyc compatibility
 _DEFAULT_MAX_RETRIES: Final[int] = 10
 _DEFAULT_BASE_DELAY_MS: Final[float] = 50.0
 _DEFAULT_ENABLE_LOGGING: Final[bool] = True
@@ -170,33 +156,14 @@ class RetryConfig:
 - `Final` tells mypyc the value is a compile-time constant, enabling inlining
 - Module-level constants provide single source of truth
 
-**Prohibited pattern (causes mypyc error):**
-
-```python
-@dataclass
-class BadConfig:
-    max_retries: int = 10
-
-    @classmethod
-    def from_features(cls, features):
-        return cls(max_retries=features.get("max_retries", cls.max_retries))  # ERROR!
-```
-
 ### Mypyc-Incompatible Protocol Patterns
 
-Avoid `@runtime_checkable` on Protocol classes in mypyc-compiled modules:
+Avoid `@runtime_checkable` on Protocol classes in mypyc-compiled modules when isinstance checks are not needed:
 
 ```python
-# BAD - Incompatible with mypyc
-from typing import Protocol, runtime_checkable
+from typing import Protocol
 
 
-@runtime_checkable  # This breaks mypyc
-class MyProtocol(Protocol):
-    def method(self) -> None: ...
-
-
-# GOOD - Remove decorator if isinstance checks aren't needed
 class MyProtocol(Protocol):
     def method(self) -> None: ...
 ```

@@ -1,8 +1,8 @@
 # litestar-security — Composition Reference
 
 A Litestar application rarely contains only its own handlers. Static assets, a
-queue dashboard, a schema browser, and a debug toolbar all arrive as routes
-another plugin registered — and none of them carry an `auth` policy.
+schema browser, and a debug toolbar can arrive as routes another plugin
+registered — and none of them carry an `auth` policy.
 
 With mechanisms configured, a route declaring no policy compiles to implicit
 `required()`. **A freshly added static files router answers `401` until it is
@@ -32,10 +32,7 @@ from litestar.static_files import create_static_files_router
 
 from litestar_security import SecurityConfig, SecurityPlugin
 
-config = SecurityConfig(
-    mechanisms=[api_key_mechanism],
-    exclude=["^/static", "^/assets"],
-)
+config = SecurityConfig(exclude=["^/static", "^/assets"])
 
 app = Litestar(
     route_handlers=[
@@ -100,7 +97,6 @@ default.
 | --- | --- | --- |
 | `litestar-vite` | Static route for the built bundle, plus the dev proxy | `^` + configured asset URL, e.g. `"^/static"` |
 | `litestar-saq` | Queue dashboard router and its API | `^` + configured web path, e.g. `"^/saq"` |
-| `litestar-queues` | Queue management and status routes | `^` + configured route prefix |
 | `litestar-asyncapi` | AsyncAPI document and its UI | `^` + configured schema path |
 | `debug-toolbar` | Toolbar panels and assets | `^` + configured toolbar path |
 
@@ -110,6 +106,16 @@ Confirm against the routes the built application actually registers:
 for route in app.routes:
     print(route.path)
 ```
+
+## Inspecting Route Posture
+
+Use the CLI command to inspect the compiled security posture across all registered routes:
+
+```bash
+LITESTAR_APP=app:app litestar security routes
+```
+
+This displays a table containing each route's Path, Method, Policy (`required`, `optional`, `public`, `exclude`), Auth status, CSRF enforcement, and inherited Guards. It also warns if an excluded route carries inherited guards that would still deny access.
 
 ## Leaving a Plugin's Routes Protected
 
@@ -135,4 +141,4 @@ an exclusion pattern.
 
 ## Official References
 
-- <https://github.com/cofin/litestar-security/blob/v0.3.0/docs/composition.rst>
+- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/composition.rst>

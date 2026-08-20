@@ -56,10 +56,11 @@ Control volume rates using bounded rates and clamps.
 from sqlspec.observability import SamplingConfig
 
 config = SamplingConfig(
-    sample_rate=0.1,                 # Sample 10% of requests
-    force_sample_on_error=True,     # Always sample errors
-    deterministic=True,              # Stable across replicas
+    sample_rate=0.1,
+    force_sample_on_error=True,
+    deterministic=True,
 )
+```
 
 ---
 
@@ -101,14 +102,12 @@ class ChangeBroadcaster:
 
     def __call__(self, event: "StatementEvent") -> None:
         sql_upper = event.sql.upper()
-        if self.table.upper() not in sql_upper or (
-            "INSERT" not in sql_upper and "UPDATE" not in sql_upper
-        ):
-            return  # quick-match filter — avoids create_task overhead for unrelated queries
+        if self.table.upper() not in sql_upper or ("INSERT" not in sql_upper and "UPDATE" not in sql_upper):
+            return
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            return  # sync script / test — no event loop; graceful no-op
+            return
         loop.create_task(self._publish(event))
 
     async def _publish(self, event: "StatementEvent") -> None:
@@ -163,9 +162,6 @@ dbm = SQLSpec(observability_config=observability)
 from sqlspec import SQLSpec
 from sqlspec.extensions.otel import enable_tracing
 
-# Auto-discovery — uses the globally configured TracerProvider (the common case
-# when you've already called `opentelemetry.trace.set_tracer_provider(...)` at
-# app startup).
 observability = enable_tracing(resource_attributes={"service.name": "orders-api"})
 dbm = SQLSpec(observability_config=observability)
 ```
@@ -339,7 +335,7 @@ Per-request attributes flow through a context manager inside middleware:
 from sqlspec.core.sqlcommenter import SQLCommenterContext
 
 with SQLCommenterContext.scope({"route": "/orders/{id}", "controller": "OrderController"}):
-    ...  # run handler; every SQL statement inside carries these attributes
+    pass
 ```
 
 ### Emitted Comment

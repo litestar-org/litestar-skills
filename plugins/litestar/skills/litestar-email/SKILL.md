@@ -1,6 +1,6 @@
 ---
 name: litestar-email
-description: "Auto-activate for litestar_email, EmailPlugin, EmailConfig, EmailService, EmailMessage, SMTPConfig, ResendConfig, SendGridConfig, MailgunConfig, SESConfig, or InMemoryBackend. Not for marketing-campaign platforms — use their dedicated SDKs."
+description: "Auto-activate for litestar_email, EmailPlugin, EmailConfig, EmailService, EmailMessage, InMemoryBackend, SMTPConfig, ResendConfig, SendGridConfig, MailgunConfig, or SESConfig. Not for marketing APIs — use vendor SDKs."
 ---
 
 # litestar-email
@@ -29,11 +29,14 @@ from the transport.
 pip install "litestar-email>=0.4.0"
 pip install "litestar-email[smtp]>=0.4.0"   # aiosmtplib
 pip install "litestar-email[ses]>=0.4.0"    # botocore for SigV4
-pip install "litestar-email[aiohttp]>=0.4.0" # optional HTTP transport
+pip install "litestar-email[httpx]>=0.4.0"   # default HTTP transport
+pip install "litestar-email[aiohttp]>=0.4.0" # alternative HTTP transport
 ```
 
-The HTTP API backends use `httpx` by default. Select the `aiohttp` extra only
-when the project already standardizes on that transport.
+The HTTP API backends select `httpx` by default, but the transport is optional
+in `litestar-email` itself. Install the `httpx` or `aiohttp` extra (unless the
+project already provides that dependency), and select `aiohttp` only when the
+project standardizes on it.
 
 ### Configure the Plugin
 
@@ -176,10 +179,10 @@ The message collections have these exact shapes:
 | Local output only | `backend="console"` | None |
 | Unit or integration tests | `backend="memory"` | None |
 | SMTP server or Mailpit | `backend=SMTPConfig(...)` | `smtp` |
-| Existing Resend account | `backend=ResendConfig(...)` | None |
-| Existing SendGrid account | `backend=SendGridConfig(...)` | None |
-| Existing Mailgun account | `backend=MailgunConfig(...)` | None |
-| Existing AWS SES setup | `backend=SESConfig(...)` | `ses` |
+| Existing Resend account | `backend=ResendConfig(...)` | `httpx` or `aiohttp` |
+| Existing SendGrid account | `backend=SendGridConfig(...)` | `httpx` or `aiohttp` |
+| Existing Mailgun account | `backend=MailgunConfig(...)` | `httpx` or `aiohttp` |
+| Existing AWS SES setup | `backend=SESConfig(...)` | `ses` plus `httpx` or `aiohttp` |
 | Project-owned backend | Registered name or backend-class import path | Project-specific |
 
 Backend config fields:
@@ -321,8 +324,7 @@ async def test_welcome_email() -> None:
 ```
 
 For direct backend tests, use `backend = config.get_backend()` and await
-`backend.send_messages([...])`. Never inspect a fictional outbox on
-`EmailService` or `EmailConfig`.
+`backend.send_messages([...])`. In-memory inspection uses `InMemoryBackend.outbox`.
 
 <workflow>
 

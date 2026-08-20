@@ -4,7 +4,7 @@ The data dictionary is SQLSpec's runtime database-introspection interface. Use t
 
 ## Metadata Contract
 
-SQLSpec 0.56 distinguishes capability, result, identity, and fidelity:
+SQLSpec distinguishes capability, result, identity, and fidelity:
 
 - `MetadataCapabilityProfile` reports support by metadata domain.
 - `MetadataCapability` distinguishes supported, gated, unsupported, unknown, and not-implemented domains.
@@ -106,7 +106,7 @@ Use the runtime capability profile as the final answer; do not hard-code a stati
 
 ## Version and Capability Caches
 
-Adapter data dictionaries cache server-version and capability probes at the config/pool scope. Oracle 0.56 shares server-version, JSON-storage, and extension-table capability detection through that cache. Do not create a second application-global cache for these probes.
+Adapter data dictionaries cache server-version and capability probes at the config/pool scope. Oracle shares server-version, JSON-storage, and extension-table capability detection through that cache. Do not create a second application-global cache for these probes.
 
 ## Additive Schema Reconciliation
 

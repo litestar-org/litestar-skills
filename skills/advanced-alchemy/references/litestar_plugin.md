@@ -54,32 +54,44 @@ from app.db import models as m
 
 
 class UserReadDTO(SQLAlchemyDTO[m.User]):
+    """DTO for serializing user responses without security-sensitive fields."""
+
     config = SQLAlchemyDTOConfig(
         exclude={"hashed_password", "totp_secret"},
     )
 
 
 class UserCreateDTO(SQLAlchemyDTO[m.User]):
+    """DTO for deserializing user creation payloads."""
+
     config = SQLAlchemyDTOConfig(
         include={"email", "name", "username"},
     )
 
 
 class UserUpdateDTO(SQLAlchemyDTO[m.User]):
+    """DTO for partial user updates where all fields are optional."""
+
     config = SQLAlchemyDTOConfig(
         include={"name", "username"},
-        partial=True,  # All fields become optional
+        partial=True,
     )
 ```
 
 ### DTO with Renamed Fields
 
 ```python
-class UserReadDTO(SQLAlchemyDTO[m.User]):
+from advanced_alchemy.extensions.litestar import SQLAlchemyDTO, SQLAlchemyDTOConfig
+from app.db import models as m
+
+
+class UserReadCamelDTO(SQLAlchemyDTO[m.User]):
+    """DTO with camelCase field naming."""
+
     config = SQLAlchemyDTOConfig(
         exclude={"hashed_password"},
-        rename_fields={"team_id": "teamId"},  # camelCase output
-        rename_strategy="camel",  # or apply globally
+        rename_fields={"team_id": "teamId"},
+        rename_strategy="camel",
     )
 ```
 

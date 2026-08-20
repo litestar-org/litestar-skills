@@ -51,7 +51,7 @@ Advanced Alchemy is NOT a raw ORM — it is a **service/repository layer** built
 | --- | --- | --- | --- |
 | `UUIDAuditBase` | UUID v4 | `created_at`, `updated_at` | Default choice for most models |
 | `UUIDBase` | UUID v4 | None | Lookup tables, tags, no audit needed |
-| `UUIDv7AuditBase` | UUID v7 | `created_at`, `updated_at` | Time-sortable IDs (preferred over v6) |
+| `UUIDv7AuditBase` | UUID v7 | `created_at`, `updated_at` | Time-ordered IDs when `uuid-utils` is installed or Python supplies UUIDv7 |
 | `BigIntAuditBase` | BigInt auto-increment | `created_at`, `updated_at` | Legacy systems, integer PKs |
 | `NanoIDAuditBase` | NanoID string | `created_at`, `updated_at` | URL-friendly short IDs |
 | `IdentityAuditBase` | database identity | `created_at`, `updated_at` | Native IDENTITY columns |
@@ -246,7 +246,7 @@ For detailed guides and code examples, refer to the following documents in `refe
 - **[Migrations](references/migrations.md)**
   Alembic integration, CLI commands, metadata registry, and multi-database support.
 - **[Types](references/types.md)**
-  Complete catalog of custom column types: EncryptedString, FileObject, DateTimeUTC, GUID, PasswordHash, ColorType, and more.
+  Complete catalog of custom column types: EncryptedString, FileObject, DateTimeUTC, GUID, PasswordHash, Bool, Vector, TOTPSecret, OneTimeCode, and more.
 - **[Base Classes](references/bases.md)**
   Declarative base classes, UUID/BigInt/Nanoid variants, audit mixins, SlugKey, UniqueMixin, metadata registry, and custom base creation.
 - **[Filters](references/filters.md)**

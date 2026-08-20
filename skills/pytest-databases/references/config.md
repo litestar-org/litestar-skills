@@ -19,8 +19,8 @@ def postgres_image() -> str:
     return "postgres:18-alpine"
 ```
 
-Image selection is generally a fixture override, not an environment variable.
-Do not invent `POSTGRES_IMAGE`, `MYSQL_IMAGE`, or similar variables.
+Image selection is configured by overriding the backend's image fixture in
+`conftest.py`.
 
 ## Environment-backed fixtures
 

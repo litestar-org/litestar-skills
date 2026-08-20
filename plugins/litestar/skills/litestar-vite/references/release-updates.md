@@ -1,6 +1,6 @@
-# litestar-vite - Release Updates 0.26.0 to 0.29.1
+# litestar-vite - Release Updates 0.26.0 to 0.31.0
 
-This guidance is audited against immutable tag `v0.29.1`.
+This guidance is audited against immutable tag `v0.31.0`.
 
 ## Release Anchors
 
@@ -28,6 +28,8 @@ This guidance is audited against immutable tag `v0.29.1`.
 | `0.29.0` | **Breaking:** `litestar_vite.commands` and `init_vite()` removed. | Use `litestar_vite.scaffolding` (`TemplateContext` plus `generate_project()`), which is what `litestar assets init` calls. |
 | `0.29.0` | Deprecated `materialize_shared_props_to_session()` for removal in `v0.30.0`. | Inertia redirect responses perform the session handoff automatically. |
 | `0.29.1` | Hotfile and HMR fixes. | Relative hot-file paths resolve beneath an absolute `bundleDir`. Vite 8.1+ HMR merges only defined values, so explicit overrides and disable flags survive; proxy mode lets Vite infer the browser client port. |
+| `0.30.0` | Inertia Precognition & Prop Helpers expansion. | Real-time form validation via `@precognition`, `PrecognitionResponse` (204 No Content with `Precognition-Success: true`), `create_precognition_exception_handler`, and `InertiaConfig.precognition`. Added `always()`, `once()`, `optional()`, `merge()` with strategies (`append`, `prepend`, `deep`) and `match_on`, `scroll_props()`, and pagination container extraction (`extract_pagination_scroll_props`). Inertia history encryption via `InertiaConfig.encrypt_history`, `InertiaResponse(encrypt_history=...)`, and `clear_history()`. |
+| `0.31.0` | SSR resilience, SPA transformation cache & CLI route filtering. | Added `InertiaSSRConfig.health_check_timeout` and refined auto-start SSR lifecycle management. Enhanced `SPAConfig` with `cache_transformed_html`, `cache_duration`, and custom CSRF variable injection (`csrf_var_name`). Added route filtering options (`--only`, `--except`, `--include-components`) to `litestar assets export-routes`. |
 
 ## Inertia Protocol Boundary
 
@@ -39,6 +41,7 @@ This guidance is audited against immutable tag `v0.29.1`.
   partial component matches the route component.
 - Asset versions come from the Vite asset loader. A stale `GET` receives a
   protocol refresh response; stale mutation requests keep their method and body.
+- Precognition validation requests return 204 No Content with `Precognition-Success: true` when validation succeeds; validation errors return 422 with formatted errors.
 
 ## Scaffolds
 
@@ -56,7 +59,9 @@ and `--overwrite` only after reviewing collisions.
 - `v0.28.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.28.0>
 - `v0.29.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.29.0>
 - `v0.29.1`: <https://github.com/litestar-org/litestar-vite/tree/v0.29.1>
-- Tagged changelog: <https://github.com/litestar-org/litestar-vite/blob/v0.29.1/docs/changelog.rst>
-- Tagged configuration: <https://github.com/litestar-org/litestar-vite/tree/v0.29.1/src/py/litestar_vite/config>
-- Tagged Inertia tests: <https://github.com/litestar-org/litestar-vite/tree/v0.29.1/src/py/tests/unit/inertia>
-- Tagged CLI tests: <https://github.com/litestar-org/litestar-vite/tree/v0.29.1/src/py/tests>
+- `v0.30.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.30.0>
+- `v0.31.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.31.0>
+- Tagged changelog: <https://github.com/litestar-org/litestar-vite/blob/v0.31.0/docs/changelog.rst>
+- Tagged configuration: <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/src/py/litestar_vite/config>
+- Tagged Inertia tests: <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/src/py/tests/unit/inertia>
+- Tagged CLI tests: <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/src/py/tests>

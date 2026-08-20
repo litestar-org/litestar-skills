@@ -12,7 +12,7 @@ query parameter. Slot behavior is deliberately strict:
   never downgraded to "absent" in order to unlock a weaker alternative.
 - When more than one credential succeeds, all must resolve to the **same
   subject**.
-- Credential-granted scopes, teams, roles, capabilities, tenants, and resource
+- Credential-granted scopes, roles, capabilities, tenant roles, tenant IDs, and resource
   permissions **intersect** rather than union.
 
 ## Policy Helpers
@@ -22,11 +22,12 @@ query parameter. Slot behavior is deliberately strict:
 | `public()` | No authentication. Also excluded from native CSRF. |
 | `required()` | Any configured mechanism |
 | `required("session")` | That named mechanism |
-| `any_of("session", "api_key")` | At least one of the named mechanisms |
-| `all_of("api_key", "workload_jwt")` | All named mechanisms, same subject |
-| `at_least(2, "session", "api_key", "passkey")` | N of M |
+| `any_of("session", "api-key")` | At least one of the named mechanisms |
+| `all_of("api-key", "service-jwt")` | All named mechanisms, same subject |
+| `at_least(2, "session", "api-key", "service-jwt")` | N of M |
 | `optional(policy)` | Authenticate when credentials are present, do not require them |
 | `exclude()` | Bypass authentication only; session CSRF coverage is retained |
+| `mechanism("oauth", "read:user")` | Select a named mechanism with requested provider scopes |
 
 All take mechanism names (`str` or `MechanismRequirement`) — never
 authorization predicates.
@@ -39,7 +40,7 @@ first: handler `auth=` → controller/router `opt` → application `opt`.
 ```python
 from litestar import Controller, Litestar, get
 
-from litestar_security import SecurityPlugin, public, required
+from litestar_security import SecurityConfig, SecurityPlugin, public, required
 
 
 @get("/", auth=public())
@@ -54,7 +55,7 @@ class AccountController(Controller):
 app = Litestar(
     route_handlers=[index, AccountController],
     opt={"auth": required()},
-    plugins=[SecurityPlugin(config)],
+    plugins=[SecurityPlugin(SecurityConfig())],
 )
 ```
 
@@ -129,4 +130,4 @@ declare `opt={"auth": public()}` on the router or controller that owns them.
 
 ## Official References
 
-- <https://github.com/cofin/litestar-security/blob/v0.3.0/docs/authentication.rst>
+- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/authentication.rst>

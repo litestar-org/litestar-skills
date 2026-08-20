@@ -4,8 +4,6 @@
 
 All database interactions go through driver adapters. Async adapters extend `AsyncDriverAdapterBase`; sync adapters extend `SyncDriverAdapterBase`. The public method surface is parallel: async drivers use `await`, sync drivers do not.
 
-Use the current method names. `select_many()` and `copy_from_arrow()` are not public SQLSpec APIs in `v0.58.3`.
-
 Bind normal query parameters as variadic positional arguments. Use `await db_session.select("... WHERE id = $1", user_id, schema_type=User)`, not `await db_session.select(..., [user_id], ...)`. Keep list or tuple containers for real batch/data payloads such as `execute_many()` parameter sets or `load_from_records()` rows.
 
 ---
@@ -134,7 +132,7 @@ Adapters without native Arrow export use dict-to-Arrow conversion. Add `native_o
 
 ---
 
-## DML Methods
+## DML & Stack Execution Methods
 
 ### execute() -- Single Statement
 
@@ -163,6 +161,36 @@ result = await db_session.execute_many(
     ],
 )
 print(result.rows_affected)
+```
+
+### execute_script() -- Multi-statement Script
+
+Execute multiple SQL statements in a single script and return one `SQLResult`:
+
+```python
+result = await db_session.execute_script(
+    """
+    CREATE TABLE temp_orders (id INT PRIMARY KEY);
+    INSERT INTO temp_orders VALUES (1);
+    """
+)
+```
+
+### execute_stack() -- Batched StatementStack
+
+Execute an immutable `StatementStack` container of heterogeneous operations (`push_execute`, `push_execute_many`, `push_execute_script`, `push_execute_arrow`) and return a `tuple[StackResult, ...]`:
+
+```python
+from sqlspec import StatementStack
+
+stack = (
+    StatementStack()
+    .push_execute("INSERT INTO users (name) VALUES ($1)", "Alice")
+    .push_execute_many("INSERT INTO tags (tag) VALUES ($1)", [("dev",), ("ops",)])
+)
+results = await db_session.execute_stack(stack)
+for res in results:
+    print(res.result_type, res.rows_affected)
 ```
 
 For high-volume ingest, prefer `load_from_records()` or `load_from_arrow()` when the adapter supports native ingest.
@@ -255,6 +283,8 @@ async with config.provide_session() as session:
 | `select_to_arrow()` / `fetch_to_arrow()` | `ArrowResult` | `return_format="table" \| "batch" \| "batches" \| "reader"` |
 | `execute()` | `SQLResult` | Check `rows_affected`, `last_inserted_id`, `metadata` |
 | `execute_many()` | `SQLResult` | Batch parameters |
+| `execute_script()` | `SQLResult` | Multi-statement script execution |
+| `execute_stack()` | `tuple[StackResult, ...]` | Ordered statement-stack execution |
 | `load_from_arrow()` | `StorageBridgeJob` | Native ingest where supported |
 | `load_from_storage()` | `StorageBridgeJob` | Staged files/cloud URIs |
 | `load_from_records()` | `StorageBridgeJob` | Records normalized through Arrow |

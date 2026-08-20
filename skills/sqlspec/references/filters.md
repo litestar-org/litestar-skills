@@ -74,17 +74,17 @@ filter_ = InCollectionFilter(
 
 ## OffsetPagination Result Type
 
-The standard pagination result container:
+The standard pagination result container returned by `SQLSpecAsyncService.paginate()` / `SQLSpecSyncService.paginate()`:
+
+- `result.items`: `list[T]` - current page rows
+- `result.total`: `int` - total matching rows
+- `result.limit`: `int` - page size
+- `result.offset`: `int` - current offset
 
 ```python
 from sqlspec.core import OffsetPagination
 
-# Returned by SQLSpecAsyncService.paginate() / SQLSpecSyncService.paginate()
 result: OffsetPagination[User]
-result.items  # list[User] - current page rows
-result.total  # int - total matching rows
-result.limit  # int - page size
-result.offset  # int - current offset
 ```
 
 ---
@@ -162,7 +162,6 @@ filter_deps = create_filter_dependencies(
 )
 
 
-# Use in a Litestar route handler
 @get("/users", dependencies=filter_deps)
 async def list_users(
     db_session: NamedDependency[AsyncpgDriver],

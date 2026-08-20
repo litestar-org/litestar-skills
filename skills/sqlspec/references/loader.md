@@ -14,7 +14,6 @@ from sqlspec.loader import SQLFileLoader
 loader = SQLFileLoader()
 loader.load_sql("./sql", "./sql/queries")
 
-# Load a named query
 stmt = loader.get_sql("get-user-by-id")
 result = await db_session.select_one(stmt, user_id, schema_type=User)
 ```
@@ -101,9 +100,9 @@ Pass any number of file or directory paths to `load_sql()`. Directories are walk
 ```python
 loader = SQLFileLoader()
 loader.load_sql(
-    "./sql/shared",  # Shared across projects (loaded first)
-    "./sql/queries",  # Standard queries
-    "./sql/overrides",  # Project-specific overrides (win on conflict)
+    "./sql/shared",
+    "./sql/queries",
+    "./sql/overrides",
 )
 ```
 
@@ -117,10 +116,7 @@ Loaded SQL files are cached in the `file` namespace. Each entry stores an MD5 co
 2. If the file has changed, the cache entry is invalidated and the file is re-parsed.
 
 ```python
-# Clear loaded queries and file-cache entries
 loader.clear_cache()
-
-# Clear only the shared file-cache namespace
 loader.clear_file_cache()
 ```
 
@@ -142,7 +138,6 @@ loader.load_sql("./sql")
 ```python
 from sqlspec.storage import storage_registry
 
-# Register an alias for S3-hosted queries
 storage_registry.register_alias(
     "queries",
     uri="s3://my-sql-queries/v2/",
@@ -164,11 +159,9 @@ from sqlspec.loader import SQLFileLoader
 loader = SQLFileLoader()
 loader.load_sql("./sql")
 
-# Load and execute
 stmt = loader.get_sql("list-active-users")
 users = await db_session.select(stmt, schema_type=User)
 
-# Load with parameter override
-stmt = loader.get_sql("get-user-by-id")
-user = await db_session.select_one(stmt, user_id, schema_type=User)
+stmt_override = loader.get_sql("get-user-by-id")
+user = await db_session.select_one(stmt_override, user_id, schema_type=User)
 ```

@@ -49,11 +49,9 @@ routing = RoutingConfig(
         "read": [
             EngineConfig(
                 connection_string="postgresql+asyncpg://user:pass@replica1:5432/app",
-                weight=2,
             ),
             EngineConfig(
                 connection_string="postgresql+asyncpg://user:pass@replica2:5432/app",
-                weight=1,
             ),
         ],
         "analytics": [
@@ -89,16 +87,16 @@ from advanced_alchemy.config.routing import RoutingConfig, RoutingStrategy
 
 ### EngineConfig
 
-```python
-from advanced_alchemy.config.routing import EngineConfig
+`EngineConfig` defines database connection URLs, weights, and labels. `ReplicaConfig` is also available as a backward-compatible alias.
 
-# Also available as ReplicaConfig (backward-compatible alias)
+```python
+from advanced_alchemy.config.routing import EngineConfig, ReplicaConfig
 ```
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
 | `connection_string` | `str` | required | Database connection URL |
-| `weight` | `int` | `1` | Relative weight for load balancing |
+| `weight` | `int` | `1` | Stored configuration; 1.11 selectors do not apply weights |
 | `name` | `str` | `""` | Human-readable label |
 
 ---
@@ -130,7 +128,7 @@ This prevents read-after-write inconsistency where a replica has not yet replica
 ## Selector Strategies
 
 ```python
-from advanced_alchemy.routing import RoundRobinSelector, RandomSelector
+from advanced_alchemy.routing import RandomSelector, RoundRobinSelector
 ```
 
 | Strategy | Enum | Behavior |
@@ -139,9 +137,12 @@ from advanced_alchemy.routing import RoundRobinSelector, RandomSelector
 | `RandomSelector` | `RoutingStrategy.RANDOM` | Picks a random replica each time |
 
 ```python
+from advanced_alchemy.config.routing import RoutingConfig, RoutingStrategy
+
 routing = RoutingConfig(
+    primary_connection_string="postgresql+asyncpg://primary/app",
+    read_replicas=["postgresql+asyncpg://replica/app"],
     routing_strategy=RoutingStrategy.RANDOM,
-    # ...
 )
 ```
 
@@ -157,8 +158,6 @@ Both selectors raise `RuntimeError` if no engines are configured for the selecte
 from advanced_alchemy.routing import primary_context
 
 with primary_context():
-    # All queries in this block hit the primary,
-    # even reads that would normally go to a replica.
     user = await repo.get(user_id)
     orders = await order_repo.get_many()
 ```
@@ -167,16 +166,14 @@ Use this when you need read-your-writes consistency for a specific code path.
 
 ### Allow Replica Reads (Override Stickiness)
 
+After a write, stickiness normally forces reads to primary. `replica_context` temporarily allows reads to go to replicas (note: may observe replication lag).
+
 ```python
 from advanced_alchemy.routing import replica_context
 
-# After a write, stickiness normally forces reads to primary
 await repo.add(new_user)
 
 with replica_context():
-    # Temporarily allow reads to go to replicas,
-    # even though a write happened above.
-    # WARNING: may see stale data
     all_users = await repo.get_many()
 ```
 
@@ -186,7 +183,6 @@ with replica_context():
 from advanced_alchemy.routing import use_bind_group
 
 with use_bind_group("analytics"):
-    # All operations use the "analytics" engine group
     report_data = await analytics_repo.get_many()
 ```
 
@@ -195,7 +191,6 @@ with use_bind_group("analytics"):
 ```python
 from advanced_alchemy.routing import reset_routing_context
 
-# Manually clear all routing state (stickiness, force, bind group)
 reset_routing_context()
 ```
 
@@ -208,8 +203,9 @@ This is normally called automatically after commit/rollback.
 ### Async
 
 ```python
-from advanced_alchemy.routing import RoutingAsyncSessionMaker
 from advanced_alchemy.config.routing import RoutingConfig
+from advanced_alchemy.routing import RoutingAsyncSessionMaker
+from sqlalchemy import select
 
 maker = RoutingAsyncSessionMaker(
     routing_config=RoutingConfig(
@@ -223,18 +219,17 @@ maker = RoutingAsyncSessionMaker(
 async with maker() as session:
     result = await session.execute(select(User))
 
-# Access engines directly
 primary = maker.primary_engine
 replicas = maker.replica_engines
-
-# Cleanup on shutdown
 await maker.close_all()
 ```
 
 ### Sync
 
 ```python
+from advanced_alchemy.config.routing import RoutingConfig
 from advanced_alchemy.routing import RoutingSyncSessionMaker
+from sqlalchemy import select
 
 maker = RoutingSyncSessionMaker(
     routing_config=RoutingConfig(
@@ -245,7 +240,6 @@ maker = RoutingSyncSessionMaker(
 
 session = maker()
 result = session.execute(select(User))
-
 maker.close_all()
 ```
 
@@ -256,6 +250,10 @@ maker.close_all()
 The config object handles session maker creation automatically:
 
 ```python
+from advanced_alchemy.config import SQLAlchemyAsyncConfig
+from advanced_alchemy.config.routing import RoutingConfig
+from sqlalchemy import insert, select
+
 db_config = SQLAlchemyAsyncConfig(
     routing_config=RoutingConfig(
         primary_connection_string="postgresql+asyncpg://primary/app",
@@ -263,9 +261,7 @@ db_config = SQLAlchemyAsyncConfig(
     ),
 )
 
-# get_session() returns a routing-aware session
 async with db_config.get_session() as session:
-    # Reads go to replica, writes go to primary
     users = await session.execute(select(User))
     await session.execute(insert(User).values(name="Alice"))
     await session.commit()
@@ -279,13 +275,8 @@ Alembic migrations always use the primary connection string extracted from the r
 
 When using both caching and routing, entity cache keys are namespaced by `bind_group` to prevent data leaks between database shards:
 
-```python
-# Cache key format with bind_group:
-# {prefix}{model_name}:{bind_group}:get:{entity_id}
-
-# Without bind_group:
-# {prefix}{model_name}:get:{entity_id}
-```
+- With bind_group: `{prefix}{model_name}:{bind_group}:get:{entity_id}`
+- Without bind_group: `{prefix}{model_name}:get:{entity_id}`
 
 This is handled automatically by `CacheManager` when `bind_group` is passed.
 
