@@ -10,33 +10,37 @@ request.
 
 | Field | Holds |
 | --- | --- |
-| `roles` | Global role names |
-| `scopes` | Scope strings |
-| `capabilities` | Capability names |
-| `team_roles` | Roles per team |
-| `tenant_ids` | Tenants the principal belongs to |
-| `resources` | Resource permissions |
-| `attributes` | Application-defined extras |
+| `roles` | Global role names (`frozenset[str]`) |
+| `scopes` | Scope strings (`frozenset[str]`) |
+| `capabilities` | Capability names (`frozenset[str]`) |
+| `tenant_roles` | Roles per tenant (`Mapping[str, frozenset[str]]`) |
+| `tenant_ids` | Tenants the principal belongs to (`frozenset[str]`) |
+| `resources` | Resource permissions (`frozenset[ResourcePermission]`) |
+| `attributes` | Application-defined extras (`Mapping[str, object]`) |
 
 ## The Resolver
 
-Configure `SecurityConfig(authorization_resolver=...)` with a callable taking
-the authenticated `Principal` and returning a snapshot. It runs **once per
-request** — which is exactly why guards must not perform I/O.
+Configure `SecurityConfig(authorization_resolver=...)` with an object that
+implements async `resolve(principal)`. Return a snapshot for an authorized
+principal, `InvalidCredentials` for an expected denial, or
+`VerificationUnavailable` for an expected dependency failure. It runs **once
+per request** — which is exactly why guards must not perform I/O.
 
 ```python
 from litestar_security import AuthorizationSnapshot, Principal
 
 
-async def resolve_user_authorization(principal: Principal[User]) -> AuthorizationSnapshot:
-    if not principal.is_authenticated:
-        return AuthorizationSnapshot()
-    user = principal.require_user()
-    return AuthorizationSnapshot(
-        roles=frozenset(user.roles),
-        scopes=frozenset(user.scopes),
-        tenant_ids=frozenset(user.tenant_ids),
-    )
+class AppAuthorizationResolver:
+    async def resolve(self, principal: Principal[User]) -> AuthorizationSnapshot:
+        if not principal.is_authenticated:
+            return AuthorizationSnapshot()
+        user = principal.require_user()
+        return AuthorizationSnapshot(
+            roles=frozenset(user.roles),
+            scopes=frozenset(user.scopes),
+            tenant_ids=frozenset(user.tenant_ids),
+            tenant_roles={tenant.id: frozenset(tenant.roles) for tenant in user.tenants},
+        )
 ```
 
 Credential restrictions are applied on top of the resolved snapshot by
@@ -52,20 +56,20 @@ therefore cannot exceed the account's own grants.
 | `requires_scope(scope)` | `str` | Scope grant |
 | `requires_capability(capability)` | `str` | Capability grant |
 | `requires_tenant(*, tenant_parameter="tenant_id")` | keyword | Path tenant is one of the principal's |
-| `requires_team_role(*, team_parameter="team_id", roles)` | keyword | Path team role membership |
+| `requires_tenant_role(*, tenant_parameter="tenant_id", roles=...)` | keyword | Path tenant role membership |
 | `requires_assurance(*, methods=(), traits=(), max_age=None, purpose=None)` | keyword | Recent or stronger evidence (step-up) |
 
 ## Combinators
 
-Predicates compose with the `guard_*` family. These are distinct from the
+Predicates compose with the `requires_*` combinator family. These are distinct from the
 identically shaped mechanism combinators used by `auth=`.
 
-| Guard combinator | Mechanism combinator (for `auth=`) |
+| Guard combinator (for `guards=[...]`) | Mechanism combinator (for `auth=`) |
 | --- | --- |
-| `guard_any_of(*predicates)` | `any_of(*mechanism_names)` |
-| `guard_all_of(*predicates)` | `all_of(*mechanism_names)` |
-| `guard_at_least(count, *predicates)` | `at_least(count, *mechanism_names)` |
-| `guard_one_of(*predicates)` | — |
+| `requires_any_of(*predicates)` | `any_of(*mechanism_names)` |
+| `requires_all_of(*predicates)` | `all_of(*mechanism_names)` |
+| `requires_at_least(count, *predicates)` | `at_least(count, *mechanism_names)` |
+| `requires_one_of(*predicates)` | — |
 
 Passing a predicate to `any_of()` raises `AttributeError` at import time,
 because it expects a mechanism name.
@@ -74,8 +78,8 @@ because it expects a mechanism name.
 from litestar import Controller, get
 
 from litestar_security import (
-    guard_any_of,
     required,
+    requires_any_of,
     requires_role,
     requires_scope,
 )
@@ -86,8 +90,9 @@ class ReportsController(Controller):
     opt = {"auth": required("session")}
     guards = [requires_role("analyst")]
 
-    @get("/", guards=[guard_any_of(requires_scope("read:all"), requires_scope("read:reports"))])
-    async def list_reports(self) -> list[dict[str, str]]: ...
+    @get("/", guards=[requires_any_of(requires_scope("read:all"), requires_scope("read:reports"))])
+    async def list_reports(self) -> list[dict[str, str]]:
+        return []
 ```
 
 Controller-level guards apply to every handler beneath them; handler guards add
@@ -95,23 +100,23 @@ to rather than replace them.
 
 ## Path-Bound Checks
 
-`requires_tenant` and `requires_team_role` compare the **path value** against
+`requires_tenant` and `requires_tenant_role` compare the **path value** against
 the server-resolved snapshot, so changing the identifier in the URL cannot
 grant access:
 
 ```python
 from litestar import get
 
-from litestar_security import required, requires_team_role
+from litestar_security import required, requires_tenant_role
 
 
 @get(
-    "/teams/{team_id:str}",
+    "/tenants/{tenant_id:str}",
     auth=required(),
-    guards=[requires_team_role(team_parameter="team_id", roles={"owner"})],
+    guards=[requires_tenant_role(tenant_parameter="tenant_id", roles={"owner"})],
 )
-async def team_settings(team_id: str) -> dict[str, str]:
-    return {"team_id": team_id}
+async def tenant_settings(tenant_id: str) -> dict[str, str]:
+    return {"tenant_id": tenant_id}
 ```
 
 ## Step-Up Authentication
@@ -148,5 +153,5 @@ is the explicit narrowing dependency.
 
 ## Official References
 
-- <https://github.com/cofin/litestar-security/blob/v0.3.0/docs/authentication.rst>
-- <https://github.com/cofin/litestar-security/blob/v0.3.0/docs/providers.rst>
+- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/authentication.rst>
+- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/providers.rst>

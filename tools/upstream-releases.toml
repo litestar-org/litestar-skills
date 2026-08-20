@@ -16,33 +16,33 @@ imports = ["advanced_alchemy"]
 
 [[package]]
 pypi = "sqlspec"
-version = "0.58.3"
-date = "2026-08-07"
-tag = "v0.58.3"
+version = "0.62.0"
+date = "2026-08-18"
+tag = "v0.62.0"
 skills = ["skills/sqlspec"]
 imports = ["sqlspec"]
 
 [[package]]
 pypi = "litestar-queues"
-version = "0.8.0"
-date = "2026-08-03"
-tag = "v0.8.0"
+version = "0.9.0"
+date = "2026-08-17"
+tag = "v0.9.0"
 skills = ["skills/litestar-queues"]
 imports = ["litestar_queues"]
 
 [[package]]
 pypi = "litestar-vite"
-version = "0.29.1"
-date = "2026-08-04"
-tag = "v0.29.1"
+version = "0.31.0"
+date = "2026-08-18"
+tag = "v0.31.0"
 skills = ["skills/litestar-vite", "skills/litestar-inertia"]
 imports = ["litestar_vite"]
 
 [[package]]
 pypi = "litestar-mcp"
-version = "0.12.0"
-date = "2026-07-29"
-tag = "v0.12.0"
+version = "0.13.0"
+date = "2026-08-19"
+tag = "v0.13.0"
 skills = ["skills/litestar-mcp"]
 imports = ["litestar_mcp"]
 
@@ -112,8 +112,8 @@ imports = ["litestar_autowire"]
 
 [[package]]
 pypi = "litestar-security"
-version = "0.3.0"
-date = "2026-08-07"
-tag = "v0.3.0"
+version = "0.6.0"
+date = "2026-08-19"
+tag = "v0.6.0"
 skills = ["skills/litestar-security"]
 imports = ["litestar_security"]

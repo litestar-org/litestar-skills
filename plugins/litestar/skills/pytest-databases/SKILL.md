@@ -43,7 +43,7 @@ The core `pytest_databases` pytest entry point supplies `docker_client` and
 | Need | Use |
 | --- | --- |
 | A ready `psycopg` connection | `postgres_connection`, a versioned PostgreSQL-family connection, or `cockroachdb_connection` |
-| A ready vendor client | `bigquery_client`, `spanner_connection`, `mongodb_connection`, or an Azure Blob container client |
+| A ready vendor client | `bigquery_client`, `spanner_connection`, `mongodb_connection`, an Oracle connection, a GizmoSQL connection, or an Azure Blob container client |
 | Service coordinates for the project's own client | The backend's `*_service` fixture |
 | A specific PostgreSQL-family release | Matching `*_NN_service`, `*_NN_connection`, and `*_NN_port` fixtures |
 | Parallel worker isolation | The backend's exact `*_xdist_isolation_level` fixture from [xdist.md](references/xdist.md) |
@@ -78,10 +78,13 @@ ready-client matrix. Do not infer a `*_connection` fixture from a
 
 ## Guardrails
 
-- **Do not invent connection fixtures.** MySQL, MariaDB, SQL Server,
-  YugabyteDB, Dolt, Redis/KeyDB/Dragonfly, Valkey, MinIO, and RustFS provide no
-  ready `*_connection` fixture in 0.19.0.
-- **Do not use SQLite fixture names.** Version 0.19.0 ships no SQLite plugin.
+- **Connection fixtures vs service fixtures**: Ready-client fixtures
+  (`*_connection`, `*_client`) exist for PostgreSQL-family, CockroachDB,
+  Oracle, GizmoSQL, BigQuery, Spanner, MongoDB, and Azure Blob. Service-only
+  backends (MySQL, MariaDB, SQL Server, YugabyteDB, Dolt, Redis, Dragonfly,
+  KeyDB, Valkey, Elasticsearch, MinIO, and RustFS) export service fixtures but
+  no ready client. Build the project's client from the service object's
+  coordinates; convenience `*_host`/`*_port` fixtures are backend-specific.
 - **Use `azure_blob_*` names.** The module is
   `pytest_databases.docker.azure_blob`, the service is `AzureBlobService`, and
   the ready clients are `azure_blob_container_client` and

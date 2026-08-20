@@ -160,9 +160,10 @@ from sqlalchemy.orm import Session
 
 @app.route("/users")
 def list_users():
+    """Retrieve users synchronously using the Flask session."""
     session: Session = alchemy.get_sync_session()
     service = UserService(session=session)
-    results = service.get_many()  # Sync operations in Flask
+    results = service.get_many()
     return [{"id": str(r.id), "email": r.email} for r in results]
 ```
 
@@ -192,12 +193,12 @@ For Starlette applications without FastAPI:
 
 ```python
 from starlette.applications import Starlette
+from starlette.responses import JSONResponse
 from starlette.routing import Route
 from advanced_alchemy.extensions.starlette import (
     AdvancedAlchemy,
     SQLAlchemyAsyncConfig,
 )
-
 
 db_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://user:pass@localhost:5432/mydb",
@@ -206,8 +207,6 @@ db_config = SQLAlchemyAsyncConfig(
 
 
 async def list_users(request):
-    from starlette.responses import JSONResponse
-
     session = request.state.session
     service = UserService(session=session)
     results = await service.get_many()
@@ -234,7 +233,6 @@ from advanced_alchemy.extensions.sanic import (
     AdvancedAlchemy,
     SQLAlchemyAsyncConfig,
 )
-
 
 db_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://user:pass@localhost:5432/mydb",
@@ -280,8 +278,8 @@ All framework integrations follow the same configuration pattern. The non-Litest
 ```python
 from advanced_alchemy.extensions.fastapi import (
     AdvancedAlchemy,
-    SQLAlchemyAsyncConfig,  # or SQLAlchemySyncConfig
     EngineConfig,
+    SQLAlchemyAsyncConfig,
 )
 
 config = SQLAlchemyAsyncConfig(

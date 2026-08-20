@@ -94,15 +94,18 @@ def list_orders():
 
 ```python
 from flask import Blueprint, current_app, jsonify
+from sqlalchemy import select
 
 orders_bp = Blueprint("orders", __name__)
 
 
 @orders_bp.route("/orders", methods=["GET"])
 def list_orders():
+    """Retrieve orders using blueprint-scoped session lookup."""
     alchemy_ext = current_app.extensions["advanced_alchemy"]
     session = alchemy_ext.get_sync_session()
-    # ... same as above
+    rows = session.execute(select(OrderModel)).scalars().all()
+    return jsonify([{"id": str(r.id), "total": r.total_cents} for r in rows])
 ```
 
 Using `current_app.extensions["advanced_alchemy"]` inside a blueprint avoids the circular import that would otherwise happen if the blueprint tried to import `alchemy` from the app module.

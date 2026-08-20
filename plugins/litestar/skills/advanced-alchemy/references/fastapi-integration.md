@@ -250,10 +250,11 @@ The FastAPI extension ships a Click command group that wraps the Alembic CLI. Tw
 If you have `fastapi_cli` installed (through the `fastapi[standard]` extra), call `assign_cli_group(app)` from your app module. This registers Typer-native `database` and `db` commands on the FastAPI CLI and forwards to the Advanced Alchemy Click migration group. Use this Typer 0.26-compatible path; do not attach the Click group directly to Typer.
 
 ```python
+from fastapi import FastAPI
 from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, assign_cli_group
 
-# ... app and alchemy already constructed ...
-
+app = FastAPI()
+alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
 assign_cli_group(app)
 ```
 

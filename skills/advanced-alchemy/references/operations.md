@@ -69,7 +69,7 @@ from advanced_alchemy.config import SQLAlchemyAsyncConfig
 
 db_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://localhost/app",
-    enable_touch_updated_timestamp_listener=False,  # e.g. for import routines
+    enable_touch_updated_timestamp_listener=False,
 )
 ```
 
@@ -80,10 +80,10 @@ Per-session override via `session.info["enable_file_object_listener"] = False` o
 Library-wide JSON encoder / decoder — msgspec first, orjson fallback, stdlib `json` last. Used by the cache layer (`cache/serializers.py`), fixture loader (`utils/fixtures.py`), and the `JsonB` column type.
 
 ```python
-from advanced_alchemy.utils.serialization import encode_json, decode_json
+from advanced_alchemy.utils.serialization import decode_json, encode_json
 
-payload = encode_json({"id": "abc", "total": 99})  # str
-parsed = decode_json(payload)  # dict
+payload: str = encode_json({"id": "abc", "total": 99})
+parsed: dict = decode_json(payload)
 ```
 
 The msgspec `Encoder` is configured with an `enc_hook` that serializes `datetime` / `date` / `Enum` / pydantic `BaseModel` by delegating to `_type_to_string`. For round-trippable encoding of `Decimal`, `UUID`, `bytes`, `set`, `timedelta`, use `encode_complex_type` / `decode_complex_type` — they wrap values in `{"__type__": ..., "value": ...}` markers.

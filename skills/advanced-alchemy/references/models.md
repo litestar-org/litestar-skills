@@ -26,7 +26,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from advanced_alchemy.base import UUIDAuditBase
-from sqlalchemy import String, ForeignKey
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
@@ -35,33 +35,22 @@ class User(UUIDAuditBase):
 
     __tablename__ = "user_account"
     __table_args__ = {"comment": "User accounts"}
-    # Required field
+
     email: Mapped[str] = mapped_column(unique=True, index=True)
-
-    # Optional field (PEP 604 union)
     name: Mapped[str | None] = mapped_column(default=None)
-
-    # String with max length
     username: Mapped[str | None] = mapped_column(
         String(length=30),
         unique=True,
         index=True,
         default=None,
     )
-
-    # Boolean with default
     is_active: Mapped[bool] = mapped_column(default=True)
-
-    # Integer with default
     login_count: Mapped[int] = mapped_column(default=0)
-
-    # Foreign key
     team_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("team.id", ondelete="CASCADE"),
         default=None,
     )
 
-    # Relationships
     team: Mapped[Team | None] = relationship(back_populates="members", lazy="selectin")
     roles: Mapped[list[UserRole]] = relationship(
         back_populates="user",
@@ -77,6 +66,7 @@ class User(UUIDAuditBase):
 ```python
 from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.mixins import SlugKey
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class Article(UUIDAuditBase, SlugKey):
@@ -97,6 +87,7 @@ mixin itself does not populate the column.
 ```python
 from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.mixins import UniqueMixin
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class Tag(UUIDAuditBase, UniqueMixin):
@@ -121,13 +112,15 @@ result on that session.
 
 ## Special Types
 
+Advanced Alchemy provides custom types for timezone-aware datetimes (`DateTimeUTC`), cross-dialect UUIDs (`GUID`), JSON storage (`JsonB`), encryption (`EncryptedString`, `EncryptedText`), and file storage (`FileObject`, `StoredObject`).
+
 ```python
 from advanced_alchemy.types import (
-    DateTimeUTC,  # Timezone-aware UTC normalization
-    GUID,  # Backend-aware UUID mapping
-    JsonB,  # Dialect-aware JSON storage
-    EncryptedString,  # Encrypted at rest (Fernet or PGCrypto)
-    EncryptedText,  # Encrypted text (larger payloads)
+    DateTimeUTC,
+    EncryptedString,
+    EncryptedText,
+    GUID,
+    JsonB,
 )
 from advanced_alchemy.types.file_object import FileObject, StoredObject
 ```
@@ -135,11 +128,15 @@ from advanced_alchemy.types.file_object import FileObject, StoredObject
 ### EncryptedString
 
 ```python
+from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.types import EncryptedString, EncryptedText
 from advanced_alchemy.types.encrypted_string import FernetBackend
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class UserSecret(UUIDAuditBase):
+    """User secret model storing encrypted API keys and private notes."""
+
     __tablename__ = "user_secret"
 
     api_key: Mapped[str] = mapped_column(
@@ -159,10 +156,14 @@ or a secrets manager.
 ### FileObject / StoredObject
 
 ```python
+from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.types.file_object import FileObject, StoredObject
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class Document(UUIDAuditBase):
+    """Document model with stored file attachment."""
+
     __tablename__ = "document"
 
     title: Mapped[str] = mapped_column()
@@ -176,12 +177,16 @@ Register storage backends during app boot. Supports `FSSpecBackend` (local, S3) 
 For security-sensitive or large fields, use deferred loading so they are only fetched when explicitly requested:
 
 ```python
+from advanced_alchemy.base import UUIDAuditBase
+from sqlalchemy.orm import Mapped, mapped_column
+
+
 class User(UUIDAuditBase):
+    """User model with deferred security credentials."""
+
     __tablename__ = "user_account"
 
     email: Mapped[str] = mapped_column(unique=True, index=True)
-
-    # Only loaded when explicitly requested via loader options
     hashed_password: Mapped[str] = mapped_column(
         deferred_group="security_sensitive",
     )

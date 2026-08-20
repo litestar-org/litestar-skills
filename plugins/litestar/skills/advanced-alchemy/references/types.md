@@ -145,24 +145,26 @@ from advanced_alchemy.types.encrypted_string import FernetBackend, PGCryptoBacke
 
 ### Usage
 
+Generate a key: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+
 ```python
+from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.types import EncryptedString, EncryptedText
 from advanced_alchemy.types.encrypted_string import FernetBackend
+from sqlalchemy.orm import Mapped, mapped_column
 
-# Generate a key: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ENCRYPTION_KEY = "your-fernet-key-here"
 
 
 class UserSecret(UUIDAuditBase):
+    """Model storing encrypted API key and private notes."""
+
     __tablename__ = "user_secret"
 
-    # Short encrypted value
     api_key: Mapped[str] = mapped_column(
         EncryptedString(key=ENCRYPTION_KEY, backend=FernetBackend),
     )
-
-    # Long encrypted text
-    private_notes: Mapped[str | None] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         EncryptedText(key=ENCRYPTION_KEY, backend=FernetBackend),
         default=None,
     )
@@ -171,10 +173,15 @@ class UserSecret(UUIDAuditBase):
 ### PGCrypto Backend (PostgreSQL Only)
 
 ```python
+from advanced_alchemy.base import UUIDAuditBase
+from advanced_alchemy.types import EncryptedString
 from advanced_alchemy.types.encrypted_string import PGCryptoBackend
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class SecureRecord(UUIDAuditBase):
+    """Secure record using server-side PGCrypto encryption."""
+
     __tablename__ = "secure_record"
 
     secret: Mapped[str] = mapped_column(
@@ -197,8 +204,8 @@ Automatic password hashing on write with verification support. The column stores
 ```python
 from advanced_alchemy.types import PasswordHash
 from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
-from advanced_alchemy.types.password_hash.pwdlib import PwdlibHasher
 from advanced_alchemy.types.password_hash.passlib import PasslibHasher
+from advanced_alchemy.types.password_hash.pwdlib import PwdlibHasher
 ```
 
 ### Backends
@@ -214,11 +221,15 @@ Each backend lives in its own submodule and pulls in its hashing dependency only
 ### Usage
 
 ```python
+from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.types import PasswordHash
 from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class Account(UUIDAuditBase):
+    """Account model with hashed password."""
+
     __tablename__ = "account"
 
     email: Mapped[str] = mapped_column(unique=True)
@@ -230,13 +241,10 @@ class Account(UUIDAuditBase):
 ### Verification
 
 ```python
-# Writing — plain text is automatically hashed
 account = Account(email="user@example.com", password="my-secret-password")
 
-# Verifying — use the stored PasswordHash wrapper
 is_valid = account.password.verify("my-secret-password")
 
-# Rehashing — persist the replacement hash when the backend policy changed
 is_valid, new_hash = account.password.verify_and_update("my-secret-password")
 if is_valid and new_hash is not None:
     account.password = new_hash
@@ -255,10 +263,14 @@ from advanced_alchemy.types.file_object import FileObject, StoredObject
 ### Column Definition
 
 ```python
+from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.types.file_object import FileObject, StoredObject
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class Document(UUIDAuditBase):
+    """Document model with stored file attachment."""
+
     __tablename__ = "document"
 
     title: Mapped[str] = mapped_column()
@@ -289,7 +301,6 @@ s3_storage = ObstoreBackend(
 ```python
 from advanced_alchemy.types.file_object import storages
 
-# Register during app startup.
 storages.register_backend(s3_storage)
 storages.register_backend(local_storage)
 ```
@@ -297,11 +308,10 @@ storages.register_backend(local_storage)
 ### Storing Files
 
 ```python
-# Create a FileObject and assign to the model
 file_obj = FileObject(
     filename="report.pdf",
     content_type="application/pdf",
-    backend="documents",  # matches the StorageBackend key
+    backend="documents",
     content=file_bytes,
 )
 
@@ -314,7 +324,7 @@ await service.create(document)
 ```python
 document = await service.get(doc_id)
 if document.file:
-    content = await document.file.read()
+    content = await document.file.get_content_async()
     filename = document.file.filename
     content_type = document.file.content_type
 ```
@@ -326,11 +336,16 @@ if document.file:
 `Bool` (added 1.11) resolves to each dialect's stock boolean type, including Oracle 23c's real `BOOLEAN` when SQLAlchemy exposes `oracle.BOOLEAN`. Older Oracle versions and SQLAlchemy 2.0.x fall back to stock SQLAlchemy `Boolean`. Use it when a model must run on Oracle as well as PostgreSQL/SQLite/MySQL.
 
 ```python
+from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.types import Bool
 from sqlalchemy.orm import Mapped, mapped_column
 
 
 class User(UUIDBase):
+    """User model using dialect-aware Bool column."""
+
+    __tablename__ = "user_account"
+
     is_active: Mapped[bool] = mapped_column(Bool, default=True)
 ```
 
@@ -339,12 +354,17 @@ class User(UUIDBase):
 `Vector` (added 1.11) is a single fixed-dimension vector column that resolves per dialect — Oracle 23ai `VECTOR`, PostgreSQL/CockroachDB `pgvector` (when installed), and a JSON-array fallback everywhere else. Importing it never requires `pgvector` or `oracledb`; the backend is chosen in `load_dialect_impl`.
 
 ```python
+from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.types import Vector
 from sqlalchemy.orm import Mapped, mapped_column
 
 
 class Document(UUIDBase):
-    embedding: Mapped[list[float]] = mapped_column(Vector(dim=1536))  # storage_format="FLOAT32" default
+    """Document model with embedding vector."""
+
+    __tablename__ = "document"
+
+    embedding: Mapped[list[float]] = mapped_column(Vector(dim=1536))
 ```
 
 Similarity search uses the dialect-aware distance operators on the column's `.comparator` — `cosine_distance`, `l2_distance`, `l1_distance`, `max_inner_product` (each maps to the backend operator; the JSON fallback raises, since it has no distance operator):
@@ -362,19 +382,23 @@ Added in 1.11 for authentication flows. `TOTPSecret` is an `EncryptedString` sub
 ```python
 from typing import Any
 
+from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.types import (
-    TOTPSecret,
     OneTimeCode,
-    generate_totp_secret,
+    TOTPSecret,
     generate_one_time_code,
+    generate_totp_secret,
 )
 from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
 from sqlalchemy.orm import Mapped, mapped_column
 
 
 class Account(UUIDBase):
+    """Account model with TOTP and one-time verification codes."""
+
+    __tablename__ = "account"
+
     totp_secret: Mapped[str | None] = mapped_column(TOTPSecret(key=ENCRYPTION_KEY), default=None)
-    # writes a plaintext code; the column hashes it. Loaded values verify through HashedOneTimeCode.
     email_code: Mapped[Any | None] = mapped_column(
         OneTimeCode(backend=Argon2Hasher(), ttl_seconds=600, max_attempts=3),
         default=None,

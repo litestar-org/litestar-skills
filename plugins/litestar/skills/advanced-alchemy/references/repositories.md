@@ -152,7 +152,13 @@ The mock bypasses SQLAlchemy compilation entirely — dialect-specific SQL, `Mer
 Required for `SQLAlchemyAsyncRepository` and `SQLAlchemyAsyncSlugRepository`:
 
 ```python
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+from app.db import models as m
+
+
 class UserRepository(SQLAlchemyAsyncRepository[m.User]):
+    """User repository with explicit model type."""
+
     model_type = m.User
 ```
 
@@ -161,9 +167,15 @@ class UserRepository(SQLAlchemyAsyncRepository[m.User]):
 When dealing with many-to-many relationships, set `uniquify=True` to automatically deduplicate related objects:
 
 ```python
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+from app.db import models as m
+
+
 class UserRepository(SQLAlchemyAsyncRepository[m.User]):
+    """User repository with result deduplication for joins."""
+
     model_type = m.User
-    uniquify = True  # Deduplicates related objects in many-to-many joins
+    uniquify = True
 ```
 
 ## Nested Repository Pattern
@@ -196,6 +208,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def get_user_by_email(session: AsyncSession, email: str):
+    """Fetch a single user directly through the repository."""
     repo = UserRepository(session=session)
     return await repo.get_one_or_none(email=email)
 ```
@@ -205,29 +218,22 @@ async def get_user_by_email(session: AsyncSession, email: str):
 Key methods available on all async repositories:
 
 ```python
-# Add (create)
 instance = await repo.add(model_instance)
 instances = await repo.add_many([model1, model2])
 
-# Get
-instance = await repo.get(id)  # Raises NotFoundError
-instance = await repo.get_one_or_none(email="x@y.com")  # Returns None
+instance = await repo.get(id)
+instance = await repo.get_one_or_none(email="x@y.com")
 
-# List
 results = await repo.get_many()
 results, count = await repo.get_many_and_count(*filters)
 
-# Update
 instance = await repo.update(model_instance)
 instances = await repo.update_many([model1, model2])
 
-# Upsert
 instance = await repo.upsert(model_instance, match_fields=["email"])
 
-# Delete
 instance = await repo.delete(id)
 
-# Exists / Count
 exists = await repo.exists(email="x@y.com")
 count = await repo.count()
 ```

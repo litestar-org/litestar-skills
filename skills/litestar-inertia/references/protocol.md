@@ -5,7 +5,7 @@
 Inertia bridges server-side routing with client-side rendering:
 
 1. **Initial Request**: Server returns full HTML with page data
-2. **Subsequent Requests**: XHR with `X-Inertia` header, server returns JSON
+2. **Subsequent Requests**: XHR with `X-Inertia: true` header, server returns JSON
 3. **Page Component**: Client renders component with props from server
 
 ## React Adapter
@@ -86,7 +86,7 @@ defineProps<{ users: User[] }>()
 </template>
 ```
 
-## Forms
+## Forms & Validation
 
 ```tsx
 import { useForm } from "@inertiajs/react"
@@ -112,6 +112,16 @@ function CreateUser() {
 }
 ```
 
+## Precognition (Real-Time Validation)
+
+Enable `InertiaConfig(precognition=True)` and decorate the form handler with
+`@precognition`. Precognition then validates against backend DTO rules before
+submission:
+
+1. Client sends request with `Precognition: true` (and optionally `Precognition-Validate-Only: name,email`).
+2. If DTO validation succeeds, server returns `204 No Content` with `Precognition-Success: true`.
+3. If validation fails, server returns `422 Unprocessable Entity` with formatted validation errors without executing the handler body or causing side effects.
+
 ## Shared Data
 
 ```tsx
@@ -129,35 +139,67 @@ function Layout({ children }) {
 }
 ```
 
-## Partial Reloads
+## Partial Reloads & Prop Types
 
 ```tsx
 import { router } from "@inertiajs/react"
 
 router.reload({ only: ["users"] })
+router.reload({ except: ["stats"] })
 router.reload({ preserveScroll: true })
 router.reload({ preserveState: true })
 ```
+
+Server-side prop wrapper types:
+
+| Helper | Protocol Role |
+| --- | --- |
+| `always("key", value)` | Always included in response, even if omitted from `only: [...]` |
+| `once("key", value_or_fn)` | Resolved on initial visit and cached client-side; omitted on reloads unless requested |
+| `optional("key", fn)` | Excluded from initial visit and regular partial reloads; evaluated only when explicitly requested (e.g. via `WhenVisible`) |
+| `defer("key", fn, group="default")` | Deferred prop loaded asynchronously after initial page mount; grouped together |
+| `lazy("key", value_or_fn)` | Loaded only when explicitly requested via partial reload |
+| `merge("key", value, strategy="append"\|"prepend"\|"deep", match_on=...)` | Merges with existing client-side prop state instead of replacing |
 
 The client sends `X-Inertia-Partial-Component` with `X-Inertia-Partial-Data`
 and/or `X-Inertia-Partial-Except`. The server filters only when the component
 matches. Except wins when the same key appears in both sets. Initial responses
 advertise deferred groups; partial responses omit `deferredProps`.
 
-## Lazy Loading Props (server side)
+## Server-Side Props Example
 
 ```python
-def get_users():
+from litestar import get
+from litestar_vite.inertia import (
+    InertiaResponse,
+    always,
+    defer,
+    lazy,
+    merge,
+    once,
+    optional,
+)
+
+
+@get("/users", component="Users/Index")
+async def get_users() -> InertiaResponse:
+    """Return page with wrapped props."""
     return InertiaResponse(
         {
-            "users": lazy("users", fetch_users),
+            "users": await fetch_users(),
+            "auth": always("auth", {"can_create": True}),
+            "settings": once("settings", fetch_settings),
+            "comments": optional("comments", fetch_comments),
             "stats": defer("stats", fetch_stats),
+            "feed": merge("feed", await fetch_feed(), strategy="append"),
         }
     )
 ```
 
-The route must declare `component="Users/Index"`. `lazy()` loads only when
-explicitly requested; `defer()` advertises a post-render deferred group.
+## History Encryption & Clearing
+
+- Enable encryption globally via `InertiaConfig(encrypt_history=True)` or per response via `InertiaResponse(..., encrypt_history=True)`.
+- Clear history state on logout or sensitive page transitions via `clear_history(request)` or `InertiaResponse(..., clear_history=True)`.
 
 ## Asset Versions
 
@@ -188,8 +230,9 @@ createServer(async (page) => createInertiaApp({
 ## Best Practices
 
 - Use `preserveState` for filter/pagination changes
-- Use `only` for partial reloads to reduce payload
-- Use `lazy` for expensive props that aren't always needed
+- Use `only` or `except` for partial reloads to reduce payload
+- Use `lazy` or `optional` for expensive props not needed on first paint
 - Use `defer` for non-critical data that can load after first render
+- Use `precognition` for instant live-validation feedback on forms
 - Handle flash messages in a layout component
 - Use the `Head` component for SEO

@@ -13,10 +13,10 @@ The runtime has four canonical modes: `spa`, `template`, `hybrid`, and `framewor
 
 The plugin pairs with the npm package [`litestar-vite-plugin`](https://www.npmjs.com/package/litestar-vite-plugin) on the JS side. Python `ViteConfig` is the source of truth; the generated `.litestar.json` bridge lets JS config normally keep only `litestar({ input: [...] })`.
 
-This guidance targets the immutable `v0.29.1` tag. Releases `0.26.0` through
-`0.29.1` hardened Inertia protocol behavior, scaffolds, type generation,
-single-port HMR routing, manifest fallback, deployment, plugin activation, and
-lifecycle logging. See [Release Updates](references/release-updates.md).
+This guidance targets the immutable `v0.31.0` tag. Releases `0.26.0` through
+`0.31.0` hardened Inertia protocol behavior, Precognition validation, scaffolds,
+type generation, single-port HMR routing, manifest fallback, deployment,
+plugin activation, and lifecycle logging. See [Release Updates](references/release-updates.md).
 
 ## Code Style Rules
 
@@ -36,11 +36,11 @@ vite_config = ViteConfig(
     mode="spa",
     enabled=True,
     paths=PathConfig(
-        resource_dir="resources",  # frontend source root
-        bundle_dir="public",  # built assets land here
-        hot_file="hot",  # written to the .litestar.json bridge
+        resource_dir="resources",
+        bundle_dir="public",
+        hot_file="hot",
     ),
-    dev_mode=True,  # toggled by env in production
+    dev_mode=True,
 )
 
 app = Litestar(plugins=[VitePlugin(config=vite_config)])
@@ -89,17 +89,17 @@ Decision tree:
 
 ```python
 from litestar_vite import (
-    ViteConfig,
-    VitePlugin,
     PathConfig,
     RuntimeConfig,
     TypeGenConfig,
+    ViteConfig,
+    VitePlugin,
 )
 
 vite_config = ViteConfig(
     mode="spa",
-    enabled=True,  # False makes runtime wiring inert; CLI remains available
-    dev_mode=False,  # True in dev, False in prod (env-toggled)
+    enabled=True,
+    dev_mode=False,
     paths=PathConfig(
         root=".",
         resource_dir="src",
@@ -137,7 +137,7 @@ TypeGenConfig(
     generate_sdk=True,
     generate_routes=True,
     generate_schemas=True,
-    generate_page_props=True,  # Inertia only
+    generate_page_props=True,
     output="src/generated",
 )
 ```
@@ -455,7 +455,8 @@ Before delivering a `litestar-vite` integration, verify:
 **Task:** A Litestar SPA app with React + TanStack Router + Tailwind, building into the Litestar static dir, with HMR in dev.
 
 ```python
-# app/config/vite.py
+"""app/config/vite.py"""
+
 import os
 from pathlib import Path
 
@@ -478,9 +479,10 @@ vite = ViteConfig(
 ```
 
 ```python
-# app/server/plugins.py
-from litestar_vite import VitePlugin
+"""app/server/plugins.py"""
+
 from app import config
+from litestar_vite import VitePlugin
 
 vite = VitePlugin(config=config.vite)
 ```
@@ -533,7 +535,7 @@ ENV=prod litestar assets build
 
 For deep-dives on specific surfaces, see:
 
-- **[Config](references/config.md)** — Full `ViteConfig`, `PathConfig`, `RuntimeConfig`, `TypeGenConfig`, and `vite.config.ts` reference.
+- **[Config](references/config.md)** — `ViteConfig`, paths, runtime, type generation, Inertia, logging, deployment, and `vite.config.ts`.
 - **[Modes](references/modes.md)** — SPA / template / HTMX / Inertia / framework deep-dive with decision matrices.
 - **[TypeGen](references/typegen.md)** — Type generation pipeline, output reference, CI integration.
 - **[HMR](references/hmr.md)** — HMR architecture, debugging, common pitfalls.
@@ -541,7 +543,7 @@ For deep-dives on specific surfaces, see:
 - **[Deployment](references/deployment.md)** — Production build, static hosting, CDN patterns, cache strategy.
 - **[Troubleshooting](references/troubleshooting.md)** — Common errors and fixes.
 - **[Release Updates](references/release-updates.md)** — audited `0.26.0`
-  through `0.29.1` behavior changes.
+- through `0.31.0` behavior changes.
 
 ## Cross-References
 
@@ -553,9 +555,9 @@ For deep-dives on specific surfaces, see:
 
 - <https://vite.dev/guide/>
 - <https://vite.dev/config/>
-- <https://github.com/litestar-org/litestar-vite/tree/v0.29.1>
-- <https://github.com/litestar-org/litestar-vite/tree/v0.29.1/docs>
-- <https://github.com/litestar-org/litestar-vite/tree/v0.29.1/src/py/tests>
+- <https://github.com/litestar-org/litestar-vite/tree/v0.31.0>
+- <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/docs>
+- <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/src/py/tests>
 - <https://www.npmjs.com/package/litestar-vite-plugin>
 
 ## Shared Styleguide Baseline

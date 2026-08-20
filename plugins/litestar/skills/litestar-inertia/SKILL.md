@@ -14,9 +14,9 @@ description: "Auto-activate for litestar_vite.inertia, InertiaConfig, component=
 | Python bridge | [`litestar-vite`](../litestar-vite/SKILL.md) | `VitePlugin` + `InertiaConfig`, asset manifest, type generation, page-props codec |
 | Server framework | [`litestar`](../litestar/SKILL.md) | Routes, Controllers, Guards, DI, DTOs — returning Inertia responses |
 
-You can't skip any of these. Using Inertia with Litestar requires all four, and the skills form a chain: Litestar routes produce page data → `ViteConfig.inertia` configures the Inertia response layer → Vite-served client bundle mounts the page component → Inertia client takes over for subsequent navigations.
-
-This skill covers that integration end-to-end. For anything that's purely about one layer (e.g., Vite config internals) see the corresponding sibling skill.
+Litestar routes produce page data, `ViteConfig.inertia` configures the response
+layer, and the Vite-served client handles subsequent navigations. For Vite-only
+configuration, use the sibling skill.
 
 ## When this skill activates
 
@@ -58,12 +58,15 @@ from app.domain.dashboard.schemas import Dashboard
 
 
 class DashboardController(Controller):
+    """Controller for user dashboard."""
+
     path = "/dashboard"
     guards = [requires_active_user]
 
     @get("/", component="dashboard/Index")
-    async def index(self, dashboard_service) -> Dashboard:
-        return await dashboard_service.get_for_current_user()
+    async def index(self, dashboard_service) -> dict[str, Dashboard]:
+        """Render dashboard page."""
+        return {"dashboard": await dashboard_service.get_for_current_user()}
 ```
 
 → See [references/litestar_integration.md](references/litestar_integration.md)
@@ -97,13 +100,17 @@ from __future__ import annotations
 
 from litestar import Litestar
 from litestar.middleware.session.client_side import CookieBackendConfig
-from litestar_granian import GranianPlugin
-from litestar_vite import PathConfig, TypeGenConfig, ViteConfig, VitePlugin
-from litestar_vite.inertia import InertiaConfig
+from litestar_vite import (
+    InertiaConfig,
+    InertiaSSRConfig,
+    PathConfig,
+    TypeGenConfig,
+    ViteConfig,
+    VitePlugin,
+)
 
 from app.domain.accounts.schemas import CurrentUser
 from app.lib.settings import get_settings
-
 
 settings = get_settings()
 session_backend = CookieBackendConfig(secret=settings.secret_key.encode("utf-8"))
@@ -120,14 +127,20 @@ vite = VitePlugin(
             root_template="index.html",
             extra_static_page_props={"appName": settings.app_name},
             extra_session_page_props={"currentUser": CurrentUser},
+            precognition=True,
+            ssr=InertiaSSRConfig(
+                enabled=True,
+                url="http://127.0.0.1:13714/render",
+                command=["node", "resources/ssr.js"],
+            ),
         ),
         types=TypeGenConfig(output="resources/generated"),
     )
 )
 
 app = Litestar(
-    route_handlers=[DashboardController, ...],
-    plugins=[GranianPlugin(), vite],
+    route_handlers=[DashboardController],
+    plugins=[vite],
     middleware=[session_backend.middleware],
 )
 ```
@@ -164,32 +177,55 @@ field, message)` and return `InertiaBack(request)`, or install an exception
 handler that performs that mapping. A raw `422` response does not populate the
 next page's `errors` prop automatically.
 
-### Partial reloads — only re-fetch what changed
+### Precognition — Real-Time Form Validation
 
-```tsx
-import { router } from "@inertiajs/react";
+```python
+from litestar import Request, post
+from litestar_vite.inertia import InertiaRedirect, precognition
 
-// After a background task finishes, reload only notifications:
-router.reload({ only: ["notifications"] });
+
+@post("/projects")
+@precognition
+async def create_project(data: ProjectCreateDTO, request: Request) -> InertiaRedirect:
+    """Create a project for a non-Precognition submission."""
+    await project_service.create(data)
+    return InertiaRedirect(request, "/projects")
 ```
 
-### Lazy props — defer expensive data
+Set `InertiaConfig(precognition=True)`. A request with `Precognition: true`
+that passes DTO validation receives `204 No Content` and skips the handler;
+validation failures use the configured Precognition exception handler.
+
+### Partial reloads & Prop Helpers
 
 ```python
 from litestar import get
-from litestar_vite.inertia import lazy
+from litestar_vite.inertia import (
+    InertiaResponse,
+    always,
+    defer,
+    lazy,
+    merge,
+    once,
+    optional,
+)
 
 
 @get("/reports", component="reports/Index")
-async def reports_page(self, reports_service) -> dict:
-    return {
-        "summary": await reports_service.summary(),  # eager
-        "fullExport": lazy("fullExport", reports_service.export),
-    }
+async def reports_page(reports_service) -> InertiaResponse:
+    """Demonstrates all Inertia prop wrapper helpers."""
+    return InertiaResponse(
+        content={
+            "summary": await reports_service.summary(),
+            "auth": always("auth", {"canEdit": True}),
+            "settings": once("settings", reports_service.get_settings),
+            "comments": optional("comments", reports_service.get_comments),
+            "export": lazy("export", reports_service.export),
+            "stats": defer("stats", reports_service.fetch_stats, group="analytics"),
+            "items": merge("items", await reports_service.list_items(), strategy="append"),
+        }
+    )
 ```
-
-Client fetches `fullExport` only on `router.reload({ only: ["fullExport"] })`.
-Pass the callable, not its result.
 
 <workflow>
 
@@ -197,7 +233,10 @@ Pass the callable, not its result.
 
 ### Step 1 — Wire the bridge
 
-Register `GranianPlugin` and one `VitePlugin(config=ViteConfig(inertia=InertiaConfig(...)))`. Add session middleware. Do not register a second Inertia plugin in normal app scaffolds; `VitePlugin` reads `ViteConfig.inertia` and configures the Inertia bridge.
+Register one `VitePlugin(config=ViteConfig(inertia=InertiaConfig(...)))`. Add
+session middleware when using session-backed props or redirect errors. Do not
+register a second Inertia plugin: `VitePlugin` reads `ViteConfig.inertia` and
+configures the bridge.
 
 ### Step 2 — Define shared props
 
@@ -282,7 +321,8 @@ Before shipping an Inertia-integrated Litestar app:
 ## Example — Authenticated dashboard with forms + partial reload
 
 ```python
-# app/domain/projects/controllers.py
+"""app/domain/projects/controllers.py"""
+
 from __future__ import annotations
 
 from litestar import Controller, Request, get, post
@@ -294,6 +334,8 @@ from app.domain.projects.services import ProjectService
 
 
 class ProjectsController(Controller):
+    """Projects management controller."""
+
     path = "/projects"
     guards = [requires_active_user]
 
@@ -371,11 +413,11 @@ export default function ProjectsIndex() {
 ## Official References
 
 - Inertia.js v3 docs: <https://inertiajs.com/docs/v3>
-- Tagged Litestar-Vite Inertia docs: <https://github.com/litestar-org/litestar-vite/tree/v0.27.0/docs/frameworks/inertia>
+- Tagged Litestar-Vite Inertia docs: <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/docs/frameworks/inertia>
 - Client-side setup: <https://inertiajs.com/docs/v3/installation/client-side-setup>
 - Release notes: <https://github.com/inertiajs/inertia/releases>
-- Tagged `litestar-vite` Inertia source: <https://github.com/litestar-org/litestar-vite/tree/v0.27.0/src/py/litestar_vite/inertia>
-- Tagged Inertia tests: <https://github.com/litestar-org/litestar-vite/tree/v0.27.0/src/py/tests/unit/inertia>
+- Tagged `litestar-vite` Inertia source: <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/src/py/litestar_vite/inertia>
+- Tagged Inertia tests: <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/src/py/tests/unit/inertia>
 
 ## Shared Styleguide Baseline
 

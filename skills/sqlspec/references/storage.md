@@ -91,7 +91,7 @@ config = AsyncpgConfig(
 )
 ```
 
-SQLSpec 0.56 validates backend-specific extension storage keys. Unknown keys and options that the selected backend cannot honor raise `ImproperConfigurationError`; they are not ignored.
+SQLSpec validates backend-specific extension storage keys. Unknown keys and options that the selected backend cannot honor raise `ImproperConfigurationError`; they are not ignored.
 
 Schema lifecycle controls are:
 

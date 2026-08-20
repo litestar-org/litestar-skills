@@ -10,6 +10,19 @@ def test_pytest_databases_019_provider_and_port_contract() -> None:
     assert "host_port" in inspect.signature(DockerService.run).parameters
     for release in range(11, 19):
         assert hasattr(postgres, f"postgres_{release}_service")
+        assert hasattr(postgres, f"postgres_{release}_connection")
+        assert hasattr(postgres, f"postgres_{release}_port")
     for release in range(13, 19):
         assert hasattr(postgres, f"pgvector_{release}_service")
+        assert hasattr(postgres, f"pgvector_{release}_connection")
+        assert hasattr(postgres, f"pgvector_{release}_port")
+    for release in range(15, 19):
+        assert hasattr(postgres, f"paradedb_{release}_service")
+        assert hasattr(postgres, f"paradedb_{release}_connection")
+        assert hasattr(postgres, f"paradedb_{release}_port")
+    for release in range(15, 18):
+        assert hasattr(postgres, f"alloydb_omni_{release}_service")
+        assert hasattr(postgres, f"alloydb_omni_{release}_connection")
+        assert hasattr(postgres, f"alloydb_omni_{release}_port")
+    assert hasattr(postgres, "xdist_postgres_isolation_level")
     assert inspect.unwrap(postgres.postgres_image)() == "postgres:18"

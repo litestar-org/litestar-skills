@@ -199,7 +199,6 @@ class LogConnectionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         conn = getattr(request.state, "db_connection", None)
         if conn is not None:
-            # do something driver-specific
             pass
         return await call_next(request)
 ```

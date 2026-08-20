@@ -6,29 +6,24 @@ Advanced Alchemy provides a composable filter and pagination system that integra
 
 ```python
 from advanced_alchemy.filters import (
-    # Core filter type
-    FilterTypes,
-    # Filters
-    SearchFilter,
-    CollectionFilter,
     BeforeAfter,
-    OnBeforeAfter,
+    BooleanFilter,
+    ChoicesFilter,
+    CollectionFilter,
+    ComparisonFilter,
+    ExistsFilter,
+    FilterGroup,
+    FilterTypes,
+    LimitOffset,
+    MultiFilter,
+    NotExistsFilter,
     NotInCollectionFilter,
     NotInSearchFilter,
-    OrderBy,
-    # Value / null / comparison filters
-    NullFilter,
     NotNullFilter,
-    ComparisonFilter,
-    ChoicesFilter,
-    BooleanFilter,
-    # Correlated subquery + composite filters
-    ExistsFilter,
-    NotExistsFilter,
-    FilterGroup,
-    MultiFilter,
-    # Pagination
-    LimitOffset,
+    NullFilter,
+    OnBeforeAfter,
+    OrderBy,
+    SearchFilter,
 )
 from advanced_alchemy.service.pagination import OffsetPagination
 ```
@@ -58,7 +53,6 @@ To filter by a list of primary key values, use `CollectionFilter` with `field_na
 ```python
 from advanced_alchemy.filters import CollectionFilter
 
-# Get specific records by ID
 results = await service.get_many(
     CollectionFilter(field_name="id", values=[id1, id2, id3]),
 )
@@ -71,12 +65,10 @@ Filter where a column's value is in a given collection (`IN` clause on any field
 ```python
 from advanced_alchemy.filters import CollectionFilter
 
-# Filter by status
 results = await service.get_many(
     CollectionFilter(field_name="status", values=["active", "pending"]),
 )
 
-# Filter by multiple IDs on a non-PK field
 results = await service.get_many(
     CollectionFilter(field_name="team_id", values=[team1_id, team2_id]),
 )
@@ -101,12 +93,10 @@ Text search on a column using SQL `LIKE` / `ILIKE`.
 ```python
 from advanced_alchemy.filters import SearchFilter
 
-# Case-insensitive search (default)
 results = await service.get_many(
     SearchFilter(field_name="name", value="john", ignore_case=True),
 )
 
-# Case-sensitive search
 results = await service.get_many(
     SearchFilter(field_name="email", value="@example.com", ignore_case=False),
 )
@@ -135,7 +125,6 @@ Filter a datetime column by a range (before and/or after a given timestamp).
 from datetime import datetime, timezone
 from advanced_alchemy.filters import BeforeAfter
 
-# Records created in a date range
 results = await service.get_many(
     BeforeAfter(
         field_name="created_at",
@@ -144,7 +133,6 @@ results = await service.get_many(
     ),
 )
 
-# Only "before" — omit "after" by passing None
 results = await service.get_many(
     BeforeAfter(field_name="expires_at", before=datetime.now(timezone.utc), after=None),
 )
@@ -157,6 +145,7 @@ results = await service.get_many(
 Like `BeforeAfter` but uses inclusive inequality (`>=` and `<=`).
 
 ```python
+from datetime import datetime, timezone
 from advanced_alchemy.filters import OnBeforeAfter
 
 results = await service.get_many(
@@ -173,14 +162,13 @@ results = await service.get_many(
 To filter on the `created_at` and `updated_at` audit columns provided by `*AuditBase` classes, use `BeforeAfter` (or `OnBeforeAfter`) with the appropriate `field_name`.
 
 ```python
+from datetime import datetime, timezone
 from advanced_alchemy.filters import BeforeAfter
 
-# Records created after a date
 results = await service.get_many(
     BeforeAfter(field_name="created_at", before=None, after=datetime(2025, 6, 1, tzinfo=timezone.utc)),
 )
 
-# Records updated before a date
 results = await service.get_many(
     BeforeAfter(field_name="updated_at", before=datetime(2025, 1, 1, tzinfo=timezone.utc), after=None),
 )
@@ -193,12 +181,10 @@ Sort results by a column.
 ```python
 from advanced_alchemy.filters import OrderBy
 
-# Sort by creation date descending
 results = await service.get_many(
     OrderBy(field_name="created_at", sort_order="desc"),
 )
 
-# Sort by name ascending (default)
 results = await service.get_many(
     OrderBy(field_name="name", sort_order="asc"),
 )
@@ -213,12 +199,10 @@ Pagination via limit and offset.
 ```python
 from advanced_alchemy.filters import LimitOffset
 
-# Page 1 (first 20 records)
 results, total = await service.get_many_and_count(
     LimitOffset(limit=20, offset=0),
 )
 
-# Page 2
 results, total = await service.get_many_and_count(
     LimitOffset(limit=20, offset=20),
 )
@@ -229,10 +213,10 @@ results, total = await service.get_many_and_count(
 `IS NULL` / `IS NOT NULL` on a column (added 1.9).
 
 ```python
-from advanced_alchemy.filters import NullFilter, NotNullFilter
+from advanced_alchemy.filters import NotNullFilter, NullFilter
 
-results = await service.get_many(NullFilter(field_name="deleted_at"))  # only un-deleted
-results = await service.get_many(NotNullFilter(field_name="verified_at"))  # only verified
+results = await service.get_many(NullFilter(field_name="deleted_at"))
+results = await service.get_many(NotNullFilter(field_name="verified_at"))
 ```
 
 ### ComparisonFilter
@@ -250,7 +234,7 @@ results = await service.get_many(ComparisonFilter(field_name="age", operator="ge
 Added 1.11. `ChoicesFilter` matches a field against an allowed set (an `IN` over a fixed choice list); `BooleanFilter` matches a boolean field (no-op when `value` is `None`, which is handy for optional query params).
 
 ```python
-from advanced_alchemy.filters import ChoicesFilter, BooleanFilter
+from advanced_alchemy.filters import BooleanFilter, ChoicesFilter
 
 results = await service.get_many(ChoicesFilter(field_name="status", values=["active", "pending"]))
 results = await service.get_many(BooleanFilter(field_name="is_published", value=True))
@@ -292,28 +276,24 @@ results = await service.get_many(group)
 Filters are passed as positional arguments and are combined with AND logic:
 
 ```python
+from datetime import datetime, timezone
 from advanced_alchemy.filters import (
+    BeforeAfter,
+    CollectionFilter,
     LimitOffset,
     OrderBy,
     SearchFilter,
-    CollectionFilter,
-    BeforeAfter,
 )
 
 results, total = await service.get_many_and_count(
-    # Text search
     SearchFilter(field_name="name", value="acme", ignore_case=True),
-    # Status filter
     CollectionFilter(field_name="status", values=["active", "trial"]),
-    # Date range
     BeforeAfter(
         field_name="created_at",
         before=datetime(2025, 12, 31, tzinfo=timezone.utc),
         after=datetime(2025, 1, 1, tzinfo=timezone.utc),
     ),
-    # Sort
     OrderBy(field_name="name", sort_order="asc"),
-    # Pagination
     LimitOffset(limit=25, offset=0),
 )
 ```
@@ -485,9 +465,11 @@ def recent_items_filter(days: int = 30) -> list[FilterTypes]:
     ]
 
 
-# Usage in service methods
 class UserService(SQLAlchemyAsyncRepositoryService[m.User]):
+    """User service using custom composite filters."""
+
     async def list_active(self, *extra_filters: FilterTypes) -> list[m.User]:
+        """List active users with optional additional filters."""
         filters = [*active_users_filter(), *extra_filters]
         return await self.get_many(*filters)
 ```
@@ -533,16 +515,18 @@ def build_filters(
 
 ### Pagination Response Mapping
 
-```python
-# OffsetPagination maps directly to frontend table expectations:
-# {
-#   "items": [...],
-#   "total": 150,
-#   "limit": 20,
-#   "offset": 0
-# }
-#
-# Frontend calculates:
-#   total_pages = ceil(total / limit)
-#   current_page = (offset / limit) + 1
+OffsetPagination maps directly to frontend table expectations:
+
+```json
+{
+  "items": [],
+  "total": 150,
+  "limit": 20,
+  "offset": 0
+}
 ```
+
+Frontend calculates:
+
+- `total_pages = ceil(total / limit)`
+- `current_page = (offset / limit) + 1`

@@ -83,6 +83,7 @@ def _accepted_keywords(obj: object) -> set[str] | None:
     except (TypeError, ValueError):
         return None
     accepted: set[str] = set()
+    has_non_positional = False
     for parameter in signature.parameters.values():
         if parameter.kind is inspect.Parameter.VAR_KEYWORD:
             return None
@@ -90,7 +91,21 @@ def _accepted_keywords(obj: object) -> set[str] | None:
             inspect.Parameter.KEYWORD_ONLY,
             inspect.Parameter.POSITIONAL_OR_KEYWORD,
         }:
+            has_non_positional = True
             accepted.add(parameter.name)
+    if not has_non_positional and inspect.isclass(obj) and obj.__init__ is not object.__init__:
+        try:
+            init_sig = inspect.signature(obj.__init__)
+            for parameter in init_sig.parameters.values():
+                if parameter.kind is inspect.Parameter.VAR_KEYWORD:
+                    return None
+                if parameter.kind in {
+                    inspect.Parameter.KEYWORD_ONLY,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                }:
+                    accepted.add(parameter.name)
+        except (TypeError, ValueError):
+            pass
     return accepted
 
 

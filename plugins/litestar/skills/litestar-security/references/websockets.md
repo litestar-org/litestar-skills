@@ -29,10 +29,10 @@ This is the pattern often called a WebSocket *ticket*. It is named for what it
 authorizes here, because the library already issues access and refresh tokens
 to users and "ticket" gave no clue which one a value was.
 
-Configure `SecurityConfig.websocket.connect_token_store` to let the plugin
-inject a `WebSocketConnectTokenIssuer` into an authenticated mint endpoint. Use
-the **registered WebSocket handler name** and the **exact browser Origin** that
-will open the connection:
+Configure `SecurityConfig(websocket=WebSocketSecurityConfig(connect_token_store=...))`
+to let the plugin inject a `WebSocketConnectTokenIssuer` into an authenticated
+mint endpoint. Use the **registered WebSocket handler name** and the **exact
+browser Origin** that will open the connection:
 
 ```python
 from typing import Any
@@ -84,6 +84,16 @@ available when an application needs manual control of connect-token bindings or
 storage. `InMemoryWebSocketConnectTokenStore` is suitable only for a single
 worker — connect tokens must be consumed atomically across the deployment.
 
+## WebSocket Close Codes
+
+The runtime maps security outcomes to standard and application close codes (`WebSocketCloseCodes`):
+
+| Outcome | Code | Meaning |
+| --- | --- | --- |
+| Unauthenticated | `4401` | Missing or invalid credential, expired connect token |
+| Unauthorized | `4403` | Guard denial, missing role or scope |
+| Verification Unavailable | `1013` | Fails closed on dependency failure / try again later |
+
 ## Cross-References
 
 - **[Authentication](authentication.md)** — policy compilation for WebSocket handlers.
@@ -92,4 +102,4 @@ worker — connect tokens must be consumed atomically across the deployment.
 
 ## Official References
 
-- <https://github.com/cofin/litestar-security/blob/v0.3.0/docs/websockets.rst>
+- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/websockets.rst>

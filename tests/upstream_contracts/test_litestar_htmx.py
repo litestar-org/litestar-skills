@@ -1,7 +1,7 @@
 import inspect
 from importlib.metadata import version
 
-from litestar_htmx import HTMXTemplate, HXLocation, ReplaceUrl, TriggerEvent
+from litestar_htmx import HTMXTemplate, HXLocation, HXStopPolling, ReplaceUrl, TriggerEvent
 
 
 def test_litestar_htmx_050_response_helper_contract() -> None:
@@ -14,3 +14,4 @@ def test_litestar_htmx_050_response_helper_contract() -> None:
     assert "select" in inspect.signature(HXLocation).parameters
     assert "replace_url" in inspect.signature(ReplaceUrl).parameters
     assert "trigger_event" in inspect.signature(HTMXTemplate).parameters
+    assert HXStopPolling().status_code == 286

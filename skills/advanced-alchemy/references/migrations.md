@@ -2,13 +2,11 @@
 
 ## Metadata Registry
 
-Advanced Alchemy uses `metadata_registry` for automatic model discovery by Alembic:
+Advanced Alchemy uses `metadata_registry` for automatic model discovery by Alembic. Default-bind models use `metadata_registry.get()`. Import all model modules before migration autogeneration.
 
 ```python
 from advanced_alchemy.base import metadata_registry
 
-# Default-bind models use metadata_registry.get(). Import all model modules
-# before migration autogeneration.
 target_metadata = metadata_registry.get()
 ```
 
@@ -17,15 +15,16 @@ target_metadata = metadata_registry.get()
 Typical `env.py` setup with Advanced Alchemy:
 
 ```python
+"""Alembic environment configuration."""
+
 from alembic import context
+from app.db import models
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from advanced_alchemy.base import metadata_registry
 
-# Import all models so they register with metadata
-from app.db import models  # noqa: F401
-
+_ = models
 target_metadata = metadata_registry.get()
 
 

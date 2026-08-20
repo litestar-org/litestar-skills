@@ -95,7 +95,7 @@ config = AsyncpgConfig(
     extension_config={
         "litestar": {
             "commit_mode": "autocommit",
-            "correlation_header": "x-request-id",  # Propagated to SQL logs
+            "correlation_header": "x-request-id",
         }
     },
 )
@@ -166,13 +166,7 @@ Analyze and optimize query execution plans fluently.
 ```python
 from sqlspec.builder import Explain
 
-explain = (
-    Explain("SELECT * FROM users", dialect="postgres")
-    .analyze()  # Execute and show actual stats
-    .verbose()  # Additional information
-    .format("json")  # Output format
-    .build()
-)
+explain = Explain("SELECT * FROM users", dialect="postgres").analyze().verbose().format("json").build()
 ```
 
 ---

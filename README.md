@@ -6,7 +6,7 @@
 
 ## Status
 
-**v0.7.0 — early access.** Multi-host plumbing, 31 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
+**v0.8.0 — early access.** Multi-host plumbing, 31 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
 
 **Breaking host identity note:** host-facing marketplace, plugin, extension, managed-config, and skill namespace IDs are `litestar`. Existing installs under `litestar-skills` should be removed and reinstalled; no alias is shipped. The Python package and repository remain `litestar-skills`.
 

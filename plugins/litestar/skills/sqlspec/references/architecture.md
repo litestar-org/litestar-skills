@@ -31,14 +31,13 @@ SQLSpec uses a structured caching system to eliminate redundant parsing, transpi
 
 ### Cache Namespaces
 
-```python
-# Names used by NamespacedCache:
-statement  # compiled SQL and safe rebinding state
-builder  # value-independent builder templates
-expression  # parsed sqlglot expressions and fragments
-file  # loaded SQL files
-optimized  # optimizer-processed expressions
-```
+Names used by `NamespacedCache`:
+
+- `statement`: compiled SQL and safe rebinding state
+- `builder`: value-independent builder templates
+- `expression`: parsed sqlglot expressions and fragments
+- `file`: loaded SQL files
+- `optimized`: optimizer-processed expressions
 
 ### Cache Configuration
 
@@ -52,8 +51,8 @@ cache_config = CacheConfig(
     sql_cache_enabled=True,
     fragment_cache_enabled=True,
     optimized_cache_enabled=True,
-    sql_cache_size=2_000,  # statement + builder
-    fragment_cache_size=5_000,  # expression + file
+    sql_cache_size=2_000,
+    fragment_cache_size=5_000,
     optimized_cache_size=2_000,
 )
 

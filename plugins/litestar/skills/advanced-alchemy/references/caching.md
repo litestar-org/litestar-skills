@@ -109,10 +109,11 @@ When `cache_config` is set on `SQLAlchemyAsyncConfig`:
 ### Typical Usage Pattern
 
 ```python
-from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig
 from advanced_alchemy.cache import CacheConfig
+from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
 
-# 1. Configure once
 db_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://...",
     cache_config=CacheConfig(
@@ -123,18 +124,20 @@ db_config = SQLAlchemyAsyncConfig(
 )
 
 
-# 2. Use services normally — caching is transparent
 class UserService(SQLAlchemyAsyncRepositoryService[User]):
+    """User service with automatic caching enabled."""
+
     class Repo(SQLAlchemyAsyncRepository[User]):
         model_type = User
 
     repository_type = Repo
 
 
-# These calls are automatically cached:
-user = await user_service.get(user_id)  # Cache hit or DB + populate
-users = await user_service.get_many()  # Version-keyed list cache
-await user_service.update(user_id, data=...)  # Auto-invalidates on commit
+async def cache_usage_example(user_service: UserService, user_id: UUID) -> None:
+    """Service calls are automatically cached and invalidated on commit."""
+    user = await user_service.get(user_id)
+    users = await user_service.get_many()
+    await user_service.update({"name": "Updated Name"}, item_id=user_id)
 ```
 
 ### Stampede Protection
@@ -177,14 +180,11 @@ On rollback:
 
 ### Listener Registration
 
-Listeners are scoped to the session maker (not global) when using config-based setup:
+Listeners are scoped to the session maker (not global) when using config-based setup (`AsyncCacheListener.after_commit`, `AsyncCacheListener.after_rollback`).
+
+For manual global registration:
 
 ```python
-# Automatic with SQLAlchemyAsyncConfig:
-# - AsyncCacheListener.after_commit
-# - AsyncCacheListener.after_rollback
-
-# For manual global registration:
 from advanced_alchemy.cache import setup_cache_listeners
 
 setup_cache_listeners()
@@ -192,13 +192,11 @@ setup_cache_listeners()
 
 ### Controlling Listeners
 
-Disable cache listeners per-session or per-engine:
+Disable cache listeners per-session via `session.info` or per-engine via `execution_options`:
 
 ```python
-# Via session info
 session.info["enable_cache_listener"] = False
 
-# Via engine execution options
 engine = create_async_engine(url, execution_options={"enable_cache_listener": False})
 ```
 
@@ -209,12 +207,9 @@ engine = create_async_engine(url, execution_options={"enable_cache_listener": Fa
 The default serializer handles SQLAlchemy model instances by extracting column values (not relationships) and encoding them as JSON with support for UUIDs, datetimes, and other complex types.
 
 ```python
-from advanced_alchemy.cache.serializers import default_serializer, default_deserializer
+from advanced_alchemy.cache.serializers import default_deserializer, default_serializer
 
-# Serialize a model to bytes
 data: bytes = default_serializer(user)
-
-# Deserialize back to a detached model instance
 user_copy: User = default_deserializer(data, User)
 ```
 
@@ -223,14 +218,23 @@ user_copy: User = default_deserializer(data, User)
 ### Custom Serializers
 
 ```python
+from typing import Any, TypeVar
 import msgpack
+from advanced_alchemy.cache import CacheConfig
+from sqlalchemy import inspect as sa_inspect
+
+T = TypeVar("T")
 
 
 def msgpack_serializer(model: Any) -> bytes:
-    return msgpack.packb(model_to_dict(model))
+    """Serialize model column values to msgpack bytes."""
+    mapper = sa_inspect(model.__class__)
+    data = {col.key: getattr(model, col.key) for col in mapper.columns}
+    return msgpack.packb(data)
 
 
 def msgpack_deserializer(data: bytes, model_class: type[T]) -> T:
+    """Deserialize msgpack bytes back to model instance."""
     return model_class(**msgpack.unpackb(data))
 
 

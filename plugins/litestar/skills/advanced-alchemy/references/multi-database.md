@@ -26,20 +26,19 @@ This catches the common mistake of forgetting to set `bind_key` on the second co
 ```python
 from advanced_alchemy.extensions.starlette import (
     AdvancedAlchemy,
-    SQLAlchemyAsyncConfig,
     EngineConfig,
+    SQLAlchemyAsyncConfig,
 )
 
 primary = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://app:app@primary:5432/orders",
     commit_mode="autocommit",
     engine_config=EngineConfig(pool_size=20, max_overflow=10),
-    # bind_key omitted -> stored under "default"
 )
 
 analytics = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://reader:reader@warehouse:5432/analytics",
-    commit_mode="manual",  # read-only; no commits expected
+    commit_mode="manual",
     engine_config=EngineConfig(pool_size=5, max_overflow=2),
     bind_key="analytics",
 )
@@ -67,13 +66,8 @@ FastAPI and Starlette expose `get_config(key)` and
 `provide_session(key)` / `provide_engine(key)` factories:
 
 ```python
-# Address the analytics bind
 analytics_config = extension.get_config("analytics")
-
-# Construct a session-provider callable for that bind
 get_analytics_session = extension.provide_session(key="analytics")
-
-# Construct an engine-provider callable for that bind
 get_analytics_engine = extension.provide_engine(key="analytics")
 ```
 
@@ -142,7 +136,7 @@ analytics = SQLAlchemyAsyncConfig(
     engine_config=EngineConfig(
         pool_size=5,
         max_overflow=2,
-        pool_recycle=1800,  # warehouse keeps connections longer
+        pool_recycle=1800,
     ),
     bind_key="analytics",
 )

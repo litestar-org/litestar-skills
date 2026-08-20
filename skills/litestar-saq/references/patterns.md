@@ -1,20 +1,19 @@
 # SAQ Advanced Patterns
 
-> **See also:** [Sidecar Worker Pattern](postgres-native-sidecar-worker.md) — `TaskService + Worker + WorkerSidecar + WorkerPlugin` pattern for a project-owned transactional outbox and job schema, frontend channel updates, and execution-target routing.
-
 ## Heartbeat Management
 
 SAQ uses the job's touched timestamp to detect stuck work. When a job is active and the time since its last touch exceeds `heartbeat`, SAQ considers it stuck and may re-queue it. A `heartbeat` value of `0` disables this stale check.
 
 `heartbeat` is the maximum silence before a job is stale, not the interval at which SAQ updates it. Set it longer than both the decorator's signal interval and the `HeartbeatManager` flush cadence.
 
+Enqueueing a long-running job with an explicit 120s heartbeat stale threshold:
+
 ```python
-# A job expected to run ~10 minutes
 await queue.enqueue(
     "process_large_file",
     file_id=42,
-    timeout=700,  # 700s hard timeout
-    heartbeat=120,  # stale after 120 seconds without a touch
+    timeout=700,
+    heartbeat=120,
 )
 ```
 
@@ -24,9 +23,8 @@ Use `monitored_job()` so the plugin registers the current job and periodically s
 async def process_large_file(ctx: dict, *, file_id: int) -> None:
     job = ctx["job"]
 
-    for chunk in read_chunks(file_id):
+    async for chunk in read_chunks(file_id):
         await process_chunk(chunk)
-        # Manually touch the job heartbeat after each chunk
         await job.update()
 ```
 
@@ -106,7 +104,7 @@ async def fan_out_coordinator(ctx: dict, *, batch_ids: list[int]) -> None:
     results = await asyncio.gather(*[queue.apply("process_item", item_id=item_id) for item_id in batch_ids])
 ```
 
-## Queue Priorities (Multiple Queues)
+## Multiple Queues
 
 ```python
 high = Queue.from_url("redis://localhost", name="high")
@@ -127,6 +125,32 @@ SAQConfig(
 ```
 
 ## Worker Lifecycle Hooks
+
+### Built-in Hooks
+
+`litestar-saq` includes ready-to-use logging and timing hooks in `litestar_saq.hooks`:
+
+```python
+from litestar_saq import QueueConfig
+from litestar_saq.hooks import (
+    after_process_logger,
+    before_process_logger,
+    shutdown_logger,
+    startup_logger,
+    timing_after_process,
+    timing_before_process,
+)
+
+queue_config = QueueConfig(
+    dsn="redis://localhost:6379/0",
+    startup=[startup_logger],
+    shutdown=[shutdown_logger],
+    before_process=[before_process_logger, timing_before_process],
+    after_process=[timing_after_process, after_process_logger],
+)
+```
+
+### Custom Hooks
 
 ```python
 async def startup(ctx: dict) -> None:
@@ -151,32 +175,46 @@ async def after_process(ctx: dict) -> None:
 
 With `litestar-saq`, the plugin manages startup/shutdown via the Litestar app lifespan; per-job hooks are still available via `QueueConfig.before_process` / `after_process`.
 
-## Postgres Backend
+## Postgres and Redis Backend Options
+
+### Postgres Backend (`PostgresQueueOptions`)
 
 Use Postgres when:
 
-- Durable persistence required
-- Want SQL-queryable job history
-- No Redis in infra
-- Need SQL-backed queue storage
+- Durable persistence is required
+- SQL-queryable job history is desired
+- No Redis is in infra
+- SQL-backed queue storage is preferred
 
 ```python
-queue = Queue.from_url("postgresql://user:pass@localhost/mydb")
-```
+from litestar_saq import PostgresQueueOptions, QueueConfig
 
-In `litestar-saq`, put the PostgreSQL DSN on `QueueConfig` and install the `psycopg` extra:
-
-```python
-from litestar_saq import QueueConfig
-
-QueueConfig(
+queue_config = QueueConfig(
     name="default",
     dsn="postgresql://user:pass@localhost/mydb",
-    broker_options={
-        "jobs_table": "saq_jobs",
-        "stats_table": "saq_stats",
-        "manage_pool_lifecycle": True,
-    },
+    broker_options=PostgresQueueOptions(
+        jobs_table="saq_jobs",
+        stats_table="saq_stats",
+        versions_table="saq_versions",
+        manage_pool_lifecycle=True,
+        min_size=2,
+        max_size=10,
+        saq_lock_keyspace=1,
+    ),
+)
+```
+
+### Redis Backend (`RedisQueueOptions`)
+
+```python
+from litestar_saq import QueueConfig, RedisQueueOptions
+
+queue_config = QueueConfig(
+    name="default",
+    dsn="redis://localhost:6379/0",
+    broker_options=RedisQueueOptions(
+        max_concurrent_ops=15,
+    ),
 )
 ```
 
@@ -193,24 +231,31 @@ The PostgreSQL broker persists jobs in PostgreSQL, but `queue.enqueue()` uses th
 
 ## Job Deduplication
 
+Per-user sync deduplication:
+
 ```python
-# Per-user sync
 await queue.enqueue(
     "sync_user_data",
     user_id=user_id,
     key=f"sync-user-{user_id}",
     timeout=300,
 )
+```
 
-# Per-resource version
+Per-resource version deduplication:
+
+```python
 await queue.enqueue(
     "reindex_document",
     doc_id=doc_id,
     key=f"reindex-doc-{doc_id}",
     timeout=60,
 )
+```
 
-# Time-windowed (one report per hour)
+Time-windowed deduplication (e.g. one report per hour):
+
+```python
 import datetime
 
 hour = datetime.datetime.utcnow().strftime("%Y%m%d%H")

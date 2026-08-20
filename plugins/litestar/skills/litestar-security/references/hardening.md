@@ -18,9 +18,23 @@ every directive.
 
 | Mode | Behavior |
 | --- | --- |
-| Static CSP | Adds no send hook |
+| Static CSP (`CSPMode.ENFORCE`) | Adds no send hook; enforces declared policy |
 | Nonce CSP | Generates at least 128 random bits per response; uses one native `before_send` hook |
-| Report-only | Emits the standard report-only header |
+| Report-only (`CSPMode.REPORT_ONLY`) | Emits the standard `Content-Security-Policy-Report-Only` header |
+
+```python
+from litestar_security.headers import CSPMode, ContentSecurityPolicy, SecurityHeadersConfig
+
+headers_config = SecurityHeadersConfig(
+    csp=ContentSecurityPolicy(
+        directives={
+            "default-src": ["'self'"],
+            "script-src": ["'self'"],
+        },
+        mode=CSPMode.ENFORCE,
+    ),
+)
+```
 
 No CSP report collector is included. Retrieve nonces for script or style tags
 with `csp_nonce`.
@@ -38,6 +52,14 @@ session-capable policies.
   `csrf_required=True` (HTTP-only).
 - `auth=exclude()` bypasses authentication only; session-capable excluded
   routes keep their derived CSRF coverage.
+
+## Rate Limiting
+
+Local authentication protects sensitive routes with `StoreRateLimiter` and
+`RateLimitPolicy`. Default policies cover login, registration, recovery,
+verification, refresh rotation, MFA, and passkey flows.
+
+Custom rate limiters implement `RateLimiter` or wrap a distributed `Store`. Use `UnlimitedRateLimiter` when limiting is handled entirely by edge proxies.
 
 ## Pinning
 
@@ -68,7 +90,7 @@ material — each an exact 32-byte key from a KMS or secret store.
 | Purpose | Construct |
 | --- | --- |
 | `MFAConfig.secret_protector` | `AESGCMSecretProtector` |
-| OAuth transaction store and token vault | `AESGCMOAuthTransactionProtector` |
+| OAuth transaction store and account store | `AESGCMOAuthTransactionProtector` |
 
 Rotate without invalidating still-live envelopes: add the former active
 `SecretProtectorKey` or `OAuthTransactionProtectorKey` to `retained_keys`
@@ -100,5 +122,5 @@ Before enabling `MFAConfig.require_at_login` in a deployment:
 
 ## Official References
 
-- <https://github.com/cofin/litestar-security/blob/v0.3.0/docs/hardening.rst>
-- <https://github.com/cofin/litestar-security/blob/v0.3.0/docs/rate-limiting.rst>
+- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/hardening.rst>
+- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/rate-limiting.rst>
