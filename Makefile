@@ -166,7 +166,7 @@ type-check: mypy pyright                            ## Run all type checking
 # -----------------------------------------------------------------------------
 
 .PHONY: fix
-fix:                                                ## Run code formatters and auto-fixers
+fix: agents sync-codex-package                      ## Regenerate agents, sync Codex package, and run formatters
 	@echo "${INFO} Running code formatters... 🔧"
 	@uv run ruff check --fix --unsafe-fixes
 	@uv run ruff format

@@ -3,7 +3,7 @@
 Reads ``tools/agent-sources/*.yaml`` and writes the four host dialects:
 
 * ``agents/<name>.md``                    — Antigravity CLI: YAML-list ``tools``
-* ``.claude-plugin/agents/<name>.md``     — Claude Code: comma-string ``tools``
+* ``agents/claude/<name>.md``             — Claude Code: comma-string ``tools``
 * ``.opencode/agents/<name>.md``          — OpenCode: dict ``tools`` + ``mode: subagent``
 * ``.codex/agents/<name>.toml``           — Codex CLI: pure TOML, no ``tools``
 
@@ -27,7 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SOURCES_DIR = REPO_ROOT / "tools" / "agent-sources"
 AGENTS_DIR = REPO_ROOT / "agents"
 ANTIGRAVITY_DIR = AGENTS_DIR
-CLAUDE_DIR = REPO_ROOT / ".claude-plugin" / "agents"
+CLAUDE_DIR = AGENTS_DIR / "claude"
 OPENCODE_DIR = REPO_ROOT / ".opencode" / "agents"
 CODEX_DIR = REPO_ROOT / ".codex" / "agents"
 

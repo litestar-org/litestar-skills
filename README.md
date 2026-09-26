@@ -16,7 +16,7 @@ This repo documents hosts by the artifacts it ships:
 
 | Host | Entry Point |
 | --- | --- |
-| Claude Code | `.claude-plugin/plugin.json` + marketplace metadata + `.claude-plugin/agents/*.md` |
+| Claude Code | `.claude-plugin/plugin.json` + marketplace metadata + `agents/claude/*.md` |
 | Antigravity CLI | `plugin.json` + `hooks.json` + `rules/litestar-antigravity.md` + `agents/*.md` + `skills/` + `hooks/` |
 | Codex CLI | `.codex-plugin/plugin.json` + `.codex/agents/*.toml` |
 | OpenCode | `.opencode/plugins/litestar.js` + `.opencode/agents/*.md` |
@@ -37,7 +37,7 @@ Different hosts expose the same repo assets with different command surfaces. Kee
 
 | Harness | Skill Manual Trigger | Command Trigger | Reviewer Agent Trigger |
 | --- | --- | --- | --- |
-| Claude Code | `/litestar:litestar` for the hub skill; `/litestar:sqlspec` for focused skills. Plugin policy uses `Skill(litestar:<skill-name>)`. | `/litestar:configure`, `/litestar:new-app`, `/litestar:new-domain`, `/litestar:review` | Select `litestar-reviewer` from `.claude-plugin/agents/` where Claude exposes plugin subagents. |
+| Claude Code | `/litestar:litestar` for the hub skill; `/litestar:sqlspec` for focused skills. Plugin policy uses `Skill(litestar:<skill-name>)`. | `/litestar:configure`, `/litestar:new-app`, `/litestar:new-domain`, `/litestar:review` | Select `litestar-reviewer` from `agents/claude/` where Claude exposes plugin subagents. |
 | Antigravity CLI | Skills load from the `litestar` plugin or `.agents/skills/`; use the displayed skill/template name in Antigravity. `PreInvocation` hooks in root `hooks.json` and `rules/litestar-antigravity.md` inject `litestar:<skill-name>` reminders when project signals are detected. | No TOML slash-command surface in the Antigravity plugin schema. Use prompts backed by the skills or reviewer agent. | `litestar-reviewer` from top-level `agents/`. |
 | Codex CLI | Codex surfaces installed skills by displayed name. In `$`-trigger Codex surfaces, force the hub with `$litestar:litestar` and focused skills with `$litestar:<skill-name>`; natural language also works. | Codex plugins do not currently expose plugin-defined `/litestar:*` slash commands. Use natural language such as “Use Litestar review…” and the `litestar` skill router. | `$agent litestar-reviewer` from `.codex/agents/`. |
 | OpenCode | `opencode skill list` shows project-local copied skills; use the displayed skill name in the OpenCode UI. Plugin reminders use `litestar:<skill-name>`. | No TOML command loader in the OpenCode plugin. Use natural-language prompts or project-local command support. | `litestar-reviewer` from `.opencode/agents/`. |

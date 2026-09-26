@@ -17,7 +17,7 @@ The `/plugin` commands run **inside** Claude Code — they cannot be automated f
 | --- | --- |
 | `skills/<name>/SKILL.md` | Skills (description-based auto-activation; manual trigger `/litestar:<name>`) |
 | `commands/<prefix>/<command>.toml` | Slash commands (e.g. `/litestar:new-app`) |
-| `.claude-plugin/agents/<name>.md` | Subagents (PascalCase tool list dialect) |
+| `agents/claude/<name>.md` | Subagents (PascalCase tool list dialect) |
 | `hooks/hooks.json` → `hooks/session-start.sh` | SessionStart hook injecting Litestar skill reminders |
 
 ## Project-local install (less common)

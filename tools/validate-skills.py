@@ -58,11 +58,11 @@ SKILLS_DIR = REPO_ROOT / "skills"
 COMMANDS_DIR = REPO_ROOT / "commands"
 AGENTS_DIR = REPO_ROOT / "agents"
 # All host agent formats use incompatible schemas, so each host-owned location
-# is validated by its own rules. Antigravity reads plugin subagents from the
-# top-level agents/ directory; Claude, OpenCode, and Codex keep their dialects
-# in hidden host package directories so Antigravity does not ingest them.
+# is validated by its own rules. Antigravity reads top-level agents/*.md;
+# Claude reads agents/claude/*.md via .claude-plugin/plugin.json; OpenCode and
+# Codex keep their dialects in hidden host package directories.
 ANTIGRAVITY_AGENTS_DIR = AGENTS_DIR
-CLAUDE_AGENTS_DIR = REPO_ROOT / ".claude-plugin" / "agents"
+CLAUDE_AGENTS_DIR = AGENTS_DIR / "claude"
 OPENCODE_AGENTS_DIR = REPO_ROOT / ".opencode" / "agents"
 CODEX_AGENTS_DIR = REPO_ROOT / ".codex" / "agents"
 SHIPPED_ROOT_FILES = ("AGENTS.md", "CONTRIBUTING.md", "README.md")
@@ -422,7 +422,7 @@ def validate_opencode_agent(path: Path) -> list[Violation]:
 
 
 def validate_claude_agent(path: Path) -> list[Violation]:
-    """Validate a Claude Code subagent file under ``.claude-plugin/agents/``.
+    """Validate a Claude Code subagent file under ``agents/claude/``.
 
     Claude schema: ``tools`` as a comma-separated string of canonical Claude
     tool names (e.g. ``Read, Grep, Glob, Bash``). YAML lists and dict mappings
@@ -487,6 +487,20 @@ def validate_manifest(path: Path) -> list[Violation]:
                         f"Claude manifest {field!r} field must be an array for maximum reliability",
                     )
                 )
+            elif isinstance(val, list) and field in ("agents", "commands"):
+                default_dir = REPO_ROOT / field
+                if default_dir.is_dir():
+                    expected_prefix = f"./{field}/"
+                    for entry in cast("list[object]", val):
+                        if isinstance(entry, str) and not entry.startswith(expected_prefix):
+                            violations.append(
+                                Violation(
+                                    path,
+                                    1,
+                                    f"Claude manifest {field!r} entry {entry!r} must point inside {expected_prefix!r} "
+                                    f"when default '{field}/' directory exists",
+                                )
+                            )
 
     if path.name == "plugin.json":
         for field in ("skills", "commands", "agents", "hooks"):
@@ -854,7 +868,7 @@ def iter_all_shipped_files() -> Iterator[Path]:
     if COMMANDS_DIR.is_dir():
         yield from sorted(COMMANDS_DIR.rglob("*.toml"))
     if ANTIGRAVITY_AGENTS_DIR.is_dir():
-        yield from sorted(ANTIGRAVITY_AGENTS_DIR.rglob("*.md"))
+        yield from sorted(ANTIGRAVITY_AGENTS_DIR.glob("*.md"))
     if OPENCODE_AGENTS_DIR.is_dir():
         yield from sorted(OPENCODE_AGENTS_DIR.rglob("*.md"))
     if CLAUDE_AGENTS_DIR.is_dir():

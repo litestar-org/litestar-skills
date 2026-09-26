@@ -37,7 +37,7 @@ Document hosts by the artifacts this repo ships. Do not describe hosts as compat
 
 | Host | Entry Point | Notes |
 | --- | --- | --- |
-| **Claude Code** | `.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` + `.claude-plugin/agents/*.md` | Full plugin with skills, commands, agents, hooks. |
+| **Claude Code** | `.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` + `agents/claude/*.md` | Full plugin with skills, commands, agents, hooks. |
 | **Antigravity CLI** | `plugin.json` + `hooks.json` + `rules/litestar-antigravity.md` + `agents/*.md` + `skills/` + `hooks/` | Google CLI plugin with Markdown subagent templates, `rules/litestar-antigravity.md`, and `PreInvocation` hooks in root `hooks.json`. |
 | **Codex CLI** | `.codex-plugin/plugin.json` + `.codex/agents/*.toml` + `.codex/config.toml` | Custom agents ship as pure TOML (tools inherited from session). |
 | **OpenCode** | `.opencode/plugins/litestar.js` + `.opencode/agents/*.md` + native `.claude/skills/` / `.agents/skills/` reads | JS plugin wrapper + dict-schema agents. |
@@ -52,7 +52,7 @@ Document hosts by the artifacts this repo ships. Do not describe hosts as compat
 | Skills | `skills/<skill-name>/SKILL.md` |
 | Slash commands | `commands/<prefix>/<command>.toml` |
 | Subagents (Antigravity CLI) | `agents/<agent-name>.md` (`tools` as YAML list of Antigravity tool names) |
-| Subagents (Claude Code) | `.claude-plugin/agents/<agent-name>.md` (`tools` as comma-separated string of Claude tool names) |
+| Subagents (Claude Code) | `agents/claude/<agent-name>.md` (`tools` as comma-separated string of Claude tool names) |
 | Subagents (Codex CLI) | `.codex/agents/<agent-name>.toml` (pure TOML; `developer_instructions` holds the prompt; no top-level `tools` — inherited from session `config.toml`) |
 | Subagents (OpenCode) | `.opencode/agents/<agent-name>.md` (`tools` as dict mapping + `mode: subagent`) |
 | MCP servers | `mcp-servers/<server-name>/` |
@@ -65,7 +65,7 @@ Keep package identity, skill namespace, command syntax, and agent syntax separat
 
 | Harness | Skill Manual Trigger | Command Trigger | Reviewer Agent Trigger |
 | --- | --- | --- | --- |
-| Claude Code | `/litestar:<skill-name>` (example: `/litestar:sqlspec`); policies use `Skill(litestar:<skill-name>)` | `/litestar:configure`, `/litestar:new-app`, `/litestar:new-domain`, `/litestar:review` | `litestar-reviewer` from `.claude-plugin/agents/` |
+| Claude Code | `/litestar:<skill-name>` (example: `/litestar:sqlspec`); policies use `Skill(litestar:<skill-name>)` | `/litestar:configure`, `/litestar:new-app`, `/litestar:new-domain`, `/litestar:review` | `litestar-reviewer` from `agents/claude/` |
 | Antigravity CLI | Uses displayed skill/template names from the `litestar` plugin | No TOML slash-command surface in the Antigravity plugin schema | `litestar-reviewer` from top-level `agents/` |
 | Codex CLI | `$litestar:litestar` or `$litestar:<focused-skill>` where the Codex surface supports `$` skill triggers; natural language also works | Codex plugins do not currently expose plugin-defined `/litestar:*` slash commands | `$agent litestar-reviewer` from `.codex/agents/` |
 | OpenCode | Uses displayed skill names from copied `.agents/skills/`; plugin reminders use `litestar:<skill-name>` | No TOML command loader in the OpenCode plugin | `litestar-reviewer` from `.opencode/agents/` |

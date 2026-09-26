@@ -71,10 +71,10 @@ def _patch_roots(mod: Any, tmp_root: Path) -> None:
     mod.AGENTS_DIR = tmp_root / "agents"
     mod.ANTIGRAVITY_AGENTS_DIR = tmp_root / "agents"
     mod.OPENCODE_AGENTS_DIR = tmp_root / ".opencode" / "agents"
-    mod.CLAUDE_AGENTS_DIR = tmp_root / ".claude-plugin" / "agents"
+    mod.CLAUDE_AGENTS_DIR = tmp_root / "agents" / "claude"
     mod.CODEX_AGENTS_DIR = tmp_root / ".codex" / "agents"
     # Ensure dirs exist so glob returns empty rather than raising.
-    for sub in ("skills", "commands", "agents", ".opencode/agents", ".claude-plugin/agents", ".codex/agents"):
+    for sub in ("skills", "commands", "agents", "agents/claude", ".opencode/agents", ".codex/agents"):
         (tmp_root / sub).mkdir(parents=True, exist_ok=True)
 
 
@@ -612,13 +612,25 @@ class TestValidateManifest:
     def test_valid_claude_manifest_no_violations(self, tmp_path: Path) -> None:
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
+        (tmp_path / "agents" / "claude" / "a.md").write_text("# agent\n")
+        manifest_dir = tmp_path / ".claude-plugin"
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        manifest = manifest_dir / "plugin.json"
+        manifest.write_text('{"name": "x", "version": "0.1", "agents": ["./agents/claude/a.md"]}')
+        violations = mod.validate_manifest(manifest)
+        assert violations == []
+
+    def test_claude_agents_outside_default_agents_dir_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
         (tmp_path / "a.md").write_text("# agent\n")
         manifest_dir = tmp_path / ".claude-plugin"
         manifest_dir.mkdir(parents=True, exist_ok=True)
         manifest = manifest_dir / "plugin.json"
         manifest.write_text('{"name": "x", "version": "0.1", "agents": ["./a.md"]}')
         violations = mod.validate_manifest(manifest)
-        assert violations == []
+        assert len(violations) == 1
+        assert "must point inside './agents/'" in violations[0].message.lower()
 
     def test_invalid_claude_agents_yields_violation(self, tmp_path: Path) -> None:
         mod = _load_validator()
@@ -761,9 +773,10 @@ class TestIterAllShippedFiles:
         cmd_dir = tmp_path / "commands" / "b"
         cmd_dir.mkdir(parents=True)
         (cmd_dir / "c.toml").write_text("x")
-        agents_dir = tmp_path / "agents" / "antigravity"
+        agents_dir = tmp_path / "agents"
         agents_dir.mkdir(parents=True, exist_ok=True)
         (agents_dir / "r.md").write_text("x")
+        (agents_dir / "claude" / "claude_r.md").write_text("x")
         (tmp_path / "AGENTS.md").write_text("x")
         (tmp_path / "README.md").write_text("x")
         found = list(mod.iter_all_shipped_files())
@@ -771,6 +784,7 @@ class TestIterAllShippedFiles:
         assert "SKILL.md" in names
         assert "c.toml" in names
         assert "r.md" in names
+        assert "claude_r.md" in names
         assert "AGENTS.md" in names
         assert "README.md" in names
 
