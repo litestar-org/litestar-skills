@@ -70,6 +70,7 @@ def _run_command_with_shell(
     env = subprocess_env(overrides={"PWD": str(cwd), **overrides})
     return subprocess.run(
         [shell_executable, "-c", command],
+        stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
         env=env,

@@ -27,9 +27,18 @@ elif [[ -n "${CURSOR_PLUGIN_ROOT:-}" ]]; then
     host="cursor"
 fi
 
+_session_python=""
+if _resolve_python >/dev/null 2>&1; then
+    _session_python="$(_resolve_python)"
+fi
+
 stdin_payload=""
 if [[ ! -t 0 ]]; then
-    IFS= read -r -t 0.05 -d '' stdin_payload || true
+    if (( BASH_VERSINFO[0] >= 4 )); then
+        IFS= read -r -t 0.05 -d '' stdin_payload || true
+    else
+        IFS= read -r -t 1 -d '' stdin_payload || true
+    fi
 fi
 
 has_stdin="0"
@@ -39,10 +48,6 @@ fi
 
 # Determine project root: prefer workspacePaths[0] from stdin JSON when present, else cwd.
 project_root="${PWD}"
-_session_python=""
-if _resolve_python >/dev/null 2>&1; then
-    _session_python="$(_resolve_python)"
-fi
 
 if [[ "$has_stdin" == "1" && -n "$_session_python" ]]; then
     stdin_info="$("$_session_python" - "$host" "$stdin_payload" <<'PY'

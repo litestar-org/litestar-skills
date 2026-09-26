@@ -20,6 +20,7 @@ def _run(cwd: Path, env_overrides: dict[str, str], stdin_text: str | None = None
     result = subprocess.run(
         [bash_executable(), str(SESSION_START)],
         input=stdin_text,
+        stdin=subprocess.DEVNULL if stdin_text is None else None,
         capture_output=True,
         text=True,
         env=subprocess_env(overrides=overrides),
