@@ -40,12 +40,12 @@ class OrderFactory(DataclassFactory[Order]):
 def test_x(orders: type[OrderFactory]) -> None: ...
 ```
 
-## Scope
+## Scope and autouse
 
-Default scope is `"function"`. Override with `scope=`:
+Default `scope` is `"function"` and `autouse` is `False`. Override either on `@register_fixture(scope=..., autouse=..., name=...)`:
 
 ```python
-@register_fixture(scope="session")
+@register_fixture(scope="session", autouse=False)
 class CustomerFactory(DataclassFactory[Customer]):
     pass
 ```

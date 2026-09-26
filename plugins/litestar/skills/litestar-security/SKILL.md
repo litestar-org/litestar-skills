@@ -1,6 +1,6 @@
 ---
 name: litestar-security
-description: "Auto-activate for litestar_security, SecurityPlugin, SecurityConfig, CurrentUser, Principal, SecurityContext, requires_role, requires_scope, requires_authenticated, requires_tenant, requires_tenant_role, requires_capability, or requires_assurance. Not for raw auth guards alone — use litestar-auth-guards."
+description: "Auto-activate for litestar_security, SecurityPlugin, SecurityConfig, SecureController, CurrentUser, Principal, SecurityContext, or requires_role/scope/tenant/capability/assurance. Not for basic Litestar Guards."
 ---
 
 # Litestar Security
@@ -16,9 +16,9 @@ Do not conflate them: the policy helpers (`public`, `required`, `any_of`, `all_o
 
 ## Code Style Rules
 
-- **Declare authentication with `auth=`.** Put policy on the route, or on a router/controller/app through `opt={"auth": ...}`. The nearest native owner wins.
+- **Declare authentication with `SecureController`, `PublicController`, or `auth=`.** Subclass `SecureController` (`auth: ClassVar[AuthenticationPolicy] = required(...)`) or `PublicController` for controllers, pass `auth=` on individual routes, and use `opt={"auth": ...}` on routers or third-party controllers. The nearest native owner wins.
 - **Keep authorization in `guards=[...]`.** Litestar's `security=` parameter is reserved for the OpenAPI requirements projected from `auth`.
-- **Inject the user with `CurrentUser[T]`.** Use `NamedDependency[CurrentUser[UserType]]`; it rejects anonymous and userless service principals. `principal` and `security_context` stay typed on public routes too.
+- **Inject the user with `CurrentUser[T]`.** Annotate `current_user: CurrentUser[UserType]` (already a `NamedDependency[UserType]` alias); it rejects anonymous and userless service principals. `principal` and `security_context` stay typed on public routes too via `NamedDependency`.
 - **Authorize from the snapshot.** Guards read the `AuthorizationSnapshot` produced by the configured `authorization_resolver`. Never query the database inside a guard.
 - **Compose predicates with `requires_*`.** Use `requires_any_of`, `requires_all_of`, `requires_at_least`, `requires_one_of` for predicate composition.
 - **Exclude other plugins' routes by path.** Static assets and dashboards carry no `auth` and compile to implicit `required()`, so they answer `401` until listed in `SecurityConfig(exclude=[...])`. Inspect routes with `litestar security routes`.
@@ -57,8 +57,19 @@ With mechanisms configured and no inherited policy, routes default to implicit `
 ### Authentication Policy
 
 ```python
-from litestar import Controller, get
-from litestar_security import all_of, any_of, at_least, public, required
+from typing import ClassVar
+
+from litestar import get
+from litestar_security import (
+    AuthenticationPolicy,
+    PublicController,
+    SecureController,
+    all_of,
+    any_of,
+    at_least,
+    public,
+    required,
+)
 
 policy_default = required()
 policy_session = required("session")
@@ -68,30 +79,43 @@ policy_threshold = at_least(2, "session", "api-key", "service-jwt")
 policy_public = public()
 ```
 
-Apply it at whichever layer owns the decision:
+Apply policy on controllers via `SecureController` / `PublicController` and on routes via `auth=`:
 
 ```python
-@get("/health", auth=public())
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+class HealthController(PublicController):
+    path = "/health"
+
+    @get("/")
+    async def check(self) -> dict[str, str]:
+        return {"status": "ok"}
 
 
-class AccountController(Controller):
-    opt = {"auth": required("session")}
+class AccountController(SecureController):
+    path = "/accounts"
+    auth: ClassVar[AuthenticationPolicy] = required("session")
 ```
 
-Custom controller class attributes are not propagated by Litestar — policy must live in `opt`, or use the typed `SecureController` / `PublicController` base classes.
+Use `opt={"auth": ...}` only on `Router`, `Litestar`, or third-party controllers that cannot subclass `SecureController`.
 
 ### Authorization Guards
 
 ```python
-from litestar import Controller, get
-from litestar_security import requires_any_of, requires_role, requires_scope
+from typing import ClassVar
+
+from litestar import get
+from litestar_security import (
+    AuthenticationPolicy,
+    SecureController,
+    required,
+    requires_any_of,
+    requires_role,
+    requires_scope,
+)
 
 
-class ReportsController(Controller):
+class ReportsController(SecureController):
     path = "/reports"
-    opt = {"auth": required("session")}
+    auth: ClassVar[AuthenticationPolicy] = required("session")
     guards = [requires_role("analyst")]
 
     @get("/", guards=[requires_any_of(requires_scope("read:all"), requires_scope("read:reports"))])
@@ -105,10 +129,11 @@ The plugin registers these; do not shadow them.
 
 | Key | Type | Use |
 | --- | --- | --- |
-| `principal` | `Principal` | Stable envelope identity plus the active user model |
-| `security_context` | `SecurityContext` | Active session, evidence, snapshot, and restrictions |
-| `current_user` | `CurrentUser[User]` | Narrowing shortcut; rejects anonymous and service principals |
-| `websocket_connect_tokens` | `WebSocketConnectTokenService` | WebSocket connect-token manager |
+| `principal` | `NamedDependency[Principal[User]]` | Stable envelope identity plus the active user model |
+| `security_context` | `NamedDependency[SecurityContext]` | Active session, evidence, snapshot, and restrictions |
+| `current_user` | `CurrentUser[User]` | Narrowing shortcut (`NamedDependency[User]`); rejects anonymous and service principals |
+| `csp_nonce` | `NamedDependency[str]` | Per-request CSP nonce when `SecurityHeadersConfig.use_csp_nonce=True` |
+| `websocket_connect_tokens` | `NamedDependency[WebSocketConnectTokenIssuer]` | Route-aware WebSocket connect-token issuer |
 
 ### Status Code Contract
 
@@ -168,12 +193,12 @@ Apply `SecurityHeadersConfig.hardened()`, supply every CSP directive explicitly,
 ## Guardrails
 
 - **Do not pass predicates to `any_of` / `all_of` / `at_least`.** Those compose authentication mechanisms. Use `requires_any_of`, `requires_all_of`, `requires_at_least`, or `requires_one_of` for predicates.
-- **Do not shadow reserved dependencies.** Avoid naming providers `principal`, `security_context`, `current_user`, or `websocket_connect_tokens`.
+- **Do not shadow reserved dependencies.** Avoid naming providers `principal`, `security_context`, `current_user`, `csp_nonce`, or `websocket_connect_tokens`.
 - **Do not perform I/O in predicates.** Guards evaluate synchronously against the snapshot; put database checks in the `authorization_resolver`.
 - **Do not use `guards=` for authentication or `auth=` for authorization.** They compile to different things — runtime admission plus OpenAPI projection versus permission checks.
 - **Do not put a layer-level policy above excluded routes.** A route that both declares `auth` and matches an exclusion pattern is rejected at startup.
 - **Do not put bearer credentials in WebSocket query strings.** Use a connect token or an HttpOnly cookie.
-- **Do not enable `MFAConfig.require_at_login` before enrolling factors.** Affected accounts lock themselves out.
+- **Do not enable `MFAConfig(require_at_login=True)` before enrolling factors.** Unenrolled accounts lock themselves out; use `require_at_login="enrolled"` to enforce login MFA only for accounts that have enrolled a factor.
 - **Do not hard-code protector keys.** Load exact 32-byte material from a KMS or secret store, and retain the previous key through rotation.
 
 </guardrails>
@@ -187,7 +212,7 @@ Apply `SecurityHeadersConfig.hardened()`, supply every CSP directive explicitly,
 - [ ] Authorization uses `guards=[...]` with predicates, never the mechanism combinators.
 - [ ] A custom `authorization_resolver` implements async `resolve()` and returns an `AuthorizationSnapshot`, `InvalidCredentials`, or `VerificationUnavailable`.
 - [ ] No handler or guard queries the database to perform authorization checks.
-- [ ] Handler injection uses `CurrentUser[UserType]` or `NamedDependency[CurrentUser[UserType]]`.
+- [ ] Handler injection uses `current_user: CurrentUser[UserType]` (or `NamedDependency[Principal[UserType]]` / `NamedDependency[SecurityContext]`).
 - [ ] Routes registered by other plugins are excluded by anchored path pattern or given an explicit policy.
 - [ ] WebSockets use connect tokens verified against the registered handler name and exact Origin.
 - [ ] Exception handlers cover `401`, `403`, and `503` outcomes.
@@ -201,17 +226,19 @@ Apply `SecurityHeadersConfig.hardened()`, supply every CSP directive explicitly,
 
 ```python
 from dataclasses import dataclass, field
+from typing import ClassVar
 
-from litestar import Litestar, Router, get
-from litestar.di import NamedDependency
+from litestar import Litestar, get
 from litestar_security import (
+    AuthenticationPolicy,
     AuthorizationSnapshot,
     CurrentUser,
     Principal,
+    PublicController,
+    SecureController,
     SecurityConfig,
     SecurityHeadersConfig,
     SecurityPlugin,
-    public,
     required,
     requires_any_of,
     requires_role,
@@ -238,25 +265,29 @@ class AppAuthorizationResolver:
         )
 
 
-@get("/health", auth=public())
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+class SystemController(PublicController):
+    path = "/health"
+
+    @get("/")
+    async def health(self) -> dict[str, str]:
+        return {"status": "ok"}
 
 
-@get(
-    "/orders",
-    guards=[requires_any_of(requires_scope("read:all"), requires_scope("read:orders"))],
-)
-async def list_orders(current_user: NamedDependency[CurrentUser[User]]) -> dict[str, str]:
-    return {"owner": current_user.username}
+class OrdersController(SecureController):
+    path = "/api/orders"
+    auth: ClassVar[AuthenticationPolicy] = required("session")
 
+    @get(
+        "/",
+        guards=[requires_any_of(requires_scope("read:all"), requires_scope("read:orders"))],
+    )
+    async def list_orders(self, current_user: CurrentUser[User]) -> dict[str, str]:
+        return {"owner": current_user.username}
 
-@get("/admin/orders", guards=[requires_role("admin")])
-async def admin_orders() -> list[dict[str, str]]:
-    return []
+    @get("/admin", guards=[requires_role("admin")])
+    async def admin_orders(self) -> list[dict[str, str]]:
+        return []
 
-
-api = Router(path="/api", route_handlers=[list_orders, admin_orders], opt={"auth": required("session")})
 
 security_config = SecurityConfig[User](
     authorization_resolver=AppAuthorizationResolver(),
@@ -265,7 +296,7 @@ security_config = SecurityConfig[User](
 )
 
 app = Litestar(
-    route_handlers=[health, api],
+    route_handlers=[SystemController, OrdersController],
     plugins=[SecurityPlugin(config=security_config)],
 )
 ```
@@ -284,8 +315,8 @@ app = Litestar(
 ## Cross-References
 
 - **[litestar](../litestar/SKILL.md)** — Litestar app setup and plugin list.
-- **[litestar-auth-guards](../litestar-auth-guards/SKILL.md)** — native guards and low-level ASGI connection context.
-- **[litestar-exceptions](../litestar-exceptions/SKILL.md)** — mapping `401` / `403` / `503` to Problem Details responses.
+- **[Litestar auth & guards](../litestar/references/auth-and-guards.md)** — native guards and low-level ASGI connection context.
+- **[Litestar exceptions](../litestar/references/exceptions.md)** — mapping `401` / `403` / `503` to Problem Details responses.
 
 ## Official References
 

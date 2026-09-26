@@ -26,7 +26,7 @@ query parameter. Slot behavior is deliberately strict:
 | `all_of("api-key", "service-jwt")` | All named mechanisms, same subject |
 | `at_least(2, "session", "api-key", "service-jwt")` | N of M |
 | `optional(policy)` | Authenticate when credentials are present, do not require them |
-| `exclude()` | Bypass authentication only; session CSRF coverage is retained |
+| `exclude()` | Bypass authentication; leaves Litestar's native CSRF middleware untouched |
 | `mechanism("oauth", "read:user")` | Select a named mechanism with requested provider scopes |
 
 All take mechanism names (`str` or `MechanismRequirement`) — never
@@ -35,45 +35,57 @@ authorization predicates.
 ## Ownership Layers
 
 Policy resolves through Litestar's native ownership layers, nearest owner
-first: handler `auth=` → controller/router `opt` → application `opt`.
+first: handler `auth=` → controller (`SecureController` / `PublicController` or
+`opt`) → router `opt` → application `opt`.
 
-```python
-from litestar import Controller, Litestar, get
-
-from litestar_security import SecurityConfig, SecurityPlugin, public, required
-
-
-@get("/", auth=public())
-async def index() -> None:
-    return None
-
-
-class AccountController(Controller):
-    opt = {"auth": required("session")}
-
-
-app = Litestar(
-    route_handlers=[index, AccountController],
-    opt={"auth": required()},
-    plugins=[SecurityPlugin(SecurityConfig())],
-)
-```
-
-Custom controller class attributes are **not** propagated by Litestar. Policy
-must live in `opt` — or use the typed base classes:
+Subclass `SecureController` or `PublicController` for application controllers;
+both compile their typed `auth` attribute into `opt["auth"]`, and a
+handler-level `auth=` still overrides them:
 
 ```python
 from typing import ClassVar
 
-from litestar_security import AuthenticationPolicy, SecureController, required
+from litestar import Litestar, Router, get
+from litestar_security import (
+    AuthenticationPolicy,
+    PublicController,
+    SecureController,
+    SecurityConfig,
+    SecurityPlugin,
+    public,
+    required,
+)
+
+
+class SystemController(PublicController):
+    path = "/health"
+
+    @get("/")
+    async def index(self) -> dict[str, str]:
+        return {"status": "ok"}
 
 
 class AccountController(SecureController):
+    path = "/accounts"
     auth: ClassVar[AuthenticationPolicy] = required("session")
+
+
+api_router = Router(
+    path="/api",
+    route_handlers=[AccountController],
+    opt={"auth": required()},
+)
+
+app = Litestar(
+    route_handlers=[SystemController, api_router],
+    plugins=[SecurityPlugin(SecurityConfig())],
+)
 ```
 
-`PublicController` is `SecureController` defaulting to `public()`. Both compile
-into the same `opt["auth"]` key, and a handler-level `auth=` still wins.
+Custom controller class attributes on a plain `Controller` are **not**
+propagated by Litestar — use `SecureController` / `PublicController` for
+application controllers, and reserve `opt = {"auth": ...}` for `Router`,
+`Litestar`, or third-party controllers that cannot subclass `SecureController`.
 
 ### Implicit Defaults
 
@@ -98,8 +110,10 @@ session-capable policies.
 - `auth=public()` excludes a stateless route from native CSRF.
 - A public handler that establishes cookie-authenticated state (a login route)
   must declare `csrf_required=True`. This key is HTTP-only.
-- `auth=exclude()` bypasses authentication only — session-capable excluded
-  routes keep their derived CSRF coverage.
+- `auth=exclude()` (along with `SecurityConfig(exclude=[...])` and
+  `exclude_from_auth=True`) derives no CSRF demand from default mechanisms and
+  writes no native CSRF exclusion either, leaving the route to Litestar's own
+  CSRF middleware unless `csrf_required=True` is declared.
 - A native CSRF exclusion key such as `exclude_from_csrf=True` is accepted only
   when the derived policy is not session-capable.
 

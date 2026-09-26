@@ -4,16 +4,25 @@ import dataclasses
 import inspect
 from importlib.metadata import version
 
-from litestar import Litestar
+from litestar import Litestar, Router, get
 from litestar_security import (
+    AssuranceRequirement,
+    AssuranceTrait,
+    AuthenticationEvidence,
     AuthorizationPredicate,
     AuthorizationSnapshot,
     ContentSecurityPolicy,
+    CredentialVerifier,
     CSPMode,
     CurrentUser,
+    ExternalCSRF,
     InvalidCredentials,
+    MFAConfig,
+    PasskeyConfig,
     Principal,
     PublicController,
+    RaisedErrorSchema,
+    RouteDocs,
     SecureController,
     SecurityConfig,
     SecurityContext,
@@ -21,8 +30,11 @@ from litestar_security import (
     SecurityPlugin,
     VerificationUnavailable,
     WebSocketCloseCodes,
+    WebSocketConnectAuthorization,
+    WebSocketConnectTokenIssuer,
     WebSocketConnectTokenService,
     WebSocketSecurityConfig,
+    accounts,
     all_of,
     any_of,
     at_least,
@@ -31,6 +43,7 @@ from litestar_security import (
     issue_websocket_connect_token,
     mechanism,
     optional,
+    providers,
     public,
     required,
     requires_all_of,
@@ -44,8 +57,58 @@ from litestar_security import (
     requires_scope,
     requires_tenant,
     requires_tenant_role,
+    testing,
 )
 from litestar_security._cli import routes_command, security_group
+from litestar_security.accounts import (
+    LocalAccountState,
+    OperationMessage,
+    RateLimitPolicy,
+    RegistrationMode,
+    RegistrationPolicy,
+    ResolvedUserAuthSession,
+    SecurityEvent,
+    SecurityEventSink,
+    SessionBindingConfig,
+    UserAuthSession,
+    UserAuthSessionResolver,
+    VerificationOutcome,
+    VerificationStatus,
+)
+from litestar_security.authentication import AUTH_POLICY_OPT_KEY
+from litestar_security.guards import AuthorizationDecision
+from litestar_security.providers import (
+    APIKeyCodec,
+    APIKeyConfig,
+    APIKeyService,
+    APIKeyState,
+    CachedJWKSProvider,
+    GoogleIAPClaims,
+    GoogleIAPConfig,
+    GoogleIAPExternalIdentity,
+    HttpxJWKSFetcher,
+    JWKSFetchOutcome,
+    JWKSFetchTarget,
+    JWKSSource,
+    LocalJWKSConfig,
+    LocalKeyRing,
+    OAuthConfig,
+    ProtectedResourceConfig,
+    ServiceTokenConfig,
+    SigningKey,
+)
+from litestar_security.testing import (
+    BackendBarrier,
+    FakeClock,
+    OAuthRequestObservation,
+    StoreConformanceFactories,
+    assert_api_key_store_conformance,
+    assert_oauth_transaction_protector_conformance,
+    assert_rate_limiter_conformance,
+    assert_secret_protector_conformance,
+    assert_security_backend_conformance,
+    assert_session_registry_conformance,
+)
 
 
 def test_litestar_security_060_version() -> None:
@@ -62,7 +125,7 @@ def test_litestar_security_060_authorization_predicates_and_combinators() -> Non
         requires_capability("reports"),
         requires_tenant(),
         requires_tenant_role(roles={"owner"}),
-        requires_assurance(),
+        requires_assurance(methods={"totp"}, traits={AssuranceTrait.USER_VERIFIED}),
         requires_all_of(requires_role("admin")),
         requires_any_of(requires_role("admin"), requires_scope("read:all")),
         requires_at_least(1, requires_role("admin")),
@@ -70,6 +133,7 @@ def test_litestar_security_060_authorization_predicates_and_combinators() -> Non
     ):
         assert isinstance(predicate, AuthorizationPredicate) or callable(predicate)
 
+    assert AssuranceRequirement(methods=frozenset({"totp"}), traits=frozenset({AssuranceTrait.PHISHING_RESISTANT}))
     assert callable(requires_role)
     assert callable(requires_scope)
     assert callable(requires_capability)
@@ -80,6 +144,8 @@ def test_litestar_security_060_authorization_predicates_and_combinators() -> Non
     assert callable(requires_any_of)
     assert callable(requires_at_least)
     assert callable(requires_one_of)
+    assert AuthorizationDecision(granted=True).granted is True
+    assert AUTH_POLICY_OPT_KEY == "auth"
     assert csp_nonce is not None
 
 
@@ -102,7 +168,13 @@ def test_litestar_security_060_config_and_snapshot_contract() -> None:
     """Verify SecurityConfig, AuthorizationSnapshot, Principal, and SecurityContext schemas."""
     config_params = inspect.signature(SecurityConfig).parameters
     expected_config_params = {
-        "authorization_resolver",
+        "slots",
+        "mechanisms",
+        "max_openapi_combinations",
+        "external_csrf",
+        "exclude_opt_key",
+        "exclude",
+        "require_default",
         "local_auth",
         "local_jwks",
         "oauth",
@@ -114,12 +186,106 @@ def test_litestar_security_060_config_and_snapshot_contract() -> None:
         "service_token",
         "headers",
         "websocket",
-        "exclude",
+        "authorization_resolver",
         "jwks_providers",
-        "raised_error_schema",
+        "jwks_warmup_failure",
         "wire_rename",
+        "wire_forbid_unknown_fields",
+        "raised_error_schema",
     }
     assert expected_config_params <= set(config_params)
+
+    mfa_fields = {f.name for f in dataclasses.fields(MFAConfig)}
+    assert {"store", "step_up_store", "secret_protector", "require_at_login", "login_challenge_store"} <= mfa_fields
+    assert CredentialVerifier is not None
+    assert WebSocketConnectAuthorization is not None
+    assert OAuthConfig is not None
+    assert APIKeyConfig is not None
+    assert APIKeyService is not None
+    assert APIKeyCodec is not None
+    assert APIKeyState is not None
+    assert GoogleIAPConfig is not None
+    assert GoogleIAPClaims is not None
+    assert GoogleIAPExternalIdentity is not None
+    assert CachedJWKSProvider is not None
+    assert HttpxJWKSFetcher is not None
+    assert JWKSSource is not None
+    assert JWKSFetchOutcome is not None
+    assert JWKSFetchTarget is not None
+    assert PasskeyConfig is not None
+    assert ProtectedResourceConfig is not None
+    assert LocalJWKSConfig is not None
+    assert LocalKeyRing is not None
+    assert SigningKey is not None
+    assert ServiceTokenConfig is not None
+    assert ExternalCSRF is not None
+    assert RouteDocs is not None
+    assert RaisedErrorSchema is not None
+    assert AuthenticationEvidence is not None
+    assert LocalAccountState is not None
+    assert OperationMessage is not None
+    assert RateLimitPolicy is not None
+    assert RegistrationMode is not None
+    assert RegistrationPolicy is not None
+    assert ResolvedUserAuthSession is not None
+    assert SecurityEvent is not None
+    assert SecurityEventSink is not None
+    assert SessionBindingConfig is not None
+    assert UserAuthSession is not None
+    assert UserAuthSessionResolver is not None
+    assert VerificationOutcome is not None
+    assert VerificationStatus is not None
+
+    expected_account_exports = {
+        "AESGCMSecretProtector",
+        "Argon2PasswordHasher",
+        "LocalAuth",
+        "LocalAuthSecrets",
+        "PasskeyAssertionStatus",
+        "PasskeyMetadata",
+        "RecoveryCodePepper",
+        "SecretProtectorKey",
+        "StepUpGrantState",
+        "WebAuthnVerificationError",
+        "build_local_auth_routes",
+        "build_mfa_routes",
+        "forwarded_client_key",
+    }
+    assert expected_account_exports <= set(accounts.__all__)
+
+    assert BackendBarrier is not None
+    assert FakeClock is not None
+    assert OAuthRequestObservation is not None
+    assert StoreConformanceFactories is not None
+    assert callable(assert_api_key_store_conformance)
+    assert callable(assert_oauth_transaction_protector_conformance)
+    assert callable(assert_rate_limiter_conformance)
+    assert callable(assert_secret_protector_conformance)
+    assert callable(assert_security_backend_conformance)
+    assert callable(assert_session_registry_conformance)
+
+    forbidden_legacy_names = (
+        "guard_all_of",
+        "guard_any_of",
+        "guard_at_least",
+        "guard_one_of",
+        "require_all_of",
+        "require_any_of",
+        "require_assurance",
+        "require_at_least",
+        "require_authenticated",
+        "require_capability",
+        "require_one_of",
+        "require_role",
+        "require_scope",
+        "require_team_role",
+        "require_tenant",
+        "requires_team_role",
+    )
+    for legacy_name in forbidden_legacy_names:
+        assert not hasattr(accounts, legacy_name)
+        assert not hasattr(providers, legacy_name)
+        assert not hasattr(testing, legacy_name)
 
     snapshot_fields = {f.name for f in dataclasses.fields(AuthorizationSnapshot)}
     expected_snapshot_fields = {
@@ -170,11 +336,17 @@ class _User:
     id: str
 
 
-def test_litestar_security_060_reserved_dependency_keys() -> None:
-    """Verify standard dependency keys registered by SecurityPlugin."""
+def test_litestar_security_060_reserved_dependency_keys_and_layer_exclusions() -> None:
+    """Verify standard dependency keys and layer-level exclude_from_auth support."""
+
+    @get("/ping")
+    async def ping() -> dict[str, str]:
+        return {"ok": "true"}
+
+    excluded_router = Router(path="/internal", route_handlers=[ping], opt={"exclude_from_auth": True})
     config: SecurityConfig[_User] = SecurityConfig()
     plugin: SecurityPlugin[_User] = SecurityPlugin(config=config)
-    app = Litestar(route_handlers=[], plugins=[plugin])
+    app = Litestar(route_handlers=[excluded_router], plugins=[plugin])
     assert set(app.dependencies) == {
         "principal",
         "security_context",
@@ -191,6 +363,7 @@ def test_litestar_security_060_websocket_and_cli_contract() -> None:
     assert close_codes.unauthorized == 4403
     assert close_codes.verification_unavailable == 1013
     assert callable(issue_websocket_connect_token)
+    assert WebSocketConnectTokenIssuer is not None
     assert WebSocketConnectTokenService is not None
 
     assert security_group is not None

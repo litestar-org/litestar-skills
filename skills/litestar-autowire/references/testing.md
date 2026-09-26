@@ -10,12 +10,14 @@ Discovery caches successful imports and optional-module misses. Use an
 autouse fixture when tests create temporary packages:
 
 ```python
+from collections.abc import Iterator
+
 import pytest
 from litestar_autowire import clear_autowire_cache
 
 
 @pytest.fixture(autouse=True)
-def isolate_autowire_cache() -> None:
+def isolate_autowire_cache() -> Iterator[None]:
     clear_autowire_cache()
     yield
     clear_autowire_cache()
@@ -31,6 +33,7 @@ Create a package under `tmp_path`, prepend the directory to `sys.path`, and
 construct the application:
 
 ```python
+import sys
 from pathlib import Path
 
 from litestar import Litestar
@@ -55,7 +58,7 @@ class AccountController(Controller):
 """,
         encoding="utf-8",
     )
-    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
 
     app = Litestar(
         plugins=[

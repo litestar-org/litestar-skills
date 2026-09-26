@@ -102,7 +102,7 @@ In practice, you **configure caching once** and let repositories/services handle
 When `cache_config` is set on `SQLAlchemyAsyncConfig`:
 
 1. **Repository `get()` calls** check the cache before hitting the database. Cache misses are populated automatically after the DB query.
-2. **Repository `list()` calls** use version-based cache keys. Any mutation to the model bumps the version, invalidating all list caches for that model.
+2. **Repository `get_many()` and `get_many_and_count()` calls** use version-based cache keys. Any mutation to the model bumps the version, invalidating all list caches for that model.
 3. **Service `create()`, `update()`, `delete()` calls** trigger automatic cache invalidation on commit — individual entity entries are deleted and model version tokens are bumped.
 4. **Rollbacks** discard pending invalidations — no cache corruption.
 

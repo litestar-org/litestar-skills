@@ -68,7 +68,8 @@ CODEX_AGENTS_DIR = REPO_ROOT / ".codex" / "agents"
 SHIPPED_ROOT_FILES = ("AGENTS.md", "CONTRIBUTING.md", "README.md")
 
 MAX_DESCRIPTION_CHARS = 1024
-MAX_SKILL_DESCRIPTION_TOTAL_CHARS = 6500
+MAX_SKILL_DESCRIPTION_CHARS = 220
+MAX_SKILL_DESCRIPTION_TOTAL_CHARS = 4500
 
 REQUIRED_SECTIONS = ("workflow", "guardrails", "validation", "example")
 SKILL_DESCRIPTION_PREFIX_PATTERN = re.compile(r"^(?:Auto-activate for|Use when)\b")
@@ -77,13 +78,7 @@ SKILL_DESCRIPTION_PROCESS_SUMMARY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Match `<tag>` for each required section.
 _XML_TAG_PATTERNS = {name: re.compile(rf"<{name}\b", re.IGNORECASE) for name in REQUIRED_SECTIONS}
-# Match `## Heading` lines for each required section. Accepts any H2 that
-# *mentions* the section name as a word ("## Example", "## End-to-End Example",
-# "## Validation Checkpoint", "## Canonical Example", etc.) — singular or
-# plural. This is intentionally lenient so existing skill docs with slightly
-# different heading conventions are still considered structurally compliant.
 _H2_HEADING_PATTERNS = {
     name: re.compile(
         rf"^##\s+.*\b{name}s?\b",
@@ -93,6 +88,8 @@ _H2_HEADING_PATTERNS = {
 }
 
 LINK_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)\n]+)\)")
+_FENCED_CODE_BLOCK_PATTERN = re.compile(r"```[\s\S]*?```|~~~[\s\S]*?~~~")
+_INLINE_CODE_PATTERN = re.compile(r"`[^`\n]+`")
 
 # Match any shipped-content reference to a ``.agents/`` path, then allow only
 # host-owned convention paths. This defaults new framework authoring paths to
@@ -120,14 +117,15 @@ FORBIDDEN_VOCAB_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\bls-[a-z]{3}\.\d+"), "Beads issue slug"),
     (re.compile(r"\bFlow\s+framework\b", re.IGNORECASE), "Flow framework name"),
     # --- Internal canonical-app codenames (non-public) ----------------------
-    (re.compile(r"dma/accelerator"), "internal canonical-app path 'dma/accelerator'"),
+    (re.compile(r"dma/(?:accelerator|framework|beekeeper|db-skus)"), "internal canonical-app path 'dma/...'"),
+    (re.compile(r"\b(?:db-skus|db_skus|beekeeper|beekeepers)\b", re.IGNORECASE), "internal canonical-app codename"),
     (re.compile(r"\bETLLogObserver\b"), "internal class name 'ETLLogObserver'"),
     (re.compile(r"~/\.dma/"), "internal app install path '~/.dma/'"),
     (re.compile(r"/opt/dma\b"), "internal app install path '/opt/dma'"),
     (re.compile(r"\bsrc/py/dma/"), "internal package path 'src/py/dma/'"),
     (re.compile(r"\bdma_(?:tasks|jobs|app|runtime)\b"), "internal app-derived identifier 'dma_*'"),
     # --- Machine-specific paths --------------------------------------------
-    (re.compile(r"/home/cody/"), "machine-specific filesystem path '/home/cody/...'"),
+    (re.compile(r"/home/cody(?:fincher)?/"), "machine-specific filesystem path '/home/cody...'"),
 )
 
 # Files exempt from FORBIDDEN_VOCAB_PATTERNS. Tests legitimately reference the
@@ -241,9 +239,18 @@ def _check_description(desc: object, path: Path, line: int) -> list[Violation]:
 
 
 def _check_skill_description(desc: object, path: Path, line: int) -> list[Violation]:
-    out = _check_description(desc, path, line)
+    out: list[Violation] = []
     if not isinstance(desc, str) or not desc.strip():
+        out.append(Violation(path, line, "description missing or empty"))
         return out
+    if len(desc) > MAX_SKILL_DESCRIPTION_CHARS:
+        out.append(
+            Violation(
+                path,
+                line,
+                f"description length {len(desc)} > {MAX_SKILL_DESCRIPTION_CHARS}",
+            )
+        )
     if not SKILL_DESCRIPTION_PREFIX_PATTERN.match(desc):
         out.append(Violation(path, line, "skill description must start with 'Auto-activate for' or 'Use when'"))
     if "not for" not in desc.lower():
@@ -251,6 +258,12 @@ def _check_skill_description(desc: object, path: Path, line: int) -> list[Violat
     if SKILL_DESCRIPTION_PROCESS_SUMMARY_PATTERN.search(desc):
         out.append(Violation(path, line, "skill description must be trigger-only; remove process summary verbs"))
     return out
+
+
+def _strip_code_spans(text: str) -> str:
+    """Remove fenced code blocks and inline code spans before scanning prose links."""
+    without_fenced = _FENCED_CODE_BLOCK_PATTERN.sub("", text)
+    return _INLINE_CODE_PATTERN.sub("", without_fenced)
 
 
 def _section_present(body: str, section: str) -> bool:
@@ -280,7 +293,8 @@ def validate_skill(path: Path) -> list[Violation]:
                     f"missing required section <{section}> (XML tag or '## {section.title()}' heading)",
                 )
             )
-    for match in LINK_PATTERN.finditer(body):
+    prose_body = _strip_code_spans(body)
+    for match in LINK_PATTERN.finditer(prose_body):
         target = match.group(2).split("#")[0].strip()
         if not target:
             continue
@@ -447,19 +461,21 @@ def validate_manifest(path: Path) -> list[Violation]:
     """Validate a host-specific plugin or marketplace manifest.
 
     Enforces host-specific schema requirements (e.g. Claude Code requiring arrays
-    for file lists and rejecting Codex-only marketplace keys).
+    for file lists and rejecting Codex-only marketplace keys) and verifies that
+    declared manifest paths exist.
     """
     violations: list[Violation] = []
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        raw_data: Any = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as exc:
         return [Violation(path, 1, f"JSON parse error: {exc}")]
+    if not isinstance(raw_data, dict):
+        return [Violation(path, 1, "top-level JSON value must be an object")]
+    data = cast("dict[str, Any]", raw_data)
 
-    # Identify host by parent directory name
     host_dir = path.parent.name
     is_claude = host_dir == ".claude-plugin"
 
-    # Claude Code plugin manifest rules.
     if is_claude and path.name == "plugin.json":
         for field in ("agents", "skills", "commands"):
             val = data.get(field)
@@ -472,7 +488,27 @@ def validate_manifest(path: Path) -> list[Violation]:
                     )
                 )
 
-    # Claude Code marketplace schema rejects Codex-style policy fields.
+    if path.name == "plugin.json":
+        for field in ("skills", "commands", "agents", "hooks"):
+            val = data.get(field)
+            if val is None:
+                continue
+            entries: list[object]
+            if isinstance(val, str):
+                entries = [val]
+            elif isinstance(val, list):
+                entries = cast("list[object]", val)
+            else:
+                violations.append(Violation(path, 1, f"manifest {field!r} field must be a string or array of strings"))
+                continue
+            for entry in entries:
+                if not isinstance(entry, str) or not entry.strip():
+                    violations.append(Violation(path, 1, f"manifest {field!r} entry must be a non-empty string"))
+                    continue
+                target = (REPO_ROOT / entry).resolve()
+                if not target.exists():
+                    violations.append(Violation(path, 1, f"manifest {field!r} path does not exist: {entry}"))
+
     if is_claude and path.name == "marketplace.json":
         plugins = data.get("plugins")
         if isinstance(plugins, list):
@@ -659,6 +695,7 @@ def iter_codex_agents() -> Iterator[Path]:
 
 def iter_manifests() -> Iterator[Path]:
     for rel in (
+        "plugin.json",
         ".claude-plugin/plugin.json",
         ".claude-plugin/marketplace.json",
         ".codex-plugin/plugin.json",
@@ -669,16 +706,13 @@ def iter_manifests() -> Iterator[Path]:
             yield candidate
 
 
-# Per-host hook manifests. Names and locations are load-bearing:
-#   hooks.json               -> Antigravity CLI plugin root hook file
-#   hooks/hooks.json         -> Claude Code default plugin hook file
-#   hooks/hooks-cursor.json  -> Cursor (referenced from .cursor-plugin/plugin.json)
-#   hooks/hooks-codex.json   -> Codex CLI (referenced from .codex-plugin/plugin.json)
 HOOK_MANIFESTS = {
     "hooks.json": "antigravity",
+    "hooks/hooks-agy.json": "antigravity",
     "hooks/hooks.json": "claude",
     "hooks/hooks-cursor.json": "cursor",
     "hooks/hooks-codex.json": "codex",
+    ".codex/hooks.json": "codex",
 }
 
 
@@ -690,15 +724,16 @@ def iter_hook_manifests() -> Iterator[tuple[Path, str]]:
 
 
 def validate_hook_manifest(path: Path, host: str) -> list[Violation]:
-    """Validate a hooks/hooks-<host>.json (or hooks.json for Claude auto-discovery).
+    """Validate a host hook manifest.
 
     Enforces:
       * Valid JSON.
-      * Top-level "hooks" object exists.
-      * Cursor uses "sessionStart"; everyone else uses "SessionStart".
-      * No deprecated PreToolUse `decision: "approve"|"block"` (April 2026 schema
-        requires `hookSpecificOutput.permissionDecision`).
-      * No reference to undocumented `${CLAUDE_PLUGIN_DATA}` env var.
+      * Antigravity uses named ``PreInvocation`` hook entries (never ``SessionStart``).
+      * Cursor uses ``hooks.sessionStart``; Claude and Codex use ``hooks.SessionStart``.
+      * ``.codex/hooks.json`` matches ``hooks/hooks-codex.json``.
+      * ``hooks/hooks-agy.json`` matches ``hooks.json``.
+      * No deprecated PreToolUse ``decision: "approve"|"block"``.
+      * No reference to undocumented ``${CLAUDE_PLUGIN_DATA}`` env var.
       * No legacy Google placeholder syntax in manifests that a shell can
         execute directly before host substitution.
       * No bare current-working-directory fallback for hook roots; host commands
@@ -711,18 +746,60 @@ def validate_hook_manifest(path: Path, host: str) -> list[Violation]:
     except (json.JSONDecodeError, OSError) as exc:
         return [Violation(path, 1, f"JSON parse error: {exc}")]
 
-    if not isinstance(data, dict) or "hooks" not in data:
-        violations.append(Violation(path, 1, "missing top-level 'hooks' object"))
+    if not isinstance(data, dict):
+        violations.append(Violation(path, 1, "top-level JSON value must be an object"))
         return violations
 
-    hooks_obj = cast("dict[str, Any]", data).get("hooks")
-    if not isinstance(hooks_obj, dict):
-        violations.append(Violation(path, 1, "'hooks' must be an object"))
-        return violations
+    data_dict = cast("dict[str, Any]", data)
 
-    expected_event = "sessionStart" if host == "cursor" else "SessionStart"
-    if expected_event not in cast("dict[str, Any]", hooks_obj):
-        violations.append(Violation(path, 1, f"missing {expected_event!r} key for host {host!r}"))
+    if host == "antigravity":
+        if "hooks" in data_dict or "SessionStart" in text:
+            violations.append(
+                Violation(
+                    path,
+                    1,
+                    "Antigravity hook manifest must use named PreInvocation hooks, not SessionStart",
+                )
+            )
+            return violations
+        has_pre_invocation = False
+        for hook_group in data_dict.values():
+            if not isinstance(hook_group, dict):
+                continue
+            group_dict = cast("dict[str, Any]", hook_group)
+            pre_inv = group_dict.get("PreInvocation")
+            if isinstance(pre_inv, list) and pre_inv:
+                has_pre_invocation = True
+        if not has_pre_invocation:
+            violations.append(Violation(path, 1, "missing named 'PreInvocation' hook list for host 'antigravity'"))
+        root_agy = REPO_ROOT / "hooks.json"
+        if path == REPO_ROOT / "hooks" / "hooks-agy.json" and root_agy.is_file():
+            try:
+                if json.loads(root_agy.read_text(encoding="utf-8")) != data_dict:
+                    violations.append(Violation(path, 1, "hooks/hooks-agy.json must match hooks.json"))
+            except (json.JSONDecodeError, OSError):
+                pass
+    else:
+        if "hooks" not in data_dict:
+            violations.append(Violation(path, 1, "missing top-level 'hooks' object"))
+            return violations
+
+        hooks_obj = data_dict.get("hooks")
+        if not isinstance(hooks_obj, dict):
+            violations.append(Violation(path, 1, "'hooks' must be an object"))
+            return violations
+
+        expected_event = "sessionStart" if host == "cursor" else "SessionStart"
+        if expected_event not in cast("dict[str, Any]", hooks_obj):
+            violations.append(Violation(path, 1, f"missing {expected_event!r} key for host {host!r}"))
+
+        canonical_codex = REPO_ROOT / "hooks" / "hooks-codex.json"
+        if host == "codex" and path == REPO_ROOT / ".codex" / "hooks.json" and canonical_codex.is_file():
+            try:
+                if json.loads(canonical_codex.read_text(encoding="utf-8")) != data_dict:
+                    violations.append(Violation(path, 1, ".codex/hooks.json must match hooks/hooks-codex.json"))
+            except (json.JSONDecodeError, OSError):
+                pass
 
     if "${CLAUDE_PLUGIN_DATA}" in text:
         violations.append(
@@ -784,15 +861,16 @@ def iter_all_shipped_files() -> Iterator[Path]:
         yield from sorted(CLAUDE_AGENTS_DIR.rglob("*.md"))
     if CODEX_AGENTS_DIR.is_dir():
         yield from sorted(CODEX_AGENTS_DIR.rglob("*.toml"))
+    rules_dir = REPO_ROOT / "rules"
+    if rules_dir.is_dir():
+        yield from sorted(rules_dir.rglob("*.md"))
     for name in SHIPPED_ROOT_FILES:
         candidate = REPO_ROOT / name
         if candidate.is_file():
             yield candidate
-    # Public docs/ tree — user-facing release notes, roadmap, launch playbook.
     docs_dir = REPO_ROOT / "docs"
     if docs_dir.is_dir():
         yield from sorted(docs_dir.rglob("*.md"))
-    # Host-specific install / config files that ship with the plugin.
     for rel in (
         ".opencode/INSTALL.md",
         ".opencode/plugins/litestar.js",

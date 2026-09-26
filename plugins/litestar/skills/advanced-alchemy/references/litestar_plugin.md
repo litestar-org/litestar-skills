@@ -22,27 +22,40 @@ app = Litestar(
 )
 ```
 
-## EngineConfig for Advanced Tuning
+## EngineConfig & Custom Engine Instance
 
 ```python
 from advanced_alchemy.extensions.litestar import (
-    SQLAlchemyAsyncConfig,
+    AlembicAsyncConfig,
+    AsyncSessionConfig,
     EngineConfig,
+    SQLAlchemyAsyncConfig,
 )
+from litestar.serialization import decode_json, encode_json
 
 
 db_config = SQLAlchemyAsyncConfig(
     connection_string="postgresql+asyncpg://user:pass@localhost:5432/mydb",
+    before_send_handler="autocommit",
+    session_config=AsyncSessionConfig(expire_on_commit=False),
     engine_config=EngineConfig(
         pool_size=20,
         max_overflow=10,
         pool_timeout=30,
         pool_recycle=300,
         echo=False,
+        json_serializer=encode_json,
+        json_deserializer=decode_json,
     ),
-    before_send_handler="autocommit",
+    alembic_config=AlembicAsyncConfig(
+        version_table_name="ddl_version",
+        script_config="app/db/migrations/alembic.ini",
+        script_location="app/db/migrations",
+    ),
 )
 ```
+
+If you construct a custom `AsyncEngine` directly via `create_async_engine(...)` (for example, to attach SQLAlchemy `"connect"` event listeners), pass `engine_instance=engine` to `SQLAlchemyAsyncConfig`.
 
 ## SQLAlchemy DTOs
 
@@ -95,65 +108,151 @@ class UserReadCamelDTO(SQLAlchemyDTO[m.User]):
     )
 ```
 
-## Dependency Injection
+## Dependency Injection & Provider Helpers
 
-### Providing Services via Dependencies
+Prefer the built-in provider generators in `advanced_alchemy.extensions.litestar.providers` (`create_service_provider`, `create_service_dependencies`, `create_filter_dependencies`) over hand-writing `AsyncGenerator` boilerplate for every service.
+
+### Reusable Service Providers (`create_service_provider`)
+
+Configure default relationship loading (`load_only`, `selectinload`, `joinedload`), custom `error_messages`, and `execution_options` once per service provider:
 
 ```python
-from collections.abc import AsyncGenerator
-from sqlalchemy.ext.asyncio import AsyncSession
-from litestar.di import NamedDependency, Provide
+from advanced_alchemy.extensions.litestar.providers import create_service_provider
+from sqlalchemy.orm import joinedload, load_only, selectinload
+from app import config, services
+from app.db import models as m
 
-
-async def provide_user_service(
-    db_session: NamedDependency[AsyncSession],
-) -> AsyncGenerator[UserService, None]:
-    async with UserService.new(session=db_session) as service:
-        yield service
-
-
-app = Litestar(
-    route_handlers=[...],
-    plugins=[SQLAlchemyPlugin(config=db_config)],
-    dependencies={"user_service": Provide(provide_user_service)},
+provide_users_service = create_service_provider(
+    services.UserService,
+    config=config.alchemy,
+    load=[
+        load_only(
+            m.User.id,
+            m.User.email,
+            m.User.name,
+            m.User.is_active,
+            m.User.is_superuser,
+        ),
+        selectinload(m.User.roles).options(joinedload(m.UserRole.role, innerjoin=True)),
+    ],
+    error_messages={
+        "duplicate_key": "This user already exists.",
+        "integrity": "User operation failed.",
+    },
+    execution_options={"populate_existing": True},
 )
 ```
 
-### Using in Route Handlers
+### Controller Wiring (`create_service_dependencies` & `create_filter_dependencies`)
+
+Use `create_service_dependencies()` to register both a service provider and query filter dependencies in one dictionary, or combine `Provide(provide_users_service)` with `create_filter_dependencies({...})`. Always annotate the injected `filters: list[FilterTypes]` parameter with `Dependency(skip_validation=True)`:
 
 ```python
-from litestar import get, post, delete
-from litestar.di import NamedDependency
-from litestar.params import FromPath
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Annotated
+from uuid import UUID
+
+from advanced_alchemy.extensions.litestar.providers import (
+    create_filter_dependencies,
+    create_service_dependencies,
+)
+from advanced_alchemy.filters import CollectionFilter
+from advanced_alchemy.service import schema_dump
+from litestar import Controller, delete, get, patch, post
+from litestar.di import Provide
+from litestar.params import Dependency, Parameter
+from app import schemas as s
+from app import services
+from app.db import models as m
+
+if TYPE_CHECKING:
+    from advanced_alchemy.filters import FilterTypes
+    from advanced_alchemy.service import OffsetPagination
 
 
-@get("/users")
-async def list_users(user_service: NamedDependency[UserService]) -> list[m.User]:
-    return await user_service.get_many()
+def provide_role_id_filter(
+    role_ids: Annotated[list[UUID] | None, Parameter(query="roleIds")] = None,
+) -> CollectionFilter[UUID]:
+    """Provide an additional CollectionFilter parsed from ?roleIds=... query params."""
+    return CollectionFilter(field_name="role_id", values=role_ids or [])
 
 
-@get("/users/{user_id:uuid}")
-async def get_user(
-    user_service: NamedDependency[UserService],
-    user_id: FromPath[UUID],
-) -> m.User:
-    return await user_service.get(user_id)
+class TagController(Controller):
+    """Controller using create_service_dependencies for service + filter DI."""
 
+    path = "/api/tags"
+    dependencies = create_service_dependencies(
+        services.TagService,
+        key="tags_service",
+        load=[m.Tag.projects],
+        filters={
+            "id_filter": UUID,
+            "created_at": True,
+            "updated_at": True,
+            "sort_field": "name",
+            "sort_order": "asc",
+            "search": "name,slug,description",
+            "search_ignore_case": True,
+            "pagination_type": "limit_offset",
+            "pagination_size": 20,
+        },
+    ) | {"role_id_filter": Provide(provide_role_id_filter, sync_to_thread=False)}
 
-@post("/users")
-async def create_user(
-    user_service: NamedDependency[UserService],
-    data: dict,
-) -> m.User:
-    return await user_service.create(data)
+    @get(path="/")
+    async def list_tags(
+        self,
+        tags_service: services.TagService,
+        filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
+    ) -> OffsetPagination[s.Tag]:
+        results, total = await tags_service.get_many_and_count(*filters)
+        return tags_service.to_schema(results, total, filters=filters, schema_type=s.Tag)
 
+    @post(path="/")
+    async def create_tag(
+        self,
+        tags_service: services.TagService,
+        data: s.TagCreate,
+    ) -> s.Tag:
+        db_obj = await tags_service.create(data)
+        return tags_service.to_schema(db_obj, schema_type=s.Tag)
 
-@delete("/users/{user_id:uuid}")
-async def delete_user(
-    user_service: NamedDependency[UserService],
-    user_id: UUID,
-) -> None:
-    await user_service.delete(user_id)
+    @patch(path="/{tag_id:uuid}")
+    async def update_tag(
+        self,
+        tags_service: services.TagService,
+        data: s.TagUpdate,
+        tag_id: UUID,
+    ) -> s.Tag:
+        update_payload = schema_dump(data, exclude_unset=True)
+        db_obj = await tags_service.update(update_payload, item_id=tag_id)
+        return tags_service.to_schema(db_obj, schema_type=s.Tag)
+
+    @delete(path="/{tag_id:uuid}")
+    async def delete_tag(
+        self,
+        tags_service: services.TagService,
+        tag_id: UUID,
+    ) -> None:
+        await tags_service.delete(tag_id)
+```
+
+When controller modules use `from __future__ import annotations` and place `FilterTypes` or `OffsetPagination` inside `if TYPE_CHECKING:`, register them in `signature_namespace` on `Litestar` or `AppConfig`:
+
+```python
+from advanced_alchemy import filters, repository, service
+from advanced_alchemy.filters import FilterTypes
+from advanced_alchemy.service import OffsetPagination
+
+app_config.signature_namespace.update(
+    {
+        "filters": filters,
+        "repository": repository,
+        "service": service,
+        "FilterTypes": FilterTypes,
+        "OffsetPagination": OffsetPagination,
+    },
+)
 ```
 
 ## Route Handlers with DTOs
@@ -163,18 +262,18 @@ from litestar import get, post, patch
 
 
 @get("/users", return_dto=UserReadDTO)
-async def list_users(user_service: NamedDependency[UserService]) -> list[m.User]:
+async def list_users(user_service: UserService) -> list[m.User]:
     return await user_service.get_many()
 
 
 @post("/users", dto=UserCreateDTO, return_dto=UserReadDTO)
-async def create_user(user_service: NamedDependency[UserService], data: m.User) -> m.User:
+async def create_user(user_service: UserService, data: m.User) -> m.User:
     return await user_service.create(data)
 
 
 @patch("/users/{user_id:uuid}", dto=UserUpdateDTO, return_dto=UserReadDTO)
 async def update_user(
-    user_service: NamedDependency[UserService],
+    user_service: UserService,
     user_id: UUID,
     data: m.User,
 ) -> m.User:

@@ -99,28 +99,38 @@ Check the adapter config flags before building generic tooling:
 
 - Optimized for Arrow framework transfers; prefer `select_to_arrow()` over row-based methods.
 
-### AsyncPG
+### AsyncPG & PostgreSQL Extension Dialects
 
 - Zero-copy JSON with `driver` strategy (no serialization overhead).
-- Native pgvector support and Cloud SQL connector integration.
-- Highest throughput PostgreSQL adapter in benchmarks.
+- Native pgvector support and Cloud SQL / AlloyDB connector integration.
+- **Modular PostgreSQL extension probing**: on first connection, PostgreSQL adapters (`asyncpg`, `psycopg`, `psqlpy`) probe `pg_extension` for enabled extensions (`enable_pgvector=True` -> `"vector"`, `enable_paradedb=True` -> `"pg_search"`, `enable_pg_textsearch=True` -> `"pg_textsearch"`) via `build_postgres_extension_probe_names()` and `resolve_postgres_extension_state()`.
+- When detected, the statement dialect promotes automatically from `"postgres"` to `"paradedb"` (`ParadeDB`), `"pg_textsearch"` (`PGTextSearch`, supporting the `<@>` BM25 ranking operator and pgvector operators), or `"pgvector"` (`PGVector`). All extension dialects are exported from `sqlspec.dialects` (`PGTextSearch`, `PGVector`, `ParadeDB`, `Spangres`, `Spanner`).
+
+### Connection Parameter Aliases & DSN Normalization
+
+Every adapter normalizes common `connection_config` parameter aliases and DSN strings (via adapter `build_connection_config` and `sqlspec.utils.config_tools` helpers `normalize_connection_config`, `parse_mysql_dsn`, and `parse_odbc_connection_string`):
+
+- **PostgreSQL / CockroachDB (`asyncpg`, `psycopg`, `psqlpy`, `cockroach_*`)**: normalizes `dsn` / `conninfo` / `url` / `connection_string`, `database` / `dbname` / `db`, and `user` / `username` into the driver's native keyword arguments.
+- **SQLite / DuckDB (`sqlite`, `aiosqlite`, `duckdb`)**: normalizes `database` / `path` / `uri` / `dsn` and strips `sqlite://` or `duckdb://` URI prefixes when appropriate.
+- **MySQL (`asyncmy`, `aiomysql`, `pymysql`, `mysqlconnector`)**: parses `mysql://` DSNs (`parse_mysql_dsn`) and normalizes `user` / `username`, `password` / `passwd`, `database` / `db`.
+- **OracleDB / PyMSSQL / MSSQL / Arrow ODBC / ADBC / BigQuery / Spanner**: normalizes DSN/URI aliases (`dsn` / `url` / `uri` / `connection_string`), user/password/database keys, and semicolon-delimited ODBC strings (`parse_odbc_connection_string`).
 
 ### DuckDB
 
 - Native Apache Arrow support for `select_to_arrow()` and `load_from_arrow()`.
-- Best for in-memory analytics and local OLAP workloads.
+- Direct object-store routing for `load_from_storage()` and `select_to_storage()` (`s3://`, `gs://`, `gcs://`, `r2://`) when native DuckDB secrets are configured.
 - `DuckDBExtensionConfig` separates install and load lifecycle: `install=True` forces an `install_extension()` call, `force_install=True` reinstalls, and `required=True` turns load/install failures from best-effort warnings into exceptions.
 
 ### BigQuery
 
 - Uses `google-cloud-bigquery` job execution model.
-- Recommends Storage Read API for large Arrow dataset extraction.
+- Recommends Storage Read API for large Arrow dataset extraction and `EXPORT DATA` for `select_to_storage()`.
 - Parameter style `@name` requires NAMED_AT binding.
 
 ### CockroachDB
 
 - Built-in retry logic for serialization conflicts (`40001`).
-- Follower reads capability for reduced query latency.
+- Follower reads capability for reduced query latency and opt-in `enable_export_into` / `enable_import_into` storage bridge paths.
 - Available in both asyncpg and psycopg variants.
 
 ### OracleDB

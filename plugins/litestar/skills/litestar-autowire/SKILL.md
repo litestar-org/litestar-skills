@@ -79,6 +79,25 @@ The default component modules are:
 | Event listeners | `events`, `listeners` | Yes |
 | Litestar Queues tasks | `jobs` | Only with `integrations=["queues"]` |
 
+`AutowireConfig` fields (all constructor arguments are keyword-only):
+
+| Field | Default | Contract |
+| --- | --- | --- |
+| `domain_packages` | `()` | `str \| Iterable[str]` normalized to `tuple[str, ...]` |
+| `integrations` | `()` | Built-in names (`"dishka"`, `"queues"`) or `AutowireIntegration` objects |
+| `discover_controllers` | `True` | Register discovered `Controller` subclasses |
+| `discover_listeners` | `True` | Register discovered `EventListener` instances |
+| `controller_modules` | `("controllers", "routes", "controller", "route")` | `str \| Iterable[str]` normalized to `tuple[str, ...]` |
+| `listener_modules` | `("events", "listeners")` | `str \| Iterable[str]` normalized to `tuple[str, ...]` |
+| `task_modules` | `("jobs",)` | `str \| Iterable[str]` normalized to `tuple[str, ...]` |
+| `router_class` | `None` | Optional router wrapper (`litestar.Router` or compatible type) |
+| `before_request` | `None` | Optional hook attached to the wrapper router |
+| `after_response` | `None` | Optional hook attached to the wrapper router |
+| `force_reload_tasks` | `False` | Passed to `litestar_queues.discover_tasks(force_reload=...)` |
+| `log_discovered` | `True` | Defer discovery summary logs to the Litestar startup hook |
+
+Use `config.integration_enabled(name)` to check whether an integration with `name` is configured.
+
 Customize module names without changing the domain layout:
 
 ```python
@@ -216,10 +235,10 @@ not load `jobs.py` until the `queues` integration is selected.
   `AutowireLoader`, router selection, Dishka, and Litestar Queues
 - [Testing](references/testing.md) — deterministic cache isolation and
   package-discovery tests
-- [Litestar Routing](../litestar-routing/SKILL.md) — controller and manual
+- [Litestar Routing](../litestar/references/handlers.md) — controller and manual
   router composition
-- [Litestar Plugins](../litestar-plugins/SKILL.md) — application plugin wiring
-- [Litestar DI](../litestar-di/SKILL.md) — built-in DI and Dishka selection
+- [Litestar Plugins](../litestar/references/plugins.md) — application plugin wiring
+- [Litestar DI](../litestar/references/di-and-dishka.md) — built-in DI and Dishka selection
 - [Litestar Queues](../litestar-queues/SKILL.md) — queue configuration, tasks,
   and workers
 - [Litestar Testing](../litestar-testing/SKILL.md) — Litestar test clients and

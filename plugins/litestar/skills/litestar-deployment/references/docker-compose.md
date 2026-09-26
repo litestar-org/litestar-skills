@@ -63,6 +63,7 @@ services:
     build:
       context: .
       dockerfile: tools/deploy/docker/Dockerfile.distroless
+    # Match-Your-Stack: use `litestar workers run` (litestar-saq) or `litestar queues run` (litestar-queues)
     command: litestar workers run
     restart: always
     depends_on:

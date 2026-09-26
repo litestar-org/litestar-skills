@@ -65,15 +65,14 @@ strategy:
 
 **5. `tools/bundler.py`:**
 
-```python
-DEFAULT_PYTHON_VERSION = "3.14"  # ← bump
+Update `DEFAULT_PYTHON_VERSION` and substitute the new `cpython-3.14.X` archive filenames from <https://github.com/astral-sh/python-build-standalone/releases> into `DEFAULT_URLS`:
 
-# Update PBS URLs for the new patch version. Get the latest release tag from:
-# https://github.com/astral-sh/python-build-standalone/releases
-# Then substitute cpython-3.14.X into each URL.
+```python
+DEFAULT_PYTHON_VERSION = "3.14"
+
 DEFAULT_URLS: dict[str, str] = {
     "x86_64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.14.1%2B20260414-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
-    # ... same for other targets ...
+    "aarch64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.14.1%2B20260414-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz",
 }
 ```
 
@@ -141,10 +140,9 @@ env:
 
 After bumping:
 
-1. **Check the install-dir patch still applies.** The regex in `patch_pyapp_install_dir()` matches the PyApp source. Upstream refactors break it:
+1. **Check the install-dir patch still applies.** The regex in `patch_pyapp_install_dir()` (`tools/bundler.py`) matches the PyApp source. Upstream refactors break it:
 
    ```python
-   # tools/bundler.py:431-453
    pattern = re.compile(
        r"platform_dirs\(\)\s*\.data_local_dir\(\)\s*"
        r"\.join\(project_name\(\)\)\s*"
@@ -177,10 +175,9 @@ PBS ships a new stripped-install archive every month or so. You don't have to ma
 
 Get the release list: <https://github.com/astral-sh/python-build-standalone/releases>.
 
-Update **one** location:
+Update **one** location (`tools/bundler.py`):
 
 ```python
-# tools/bundler.py:45-62
 DEFAULT_URLS: dict[str, str] = {
     "x86_64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/<NEW_RELEASE_TAG>/cpython-<VERSION>%2B<NEW_RELEASE_TAG>-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
     "aarch64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/<NEW_RELEASE_TAG>/cpython-<VERSION>%2B<NEW_RELEASE_TAG>-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz",
@@ -220,13 +217,12 @@ uv run tools/bundler.py build \
 - `/opt/myapp` → `/opt/myapp/runtime/` (hardcoded PathBuf, absolute, requires sudo on first run)
 - `/usr/local/lib/myapp` → same as above
 
-The logic that generates the Rust expression from `--install-root` is in `bundler.py:417-428`. See [pyapp-advanced.md](pyapp-advanced.md) for details.
+The logic that generates the Rust expression from `--install-root` is in `bundler.py`. See [pyapp-advanced.md](pyapp-advanced.md) for details.
 
-**Also consider updating your app's own runtime defaults** if they reference the old install location:
+**Also consider updating your app's own runtime defaults** (`src/py/<app>/cli/commands/manage.py`) if they reference the old install location:
 
 ```python
-# src/py/<app>/cli/commands/manage.py
-default = "~/.<app>"  # ← update to match --install-root
+DEFAULT_INSTALL_ROOT = "~/.<app>"
 ```
 
 ## Add a new target platform
@@ -237,12 +233,10 @@ The long version is in [pyapp-advanced.md](pyapp-advanced.md). The short version
 
 ```python
 DEFAULT_URLS: dict[str, str] = {
-    ...
     "aarch64-pc-windows-msvc": "https://github.com/astral-sh/python-build-standalone/releases/download/<TAG>/cpython-<VERSION>%2B<TAG>-aarch64-pc-windows-msvc-install_only_stripped.tar.gz",
 }
 
 DEFAULT_PLATFORMS: dict[str, str] = {
-    ...
     "aarch64-pc-windows-msvc": "aarch64-pc-windows-msvc",
 }
 ```

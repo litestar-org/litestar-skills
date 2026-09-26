@@ -35,12 +35,12 @@ Install `sqlspec[obstore]` or `sqlspec[fsspec]` for cloud storage. Local paths a
 
 ## Storage Pipelines
 
-`SyncStoragePipeline` and `AsyncStoragePipeline` implement staging, partition fan-out, cleanup, CSV/JSON/NDJSON/Arrow/Parquet payload handling, and telemetry. Driver methods such as `select_to_storage()` and `load_from_storage()` use the same bridge vocabulary:
+`SyncStoragePipeline` and `AsyncStoragePipeline` implement staging, partition fan-out, cleanup, CSV/JSON/NDJSON/Arrow/Parquet payload handling, and telemetry. Driver methods such as `select_to_storage()`, `load_from_arrow()`, `load_from_storage()`, and `load_from_records()` use the same bridge vocabulary:
 
 - `StorageCapabilities` describes the selected driver's supported import/export paths.
-- `StorageLoadRequest` describes a staging allocation.
-- `StagedArtifact` carries cleanup and expiry metadata.
-- `StorageBridgeJob` is a completed operation handle with `job_id`, `status`, and telemetry.
+- `StorageDestination` and `StorageFormat` (`"parquet"`, `"csv"`, `"jsonl"`, `"arrow"`, `"ndjson"`) type destination URIs and payload formats.
+- `ResolvedStorageTarget` and `resolve_storage_path()` resolve local paths, cloud URIs, and registered `StorageRegistry` aliases into concrete backend + path targets.
+- `StorageBridgeJob` and `StorageTelemetry` report operation status, `rows_processed`, `bytes_processed`, `duration_s`, `format`, and adapter-specific `extra` metadata.
 
 Check the adapter capability matrix before calling driver storage methods. A method existing on the shared driver base does not mean every adapter has a native or supported implementation.
 

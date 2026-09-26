@@ -5,20 +5,30 @@ description: "Use when authoring Litestar skill content, Python/TypeScript examp
 
 # litestar-styleguide
 
-This is the **shared style baseline** that every other skill in this plugin references. It exists so that cross-cutting rules (PEP 604 unions, async I/O, ruff + mypy + pyright, test file naming, CI/CD conventions) live in exactly one place — and individual skills stay focused on their framework or tool-specific surface.
+This is the **shared style baseline** that every other skill in this plugin references. It exists so that cross-cutting rules (PEP 604 unions, async I/O, ruff + mypy + pyright + prek, test file naming, CI/CD conventions) live in exactly one place — and individual skills stay focused on their framework or tool-specific surface.
 
-## What's in here
+## Code Style Rules
 
-Each reference covers one slice of the code-style baseline. A sibling skill links to only the files relevant to its language / framework mix.
+- **Terse, imperative, authoritative.** State the preferred choice and a one-line `Reason:`; never hedge ("you might want to…").
+- **PEP 604 unions (`T | None`) and PEP 585 generics (`list[T]`, `dict[K, V]`).** Never use `typing.Optional`, `typing.Union`, `typing.List`, or `typing.Dict`.
+- **`from __future__ import annotations` is a library-author guardrail, not a consumer rule.** Application code (handlers, services, tests) MAY use it; avoid it only in modules defining runtime-introspected types (`msgspec.Struct`, SQLAlchemy `Mapped[...]`, Dishka `@provide`, SAQ `@task`).
+- **Async all I/O, Google-style docstrings, function-based pytest tests (`@pytest.mark.anyio`).**
+- **Litestar first-party stack bias with match-your-stack flexibility.** Prefer `msgspec`, `advanced-alchemy` / `sqlspec`, `litestar-granian`, `litestar-saq` / `litestar-queues` when starting fresh, and match the user's existing stack when present.
 
-- [`references/general.md`](references/general.md) — Cross-language principles (simplicity over cleverness, error handling, naming, DRY-when-it-pays)
-- [`references/python.md`](references/python.md) — Python conventions (PEP 604 unions, docstrings, imports, ruff / mypy / pyright configuration)
-- [`references/litestar.md`](references/litestar.md) — Litestar-specific baseline (guards, DTOs, DI, plugin use)
-- [`references/typescript.md`](references/typescript.md) — TypeScript conventions (when paired with a frontend skill)
-- [`references/testing.md`](references/testing.md) — Testing conventions (pytest, vitest, fixtures, coverage)
-- [`references/ci-cd.md`](references/ci-cd.md) — CI/CD conventions (GitHub Actions, matrix builds, caching)
+## Quick Reference
 
-## How sibling skills consume this
+| Slice | Reference File | Key Topics |
+| --- | --- | --- |
+| Cross-language principles | [`references/general.md`](references/general.md) | Simplicity over cleverness, boundary validation, naming, import order |
+| Python conventions | [`references/python.md`](references/python.md) | PEP 604/585, `msgspec.Struct`, async I/O, docstrings, `ruff`, `mypy`, `pyright`, `prek` |
+| Litestar baseline | [`references/litestar.md`](references/litestar.md) | Typed markers (`FromPath`, `FromQuery`, `NamedDependency`, `SkipValidation`), `Provide` vs Dishka, `MsgspecDTO`, Guards, plugins |
+| TypeScript conventions | [`references/typescript.md`](references/typescript.md) | Strict `tsconfig`, discriminated unions, named exports, `oxlint` / `biome` |
+| Testing conventions | [`references/testing.md`](references/testing.md) | `pytest` + `anyio`, `AsyncTestClient` lifespan fixtures, Vitest, 90%+ coverage |
+| CI/CD conventions | [`references/ci-cd.md`](references/ci-cd.md) | GitHub Actions with `setup-uv`, `prek` / `.pre-commit-config.yaml`, matrix builds |
+| Canonical reference apps | [`references/canonical-apps.md`](references/canonical-apps.md) | `litestar-fullstack-inertia`, `litestar-fullstack`, `litestar-sqlstack`, `oracledb-vertexai-demo` |
+| Google Developer Knowledge MCP | [`references/google-developer-knowledge-mcp.md`](references/google-developer-knowledge-mcp.md) | Opt-in MCP setup for fresh GCP / Firebase / Maps documentation |
+
+### How sibling skills consume this
 
 Every `SKILL.md` in this plugin has a `## Shared Styleguide Baseline` section near the bottom. That section links to a subset of these references — only the ones that apply to the skill's language / framework mix. For example:
 
@@ -28,17 +38,11 @@ Every `SKILL.md` in this plugin has a `## Shared Styleguide Baseline` section ne
 
 The sibling skill extends the baseline with its own tool-specific Code Style Rules, Quick Reference, Guardrails, and Validation — but it does not duplicate the baseline. If a convention is generic (type hints, naming, imports), it belongs here.
 
-## When to update this skill
+### When to update this skill
 
 - A rule becomes contentious across two or more sibling skills → pull it into the right baseline reference file here.
 - A new language lands (Rust, Mojo, etc.) → add a new `references/<lang>.md` and link from skills that use it.
-- A tool is swapped out (e.g., ruff replaces flake8 + black) → update `python.md` once; all sibling skills inherit it.
-
-## Authoring rule for this skill
-
-- Keep references **terse, imperative, authoritative**. No hedging ("you might want to…"). State the preferred choice and the one-line reason.
-- Every "never do X" rule has a one-line *why* (perf, runtime introspection, OpenAPI alignment, etc.). No folklore.
-- Examples are copy-pasteable and minimal. No pseudo-code.
+- A tool is swapped out (e.g., ruff replaces flake8 + black, `prek` replaces `pre-commit` CLI) → update `python.md` / `ci-cd.md` once; all sibling skills inherit it.
 
 <workflow>
 
@@ -94,9 +98,31 @@ Then in each sibling's `SKILL.md`, replace the duplicate with a pointer:
 
 </example>
 
+## References Index
+
+- [General Principles](references/general.md)
+- [Python](references/python.md)
+- [Litestar](references/litestar.md)
+- [TypeScript](references/typescript.md)
+- [Testing](references/testing.md)
+- [CI/CD](references/ci-cd.md)
+- [Canonical Reference Apps](references/canonical-apps.md)
+- [Google Developer Knowledge MCP](references/google-developer-knowledge-mcp.md)
+
 ## Official References
 
 - <https://peps.python.org/pep-0604/> — PEP 604 union syntax
 - <https://docs.astral.sh/ruff/> — ruff linter / formatter
+- <https://docs.astral.sh/uv/> — uv package and environment manager
+- <https://mypy.readthedocs.io/en/stable/> — mypy static type checker
 - <https://microsoft.github.io/pyright/> — pyright type checker
 - <https://docs.pytest.org/> — pytest
+
+## Shared Styleguide Baseline
+
+- [General Principles](references/general.md)
+- [Python](references/python.md)
+- [Litestar](references/litestar.md)
+- [TypeScript](references/typescript.md)
+- [Testing](references/testing.md)
+- [CI/CD](references/ci-cd.md)

@@ -107,7 +107,7 @@ Oracle defaults to `poll_queue`. `aq` and `txeventq` are opt-in and attach to an
 - The user needs the required `DBMS_AQADM`, AQ role, and `DBMS_AQ` privileges.
 - `aq_queue` defaults to `SQLSPEC_EVENTS_QUEUE` and can include `{channel}` when physical per-channel queues are pre-provisioned.
 
-## Durable Queue Schema
+## Durable Queue Schema & Claim Primitives
 
 Durable queues support additive schema reconciliation:
 
@@ -117,9 +117,30 @@ Durable queues support additive schema reconciliation:
 
 Column renames, drops, and type changes require explicit migrations. See [storage.md](storage.md) for backend-specific table tuning.
 
-## Framework Fan-Out
+For custom queue stores or extensions, `sqlspec.extensions.events` exports dialect-aware table-queue SQL and claim verification primitives (`from sqlspec.extensions.events import claim_verified, lock_clause, row_limit_clause, select_limit_prefix`):
 
-Database event queues are competing-consumer transports, not browser broadcast buses. Bridge an event channel into Litestar Channels only when the application explicitly needs WebSocket or SSE fan-out; acknowledge the database event after the broadcast boundary succeeds.
+- `lock_clause(select_for_update=True, skip_locked=True)` renders `FOR UPDATE SKIP LOCKED` or `FOR UPDATE`.
+- `row_limit_clause(dialect, n)` and `select_limit_prefix(dialect, n)` render `LIMIT n`, `FETCH FIRST n ROWS ONLY` (Oracle), or `TOP n` (MSSQL/T-SQL).
+- `claim_verified(row, leased_until)` verifies lease ownership after a claim `UPDATE` even on drivers that do not report `rows_affected`.
+
+## Framework Fan-Out (`SQLSpecChannelsBackend`)
+
+Database event queues are competing-consumer transports, not browser broadcast buses. When a Litestar application needs WebSocket or SSE fan-out backed by SQLSpec's event channel (`notify`, `notify_queue`, or `poll_queue`), wrap `AsyncEventChannel(config)` in `SQLSpecChannelsBackend` from `sqlspec.extensions.litestar.channels`:
+
+```python
+from litestar.channels import ChannelsPlugin
+from sqlspec.extensions.events import AsyncEventChannel
+from sqlspec.extensions.litestar.channels import SQLSpecChannelsBackend
+
+channels_plugin = ChannelsPlugin(
+    backend=SQLSpecChannelsBackend(
+        AsyncEventChannel(channels_db_config),
+        output_queue_capacity=1024,
+    ),
+    arbitrary_channels_allowed=True,
+    create_ws_route_handlers=False,
+)
+```
 
 ## Cross References
 

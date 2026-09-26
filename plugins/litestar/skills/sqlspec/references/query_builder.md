@@ -16,28 +16,19 @@ from sqlspec.loader import SQLFileLoader
 loader = SQLFileLoader()
 loader.load_sql("./sql")
 
-base = loader.get("list-users")
-
-query = (
-    base.where_eq("u.status", "active")
-    .where("u.created_at > :since", since=cutoff_date)
-    .order_by("u.created_at", desc=True)
-    .limit(50)
-)
-
-admin_query = base.where_eq("t.name", "engineering").where_in("u.role", ["admin", "superadmin"]).order_by("u.name")
+base = loader.get_sql("list-users")
 ```
 
-You can also pass SQLSpec filter objects directly to driver methods — the driver applies them to the SQL statement automatically:
+You can pass SQLSpec filter objects directly to driver methods or `apply_filter()` — the driver applies them to the `SQL` statement or builder AST automatically:
 
 ```python
 from sqlspec.core.filters import LimitOffsetFilter, OrderByFilter, SearchFilter
 
-base = loader.get("list-users")
+base = loader.get_sql("list-users")
 
 filters = [
     SearchFilter(field_name="name", value="alice"),
-    OrderByFilter(field_name="created_at", sort_order="desc"),
+    OrderByFilter(field_name="created_at", sort_order="desc", nulls="last"),
     LimitOffsetFilter(limit=20, offset=0),
 ]
 
@@ -95,6 +86,8 @@ only_active = active.except_(archived)
 
 ### Common Table Expressions (CTEs)
 
+`with_()` and `with_cte()` work on `SELECT`, `INSERT`, `UPDATE`, and `DELETE` builders, preserving CTEs across DML compilation:
+
 ```python
 query = (
     sql.select("*")
@@ -148,7 +141,9 @@ query_on_conflict = (
 
 ---
 
-## sql.update()
+## sql.update() and `UPDATE ... FROM`
+
+`sql.update()` supports `.from_(*tables)` for joined `UPDATE ... FROM` statements (accepting table names, aliased tables, subqueries, or `Select` builders) and preserves attached CTEs:
 
 ```python
 query = sql.update("users").set(name="Bob", updated_at="now()").where_eq("id", 1).returning("id", "name")
@@ -186,22 +181,43 @@ query = (
 )
 ```
 
-`sql.upsert(table, dialect=...)` automatically generates either MERGE or ON CONFLICT SQL depending on dialect capabilities.
+`sql.upsert(table, dialect=...)` automatically generates `MERGE` (PostgreSQL 15+, Oracle, BigQuery, T-SQL), `INSERT ... ON CONFLICT` (SQLite, DuckDB), or `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL/MariaDB) depending on dialect capabilities.
 
 ---
 
-## Window Functions & Expressions
+## Dialect-Aware DDL Builders
 
-SQLSpec provides fluent window function helpers and expression builders:
+`sql.create_table(table, dialect=...)` and `sql.alter_table(table, dialect=...)` parse column data types against the configured target dialect and preserve dialect overrides on `.build(dialect=...)` and `.to_statement()`:
 
 ```python
-query = sql.select(
-    "id",
-    "department",
-    sql.row_number(partition_by="department", order_by="salary DESC").as_("rank"),
-    sql.sum_over("salary", partition_by="department").as_("dept_total"),
-    sql.lag("salary", partition_by="department", order_by="hire_date").as_("prev_salary"),
-).from_("employees")
+create_users = (
+    sql.create_table("users", dialect="postgres")
+    .if_not_exists()
+    .column("id", "UUID", primary_key=True)
+    .column("email", "TEXT", not_null=True, unique=True)
+    .column("created_at", "TIMESTAMPTZ", default="CURRENT_TIMESTAMP", not_null=True)
+)
+```
+
+---
+
+## Window Functions, Column Ordering & Expressions
+
+SQLSpec provides fluent window function helpers and column expression builders (`sql.column("col")` / `sql.col`):
+
+```python
+query = (
+    sql.select(
+        "id",
+        "department",
+        sql.row_number(partition_by="department", order_by="salary DESC").as_("rank"),
+        sql.sum_over("salary", partition_by="department").as_("dept_total"),
+        sql.lag("salary", partition_by="department", order_by="hire_date").as_("prev_salary"),
+    )
+    .from_("employees")
+    .where(sql.column("department").any_(["eng", "product"]))
+    .order_by(sql.column("salary").desc(nulls="last"))
+)
 ```
 
 ### Vector Distance Expressions

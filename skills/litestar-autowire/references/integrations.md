@@ -162,7 +162,7 @@ A missing Queues extra raises `RuntimeError`. An installed
 - [Discovery](discovery.md)
 - [Testing](testing.md)
 - [Skill overview](../SKILL.md)
-- [Litestar DI](../../litestar-di/SKILL.md)
+- [Litestar DI](../../litestar/references/di-and-dishka.md)
 - [Litestar Queues](../../litestar-queues/SKILL.md)
 
 ## Tagged source

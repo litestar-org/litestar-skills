@@ -24,6 +24,7 @@ _SKIP_DIRS = {
     "__pycache__",
     "dist",
     "build",
+    "plugins",
     ".git",
     ".mypy_cache",
     ".ruff_cache",
@@ -33,7 +34,39 @@ _PY_FILE_CAP = 50
 _PY_DEPTH_CAP = 4
 
 
+def _normalize_dep_name(name: str) -> str:
+    """Normalize a Python distribution name per PEP 503."""
+    return re.sub(r"[-_.]+", "-", name.strip().lower())
+
+
+def _extract_project_name(pyproject_text: str) -> str:
+    """Extract normalized [project].name or [tool.poetry].name from pyproject.toml."""
+    in_target_section = False
+    for raw_line in pyproject_text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip()
+            in_target_section = section in ("project", "tool.poetry")
+            continue
+        if in_target_section:
+            match = re.match(r'^name\s*=\s*["\']([^"\']+)["\']', line)
+            if match:
+                return _normalize_dep_name(match.group(1))
+    return ""
+
+
+def _is_ignored_glob_candidate(root: Path, candidate: Path, pattern: str) -> bool:
+    """Return True when a glob match traverses hidden or skipped directories."""
+    rel_parts = candidate.relative_to(root).parts
+    if any(p in _SKIP_DIRS or p.startswith(".") for p in rel_parts[:-1]):
+        return True
+    return bool(rel_parts and rel_parts[-1].startswith(".") and not Path(pattern).name.startswith("."))
+
+
 def detect(root: Path, map_path: Path) -> dict[str, object]:
+    """Detect Litestar ecosystem skills for ``root`` using ``map_path``."""
     map_data = json.loads(map_path.read_text())
     matchers = map_data["matchers"]
     intro = map_data.get("static_intro", "")
@@ -43,8 +76,15 @@ def detect(root: Path, map_path: Path) -> dict[str, object]:
     python_imports: dict[str, str] = {}
     python_regexes: list[tuple[re.Pattern[str], str]] = []
     file_globs: list[tuple[str, str]] = []
+    own_package_to_skill: dict[str, tuple[str, str]] = {}
     for m in matchers:
         skill = m["skill"]
+        own_pkg = m.get("own_package")
+        if isinstance(own_pkg, str) and own_pkg.strip():
+            own_package_to_skill[_normalize_dep_name(own_pkg)] = (own_pkg.strip(), skill)
+        for pkg in m.get("own_packages", []):
+            if isinstance(pkg, str) and pkg.strip():
+                own_package_to_skill[_normalize_dep_name(pkg)] = (pkg.strip(), skill)
         for sig in m.get("signals", []):
             t = sig.get("type")
             if t == "pyproject_dep":
@@ -65,17 +105,18 @@ def detect(root: Path, map_path: Path) -> dict[str, object]:
 
     pyproject = root / "pyproject.toml"
     pyproject_text = ""
+    project_name = ""
     if pyproject.is_file():
         try:
             pyproject_text = pyproject.read_text(errors="ignore")
         except OSError:
             pyproject_text = ""
+        project_name = _extract_project_name(pyproject_text)
         text_lower = pyproject_text.lower()
         for name, skill in pyproject_deps.items():
             if re.search(rf'["\']{re.escape(name)}(?:[\[\s>=<!~,"\']|$)', text_lower):
                 detected.add(skill)
         for section, skill in pyproject_sections:
-            # Match `[tool.sqlspec]` or `[tool.sqlspec.something]` (including under-bracket variants).
             pattern = rf"^\s*\[\s*{re.escape(section)}(?:\.|\s*\])"
             if re.search(pattern, pyproject_text, re.MULTILINE):
                 detected.add(skill)
@@ -115,29 +156,51 @@ def detect(root: Path, map_path: Path) -> dict[str, object]:
         if skill in detected:
             continue
         candidates = list(root.glob(pattern)) + list(root.glob(f"*/{pattern}")) + list(root.glob(f"*/*/{pattern}"))
-        if any(c.exists() for c in candidates):
+        if any(c.exists() and not _is_ignored_glob_candidate(root, c, pattern) for c in candidates):
             detected.add(skill)
+
+    own_entry = own_package_to_skill.get(project_name) if project_name else None
+    if own_entry is not None:
+        detected.discard(own_entry[1])
 
     ordered = [m["skill"] for m in sorted(matchers, key=lambda x: -int(x.get("priority", 0)))]
     final_skills = [s for s in ordered if s in detected]
 
-    matchers_by_skill = {m["skill"]: m for m in matchers}
     parts: list[str] = []
     if intro:
         parts.append(intro)
-    for skill in final_skills:
-        reminder = matchers_by_skill[skill].get("reminder")
-        if reminder:
-            parts.append(reminder)
+    if own_entry is not None:
+        own_pkg_display, own_skill = own_entry
+        parts.append(
+            f"Upstream library workspace detected (`{own_pkg_display}`). "
+            f"Do NOT rely on `litestar:{own_skill}` or consumer skills for `{own_pkg_display}` internals or APIs — "
+            "you are working on the library itself; treat this repository's source code as the source of truth "
+            "(changes here may require a follow-up update to `litestar-skills`)."
+        )
+        if final_skills:
+            qualified = ", ".join(f"litestar:{s}" for s in final_skills)
+            parts.append(
+                f"Detected stack skills: {qualified} "
+                f"(use only for sibling-library conventions, never for `{own_pkg_display}` internals)."
+            )
+    elif final_skills:
+        qualified = ", ".join(f"litestar:{s}" for s in final_skills)
+        parts.append(
+            f"Detected stack skills: {qualified}. Load the matching skill before implementing or reviewing changes."
+        )
 
-    return {
+    result: dict[str, object] = {
         "detected_skills": final_skills,
-        "context": "\n\n".join(parts),
+        "context": " ".join(parts),
         "project_root": str(root),
     }
+    if own_entry is not None:
+        result["suppressed_own_skill"] = own_entry[1]
+    return result
 
 
 def main(argv: list[str]) -> int:
+    """CLI entrypoint for _detector.py."""
     if len(argv) < 3:
         print('{"error":"usage: _detector.py <project_root> <skill_map_path>"}', file=sys.stderr)
         return 2

@@ -69,6 +69,7 @@ def check_package(repo_root: Path) -> int:
 
 
 def _build_package(repo_root: Path, package_root: Path) -> None:
+    """Copy canonical entries into ``package_root`` and normalize Codex hook manifests."""
     package_root.mkdir(parents=True, exist_ok=True)
     for entry in PACKAGE_ENTRIES:
         source = repo_root / entry
@@ -76,6 +77,10 @@ def _build_package(repo_root: Path, package_root: Path) -> None:
         if not source.is_dir():
             raise RuntimeError(f"Missing canonical source directory: {source}")
         shutil.copytree(source, destination, ignore=_ignore_names)
+    codex_hook_source = repo_root / "hooks" / "hooks-codex.json"
+    if codex_hook_source.is_file():
+        shutil.copyfile(codex_hook_source, package_root / "hooks" / "hooks.json")
+        shutil.copyfile(codex_hook_source, package_root / ".codex" / "hooks.json")
 
 
 def _ignore_names(_directory: str, names: list[str]) -> set[str]:

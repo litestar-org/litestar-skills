@@ -30,13 +30,11 @@ isolation or when tests mutate server-wide state.
 | Valkey | `xdist_valkey_isolation_level` |
 | YugabyteDB | `xdist_yugabyte_isolation_level` |
 
-Oracle and Spanner select worker-specific service names internally. Elasticsearch
-does not expose an isolation fixture in 0.19.0.
+Oracle and Spanner select worker-specific service/database names (`test_{worker_num}` or `test-db-{worker_num}`) internally. Elasticsearch does not expose an isolation fixture in 0.19.0 (though it assigns `database = worker_num or 0` on `ElasticsearchService`).
 
-GizmoSQL always uses a worker-specific server name under xdist because its
-storage backend does not provide multi-database isolation. Override
-`xdist_gizmosql_isolation_level` to `"server"` so those worker containers are
-transient.
+GizmoSQL and BigQuery always append `_{worker_num}` to their container names under xdist because their emulators do not provide multi-database logical isolation; overriding `xdist_gizmosql_isolation_level` or `xdist_bigquery_isolation_level` to `"server"` marks those worker containers transient (`transient=True`).
+
+MinIO and RustFS suffix their default bucket names (`pytest-databases-{worker_num}`) and container names only when `xdist_minio_isolation_level` or `xdist_rustfs_isolation_level` is set to `"server"`.
 
 ## Override server isolation
 

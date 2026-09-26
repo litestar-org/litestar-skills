@@ -93,7 +93,8 @@ from google.cloud.sql.connector import Connector
 connector = Connector()
 
 
-async def get_connection():
+async def get_connection() -> object:
+    """Create an asyncpg connection to Cloud SQL via the Python Connector."""
     return await connector.connect_async(
         "my-project:us-central1:my-instance",
         "asyncpg",
@@ -113,15 +114,35 @@ async def get_connection():
 | `cpu-throttling: false` | Yes | Keeps CPU allocated even when idle. Needed for background processing. |
 | `startup-cpu-boost` | Yes | Extra CPU during startup for faster cold starts. |
 | `timeout` | 300s | Max request duration. Increase for long-running API calls. |
+| `LITESTAR_TRUSTED_PROXIES` | `"*"` | Allows `litestar-vite` `ProxyHeadersMiddleware` to trust `X-Forwarded-Proto` / `X-Forwarded-Host` from the Cloud Run load balancer. |
 
-## Workers on Cloud Run
+## Background Tasks on Cloud Run (Match-Your-Stack)
 
-SAQ workers do not work well on Cloud Run because:
+Cloud Run Services scale based on incoming HTTP traffic and scale to zero when idle, so continuous polling daemons (`litestar workers run` or `litestar queues run`) should not run inside a scale-to-zero HTTP Service.
 
-1. Cloud Run scales based on HTTP traffic — workers receive none.
-2. Cloud Run can scale to zero — workers must always be running.
+### Option A: `litestar-queues` on Cloud Run Jobs (Recommended for Serverless)
 
-Deploy workers on **GKE**, **Compute Engine**, or **Cloud Run Jobs** (for batch-style processing) instead. If you must use Cloud Run, set `min-instances: 1` and use Cloud Run's always-on CPU allocation.
+`litestar-queues` natively supports **one-shot serverless execution** via `CloudRunExecutionConfig` and `litestar queues run-task`:
+
+1. Configure `QueueConfig(execution_mode="cloud_run", cloud_run=CloudRunExecutionConfig(project_id=..., region=..., job_name="my-app-tasks"))` on the web service.
+2. Deploy a **Cloud Run Job** using the same container image with `litestar queues run-task` as its entrypoint:
+
+```bash
+gcloud run jobs create my-app-tasks \
+    --image us-docker.pkg.dev/my-project/repo/app:v1.0.0 \
+    --region us-central1 \
+    --command "litestar" \
+    --args "queues,run-task" \
+    --set-env-vars "LITESTAR_APP=app.server.asgi:create_app" \
+    --set-secrets "DATABASE_URL=database-url:latest,SECRET_KEY=secret-key:latest" \
+    --service-account app-sa@my-project.iam.gserviceaccount.com
+```
+
+When the web application enqueues a task, `litestar-queues` dispatches a Cloud Run Job execution passing `LITESTAR_QUEUES_TASK_NAME`, `LITESTAR_QUEUES_TASK_ID`, and `LITESTAR_QUEUES_PAYLOAD_B64`; the container processes that single task and exits immediately. For scheduled lease recovery and history pruning, trigger a second Cloud Run Job (`--args "queues,run-maintenance"`) via Cloud Scheduler. See [`../../litestar-queues/SKILL.md`](../../litestar-queues/SKILL.md).
+
+### Option B: Long-Running Workers (`litestar-saq` or `litestar-queues` Daemon)
+
+If you use `litestar-saq` (`litestar workers run`) or continuous `litestar queues run` / `run-consumer` workers, deploy them on **GKE**, **Compute Engine**, or a dedicated Cloud Run Worker Pool / Service with `min-instances: 1` and `cpu-throttling: false`.
 
 ## IAP (Identity-Aware Proxy)
 

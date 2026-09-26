@@ -20,6 +20,7 @@ It derives:
 - Maintenance coordination keys
 - Redis and Valkey keys, and backend wakeups
 - Cloud Tasks delivery resources
+- Task-module discovery environment variable (`<NAMESPACE>_TASK_MODULES`)
 - Telemetry and logger hierarchies
 
 Explicit component settings stay authoritative. **SQL table names, ORM model classes, task names, and queue names are untouched** — namespacing is about runtime identity, not storage schema.
@@ -57,9 +58,9 @@ Set `replay_limit > 0` (the default is `0`) when browser clients must recover mi
 ## Cross-References
 
 - **[Execution Backends](execution-backends.md)** — managed transports and repair.
-- **[litestar-realtime](../../litestar-realtime/SKILL.md)** — Channels backends behind the event stream.
+- **[Litestar Channels & SSE](../../litestar/references/channels-and-sse.md)** — Channels backends behind the event stream.
 
 ## Official References
 
-- <https://github.com/cofin/litestar-queues/blob/v0.9.0/docs/changelog.rst>
-- <https://github.com/cofin/litestar-queues/blob/v0.9.0/src/litestar_queues/config.py>
+- <https://github.com/cofin/litestar-queues/blob/v0.12.0/docs/changelog.rst>
+- <https://github.com/cofin/litestar-queues/blob/v0.12.0/src/litestar_queues/config.py>

@@ -192,6 +192,150 @@ SQLSpec's migration runner reads the registry the same way the framework extensi
 - **Pool exhaustion at the wrong bind.** If the analytics pool is sized at 5 and a long-running report blocks all of them, requests that need *any* analytics query queue up. Size analytics pools for the worst-case concurrent slow query.
 - **`extension_config` keys are framework-namespaced.** Settings under `extension_config["starlette"]` are not read by the litestar extension; settings under `extension_config["litestar"]` are not read by the starlette extension. You can declare both blocks in the same dict — only the loaded extension reads its block.
 
+## Pool-Per-Role Database Configuration (`web`, `worker`, `channels`)
+
+Even when an application targets a single PostgreSQL database, separate `AsyncpgConfig` pools by workload role so long-running background jobs or dedicated `LISTEN/NOTIFY` listeners never starve interactive HTTP requests:
+
+```python
+from sqlspec import SQLSpec
+from sqlspec.adapters.asyncpg import AsyncpgConfig, AsyncpgPoolConfig
+
+db_manager = SQLSpec()
+
+web_db = db_manager.add_config(
+    AsyncpgConfig(
+        connection_config=AsyncpgPoolConfig(
+            dsn="postgresql://app:app@localhost:5432/app",
+            min_size=2,
+            max_size=10,
+            command_timeout=60.0,
+        ),
+        extension_config={"litestar": {"disable_di": True, "manage_lifespan": True}},
+    )
+)
+
+worker_db = db_manager.add_config(
+    AsyncpgConfig(
+        connection_config=AsyncpgPoolConfig(
+            dsn="postgresql://app:app@localhost:5432/app",
+            min_size=1,
+            max_size=5,
+            command_timeout=None,
+        ),
+        extension_config={
+            "litestar": {
+                "disable_di": True,
+                "manage_lifespan": True,
+                "connection_key": "worker_db_connection",
+                "pool_key": "worker_db_pool",
+                "session_key": "worker_db_session",
+            }
+        },
+    )
+)
+
+channels_db = db_manager.add_config(
+    AsyncpgConfig(
+        connection_config=AsyncpgPoolConfig(
+            dsn="postgresql://app:app@localhost:5432/app",
+            min_size=1,
+            max_size=2,
+            command_timeout=60.0,
+        ),
+        extension_config={
+            "events": {"backend": "notify", "listener_queue_capacity": 1024},
+            "litestar": {
+                "disable_di": True,
+                "manage_lifespan": True,
+                "connection_key": "channels_db_connection",
+                "pool_key": "channels_db_pool",
+                "session_key": "channels_db_session",
+            },
+        },
+    )
+)
+```
+
+## Shared In-Memory DuckDB Serving + Per-Job ADBC / DuckDB ETL
+
+Hybrid OLTP + OLAP applications combine PostgreSQL (`AsyncpgConfig`) for transactional metadata with a shared in-memory `DuckDBConfig` for low-latency Parquet/Arrow serving queries and isolated per-job `AdbcConfig` or file-backed `DuckDBConfig` instances for background ingestion:
+
+```python
+from pathlib import Path
+from sqlspec import StatementConfig, uuid7
+from sqlspec.adapters.adbc import AdbcConfig
+from sqlspec.adapters.duckdb import DuckDBConfig, DuckDBPoolParams
+
+workspace_serving_db = DuckDBConfig(
+    connection_config=DuckDBPoolParams(
+        database=f":memory:app-workspace-{uuid7().hex}",
+        parquet_metadata_cache=True,
+        enable_external_file_cache=False,
+        pool_min_size=1,
+        pool_max_size=4,
+    ),
+    driver_features={"enable_uuid_conversion": False},
+    extension_config={
+        "litestar": {
+            "disable_di": True,
+            "manage_lifespan": True,
+            "connection_key": "workspace_db_connection",
+            "pool_key": "workspace_db_pool",
+            "session_key": "workspace_db_session",
+        }
+    },
+)
+
+
+def create_job_etl_config(working_dir: Path) -> AdbcConfig:
+    return AdbcConfig(
+        connection_config={
+            "uri": f"duckdb://{working_dir / 'job.duckdb'}",
+            "autocommit": True,
+        },
+        statement_config=StatementConfig(dialect="duckdb"),
+    )
+```
+
+## PEP 562 Lazy `config.py` & `sqlspec.utils.env`
+
+Use `get_env`, `get_env_with_aliases`, and `is_env_set` from `sqlspec.utils.env` inside `@dataclass` settings, and expose `db_manager` / `db` via PEP 562 module `__getattr__` in `app/config.py` so importing `app.config` does not eagerly construct pools or parse SQL files at import time:
+
+```python
+from dataclasses import dataclass, field
+from functools import lru_cache
+from sqlspec import SQLSpec
+from sqlspec.adapters.asyncpg import AsyncpgConfig
+from sqlspec.utils.env import get_env, get_env_with_aliases
+
+
+@dataclass
+class DatabaseSettings:
+    URL: str = field(
+        default_factory=get_env_with_aliases(
+            "DATABASE_URL",
+            "POSTGRES_URL",
+            default="postgresql://app:app@localhost:5432/app",
+        )
+    )
+    POOL_MAX_SIZE: int = field(default_factory=get_env("DATABASE_POOL_MAX_SIZE", default=10, type_hint=int))
+
+
+@lru_cache(maxsize=1)
+def get_db_manager() -> SQLSpec:
+    return SQLSpec()
+
+
+@lru_cache(maxsize=1)
+def get_db_config() -> AsyncpgConfig:
+    settings = DatabaseSettings()
+    return get_db_manager().add_config(
+        AsyncpgConfig(connection_config={"dsn": settings.URL, "max_size": settings.POOL_MAX_SIZE})
+    )
+```
+
+Point `[tool.sqlspec]` in `pyproject.toml` at your config or factory (`config = "app.config.db"` or `config = "app.config:get_db_config"`).
+
 ## Canonical References
 
 - [litestar-sqlstack](https://github.com/cofin/litestar-sqlstack) — single-bind AsyncpgConfig demonstrating the baseline `SQLSpec()` + `add_config()` shape; the per-key fields are visible in its `extension_config["litestar"]` block.

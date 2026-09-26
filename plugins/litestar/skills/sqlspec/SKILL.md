@@ -1,6 +1,6 @@
 ---
 name: sqlspec
-description: "Auto-activate for sqlspec, SQLSpec, SQLFileLoader, drivers, query builders, named SQL, filters, pagination, Arrow, framework extensions, ADK stores, data dictionary, or observers. Not for ORM repositories -- use advanced-alchemy."
+description: "Auto-activate for sqlspec, SQLSpec, SQLFileLoader, drivers, query builders, named SQL, filters, pagination, Arrow, framework extensions, ADK stores, or observers. Not for ORM repositories — use advanced-alchemy."
 ---
 
 # SQLSpec Skill
@@ -92,6 +92,7 @@ merge_stmt = (
 | `select_with_total()` | Rows plus total | Pagination |
 | `select_stream()` / `fetch_stream()` | Context-managed row stream | Bounded row iteration where adapter supports native streaming |
 | `select_to_arrow()` / `fetch_to_arrow()` | `ArrowResult` | Bulk data export, analytics |
+| `select_to_storage()` | `StorageBridgeJob` | Export query results to local or cloud storage |
 | `execute()` | `SQLResult` | INSERT/UPDATE/DELETE metadata |
 | `execute_many()` | `SQLResult` | Batch operation metadata |
 | `execute_script()` | `SQLResult` | Multi-statement SQL script execution |
@@ -99,6 +100,7 @@ merge_stmt = (
 | `load_from_arrow()` | `StorageBridgeJob` | Adapter-supported Arrow ingest |
 | `load_from_storage()` | `StorageBridgeJob` | Adapter-supported staged-file ingest |
 | `load_from_records()` | `StorageBridgeJob` | Records normalized through the Arrow ingest path |
+| `transaction()` | Context manager | Atomic transaction or savepoint scope on a driver |
 
 ### Arrow Integration Basics
 
@@ -122,27 +124,28 @@ await db.load_from_records("users", [{"id": 1, "name": "Ada"}])
 
 | Need | Adapter | Key Feature |
 | --- | --- | --- |
-| PostgreSQL async | `asyncpg`, `psycopg` | Async, NUMERIC/PYFORMAT params |
+| PostgreSQL async | `asyncpg`, `psycopg` | Async, NUMERIC/PYFORMAT params, auto-probed `pgvector` / `pg_textsearch` / `paradedb` |
 | PostgreSQL sync | `psycopg` | Sync+async, PYFORMAT params |
 | SQLite | `sqlite`, `aiosqlite` | QMARK params, local dev |
-| DuckDB analytics | `duckdb` | Arrow-native OLAP, extension load/install lifecycle |
+| DuckDB analytics | `duckdb` | Arrow-native OLAP, extension load/install lifecycle, direct object-store transfer |
+| Arrow / multi-engine ETL | `adbc` | Arrow-native ingest/export across DuckDB, PostgreSQL, BigQuery, Flight SQL |
 | MySQL async | `asyncmy` | PYFORMAT params |
 | Oracle | `oracledb` | NAMED_COLON params, sync+async |
 | BigQuery / Spanner | `bigquery`, `spanner` | NAMED_AT params, cloud job/session controls |
 | Raw SQL strings | Driver methods | `select()`, `execute()` |
-| Dynamic queries | Query builder | `sql.select()...to_statement()` |
-| SQL from files | `SQLFileLoader` | Metadata directives, `-- param:` declarations, caching |
-| High-volume ingest | Storage bridge | Check the adapter matrix before selecting `load_from_arrow()`, `load_from_storage()`, or `load_from_records()` |
+| Dynamic queries | Query builder | `sql.select()...to_statement()`, `sql.update()...from_()`, `sql.upsert()` |
+| SQL from files | `SQLFileLoader` | Metadata directives, `-- param:`, `-- fragment:`, `/* include: */`, `/* slot: */`, caching |
+| High-volume ingest/export | Storage bridge | Check the adapter matrix before selecting `load_from_arrow()`, `load_from_storage()`, `load_from_records()`, or `select_to_storage()` |
 
 ### Step 2: Implement
 
-1. Configure the adapter with connection details and pool settings
-2. Register the config with `SQLSpec.add_config()` and use `SQLSpec.provide_session(config)` for connection lifecycle
+1. Configure the adapter with connection details (standardized aliases like `dsn`/`url`/`conninfo`, `database`/`dbname`, `user`/`username` normalize automatically) and pool settings
+2. Register the config with `SQLSpec.add_config()` and use `SQLSpec.provide_session(config)` or config-backed `SQLSpecAsyncService(config=..., loader=...)` for connection lifecycle
 3. Choose the appropriate driver method for your query shape
-4. Use `schema_type` parameter for typed results (Pydantic or msgspec models)
-5. Apply filters with `LimitOffsetFilter`, `OrderByFilter`, `SearchFilter`
+4. Use `schema_type` parameter for typed results (msgspec Structs, dataclasses, or Pydantic models)
+5. Apply filters with `LimitOffsetFilter`, `CursorFilter`, `OrderByFilter`, `SearchFilter`, `BeforeAfterFilter`, or `InCollectionFilter`
 6. Use `select_stream(..., native_only=True)` when bounded-memory streaming is mandatory
-7. Check adapter ingest capabilities, then use `load_from_records()` or `load_from_arrow()` for high-volume ingest
+7. Check adapter ingest capabilities, then use `load_from_records()`, `load_from_arrow()`, `load_from_storage()`, or `select_to_storage()` for high-volume data movement
 
 ### Step 3: Validate
 
@@ -156,15 +159,15 @@ Run through the validation checkpoint below before considering the work complete
 
 - **Always use typed adapters**: import the specific adapter config, not generic base classes
 - **Always use `schema_type`** for query results -- get typed objects, not raw dicts
-- **Always use context managers** for driver lifecycle -- `async with db_manager.provide_session(config) as db:`
+- **Always use context managers** for driver lifecycle -- `async with db_manager.provide_session(config) as db:` or `async with service.provide_session() as db:`
 - **Prefer the query builder** for complex dynamic queries -- avoids string concatenation, handles dialect conversion
-- **Prefer `SQLFileLoader`** for static queries -- keeps SQL out of Python and reuses the global file-cache namespace
+- **Prefer `SQLFileLoader`** for static queries -- keeps SQL out of Python, supports reusable `-- fragment:` / `/* include: */` blocks and validated `/* slot: */` splicing, and reuses the global file-cache namespace
 - **Use `-- param:` declarations for named SQL files that cross service boundaries** -- load-time and execute-time validation catches name drift and required parameter omissions
 - **Use `native_only=True` for streaming or Arrow paths only when fallback is unacceptable** -- unsupported adapters otherwise use eager row conversion
 - **Pass regular query bind values as positional arguments** -- `await db.select("... WHERE id = $1", user_id, schema_type=User)`, not `await db.select(..., [user_id], ...)`
-- **Never concatenate SQL strings** -- use parameterized queries or the query builder
-- **Never hold connections outside context managers** -- connection leaks exhaust the pool
-- **Match parameter style to adapter**: `$1` for asyncpg, `%s` for psycopg, `?` for sqlite, `:name` for oracledb
+- **Never concatenate SQL strings** -- use parameterized queries, query builder expressions, or declared `/* slot: <name> */` fragments
+- **Never hold connections outside context managers** -- connection leaks exhaust the pool; prefer config-backed services (`SQLSpecAsyncService(config=...)`) when operations should hold a connection only for the duration of a single query or `begin_transaction()` block
+- **Match parameter style to adapter**: `$1` for asyncpg, `%s` for psycopg, `?` for sqlite/duckdb, `:name` for oracledb
 - **Cloud adapter controls** -- BigQuery job controls live in `driver_features`; Spanner request controls live in `driver_features` or `provide_session()` kwargs
 - **Adapter config / driver modules avoid `from __future__ import annotations`**. Consumer app modules MAY use it.
 
@@ -177,13 +180,14 @@ Run through the validation checkpoint below before considering the work complete
 Before delivering SQLSpec code, verify:
 
 - [ ] Adapter config uses the correct import path (`sqlspec.adapters.<name>`)
-- [ ] Connection lifecycle uses `SQLSpec.provide_session(config)` context manager
+- [ ] Connection lifecycle uses `SQLSpec.provide_session(config)` or `service.provide_session()` context manager
 - [ ] Parameter style matches the adapter (see adapter registry table)
 - [ ] Query results use `schema_type` for type-safe mapping
-- [ ] Complex dynamic queries use the builder API, not string concatenation
-- [ ] Filters use SQLSpec filter objects (`LimitOffsetFilter`, etc.) not manual LIMIT/OFFSET
+- [ ] Complex dynamic queries use the builder API or declared SQL slots, not string concatenation
+- [ ] Filters use SQLSpec filter objects (`LimitOffsetFilter`, `CursorFilter`, `OrderByFilter`, etc.) not manual LIMIT/OFFSET
+- [ ] Dishka-first Litestar apps that disable SQLSpec DI set `extension_config={"litestar": {"disable_di": True, "manage_lifespan": True}}` when `SQLSpecPlugin` should still manage pool lifespan
 - [ ] Streaming code uses context managers and sets `native_only=True` when eager fallback would be a bug
-- [ ] Bulk ingest code checks the adapter matrix before using `load_from_arrow()`, `load_from_storage()`, or `load_from_records()`
+- [ ] Bulk ingest/export code checks the adapter matrix before using `load_from_arrow()`, `load_from_storage()`, `load_from_records()`, or `select_to_storage()`
 - [ ] ADK stores are selected from supported adapter `adk` packages; BigQuery is not an ADK backend
 
 </validation>

@@ -153,22 +153,52 @@ export default defineConfig({
 
 `outDir` is an absolute path into `src/py/app/server/static/web/`. Because `src/py/app` is the Hatchling package, anything under `static/web/` ships.
 
-For litestar-fullstack-inertia, the same effect is achieved by configuring litestar-vite's `bundle_dir` (in the Python settings module) rather than Vite's `outDir`. The litestar-vite plugin then writes there when `app assets build` is invoked:
+For `litestar-fullstack-inertia`, `litestar-vite` v0.30+ makes Python `ViteConfig(paths=PathConfig(bundle_dir=...))` the single source of truth. When `litestar assets build` runs, `litestar-vite` writes `.litestar.json` so `litestar({ input: [...] })` in `vite.config.ts` inherits `bundleDir` and `hotFile` automatically:
 
 ```python
-# app/lib/settings.py
-return ViteConfig(
-    dev_mode=self.DEV_MODE,
-    runtime=RuntimeConfig(executor="bun", trusted_proxies="*"),
-    paths=PathConfig(
-        root=BASE_DIR.parent,
-        bundle_dir=Path("app/domain/web/public"),  # ← inside `app/` package
-        resource_dir=Path("resources"),
-    ),
-)
+def get_vite_config(self) -> ViteConfig:
+    """Configure litestar-vite to emit compiled assets inside app/domain/web/public."""
+    return ViteConfig(
+        dev_mode=self.DEV_MODE,
+        runtime=RuntimeConfig(executor="bun", trusted_proxies="*"),
+        paths=PathConfig(
+            root=BASE_DIR.parent,
+            bundle_dir=Path("app/domain/web/public"),
+            resource_dir=Path("resources"),
+        ),
+    )
 ```
 
 **If you remember nothing else:** `bundle_dir` (and Vite `outDir`) must be a path **inside** a directory listed in `[tool.hatch.build.targets.wheel] packages = [...]`. A Vite default of `./dist` at the repo root produces an empty wheel.
+
+## Optional: Custom Hatchling `BuildHookInterface`
+
+If you want `uv build --wheel` to invoke `bun run build` automatically via a custom Hatchling build hook (`[tool.hatch.build.targets.wheel.hooks.custom]`), follow two mandatory guardrails:
+
+1. **Short-circuit editable installs (`if version == "editable": return`)** — `uv sync` installs the project in editable mode (`version == "editable"`). Without this guard, `uv sync` fails in fresh checkouts or CI lint jobs before Node/Bun dependencies exist.
+2. **Exclude the build-hook directory from `mypy` and `pyright`** — `hatchling` lives in `[build-system].requires`, not in project runtime/dev dependencies, so typecheckers will report `Cannot find implementation or library stub for module named "hatchling.builders.hooks.plugin.interface"` unless excluded.
+
+```python
+import subprocess
+from typing import Any
+from hatchling.builders.hooks.plugin.interface import BuildHookInterface
+
+
+class AssetBuildHook(BuildHookInterface):
+    """Build frontend assets during wheel/sdist builds while skipping editable installs."""
+
+    def initialize(self, version: str, build_data: dict[str, Any]) -> None:
+        """Skip editable installs so uv sync succeeds without building frontend assets."""
+        if version == "editable":
+            return
+        subprocess.run(["bun", "run", "build"], check=True)
+```
+
+ When testing wheel builds offline or inside containers with pre-populated virtual environments, pass `--no-build-isolation` (or set `UV_NO_BUILD_ISOLATION=1`) and `--clear` to `uv build`:
+
+```bash
+uv build --wheel --clear
+```
 
 ## The Makefile chain
 
@@ -188,7 +218,7 @@ build-assets:
 
 .PHONY: build-wheel
 build-wheel: build-assets
-	@uv build --wheel
+	@uv build --wheel --clear
 
 .PHONY: build-binary
 build-binary: build-wheel

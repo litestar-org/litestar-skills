@@ -33,19 +33,23 @@ FROM users
 WHERE id = $1
 ```
 
-### Supported Directives
+### Supported Directives & Markers
 
-| Directive | Required | Description |
+| Directive / Marker | Required | Description |
 | --- | --- | --- |
-| `-- name:` | Yes | Unique identifier for the query |
+| `-- name:` | Yes (or `-- fragment:`) | Unique identifier for an executable query |
+| `-- fragment:` | No | Reusable SQL fragment for static `/* include: */` or dynamic `/* slot: */` splicing |
 | `-- dialect:` | No | Source dialect for sqlglot parsing |
 | `-- param:` | No | Declared parameter metadata and validation |
+| `-- slot:` | No | Declared slot default (`-- slot: <name> = <default_sql>`) |
 | `-- description:` | No | Human-readable description |
 | `-- result:` | No | Expected result type hint (`one`, `many`, `value`, `affected`) |
+| `/* include: <name> */` | No | Static load-time splice of a named fragment |
+| `/* slot: <name> */` | No | Dynamic runtime splice resolved via `loader.get_sql(name, <slot>=...)` |
 
 ### Multiple Queries Per File
 
-A single `.sql` file can contain multiple named queries separated by directives:
+A single `.sql` file can contain multiple named queries and fragments separated by directives:
 
 ```sql
 -- name: list-users
@@ -57,6 +61,66 @@ SELECT COUNT(*) FROM users
 -- name: get-user-by-email
 -- dialect: postgres
 SELECT * FROM users WHERE email = $1
+```
+
+---
+
+## Fragments, Includes, and Slots
+
+`SQLFileLoader` supports two complementary composition mechanisms so SQL files can share column lists, CTEs, and optional filter predicates without string concatenation:
+
+### 1. Static Includes (`-- fragment:` + `/* include: <name> */`)
+
+Fragments are defined with `-- fragment: <name>` (or `loader.add_fragment(name, sql)`) and spliced at load time wherever `/* include: <name> */` appears. Cyclic or missing includes raise `SQLFileParseError` / `SQLFragmentNotFoundError`.
+
+```sql
+-- fragment: user-columns
+u.id, u.name, u.email, u.created_at
+
+-- name: list-active-users
+SELECT /* include: user-columns */
+FROM users AS u
+WHERE u.active = TRUE
+ORDER BY u.created_at DESC
+```
+
+Inspect registered fragments with `loader.has_fragment(name)`, `loader.list_fragments()`, and `loader.get_fragment_text(name)`.
+
+### 2. Dynamic Slots (`/* slot: <name> */` + `-- slot: <name> = <default_sql>`)
+
+Slots mark fill points in a named query where a caller may splice a `str` (verbatim SQL), a `sqlglot` / `sql.column(...)` expression (rendered in the statement's dialect), or a `SQL` object (splicing its text and binding its named parameters) at `get_sql(name, **slots)` time:
+
+- Declare an optional default with `-- slot: <name> = <default_sql>`.
+- An undeclared `/* slot: <name> */` marker (or `-- slot: <name>` without `= ...`) has `default=None` and **must** be supplied by the caller at `get_sql()` time.
+- Missing required slots, unknown slot keyword arguments, positional parameters inside a `SQL` slot value, or colliding parameter names raise `SQLSlotError`.
+- Inspect declared slots with `loader.get_query_slots(name)` (returns `tuple[SlotDeclaration, ...]`).
+
+```sql
+-- name: search-users
+-- dialect: postgres
+-- slot: extra_where = 1=1
+-- slot: order_clause = u.name ASC
+SELECT u.id, u.name, u.email
+FROM users AS u
+WHERE u.active = TRUE
+  AND /* slot: extra_where */
+ORDER BY /* slot: order_clause */
+```
+
+```python
+from sqlspec import SQL, sql
+from sqlspec.loader import SQLFileLoader, SlotDeclaration
+
+loader = SQLFileLoader()
+loader.load_sql("./sql")
+
+slots: tuple[SlotDeclaration, ...] = loader.get_query_slots("search-users")
+default_stmt = loader.get_sql("search-users")
+role_stmt = loader.get_sql(
+    "search-users",
+    extra_where=SQL("u.role = :role", {"role": "admin"}),
+    order_clause="u.created_at DESC",
+)
 ```
 
 ---

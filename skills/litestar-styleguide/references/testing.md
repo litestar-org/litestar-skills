@@ -37,22 +37,26 @@ def test_string_length(input: str, expected: int):
 
 ```python
 import pytest
-from httpx import AsyncClient
+from litestar.testing import AsyncTestClient
 
 
 @pytest.mark.anyio
-async def test_async_endpoint(client: AsyncClient):
-    response = await client.get("/api/items")
+async def test_async_endpoint(async_client: AsyncTestClient) -> None:
+    response = await async_client.get("/api/items")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 ```
 
 ### Python — Fixtures
 
+Always enter `AsyncTestClient` (`async with`) or `TestClient` (`with`) inside the fixture so Litestar's `LifeSpanHandler` runs `on_startup` / `on_shutdown` and `lifespan` context managers.
+
 ```python
+from collections.abc import AsyncGenerator, Generator
 import pytest
+from litestar import Litestar
+from litestar.testing import AsyncTestClient, TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from collections.abc import AsyncGenerator
 
 
 @pytest.fixture
@@ -67,18 +71,27 @@ async def db_session(engine) -> AsyncGenerator[AsyncSession, None]:
         await session.rollback()
 
 
-@pytest.fixture(scope="module")
-def client(app) -> TestClient:
-    return TestClient(app)
+@pytest.fixture
+async def async_client(app: Litestar) -> AsyncGenerator[AsyncTestClient[Litestar], None]:
+    async with AsyncTestClient(app=app) as client:
+        yield client
+
+
+@pytest.fixture
+def client(app: Litestar) -> Generator[TestClient[Litestar], None, None]:
+    with TestClient(app=app) as test_client:
+        yield test_client
 ```
 
 ### Python — Mocking
+
+Prefer overriding DI providers (`Provide` or Dishka `Provider`) over `unittest.mock.patch` for Litestar route/service dependencies; see [litestar-testing](../../litestar-testing/SKILL.md).
 
 ```python
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
-def test_with_mock():
+def test_with_mock() -> None:
     with patch("module.external_api") as mock_api:
         mock_api.return_value = {"status": "ok"}
         result = function_that_calls_api()
@@ -87,7 +100,7 @@ def test_with_mock():
 
 
 @pytest.fixture
-def mock_service():
+def mock_service() -> MagicMock:
     service = MagicMock(spec=MyService)
     service.fetch_data = AsyncMock(return_value=[])
     return service
@@ -95,17 +108,22 @@ def mock_service():
 
 ### Python — HTTP Testing with Litestar
 
+See [litestar-testing](../../litestar-testing/SKILL.md) for `create_async_test_client`, `create_test_client`, `RequestFactory`, `websocket_connect` (`WebSocketTestSession`), `set_session_data` / `get_session_data`, and `subprocess_async_client`.
+
 ```python
-from litestar.testing import TestClient
+import pytest
+from litestar.testing import AsyncTestClient
 
 
-def test_get_items(client: TestClient):
-    response = client.get("/items")
+@pytest.mark.anyio
+async def test_get_items(async_client: AsyncTestClient) -> None:
+    response = await async_client.get("/items")
     assert response.status_code == 200
 
 
-def test_create_item(client: TestClient):
-    response = client.post("/items", json={"name": "Test"})
+@pytest.mark.anyio
+async def test_create_item(async_client: AsyncTestClient) -> None:
+    response = await async_client.post("/items", json={"name": "Test"})
     assert response.status_code == 201
     assert response.json()["name"] == "Test"
 ```

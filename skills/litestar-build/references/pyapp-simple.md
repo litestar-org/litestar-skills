@@ -67,6 +67,9 @@ PYAPP_ALLOW_UPDATES = "1"
 | `PYAPP_FULL_ISOLATION=1` | Create an isolated venv per version; ignore user site-packages. Required for reliable behavior. |
 | `PYAPP_UV_ENABLED=1` | Use `uv pip` for the install step (fast). |
 | `PYAPP_ALLOW_UPDATES=1` | Enable the `self update` subcommand at runtime. |
+| `PYAPP_DISTRIBUTION_VARIANT_GIL` | Optional on Python 3.13+: select the GIL vs free-threaded (`nogil`) distribution variant when using default PBS archives. |
+
+At runtime, the compiled PyApp wrapper sets `PYAPP=1` in the environment (or the binary's path when built with `PYAPP_PASS_LOCATION=1`), so application code can detect onefile execution via `bool(os.getenv("PYAPP"))`.
 
 ## Release pipeline (multi-platform)
 

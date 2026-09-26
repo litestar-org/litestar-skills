@@ -3,7 +3,7 @@ pypi = "litestar"
 version = "2.24.0"
 date = "2026-06-11"
 tag = "v2.24.0"
-skills = ["skills/litestar", "skills/litestar-routing", "skills/litestar-di", "skills/litestar-dto-openapi", "skills/litestar-auth-guards", "skills/litestar-exceptions", "skills/litestar-testing"]
+skills = ["skills/litestar"]
 imports = ["litestar"]
 
 [[package]]
@@ -16,17 +16,17 @@ imports = ["advanced_alchemy"]
 
 [[package]]
 pypi = "sqlspec"
-version = "0.62.0"
-date = "2026-08-18"
-tag = "v0.62.0"
+version = "0.64.0"
+date = "2026-09-21"
+tag = "v0.64.0"
 skills = ["skills/sqlspec"]
 imports = ["sqlspec"]
 
 [[package]]
 pypi = "litestar-queues"
-version = "0.9.0"
-date = "2026-08-17"
-tag = "v0.9.0"
+version = "0.12.0"
+date = "2026-09-17"
+tag = "v0.12.0"
 skills = ["skills/litestar-queues"]
 imports = ["litestar_queues"]
 
@@ -35,14 +35,14 @@ pypi = "litestar-vite"
 version = "0.31.0"
 date = "2026-08-18"
 tag = "v0.31.0"
-skills = ["skills/litestar-vite", "skills/litestar-inertia"]
+skills = ["skills/litestar-vite"]
 imports = ["litestar_vite"]
 
 [[package]]
 pypi = "litestar-mcp"
-version = "0.13.0"
-date = "2026-08-19"
-tag = "v0.13.0"
+version = "0.13.2"
+date = "2026-08-26"
+tag = "v0.13.2"
 skills = ["skills/litestar-mcp"]
 imports = ["litestar_mcp"]
 

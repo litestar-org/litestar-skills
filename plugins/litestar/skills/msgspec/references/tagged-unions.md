@@ -104,9 +104,10 @@ Do not mix integer and string tags in one union. Integer tags must fit in a sign
 
 ---
 
-## Callable Tags and Inheritance
+## Callable Tags, Inheritance, and `array_like=True`
 
 Set the shared tag policy on a base Struct. The callable receives the subclass's qualified name.
+Pass `tag=False` on a subclass to opt out of an inherited tag policy.
 
 ```python
 class TaggedMessage(msgspec.Struct, tag_field="kind", tag=str.lower):
@@ -121,8 +122,18 @@ class Stopped(TaggedMessage):
     job_id: int
 
 
+class InternalHelper(TaggedMessage, tag=False):
+    """Not part of the tagged union; tag and tag_field are reset to None."""
+
+    note: str
+
+
 Message = Started | Stopped
 ```
+
+When `array_like=True` is combined with `tag`, the tag value is encoded as element `0` of the
+array (`[tag, field1, field2, ...]`). Object-like tagged unions emit `anyOf` + `discriminator`
+(`propertyName` and `mapping` formatted with `ref_template`) in `msgspec.json.schema()`.
 
 ---
 

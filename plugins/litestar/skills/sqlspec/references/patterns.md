@@ -219,3 +219,45 @@ def build_projection(columns: list[str], table: str) -> str:
     query = select(*[exp.column(c) for c in columns]).from_(table)
     return query.sql()
 ```
+
+---
+
+## Table Fixtures (`sqlspec.utils.fixtures`)
+
+Load and export per-table `.json` or `.jsonl` (including `.gz`) fixtures with automatic schema-driven type coercion, topological `table_order`, `conflict_keys` upserts, `batch_size`, and identity sequence resynchronization (`resync_sequences=True`):
+
+```python
+from pathlib import Path
+from sqlspec.utils.fixtures import export_table_fixtures_async, load_table_fixtures_async
+
+loaded_counts = await load_table_fixtures_async(
+    db_session,
+    Path("db/fixtures"),
+    table_order=["roles", "users"],
+    conflict_keys={"roles": ["slug"], "users": ["email"]},
+    resync_sequences=True,
+)
+
+exported_paths = await export_table_fixtures_async(
+    db_session,
+    Path("db/fixtures/snapshots"),
+    tables=["roles", "users"],
+    file_format="jsonl",
+    compress=True,
+)
+```
+
+Synchronous drivers use `load_table_fixtures_sync()` and `export_table_fixtures_sync()`.
+
+---
+
+## ID Generation Helpers (`uuid4`, `uuid6`, `uuid7`, `nanoid`)
+
+Top-level `sqlspec` (and `sqlspec.utils.uuids`) exports fast, dependency-consistent ID generators (`uuid7` for time-ordered UUID primary keys, `uuid4`, `uuid6`, and `nanoid`):
+
+```python
+from sqlspec import nanoid, uuid7
+
+record_id = uuid7()
+public_slug = nanoid()
+```

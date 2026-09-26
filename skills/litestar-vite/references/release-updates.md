@@ -1,6 +1,6 @@
-# litestar-vite - Release Updates 0.26.0 to 0.31.0
+# litestar-vite - Release Updates 0.26.0 to 0.32.0
 
-This guidance is audited against immutable tag `v0.31.0`.
+This guidance is audited against immutable tag `v0.31.0` (the latest published PyPI/GitHub release) and documents `0.32.0` (`feat/ssr-fragments`) additions.
 
 ## Release Anchors
 
@@ -28,20 +28,26 @@ This guidance is audited against immutable tag `v0.31.0`.
 | `0.29.0` | **Breaking:** `litestar_vite.commands` and `init_vite()` removed. | Use `litestar_vite.scaffolding` (`TemplateContext` plus `generate_project()`), which is what `litestar assets init` calls. |
 | `0.29.0` | Deprecated `materialize_shared_props_to_session()` for removal in `v0.30.0`. | Inertia redirect responses perform the session handoff automatically. |
 | `0.29.1` | Hotfile and HMR fixes. | Relative hot-file paths resolve beneath an absolute `bundleDir`. Vite 8.1+ HMR merges only defined values, so explicit overrides and disable flags survive; proxy mode lets Vite infer the browser client port. |
-| `0.30.0` | Inertia Precognition & Prop Helpers expansion. | Real-time form validation via `@precognition`, `PrecognitionResponse` (204 No Content with `Precognition-Success: true`), `create_precognition_exception_handler`, and `InertiaConfig.precognition`. Added `always()`, `once()`, `optional()`, `merge()` with strategies (`append`, `prepend`, `deep`) and `match_on`, `scroll_props()`, and pagination container extraction (`extract_pagination_scroll_props`). Inertia history encryption via `InertiaConfig.encrypt_history`, `InertiaResponse(encrypt_history=...)`, and `clear_history()`. |
-| `0.31.0` | SSR resilience, SPA transformation cache & CLI route filtering. | Added `InertiaSSRConfig.health_check_timeout` and refined auto-start SSR lifecycle management. Enhanced `SPAConfig` with `cache_transformed_html`, `cache_duration`, and custom CSRF variable injection (`csrf_var_name`). Added route filtering options (`--only`, `--except`, `--include-components`) to `litestar assets export-routes`. |
+| `0.30.0` | Direct `msgspec.Struct` field-rename preservation in Inertia (#347). | Direct `msgspec.Struct` returns from `component=` handlers encode via `msgspec.to_builtins()` so `rename=` rules (`camel`, `kebab`, `pascal`) and `msgspec.field(name=...)` aliases survive as top-level page props. |
+| `0.30.0` | Secondary Vite HTML entry resolution (#348). | Added `ViteAssetLoader.resolve_html_entry(entry, *, production_path, absolute_dev_asset_urls=False)` and `resolve_html_entry_sync(...)`, `HTMLEntryResolutionError`, and `/__litestar__/transform-index` `{ entry }` support for secondary HTML entrypoints. |
+| `0.30.1` | Static auth exclusion and Granian static eligibility (#351). | `ViteConfig.exclude_static_from_auth=True` emits `opt={"exclude_from_auth": True}` directly on static route handlers and decouples `VitePlugin.get_static_server_config()` (`StaticServerConfig`, `StaticPlacement`, `StaticServerMount`) for Granian native static serving. |
+| `0.31.0` | CSRF constants in `routes.ts` and static helper fallbacks (#354). | `generate_routes_ts` emits `CSRF_COOKIE_NAME` and `CSRF_HEADER_NAME` from `app.csrf_config`. `getCsrfHeaderName`, `getCsrfToken`, `csrfHeaders`, and `csrfFetch` accept `CsrfOptions` / `CsrfFetchOptions` (`headerName`, `cookieName`) when `window.__LITESTAR_CSRF_*__` globals are absent. |
+| `0.32.0` | UI component fragments & `<litestar-island>` (`feat/ssr-fragments`). | Render React, Vue, Svelte, or Astro fragments from Python via `ComponentResponse(component, props=..., mode="static" \| "island")`, `FragmentEngine`, or Jinja `{{ vite_fragment(...) }}`, with scoped CSS chunk extraction from `manifest.json`. |
+| `0.32.0` | Persistent IPC SSR worker, Vite 7+ `ModuleRunner`, and circuit breaker (`feat/ssr-fragments`). | `litestar_vite.ipc` provides `StdioIPCTransport` (prod `litestar-vite-ssr-worker`), `TCPStreamIPCTransport` (dev `/__litestar_ssr__` via `litestarViteSsrPlugin`), and `SSRCircuitBreaker` (`fallback_to_client`, `circuit_breaker_enabled`, `circuit_breaker_failure_threshold`, `circuit_breaker_reset_timeout` on `InertiaSSRConfig`). |
+| `0.32.0` | AsyncAPI 3.0 & typed channels (`feat/ssr-fragments`). | `TypeGenConfig(generate_channels=True)` emits `asyncapi.json` and `channels.ts` (`ChannelMap`) for `ChannelsPlugin`, `@websocket`, `websocket_listener`, and `ServerSentEvent` routes, paired with `createTypedChannels()` in `litestar-vite-plugin/helpers`. |
+| `0.32.0` | AnyIO byte-streaming proxy & Inertia slot tokens (`feat/ssr-fragments`). | Removes `httpx` from runtime dependencies in favor of AnyIO byte-streaming proxy/IPC transports, enforces Vite `>=7.0.0`, and supports `<!--inertia-head-->` / `<!--inertia-body-->` slot replacement with fallback to `#app`. |
 
 ## Inertia Protocol Boundary
 
 - Initial non-Inertia visits return HTML; Inertia visits return JSON.
-- Structured handler returns become top-level props.
+- Structured handler returns (`dict`, `msgspec.Struct`, dataclass, Pydantic) become top-level props, preserving `msgspec.Struct` `rename=` and `field(name=...)` rules (`0.30.0+`).
 - Initial responses advertise deferred groups.
 - Partial responses omit `deferredProps`, including unrequested groups.
 - `X-Inertia-Partial-Data` and `X-Inertia-Partial-Except` apply only when the
   partial component matches the route component.
 - Asset versions come from the Vite asset loader. A stale `GET` receives a
   protocol refresh response; stale mutation requests keep their method and body.
-- Precognition validation requests return 204 No Content with `Precognition-Success: true` when validation succeeds; validation errors return 422 with formatted errors.
+- Precognition validation requests (`@precognition`, `InertiaConfig.precognition=True`) return 204 No Content with `Precognition-Success: true` (`PrecognitionResponse`) when validation succeeds; validation errors return 422 with formatted errors.
 
 ## Scaffolds
 
@@ -60,6 +66,7 @@ and `--overwrite` only after reviewing collisions.
 - `v0.29.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.29.0>
 - `v0.29.1`: <https://github.com/litestar-org/litestar-vite/tree/v0.29.1>
 - `v0.30.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.30.0>
+- `v0.30.1`: <https://github.com/litestar-org/litestar-vite/tree/v0.30.1>
 - `v0.31.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.31.0>
 - Tagged changelog: <https://github.com/litestar-org/litestar-vite/blob/v0.31.0/docs/changelog.rst>
 - Tagged configuration: <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/src/py/litestar_vite/config>

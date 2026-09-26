@@ -34,7 +34,7 @@ The four host-dialect agent files are generated from canonical YAML sources at `
 
 ## Skill and command names
 
-Codex surfaces installed skills by displayed name. In `$`-trigger Codex surfaces, force the Litestar hub with `$litestar:litestar` and focused skills with `$litestar:<skill-name>` (for example `$litestar:litestar-routing`). Natural-language requests also work.
+Codex surfaces installed skills by displayed name. In `$`-trigger Codex surfaces, force the Litestar hub with `$litestar:litestar` and focused skills with `$litestar:<skill-name>` (for example `$litestar:sqlspec`). Natural-language requests also work.
 
 Codex plugins do not currently expose plugin-defined `/litestar:*` slash commands. Treat the shipped `commands/litestar/*.toml` files as host payload for slash-command-capable harnesses and as canonical prompts the `litestar` skill can follow in Codex.
 

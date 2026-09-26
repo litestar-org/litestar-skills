@@ -88,7 +88,7 @@ results = await service.get_many(
 
 ### SearchFilter
 
-Text search on a column using SQL `LIKE` / `ILIKE`.
+Text search on one or more columns using SQL `LIKE` / `ILIKE`.
 
 ```python
 from advanced_alchemy.filters import SearchFilter
@@ -98,16 +98,17 @@ results = await service.get_many(
 )
 
 results = await service.get_many(
-    SearchFilter(field_name="email", value="@example.com", ignore_case=False),
+    SearchFilter(field_name={"name", "email"}, value="acme", ignore_case=True),
 )
 ```
 
-- `ignore_case=True` (default): uses `ILIKE` on PostgreSQL, `LOWER()` comparison elsewhere
+- `field_name`: single column name (`str`) or `set[str]` (combines multiple columns with `OR`)
+- `ignore_case=False` (default): uses case-sensitive `.like()`; set `ignore_case=True` for case-insensitive `.ilike()`
 - The value is wrapped in `%value%` wildcards automatically
 
 ### NotInSearchFilter
 
-Inverse of `SearchFilter` — excludes rows matching the pattern (`NOT LIKE`).
+Inverse of `SearchFilter` — excludes rows matching the pattern (`NOT LIKE` / `NOT ILIKE`, combining multiple `field_name` entries with `AND`). Accepts `ignore_case`.
 
 ```python
 from advanced_alchemy.filters import NotInSearchFilter
@@ -176,17 +177,13 @@ results = await service.get_many(
 
 ### OrderBy
 
-Sort results by a column.
+Sort results by a column, model attribute, or SQL expression.
 
 ```python
 from advanced_alchemy.filters import OrderBy
 
 results = await service.get_many(
     OrderBy(field_name="created_at", sort_order="desc"),
-)
-
-results = await service.get_many(
-    OrderBy(field_name="name", sort_order="asc"),
 )
 ```
 
@@ -221,12 +218,20 @@ results = await service.get_many(NotNullFilter(field_name="verified_at"))
 
 ### ComparisonFilter
 
-A single `field op value` comparison (`eq`, `ne`, `gt`, `ge`, `lt`, `le`).
+A single `field op value` comparison supporting 16 operators (`VALID_OPERATORS`):
+
+- Equality & ordering: `eq`, `ne`, `gt`, `ge`, `lt`, `le`
+- Set & range membership: `in`, `notin`, `between` (expects a 2-tuple/list `(low, high)`)
+- Pattern matching: `like`, `ilike`, `startswith`, `istartswith`, `endswith`, `iendswith`
+- Date equality: `dateeq`
 
 ```python
 from advanced_alchemy.filters import ComparisonFilter
 
-results = await service.get_many(ComparisonFilter(field_name="age", operator="ge", value=18))
+results = await service.get_many(
+    ComparisonFilter(field_name="age", operator="ge", value=18),
+    ComparisonFilter(field_name="score", operator="between", value=(50, 100)),
+)
 ```
 
 ### ChoicesFilter / BooleanFilter
@@ -358,31 +363,59 @@ next_cursor = results[-1].created_at if results else None
 
 ### create_filter_dependencies()
 
-Automatically creates Litestar dependency providers that parse filter parameters from query strings.
+Automatically creates Litestar dependency providers that parse filter parameters from query strings using `FilterConfig`:
 
 ```python
 from uuid import UUID
 
-from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
+from advanced_alchemy.extensions.litestar.providers import (
+    ChoiceField,
+    FieldNameType,
+    create_filter_dependencies,
+)
 
 filter_deps = create_filter_dependencies(
     {
         "id_filter": UUID,
+        "id_field": "id",
         "search": {"name", "email"},
         "search_ignore_case": True,
+        "search_escape_wildcards": True,
         "created_at": True,
         "updated_at": True,
         "pagination_type": "limit_offset",
         "pagination_size": 20,
         "sort_field": "created_at",
         "sort_order": "desc",
+        "sort_nulls": "last",
+        "in_fields": {FieldNameType(name="team_id", type_hint=UUID)},
+        "not_in_fields": {"role"},
+        "boolean_fields": {"is_active", "is_verified"},
+        "choice_fields": [ChoiceField(name="status", choices=("active", "pending", "suspended"))],
+        "alias_generator": "camel_case",
     }
 )
 ```
 
-The generated query names are `ids`, `searchString`,
-`searchIgnoreCase`, `createdBefore` / `createdAfter`, `updatedBefore` /
-`updatedAfter`, `currentPage` / `pageSize`, and `orderBy` / `sortOrder`.
+| `FilterConfig` Key | Type | Generated Query Parameter(s) (default / `camel_case`) |
+| --- | --- | --- |
+| `id_filter` | `type[UUID \| int \| str]` | `ids` |
+| `id_field` | `str` (default `"id"`) | Target model column for `id_filter` |
+| `search` | `str \| set[str] \| list[str]` | `searchString` |
+| `search_ignore_case` | `bool` | `searchIgnoreCase` |
+| `search_escape_wildcards` | `bool` | Escapes `%` and `_` in `SearchFilter` (unreleased `main` after 1.11.0) |
+| `created_at` | `bool` | `createdBefore`, `createdAfter` |
+| `updated_at` | `bool` | `updatedBefore`, `updatedAfter` |
+| `pagination_type` | `Literal["limit_offset"]` | `currentPage`, `pageSize` |
+| `pagination_size` | `int` (default `20`) | Default `pageSize` value |
+| `sort_field` | `str \| set[str] \| list[str]` | `orderBy` |
+| `sort_order` | `Literal["asc", "desc"]` | `sortOrder` |
+| `sort_nulls` | `Literal["first", "last"] \| None` | Pins `NULL` sort placement on `OrderBy` (unreleased `main` after 1.11.0) |
+| `in_fields` | `FieldNameConfig` | `<field>In` (or `<field>_in` with `snake_case`) |
+| `not_in_fields` | `FieldNameConfig` | `<field>NotIn` (or `<field>_not_in` with `snake_case`) |
+| `boolean_fields` | `FieldNameConfig` | `<field>` boolean query param |
+| `choice_fields` | `ChoiceFieldConfig` | `<field>` literal choice query param (`ChoiceField(name, choices)` or `(name, choices)`) |
+| `alias_generator` | `"snake_case" \| "camel_case" \| Callable[[str], str]` | Transforms generated query parameter names (`page_size` vs `pageSize`) (unreleased `main` after 1.11.0) |
 
 ### Using in Litestar Routes
 

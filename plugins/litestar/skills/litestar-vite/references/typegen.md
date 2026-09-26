@@ -8,12 +8,14 @@ End-to-end type generation from the Litestar backend to TypeScript.
 | --- | --- | --- |
 | `openapi.json` | Litestar OpenAPI schema | Source of truth for SDK + schemas |
 | `routes.json` | Route metadata | JSON consumed by `litestar-vite-plugin` |
-| `routes.ts` | Route registry | Typed URL builder: `route("name", { params })` |
+| `routes.ts` | Route registry + `app.csrf_config` | Typed URL builder (`route("name", { params })`) + `CSRF_COOKIE_NAME` and `CSRF_HEADER_NAME` constants (`0.31.0+`) |
 | `api/` | Litestar OpenAPI schema | hey-api `types.gen.ts`, schemas, SDK functions, and fetch client |
 | `schemas.ts` | Route metadata plus hey-api types | `FormInput`, `FormResponse`, and `SuccessResponse` route helpers |
 | `inertia-pages.json` | Inertia handler metadata | JSON consumed by `litestar-vite-plugin` |
 | `page-props.ts` | Inertia page-prop types | Typed props for Inertia page components |
-| `static-props.ts` | `.litestar.json` `staticProps` | Typed default and named exports for static bridge values |
+| `static-props.ts` | `.litestar.json` `staticProps` | Typed default and named exports for static bridge values (`virtual:litestar-static-props`) |
+| `asyncapi.json` | Channels / WebSocket / SSE routes (`0.32.0+`) | AsyncAPI 3.0.0 specification when `generate_channels=True` |
+| `channels.ts` | `asyncapi.json` (`0.32.0+`) | Typed `ChannelMap` consumed by `createTypedChannels()` |
 
 ## Configuration
 
@@ -25,36 +27,57 @@ TypeGenConfig(
     generate_sdk=True,
     generate_routes=True,
     generate_schemas=True,
-    generate_page_props=True,  # Inertia only
-    fail_on_error=None,  # fail builds, warn in dev
+    generate_page_props=True,
+    global_route=False,
+    fail_on_error=None,
     output="src/generated",
+)
+```
+
+In `0.32.0+`, enable AsyncAPI 3.0 and typed realtime channel generation with `generate_channels=True`:
+
+```python # pragma: legacy-example
+from litestar_vite import TypeGenConfig
+
+TypeGenConfig(
+    output="src/generated",
+    generate_channels=True,
+    asyncapi_path="src/generated/asyncapi.json",
+    channels_ts_path="src/generated/channels.ts",
 )
 ```
 
 ## CLI
 
 ```bash
-litestar assets generate-types     # generate everything enabled
-litestar assets export-routes      # routes.json metadata
+litestar assets generate-types              # generate everything enabled
+litestar assets export-routes               # routes.json metadata
+litestar assets export-routes --only users,posts --except admin
 litestar assets export-routes --typescript  # routes.ts only
 ```
 
-The Python pipeline first exports metadata, then runs `extra_commands`, then
-invokes the JS generator. Release `0.26.1` writes `.litestar.json` before those
-generators read it.
+The Python pipeline first writes `.litestar.json`, exports metadata (`openapi.json`, `routes.json`, `routes.ts`, `inertia-pages.json`, and `asyncapi.json` when enabled), runs `extra_commands` (resolved via the configured JS executor in `node_modules/.bin` or `npx`/`bunx`/`pnpm dlx`/`yarn dlx`/`deno run`), and finally invokes `litestar-vite-typegen`.
 
 ## Frontend Use
 
-### Routes
+### Routes & CSRF Constants (`0.31.0+`)
+
+When `app.csrf_config` is configured on the Litestar app, `routes.ts` exports `CSRF_COOKIE_NAME` and `CSRF_HEADER_NAME` (empty strings when CSRF is disabled). Pass them as static fallbacks when `window.__LITESTAR_CSRF_*__` globals are not injected:
 
 ```ts
-import { route } from "@/generated/routes"
+import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME, route } from "@/generated/routes"
+import { csrfFetch, csrfHeaders, getCsrfHeaderName, getCsrfToken } from "litestar-vite-plugin/helpers"
 
 const url = route("users:get", { id: 123 })
 // → "/api/users/123"
+
+const token = getCsrfToken({ cookieName: CSRF_COOKIE_NAME })
+const header = getCsrfHeaderName(CSRF_HEADER_NAME)
+const headers = csrfHeaders({ "Content-Type": "application/json" }, { headerName: CSRF_HEADER_NAME, cookieName: CSRF_COOKIE_NAME })
+await csrfFetch(url, { method: "POST", headers })
 ```
 
-Route names come from Litestar handler `name=` parameters.
+Route names come from Litestar handler `name=` parameters. Set `TypeGenConfig(global_route=True)` if you also want `window.route` registered globally.
 
 ### OpenAPI Types and SDK
 
@@ -79,6 +102,21 @@ type LoginCreated = SuccessResponse<"auth:login">
 type LoginBadRequest = FormResponse<"auth:login", 400>
 ```
 
+### Typed Realtime Channels (`0.32.0+`)
+
+When `generate_channels=True`, `channels.ts` exports a `ChannelMap` interface derived from `ChannelsPlugin`, `@websocket`, `websocket_listener`, and `ServerSentEvent` routes:
+
+```ts
+import { createTypedChannels } from "litestar-vite-plugin/helpers"
+import type { ChannelMap } from "@/generated/channels"
+
+const channels = createTypedChannels<ChannelMap>({ basePath: "/ws" })
+const stream = channels.stream("notifications", {
+  onEvent: (event) => console.log(event),
+})
+stream.connect()
+```
+
 ## CI Integration
 
 Generated files should either be:
@@ -92,9 +130,10 @@ Pattern (1) is preferred — diffs surface in PR review.
 
 | Change | Re-trigger needed |
 | --- | --- |
-| Add/change a route handler | yes (`routes.json` and `routes.ts`) |
-| Add/change a Pydantic / msgspec DTO | yes (`schemas.ts`) |
+| Add/change a route handler or `CSRFConfig` | yes (`routes.json` and `routes.ts`) |
+| Add/change a Pydantic / msgspec DTO | yes (`openapi.json`, `api/`, and `schemas.ts`) |
 | Change Inertia handler / page name | yes (`inertia-pages.json` and `page-props.ts`) |
+| Add/change `ChannelsPlugin`, WebSocket, or SSE route (`0.32.0+`) | yes (`asyncapi.json` and `channels.ts`) |
 | Refactor internal modules | no (if no API surface change) |
 
 ## Pitfalls

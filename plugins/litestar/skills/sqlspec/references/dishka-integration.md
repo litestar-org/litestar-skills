@@ -4,7 +4,7 @@ Dishka is an explicit-scope DI framework for Python that gives you precise contr
 
 **When to use Dishka vs Litestar's built-in `Provide`:**
 
-- **Use `Provide`** (Litestar's default) for simple apps with a handful of injected services, no cross-request singletons, and no WebSocket session scope. It's zero-dep and composable with Litestar's controller-level `dependencies` dict. See [`../../litestar-di/references/di.md`](../../litestar-di/references/di.md) for the full guide.
+- **Use `Provide`** (Litestar's default) for simple apps with a handful of injected services, no cross-request singletons, and no WebSocket session scope. It's zero-dep and composable with Litestar's controller-level `dependencies` dict. See [`../../litestar/references/di-and-dishka.md`](../../litestar/references/di-and-dishka.md) for the full guide.
 - **Use Dishka** when you need explicit scope control (APP vs REQUEST vs SESSION), multiple provider classes with lifecycle hooks, or the same provider graph across Litestar and background workers (SAQ, Celery). Dishka also makes provider graphs testable in isolation via `make_async_container`.
 
 ## Provider overview — 3 providers, 3 scopes
@@ -62,12 +62,28 @@ class LitestarPersistenceProvider(Provider):
 
 ### `AppSingletonsProvider` — `Scope.APP`
 
-Provides process-lifetime singletons — things that are initialized once and shared across all requests. The `ChannelsBackend` is the most common: it's a long-lived client that maintains connections to the pub/sub backend. Pull it from `app.channels` (the Litestar `ChannelsPlugin` instance) so it's already initialized by the time handlers need it.
+Provides process-lifetime singletons — things that are initialized once and shared across all requests. The `ChannelsBackend` is the most common: it's a long-lived client that maintains connections to the pub/sub backend. You can back `ChannelsPlugin` directly with `SQLSpecChannelsBackend(AsyncEventChannel(channels_db), output_queue_capacity=1024)` from `sqlspec.extensions.litestar.channels` so PostgreSQL `LISTEN/NOTIFY` or durable event queues drive realtime fan-out without Redis:
 
 ```python
 from dishka import Provider, Scope, provide
 from litestar import Litestar
-from litestar_channels.backends.base import ChannelsBackend
+from litestar.channels import ChannelsPlugin
+from litestar.channels.backends.base import ChannelsBackend
+from sqlspec.adapters.asyncpg import AsyncpgConfig
+from sqlspec.extensions.events import AsyncEventChannel
+from sqlspec.extensions.litestar.channels import SQLSpecChannelsBackend
+
+
+def create_channels_plugin(channels_db: AsyncpgConfig) -> ChannelsPlugin:
+    backend = SQLSpecChannelsBackend(
+        AsyncEventChannel(channels_db),
+        output_queue_capacity=1024,
+    )
+    return ChannelsPlugin(
+        backend=backend,
+        arbitrary_channels_allowed=True,
+        create_ws_route_handlers=False,
+    )
 
 
 class AppSingletonsProvider(Provider):
@@ -75,6 +91,44 @@ class AppSingletonsProvider(Provider):
     def provide_channels_backend(self, app: Litestar) -> ChannelsBackend:
         return app.channels._backend
 ```
+
+### Config-Backed Services with Dishka (`Scope.APP` Config/Loader + `Scope.REQUEST` Service)
+
+Holding a pooled `asyncpg` connection open for the entire HTTP request lifecycle (`Scope.REQUEST` yielding `AsyncDriverAdapterBase`) can starve the connection pool when handlers perform slow non-database work such as Argon2 password hashing, object-store uploads, or LLM streaming.
+
+Instead, register `AsyncpgConfig` (or `DuckDBConfig`) and `SQLFileLoader` at `Scope.APP` and construct config-backed services (`AsyncpgLoaderService(app_db, loader)`) at `Scope.REQUEST`:
+
+1. Configure `extension_config={"litestar": {"disable_di": True, "manage_lifespan": True}}` on each adapter config so `SQLSpecPlugin` manages pool teardown on app shutdown without registering unused request-scoped Litestar DI providers.
+2. Provide `AsyncpgConfig` and `SQLFileLoader` at `Scope.APP` and domain services at `Scope.REQUEST`:
+
+```python
+from dishka import Provider, Scope, provide
+from sqlspec.adapters.asyncpg import AsyncpgConfig
+from sqlspec.loader import SQLFileLoader
+
+from app.config import db, db_manager
+from app.domains.orders.services import OrderService
+
+
+class CorePersistenceProvider(Provider):
+    @provide(scope=Scope.APP)
+    def provide_app_db(self) -> AsyncpgConfig:
+        return db
+
+    @provide(scope=Scope.APP)
+    def provide_sql_loader(self) -> SQLFileLoader:
+        return db_manager.loader
+
+
+class ConfigBackedServiceProvider(Provider):
+    scope = Scope.REQUEST
+
+    @provide
+    def provide_order_service(self, app_db: AsyncpgConfig, loader: SQLFileLoader) -> OrderService:
+        return OrderService(app_db=app_db, loader=loader)
+```
+
+Each service helper call (`get_one`, `paginate`, `provide_session`, `begin_transaction`) checks out a pooled connection only for the duration of that SQL operation or transaction block and returns it immediately.
 
 ## `FromDishka as Inject` alias
 
@@ -102,7 +156,7 @@ __all__ = ["Inject", "inject"]
 | `Scope.APP` | `ChannelsBackend`, long-lived clients, config objects, caches | Created at app startup, lives until process exit |
 | `Scope.SESSION` | WebSocket connections — Dishka manages a child container per WS session | Created at `ws.accept()`, released at `ws.close()` |
 
-`Scope.SESSION` is managed internally by Dishka's `with_websocket_request` context manager — you typically don't register `Scope.SESSION` providers manually. See [`../../litestar-realtime/references/websockets.md`](../../litestar-realtime/references/websockets.md) §Dishka DI in WS handlers for details.
+`Scope.SESSION` is managed internally by Dishka's `with_websocket_request` context manager — you typically don't register `Scope.SESSION` providers manually. See [`../../litestar/references/websockets.md`](../../litestar/references/websockets.md) §Dishka DI in WS handlers for details.
 
 ## Full provider example
 
@@ -220,14 +274,14 @@ def create_app() -> Litestar:
 
 ## When Dishka is overkill
 
-Dishka's explicit scope control is most valuable when you have multiple provider classes, APP-scoped singletons, and WebSocket SESSION scope in the same app. For simpler setups — a handful of handlers, one DB pool, no pub/sub backend — Litestar's built-in `Provide` is the lighter choice. It requires no extra dependency, composes naturally with controller-level `dependencies` dicts, and keeps the DI graph implicit rather than explicit. See [`../../litestar-di/references/di.md`](../../litestar-di/references/di.md) for the full `Provide` reference.
+Dishka's explicit scope control is most valuable when you have multiple provider classes, APP-scoped singletons, and WebSocket SESSION scope in the same app. For simpler setups — a handful of handlers, one DB pool, no pub/sub backend — Litestar's built-in `Provide` is the lighter choice. It requires no extra dependency, composes naturally with controller-level `dependencies` dicts, and keeps the DI graph implicit rather than explicit. See [`../../litestar/references/di-and-dishka.md`](../../litestar/references/di-and-dishka.md) for the full `Provide` reference.
 
 ## Cross-references
 
 - [`service-patterns.md`](service-patterns.md) — `SQLSpecAsyncService` base, `db_manager.get_sql`, variadic `*filters`, `create_filter_dependencies()`
 - [`observability.md`](observability.md) — `ObservabilityConfig`, `StatementObserver`, SQL-level event broadcasting
-- [`../../litestar-di/references/di.md`](../../litestar-di/references/di.md) — Litestar built-in `Provide`; when to use it vs Dishka
-- [`../../litestar-realtime/references/websockets.md`](../../litestar-realtime/references/websockets.md) — `with_websocket_request`, Dishka `Scope.SESSION` in WS handlers
+- [`../../litestar/references/di-and-dishka.md`](../../litestar/references/di-and-dishka.md) — Litestar built-in `Provide`; when to use it vs Dishka
+- [`../../litestar/references/websockets.md`](../../litestar/references/websockets.md) — `with_websocket_request`, Dishka `Scope.SESSION` in WS handlers
 
 ## Shared Styleguide Baseline
 

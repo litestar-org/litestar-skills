@@ -199,6 +199,20 @@ For high-volume ingest, prefer `load_from_records()` or `load_from_arrow()` when
 
 ## Storage Bridge Methods
 
+### select_to_storage()
+
+Export query results directly to a local path, registered alias, or cloud URI (`s3://`, `gs://`, `az://`):
+
+```python
+job = await db_session.select_to_storage(
+    "SELECT id, total, created_at FROM orders WHERE status = $1",
+    "completed",
+    destination="gs://analytics-bucket/exports/orders.parquet",
+    format_hint="parquet",
+)
+print(job.telemetry["rows_processed"])
+```
+
 ### load_from_arrow()
 
 Load an Arrow table or coercible Arrow source into a target table through the adapter's native ingest path.
@@ -210,7 +224,7 @@ print(job.telemetry["rows_processed"])
 
 ### load_from_storage()
 
-Load a staged artifact, local path, or cloud URI into a target table.
+Load a local path, registered storage alias, or cloud URI into a target table.
 
 ```python
 job = await db_session.load_from_storage(
@@ -241,11 +255,34 @@ Empty records, mismatched mapping keys, and positional width mismatches raise `I
 
 ---
 
-## Transaction Methods
+## Transaction & Savepoint Methods
+
+### transaction() Context Manager
+
+Prefer `db_session.transaction()` (async or sync context manager) over manual `begin()` / `commit()` / `rollback()` blocks. It commits on normal exit and rolls back automatically on exception:
+
+```python
+async with db_session.transaction():
+    await db_session.execute("UPDATE accounts SET balance = balance - $1 WHERE id = $2", 100, from_id)
+    await db_session.execute("UPDATE accounts SET balance = balance + $1 WHERE id = $2", 100, to_id)
+```
+
+### Savepoints (`create_savepoint`, `release_savepoint`, `rollback_to_savepoint`)
+
+Drivers that advertise `supports_savepoints` expose explicit savepoint primitives (also used automatically by nested `SQLSpecAsyncService.begin_transaction()` calls):
+
+```python
+await db_session.create_savepoint("sp_optional_step")
+try:
+    await db_session.execute("INSERT INTO audit_events (msg) VALUES ($1)", "step")
+    await db_session.release_savepoint("sp_optional_step")
+except Exception:
+    await db_session.rollback_to_savepoint("sp_optional_step")
+```
 
 ### begin() / commit() / rollback()
 
-Use explicit transaction control only when a higher-level session or framework commit mode is not managing the transaction.
+Use low-level transaction methods only when a context manager cannot span the boundary:
 
 ```python
 await db_session.begin()
@@ -281,6 +318,7 @@ async with config.provide_session() as session:
 | `select_with_total()` / `fetch_with_total()` | `tuple[list[T], int]` | Pagination |
 | `select_stream()` / `fetch_stream()` | `SyncRowStream` / `AsyncRowStream` | Context-managed chunk stream |
 | `select_to_arrow()` / `fetch_to_arrow()` | `ArrowResult` | `return_format="table" \| "batch" \| "batches" \| "reader"` |
+| `select_to_storage()` | `StorageBridgeJob` | Export query results to local/cloud storage |
 | `execute()` | `SQLResult` | Check `rows_affected`, `last_inserted_id`, `metadata` |
 | `execute_many()` | `SQLResult` | Batch parameters |
 | `execute_script()` | `SQLResult` | Multi-statement script execution |
@@ -288,3 +326,5 @@ async with config.provide_session() as session:
 | `load_from_arrow()` | `StorageBridgeJob` | Native ingest where supported |
 | `load_from_storage()` | `StorageBridgeJob` | Staged files/cloud URIs |
 | `load_from_records()` | `StorageBridgeJob` | Records normalized through Arrow |
+| `transaction()` | Context manager | Atomic transaction scope on the driver |
+| `create_savepoint()` / `release_savepoint()` / `rollback_to_savepoint()` | `SQLResult` | Savepoint lifecycle within an open transaction |

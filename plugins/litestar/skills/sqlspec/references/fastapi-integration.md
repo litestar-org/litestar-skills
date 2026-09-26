@@ -257,13 +257,16 @@ What the filter keys advertise as query parameters:
 | `id_filter=UUID` | `?ids=<uuid>&ids=<uuid>` | `InCollectionFilter(field_name="id", values=[...])` |
 | `created_at=True` | `?createdBefore=<iso>&createdAfter=<iso>` | `BeforeAfterFilter(field_name="created_at", before=..., after=...)` |
 | `updated_at=True` | `?updatedBefore=<iso>&updatedAfter=<iso>` | `BeforeAfterFilter(field_name="updated_at", ...)` |
-| `pagination_type="limit_offset"` | `?currentPage=<n>&pageSize=<n>` | `LimitOffsetFilter(limit=page_size, offset=page_size * (currentPage - 1))` |
+| `pagination_type="limit_offset"` | `?currentPage=<n>&pageSize=<n>` | `LimitOffsetFilter(limit=page_size, offset=page_size * (currentPage - 1))` (capped by `pagination_max_size`, default `1000`) |
+| `pagination_type="cursor"` | `?cursor=<token>&pageSize=<n>` | `CursorFilter(cursor=..., limit=page_size, keys=..., secret=...)` |
 | `search="col1,col2"` | `?searchString=<q>&searchIgnoreCase=<bool>` | `SearchFilter(field_name={"col1","col2"}, value=q, ignore_case=...)` |
-| `sort_field="created_at"` | `?orderBy=<col>&sortOrder=<asc\|desc>` | `OrderByFilter(field_name=col, sort_order=...)` |
-| `in_fields=FieldNameType("status", str)` | `?statusIn=<v>&statusIn=<v>` | `InCollectionFilter(field_name="status", values={...})` |
-| `not_in_fields=FieldNameType("status", str)` | `?statusNotIn=<v>` | `NotInCollectionFilter(field_name="status", values={...})` |
+| `sort_field="created_at"` | `?orderBy=<col>&sortOrder=<asc\|desc>` | `OrderByFilter(field_name=col, sort_order=...)` (supports `sort_field_aliases` & `sort_field_camelize`) |
+| `in_fields=[FieldNameType("status", str)]` | `?statusIn=<v>&statusIn=<v>` | `InCollectionFilter(field_name="status", values={...})` |
+| `not_in_fields=[FieldNameType("status", str)]` | `?statusNotIn=<v>` | `NotInCollectionFilter(field_name="status", values={...})` |
 | `null_fields="notes"` | `?notesIsNull=true` | `NullFilter(field_name="notes")` |
 | `not_null_fields="notes"` | `?notesIsNotNull=true` | `NotNullFilter(field_name="notes")` |
+| `boolean_fields="is_active"` | `?isActive=<bool>` | `BooleanFilter(field_name="is_active", value=...)` |
+| `choice_fields=[ChoiceField("tier", ("free", "pro"))]` | `?tier=<choice>` | `ChoicesFilter(field_name="tier", choices=..., value=...)` |
 
 The returned callable is memoized on the hashed `FilterConfig`, so calling `db_plugin.provide_filters(same_config)` twice reuses the same dynamically-generated function. Build the filter dependency at module scope and reference the variable in route signatures — don't reconstruct it inside `Annotated[...]` because that regenerates the signature every request.
 

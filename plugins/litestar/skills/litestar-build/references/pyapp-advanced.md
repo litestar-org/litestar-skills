@@ -38,25 +38,17 @@ Three things make this different from simple hatch-binary:
 
 ## The bundler
 
-`tools/bundler.py` is a single-file script (runs with `uv run`, has its own deps pinned in the shebang header):
+`tools/bundler.py` is a single-file PEP 723 script (runs with `uv run`, with `rich-click`, `rich`, and `tomli; python_version < '3.11'` declared in its `/// script` header):
 
 ```python
-# tools/bundler.py:1-8
-#!/usr/bin/env python3
-# /// script
-# dependencies = [
-#   "rich-click",
-#   "rich",
-#   "tomli; python_version < '3.11'",
-# ]
-# ///
 """Bundle Python dependencies into a standalone distribution for PyApp."""
 ```
 
 ### Target mapping
 
+`DEFAULT_PLATFORMS` maps Rust target triples to `uv --python-platform` values (not PEP 425 wheel tags), using `manylinux_2_28` when native wheels such as `duckdb` require glibc 2.28+:
+
 ```python
-# tools/bundler.py:45-62
 DEFAULT_URLS: dict[str, str] = {
     "x86_64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
     "aarch64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz",
@@ -65,8 +57,6 @@ DEFAULT_URLS: dict[str, str] = {
     "x86_64-pc-windows-msvc": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
 }
 
-# uv --python-platform values (NOT PEP 425 wheel tags)
-# manylinux_2_28 required because duckdb only provides wheels for glibc 2.28+
 DEFAULT_PLATFORMS: dict[str, str] = {
     "x86_64-unknown-linux-gnu": "x86_64-manylinux_2_28",
     "aarch64-unknown-linux-gnu": "aarch64-manylinux_2_28",
@@ -81,32 +71,35 @@ DEFAULT_PLATFORMS: dict[str, str] = {
 ### Build flow
 
 ```python
-# tools/bundler.py:599-738 (abbreviated)
-def build_bundle(...):
-    # 1. Download python-build-standalone archive to cache
+def build_bundle(
+    url: str,
+    cache_dir: Path,
+    extract_dir: Path,
+    target: str,
+    python_version: str,
+    requirements_path: Path,
+    resolved_platform: str,
+    resolved_python_version: str,
+    pyapp_dir: Path | None,
+    resolved_install_dir: Path,
+    resolved_output: Path,
+) -> None:
+    """Download a python-build-standalone archive, pre-install wheels into site-packages, optionally patch PyApp's install dir, and repack as python-dist.tar.gz."""
     archive_path = download_pbs(url, cache_dir)
-
-    # 2. Extract to a temp work dir
     extract_archive(archive_path, extract_dir)
-    python_root = resolve_python_root(extract_dir)        # e.g. extract_dir/python
-
-    # 3. Locate the site-packages inside the extracted Python
+    python_root = resolve_python_root(extract_dir)
     site_packages = find_site_packages(python_root, target, python_version)
 
-    # 4. uv pip install the app's requirements into that site-packages
     install_requirements(
         requirements_path=requirements_path,
         site_packages=site_packages,
-        platform=resolved_platform,          # e.g. x86_64-manylinux_2_28
+        platform=resolved_platform,
         python_version=resolved_python_version,
-        ...
     )
 
-    # 5. Optionally patch PyApp's Rust source for the custom install dir
     if pyapp_dir:
         patch_pyapp_install_dir(pyapp_dir, resolved_install_dir)
 
-    # 6. Repack as python-dist.tar.gz
     with tarfile.open(resolved_output, "w:gz") as tar:
         tar.add(python_root, arcname="python")
 ```
@@ -123,9 +116,8 @@ PyApp's default install dir at runtime is `platform_dirs().data_local_dir().join
 An advanced reference pattern wants `~/.<app>/runtime/` instead. It patches `src/app.rs` **before** `cargo build`:
 
 ```python
-# tools/bundler.py:431-453
 def patch_pyapp_install_dir(pyapp_dir: Path, install_dir: Path) -> None:
-    """Patch PyApp to use a custom default installation directory."""
+    """Patch PyApp src/app.rs to use a custom default installation directory."""
     app_rs = pyapp_dir / "src" / "app.rs"
     content = app_rs.read_text(encoding="utf-8")
     pattern = re.compile(
@@ -142,8 +134,8 @@ def patch_pyapp_install_dir(pyapp_dir: Path, install_dir: Path) -> None:
 The replacement Rust expression is generated to **stay relocatable** — if the target install dir is under `$HOME`, it resolves `home_dir()` at runtime:
 
 ```python
-# tools/bundler.py:417-428
 def render_install_dir_expression(install_dir: Path) -> str:
+    """Render a Rust PathBuf expression that resolves relative to home_dir() when under $HOME."""
     install_dir = install_dir.expanduser().resolve()
     home_dir = Path.home().resolve()
     with contextlib.suppress(ValueError):
@@ -205,7 +197,7 @@ sed -i 's/bzip2 = "\([^"]*\)"/bzip2 = { version = "\1", features = ["static"] }/
 sed -i '/\[dependencies\]/a bzip2-sys = { version = "*", features = ["static"] }' ${PYAPP_DIR}/Cargo.toml
 
 # 3. Build the wheel
-uv build --wheel
+uv build --wheel --clear
 
 # 4. Export requirements so bundler.py knows what to install
 uv export --frozen --no-dev --no-editable --no-hashes --no-header --no-emit-project --extra cloudrun > dist/requirements.txt
@@ -255,6 +247,7 @@ Everything the advanced build sets:
 | `PYAPP_PYTHON_VERSION` | `3.13` | cargo build | Which PBS archive to match |
 | `PYAPP_PROJECT_FEATURES` | `cloudrun` | cargo build | Pass extras to `uv pip install` at first run (ignored when `PYAPP_SKIP_INSTALL=true`) |
 | `PYAPP_DISTRIBUTION_VARIANT_CPU` | `v1` | cargo build | CPU baseline (x86-64-v1/v2/v3) |
+| `PYAPP_DISTRIBUTION_VARIANT_GIL` | *(optional)* | cargo build | On Python 3.13+, select GIL vs free-threaded (`nogil`) distribution variant |
 | `PYAPP_DISTRIBUTION_PATH` | `dist/python-dist.tar.gz` | cargo build | Use pre-built tarball instead of downloading PBS |
 | `PYAPP_DISTRIBUTION_EMBED` | `true` | cargo build | Embed the tarball *in* the binary |
 | `PYAPP_DISTRIBUTION_PYTHON_PATH` | `python/bin/python3` | cargo build | Path to Python *inside* the tarball |
@@ -265,7 +258,7 @@ Everything the advanced build sets:
 | `BZIP2_SYS_STATIC` | `1` | cargo build | Link libbz2 statically |
 | `LZMA_API_STATIC` | `1` | cargo build | Link liblzma statically |
 
-**Critical:** these are **build-time** env vars, consumed while compiling PyApp. Setting them when running the binary does nothing. `PYAPP_PROJECT_NAME` at runtime is a no-op; the compiled binary already has the name baked into the Rust source.
+**Critical:** `PYAPP_*` configuration variables are **build-time** env vars, consumed while compiling PyApp. Setting `PYAPP_PROJECT_NAME` when running the binary is a no-op; the compiled binary already has the name baked into the Rust source. At runtime, the PyApp wrapper sets `PYAPP=1` (or the executable path when compiled with `PYAPP_PASS_LOCATION=1`) inside the spawned Python environment so application code can detect onefile execution via `os.getenv("PYAPP")`.
 
 ## glibc portability with `cargo-zigbuild`
 

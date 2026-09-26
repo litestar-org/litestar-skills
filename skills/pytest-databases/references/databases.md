@@ -66,9 +66,19 @@ def test_mysql_coordinates(mysql_service: MySQLService) -> None:
 ```
 
 Pass these attributes to the project's MySQL client in the integration test.
-Apply the same pattern to MariaDB, Dolt, SQL Server, YugabyteDB, Redis,
-Dragonfly, KeyDB, Valkey, MinIO, and RustFS. The package validates those
-services without forcing a Python client dependency.
+Apply the same service-fixture pattern to MariaDB, Dolt, SQL Server, YugabyteDB,
+Redis, Dragonfly, KeyDB, Valkey, Elasticsearch, MinIO, and RustFS:
+
+- **Clientless service modules** (`mysql`, `mariadb`, `dolt`, `mssql`,
+  `yugabyte`, `minio`, `rustfs`) validate readiness via container commands or
+  HTTP checks without importing a Python driver.
+- **Health-check client modules** (`redis` for Redis/Dragonfly/KeyDB, `valkey`
+  for Valkey, and `elastic_search` for Elasticsearch 7/8) import `redis`,
+  `valkey`, or `elasticsearch7` at module load time to run readiness checks,
+  even though they only expose `*_service` fixtures.
+- In `v0.19.0`, `elasticsearch_service` has an unresolved fixture parameter
+  (`elasticsearch8_service` instead of `elasticsearch_8_service`); request
+  `elasticsearch_8_service` or `elasticsearch_7_service` directly.
 
 ## Ready vendor clients
 
@@ -84,7 +94,8 @@ Use the provided client fixture when it matches the project's stack:
 - `oracle_18c_connection` and `oracle_23ai_connection`
 
 The published `oracle_startup_connection` alias has an unresolved fixture
-dependency in 0.19.0; see [reference.md](reference.md) before using it.
+dependency (`oracle_23ai_startup_connection`) in 0.19.0; use
+`oracle_23ai_connection` or `oracle_18c_connection` instead.
 
 MinIO and RustFS expose S3-compatible service coordinates but no bundled S3
 client. Use `boto3`, `minio`, or the client already present in the project.

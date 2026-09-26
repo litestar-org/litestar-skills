@@ -16,11 +16,18 @@ middleware runs for every path it is not told to skip. Litestar's answer is the
 middleware's `exclude` argument, and `exclude` on `SecurityConfig` is the same
 mechanism spelled the same way.
 
-Litestar's other escape hatch, the `exclude_from_auth` opt, is deliberately
-narrower here: honored on an individual route handler, **rejected** on a
-router, controller, or application, because a layer-level exclusion opens a
-whole subtree without naming what is in it. Routers built by another plugin
-expose `opt` only at the router level, so path patterns are the route to take.
+Litestar's other escape hatch, the `exclude_from_auth` opt (configurable via
+`SecurityConfig.exclude_opt_key`), is also honored across all ownership layers
+(handler, controller, router, or application) by truthiness, with the innermost
+owner winning:
+
+- A handler under an excluded router or controller can opt back into
+  authentication with `opt={"exclude_from_auth": False}` or an explicit `auth=`
+  policy.
+- Declaring both `auth` and a truthy `exclude_from_auth` on the **same**
+  ownership layer is rejected at startup (`Route declares both auth and exclude_from_auth`).
+- For routers built by third-party plugins whose `opt` you do not control, use
+  `SecurityConfig(exclude=[...])` path patterns.
 
 ## Excluding Paths
 
@@ -134,10 +141,50 @@ operations = Router(path="/", route_handlers=[queue_router], opt={"auth": requir
 Because the wrapper declares a policy, the wrapped routes must not also match
 an exclusion pattern.
 
+## Machine-Only Plugin Surfaces (e.g. `litestar-mcp`)
+
+Machine surfaces like `/mcp` authenticate with API keys or IAP assertions and
+have no browser cookie to pair with a CSRF header. Restricting their policy to
+non-session mechanisms (`required("api-key", "google-iap")` or
+`required(mechanism("api-key"))`) keeps the surface fail-closed while making
+`SecurityPlugin` derive the browser CSRF exemption automatically.
+
+You can pass `route_opt={"auth": required(mechanism("api-key"))}` directly on
+`MCPConfig` (or `opt = {"auth": required(mechanism("api-key"))}` on a dedicated
+MCP controller), or stamp `AUTH_POLICY_OPT_KEY` on `/mcp` handlers via an
+`InitPluginProtocol` before `SecurityPlugin` compiles routes:
+
+```python
+from litestar.config.app import AppConfig
+from litestar.plugins import InitPluginProtocol
+from litestar.router import Router
+from litestar.routes import HTTPRoute
+from litestar_security.authentication import AUTH_POLICY_OPT_KEY, required
+
+
+class MCPRoutePolicy(InitPluginProtocol):
+    __slots__ = ("base_path", "iap_enabled")
+
+    def __init__(self, *, base_path: str = "/mcp", iap_enabled: bool = False) -> None:
+        self.base_path = base_path
+        self.iap_enabled = iap_enabled
+
+    def on_app_init(self, app_config: AppConfig) -> AppConfig:
+        policy = required("api-key", "google-iap") if self.iap_enabled else required("api-key")
+        for registered in app_config.route_handlers:
+            if not (isinstance(registered, Router) and registered.path == self.base_path):
+                continue
+            for route in registered.routes:
+                if isinstance(route, HTTPRoute):
+                    for handler in route.route_handlers:
+                        handler.opt[AUTH_POLICY_OPT_KEY] = policy
+        return app_config
+```
+
 ## Cross-References
 
 - **[Authentication](authentication.md)** — the policy helpers and ownership layers.
-- **[litestar-plugins](../../litestar-plugins/SKILL.md)** — plugin registration order and init hooks.
+- **[Litestar plugins](../../litestar/references/plugins.md)** — plugin registration order and init hooks.
 
 ## Official References
 

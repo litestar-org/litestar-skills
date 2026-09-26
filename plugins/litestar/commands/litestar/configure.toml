@@ -23,16 +23,18 @@ This is the pattern used in [litestar-fullstack](https://github.com/litestar-org
 ```python
 from __future__ import annotations
 
-import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any, Callable, TypeVar
+import os
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 
 TRUE_VALUES = frozenset({"True", "true", "1", "yes", "Y", "y", "T", "t"})
 
-def get_env(key: str, default: Any = None) -> Callable:
+
+def get_env(key: str, default: Any = None) -> Callable[[], Any]:
     \"\"\"Return a field default_factory that reads an env var with type coercion.\"\"\"
     def _factory() -> Any:
         value = os.environ.get(key)
@@ -48,19 +50,19 @@ def get_env(key: str, default: Any = None) -> Callable:
     return _factory
 
 
-@dataclass
+@dataclass(frozen=True)
 class DatabaseSettings:
     URL: str = field(default_factory=get_env("DATABASE_URL", "postgresql+asyncpg://localhost/app"))
     POOL_SIZE: int = field(default_factory=get_env("DATABASE_POOL_SIZE", 10))
     ECHO: bool = field(default_factory=get_env("DATABASE_ECHO", False))
 
 
-@dataclass
+@dataclass(frozen=True)
 class RedisSettings:
     URL: str = field(default_factory=get_env("REDIS_URL", "redis://localhost:6379/0"))
 
 
-@dataclass
+@dataclass(frozen=True)
 class AppSettings:
     NAME: str = field(default_factory=get_env("APP_NAME", "My Litestar App"))
     DEBUG: bool = field(default_factory=get_env("APP_DEBUG", False))
@@ -75,9 +77,9 @@ def get_settings() -> AppSettings:
     return AppSettings()
 ```
 
-Scaffold this at `lib/settings.py` with the `get_env` utility at `utils/env.py`.
+Scaffold this at `lib/settings.py` with the `get_env` utility at `utils/env.py` (see `skills/litestar/SKILL.md` and `skills/litestar/references/settings.md`, including PEP 562 module-level `__getattr__` when lazy module-attribute access is needed).
 
-**When `@dataclass` fits:**
+**When `@dataclass(frozen=True)` fits:**
 - Zero runtime dependency (no `pydantic-settings` install needed) — leaner startup, leaner wheel
 - Same `@lru_cache` pattern for singleton settings
 - Type coercion via `get_env()` is explicit and debuggable
@@ -93,6 +95,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -110,7 +113,7 @@ class AppSettings(BaseSettings):
     name: str = "My Litestar App"
     debug: bool = False
     secret_key: str = "change-me-in-production"
-    database: DatabaseSettings = DatabaseSettings()
+    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
 
 
 @lru_cache(maxsize=1)
@@ -118,7 +121,7 @@ def get_settings() -> AppSettings:
     return AppSettings()
 ```
 
-**When `pydantic_settings` fits:** the project already depends on Pydantic (shared DTOs, SQLModel, FastAPI migration, JSON Schema-driven contracts). `BaseSettings` gives automatic `.env` loading, `env_nested_delimiter` for nested models, field-level validation, and CLI / secret-store integration. If you're starting fresh with no existing Pydantic dependency, `@dataclass` + `get_env()` keeps the dependency graph leaner. Both patterns are fully supported — pick based on what's already in your project, not on which is "canonical."
+**When `pydantic_settings` fits:** the project already depends on Pydantic (shared DTOs, SQLModel, FastAPI migration, JSON Schema-driven contracts). `BaseSettings` gives automatic `.env` loading, `env_nested_delimiter` for nested models, field-level validation, and CLI / secret-store integration. If you're starting fresh with no existing Pydantic dependency, `@dataclass(frozen=True)` + `get_env()` keeps the dependency graph leaner. Both patterns are fully supported — pick based on what's already in your project, not on which is "canonical."
 
 ### C) Simple single-file config (tutorials / demos)
 
@@ -127,17 +130,20 @@ For quick starts that don't need the full `get_env()` machinery:
 ```python
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
+import os
 
 
 @dataclass(frozen=True)
 class Settings:
+    \"\"\"Tutorial-only singleton settings loaded at module import time.\"\"\"
+
     database_url: str = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///app.db")
     secret_key: str = os.environ.get("SECRET_KEY", "dev-secret")
     debug: bool = os.environ.get("DEBUG", "false").lower() in ("true", "1", "yes")
 
-settings = Settings()  # singleton at module level
+
+settings = Settings()
 ```
 
 **Trade-off:** reads env at import time (not test-friendly), no nested config, no type-safe coercion. Fine for demos; refactor to option A for production.
@@ -146,18 +152,32 @@ settings = Settings()  # singleton at module level
 
 Present this menu:
 
-1. **litestar-granian** — Granian ASGI server
-2. **litestar-saq** — Async task queue (Redis or Postgres backend)
-3. **litestar-vite** — Frontend build (React / Vue / Svelte / HTMX / Inertia / Angular / Astro)
-4. **litestar-mcp** — MCP tools/resources over Streamable HTTP + JSON-RPC 2.0
-5. **litestar-email** — Email (SMTP / SendGrid / Resend / Mailgun / InMemory)
-6. **litestar-htmx** — HTMX integration (HTMXRequest, hx-ext="litestar" templating)
-7. **advanced-alchemy** — SQLAlchemy ORM + Repository Service + OffsetPagination + Alembic
-8. **sqlspec** — Low-level SQL adapter + query builder + Arrow + framework extensions
-9. **pytest-databases** — Container-based database test fixtures
-10. **litestar-deployment** — Docker / Railway / K8s / Cloud Run / systemd scaffolding
-11. **litestar-autowire** — Domain-package controller, listener, and optional task discovery
-12. **litestar-security** — Declarative auth: sessions, MFA, passkeys, OAuth/OIDC, role/scope guards, CSP
+1. **litestar-granian** — Granian ASGI server (`GranianPlugin`, HTTP/2, TLS, worker lifecycle — `skills/litestar-granian/SKILL.md`)
+2. **litestar-queues** — First-party task queues (`QueuePlugin`, `QueueConfig`, `WorkerConfig`, `QueueService`, `@task`, SQLSpec / Advanced Alchemy / Redis / Valkey backends — `skills/litestar-queues/SKILL.md`)
+3. **litestar-saq** — SAQ async task queue (`SAQPlugin`, `SAQConfig`, `QueueConfig`, `CronJob`, Redis or PostgreSQL broker — `skills/litestar-saq/SKILL.md`)
+4. **litestar-vite** — Frontend build, asset pipeline, and Inertia server-driven React / Vue / Svelte SPAs (`VitePlugin`, `ViteConfig`, `PathConfig`, `RuntimeConfig`, `TypeGenConfig`, `InertiaConfig` — `skills/litestar-vite/SKILL.md`, `skills/litestar-vite/references/inertia.md`)
+5. **litestar-htmx** — HTMX server-driven partials (`HTMXPlugin`, `HTMXConfig`, `HTMXRequest`, `HTMXTemplate`, `HX-*` response helpers — `skills/litestar-htmx/SKILL.md`)
+6. **litestar-mcp** — MCP tools, resources, and prompts over Streamable HTTP / stdio + OIDC (`LitestarMCP`, `MCPConfig`, `MCPAuthConfig` — `skills/litestar-mcp/SKILL.md`)
+7. **litestar-email** — Transactional email (`EmailPlugin`, `EmailConfig`, `EmailService`, `SMTPConfig` / `ResendConfig` / `SendGridConfig` / `MailgunConfig` / `SESConfig` / `memory` / `console` — `skills/litestar-email/SKILL.md`)
+8. **advanced-alchemy** — SQLAlchemy ORM + `SQLAlchemyAsyncRepositoryService` + `OffsetPagination` + Alembic (`skills/advanced-alchemy/SKILL.md`, `skills/litestar/references/services-and-repos.md`, `skills/litestar/references/filters-and-pagination.md`)
+9. **sqlspec** — SQL query runner + 19 driver adapters + `SQLSpecAsyncService` + `SQLFileLoader` + Arrow + ADK stores (`skills/sqlspec/SKILL.md`, `skills/litestar/references/services-and-repos.md`, `skills/litestar/references/filters-and-pagination.md`)
+10. **litestar-security** — Declarative auth: sessions, MFA, passkeys, OAuth/OIDC, `AuthorizationSnapshot`, role/scope/tenant guards, CSP (`SecurityPlugin`, `SecurityConfig` — `skills/litestar-security/SKILL.md`)
+11. **litestar-autowire** — Domain-package controller, listener, Dishka, and queue discovery (`AutowirePlugin`, `AutowireConfig` — `skills/litestar-autowire/SKILL.md`)
+12. **litestar-ai** — Google ADK (`LlmAgent`, `Runner`, `SQLSpecSessionService`), Vertex AI, SSE agent chats (`skills/litestar-ai/SKILL.md`)
+13. **pytest-databases** & **polyfactory** — Container-based database test fixtures (`skills/pytest-databases/SKILL.md`) and model/DTO test factories (`skills/polyfactory/SKILL.md`, `skills/litestar-testing/SKILL.md`)
+14. **litestar-build** & **litestar-deployment** — Wheel / PyApp single-binary builds (`skills/litestar-build/SKILL.md`) and Docker / Railway / K8s / Cloud Run / GKE / systemd runtime scaffolding (`skills/litestar-deployment/SKILL.md`)
+
+For core Litestar subsystem configuration, also consult:
+- `skills/litestar/SKILL.md` — App bootstrap, `[tool.litestar]` / `litestar.toml` CLI discovery, and stack routing (`skills/litestar/references/app-and-lifecycle.md`, `skills/litestar/references/cli-and-config.md`)
+- `skills/litestar/references/handlers.md` & `skills/litestar/references/layout.md` — Controllers, Routers, route handlers, and domain layout
+- `skills/litestar/references/dtos.md`, `skills/litestar/references/openapi.md`, & `skills/msgspec/SKILL.md` — DTOs, OpenAPI schema config, and `msgspec.Struct` conventions
+- `skills/litestar/references/di-and-dishka.md` — `Provide()`, `NamedDependency`, `SkipValidation`, and Dishka `FromDishka`
+- `skills/litestar/references/auth-and-guards.md` — Native Litestar `Guard` functions and `ASGIConnection` auth
+- `skills/litestar/references/exceptions.md` — `ApplicationError` hierarchy and `exception_handlers`
+- `skills/litestar/references/middleware.md` — `ASGIMiddleware`, `CORSConfig`, `CSRFConfig`, `AllowedHostsConfig`, `CompressionConfig`
+- `skills/litestar/references/plugins.md` — `InitPlugin`, `CLIPluginProtocol`, `SerializationPluginProtocol`, `OpenAPISchemaPluginProtocol`
+- `skills/litestar/references/channels-and-sse.md` & `skills/litestar/references/websockets.md` — WebSockets (`@websocket`, `websocket_listener`), SSE (`ServerSentEvent`), and `ChannelsPlugin` pub/sub fan-out
+- `skills/litestar-styleguide/SKILL.md` — Shared Python / TypeScript / testing style baseline
 
 For each selected library:
 
@@ -170,13 +190,18 @@ For each selected library:
 
 ### Library-specific notes
 
-- **litestar-vite**: ask which frontend framework; scaffold the matching `vite.config.ts` from `skills/litestar-vite/references/modes.md`
-- **litestar-saq**: ask for queue backend (Redis or Postgres); configure `QueueConfig` with the chosen DSN; add `use_server_lifespan=True`
-- **litestar-mcp**: show which routes are marked with `mcp_tool=` / `mcp_resource=` and how to test with `POST /mcp`
-- **advanced-alchemy**: if no models exist yet, scaffold an example domain using `/litestar:new-domain`
-- **sqlspec**: ask which database adapter (asyncpg, psycopg, oracledb, duckdb, etc.); scaffold the adapter config
-- **pytest-databases**: add to `[project.optional-dependencies.test]`, create `tests/conftest.py` with fixtures
-- **litestar-autowire**: configure `domain_packages`; add `dishka` or `queues` only when those integrations are already in the project
+- **litestar-vite**: ask which frontend framework; scaffold the matching `vite.config.ts` from `skills/litestar-vite/references/modes.md`. For Inertia SPAs, configure via `VitePlugin(config=ViteConfig(inertia=InertiaConfig(...)))`; do not register a separate `InertiaPlugin` alongside `VitePlugin` (`skills/litestar-vite/references/inertia.md`)
+- **litestar-htmx**: register `HTMXPlugin()` from `litestar_htmx` and use `HTMXRequest` / `HTMXTemplate` / `HX-*` response helpers; note that `hx-ext="litestar"` is a client helper from `litestar-vite-plugin`, not `litestar-htmx` (`skills/litestar-htmx/SKILL.md`)
+- **litestar-queues**: ask which backend matches the project's stack (`SQLSpecBackendConfig`, `SQLAlchemyBackendConfig`, `RedisBackendConfig`, `ValkeyBackendConfig`, or ephemeral in-memory); wire `QueuePlugin(config=QueueConfig(backend=..., workers=[WorkerConfig(...)]))` and inject `NamedDependency[QueueService]` (`skills/litestar-queues/SKILL.md`)
+- **litestar-saq**: ask for queue backend (Redis or Postgres); configure `QueueConfig` with the chosen DSN; add `use_server_lifespan=True` when sharing the web process in dev (`skills/litestar-saq/SKILL.md`)
+- **litestar-mcp**: show which routes are marked with `mcp_tool=` / `mcp_resource=` / `mcp_prompt=` or registered via `@mcp.tool` / `@mcp.resource` / `@mcp.prompt`, and how to test with `POST /mcp` (`skills/litestar-mcp/SKILL.md`)
+- **litestar-email**: configure `EmailPlugin(config=EmailConfig(backend=...))` (`"memory"`, `"console"`, `SMTPConfig`, `ResendConfig`, `SendGridConfig`, `MailgunConfig`, or `SESConfig`) and inject `email_service: NamedDependency[EmailService]` (`skills/litestar-email/SKILL.md`)
+- **litestar-granian**: register `GranianPlugin()` in `plugins=[...]` and run via `litestar run` (`skills/litestar-granian/SKILL.md`)
+- **advanced-alchemy**: if no models exist yet, scaffold an example domain using `/litestar:new-domain` (`skills/advanced-alchemy/SKILL.md`)
+- **sqlspec**: ask which database adapter (asyncpg, psycopg, aiosqlite, oracledb, duckdb, adbc, etc.); scaffold the adapter config and `SQLSpecPlugin` (`skills/sqlspec/SKILL.md`)
+- **litestar-security**: configure `SecurityPlugin(SecurityConfig(session=..., principal_resolver=..., exclude=[...]))`; subclass `SecureController` (`auth: ClassVar[AuthenticationPolicy] = required(...)` / `any_of(...)`) or `PublicController` on domain controllers (reserving `opt={"auth": ...}` for third-party/plugin controllers) and place authorization predicates (`requires_role`, `requires_scope`, `requires_tenant`) in `guards=[...]` (`skills/litestar-security/SKILL.md`)
+- **pytest-databases**: add to `[project.optional-dependencies.test]` or `[dependency-groups]`, create `tests/conftest.py` with fixtures (`skills/pytest-databases/SKILL.md`)
+- **litestar-autowire**: configure `domain_packages`; add `"dishka"` or `"queues"` to `integrations` only when those libraries are already in the project (`skills/litestar-autowire/SKILL.md`)
 
 ## Option 3: Environment Setup
 
@@ -196,7 +221,7 @@ For users structuring their `server/` module, show these canonical patterns:
 
 The app's core wiring lives in a single `InitPlugin` class. This class:
 - Sets `debug`, `openapi_config`, `cors_config`, `session_config`
-- Registers all plugins (structlog, granian, alchemy, vite, saq, email, domain)
+- Registers all plugins (structlog, granian, alchemy/sqlspec, vite, queues/saq, email, domain)
 - Adds exception handlers, signature namespace types, middleware
 - Implements `CLIPluginProtocol` when it also needs to register CLI command groups
 
@@ -208,7 +233,7 @@ class ApplicationCore(InitPlugin, CLIPluginProtocol):
     def on_app_init(self, app_config: AppConfig) -> AppConfig:
         settings = get_settings()
         app_config.debug = settings.app.DEBUG
-        app_config.openapi_config = OpenAPIConfig(title=settings.app.NAME, ...)
+        app_config.openapi_config = OpenAPIConfig(title=settings.app.NAME, version="1.0.0")
         app_config.cors_config = config.cors
         app_config.exception_handlers = {ApplicationError: exception_to_http_response}
         app_config.plugins.extend([
@@ -291,10 +316,13 @@ autowire = AutowirePlugin(
     AutowireConfig(domain_packages=["app.domain"])
 )
 
+
 @cache
 def get_saq_plugin() -> SAQPlugin:
     return SAQPlugin(config=config.get_saq_config())
 ```
+
+For projects on `litestar-queues` instead of `litestar-saq`, wire `queues = QueuePlugin(config=config.queues)` in `server/plugins.py` (see `skills/litestar-queues/SKILL.md`).
 
 **Why `@cache` for SAQ:** SAQ connects to Redis at plugin instantiation. Using `@cache` defers the connection to first access — avoids requiring Redis during `import` (important for Docker builds, tests, CLI commands that don't need SAQ).
 

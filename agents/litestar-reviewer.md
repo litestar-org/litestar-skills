@@ -21,10 +21,11 @@ For every file in the review scope, evaluate against the 12 criteria below (from
 Before flagging any violation, detect the project's stack:
 
 1. `grep -REn "^from (advanced_alchemy|sqlspec|sqlalchemy)\b" src/ app/ 2>/dev/null | head` — determine data-access layer (`advanced-alchemy` / `sqlspec` / raw-SQLAlchemy).
-2. `grep -REn "^from dishka\b|FromDishka\[" src/ app/ 2>/dev/null | head` — determine DI (Dishka `Inject[T]` vs built-in `Provide()`).
-3. `grep -REn "^from pydantic_settings\b|BaseSettings\b|^from dataclasses\b" src/ app/ 2>/dev/null | head` — determine settings pattern (`@dataclass` + `get_env()` vs `pydantic_settings.BaseSettings`).
+2. `grep -REn "^from dishka\b|FromDishka\[" src/ app/ 2>/dev/null | head` — determine DI (Dishka `Inject[T]` vs built-in `Provide()` + `NamedDependency[T]`).
+3. `grep -REn "^from pydantic_settings\b|BaseSettings\b|^from dataclasses\b" src/ app/ 2>/dev/null | head` — determine settings pattern (`@dataclass(frozen=True)` + `get_env()` vs `pydantic_settings.BaseSettings`).
 4. `grep -REn "^from msgspec\b|msgspec\.Struct|^from pydantic\b|BaseModel" src/ app/ 2>/dev/null | head` — determine serialization (msgspec vs Pydantic).
-5. Read `pyproject.toml` dependencies to corroborate the imports.
+5. `grep -REn "^from (litestar_queues|litestar_saq|litestar_security|litestar_autowire)\b" src/ app/ 2>/dev/null | head` — determine background queue (`litestar-queues` vs `litestar-saq`), auth (`litestar-security` vs native guards), and routing (`litestar-autowire` vs explicit routers).
+6. Read `pyproject.toml` dependencies to corroborate the imports.
 
 Apply each criterion against THAT stack only. A `sqlspec` project that uses `SQLSpecAsyncService` should not be flagged for "not using `SQLAlchemyAsyncRepositoryService`" — that is the exact anti-pattern we reject. Flag cross-stack imports (e.g., an `advanced_alchemy` import inside an otherwise sqlspec-only repo) and mixed settings / serialization patterns (half-dataclass, half-BaseSettings).
 
@@ -32,9 +33,9 @@ Apply each criterion against THAT stack only. A `sqlspec` project that uses `SQL
 
 1. **DTOs** — `msgspec.Struct` with the class option `rename="camel"` (canonical on msgspec stacks) OR `pydantic.BaseModel` with `alias_generator=to_camel` + `ConfigDict(populate_by_name=True)` (canonical on Pydantic stacks). Flag mixed stacks (both `msgspec.Struct` and `BaseModel` in the same request path). Do not flag Pydantic usage when Pydantic is already in-stack.
 
-2. **Guards** — auth via Guards at Controller class level, never inline `if not request.user:` checks inside handler bodies.
+2. **Guards & security** — auth via Guards at Controller class level (`skills/litestar/references/auth-and-guards.md`) or via `litestar-security` (`SecureController` with `auth: ClassVar[AuthenticationPolicy] = required(...)` / `any_of(...)` or `PublicController` on domain controllers, reserving `opt={"auth": ...}` for third-party/plugin controllers, plus `guards=[requires_role(...), requires_scope(...), requires_tenant(...)]` for synchronous snapshot-backed predicates — `skills/litestar-security/SKILL.md`), never inline `if not request.user:` checks inside handler bodies or database I/O inside guards.
 
-3. **DI** — services injected via `Provide()` or Dishka `Inject[T]` per the project's DI choice; never instantiated inside handlers.
+3. **DI** — services injected via `Provide()` + `NamedDependency[T]` / `NamedDependency[SkipValidation[T]]` or Dishka `FromDishka as Inject[T]` per the project's DI choice (`skills/litestar/references/di-and-dishka.md`); never instantiated inside handlers.
 
 4. **Data access** — repository service for the project's data layer:
    - `SQLAlchemyAsyncRepositoryService` subclass on `advanced-alchemy` stacks (canonical)
@@ -44,8 +45,8 @@ Apply each criterion against THAT stack only. A `sqlspec` project that uses `SQL
    Flag hand-rolled CRUD queries inside Controllers regardless of stack.
 
 5. **Pagination** — first-party paginated envelope + filter dependencies for the project's stack:
-   - `OffsetPagination[T]` + `create_filter_dependencies` on `advanced-alchemy` stacks (canonical)
-   - `LimitOffsetFilter` + `OrderByFilter` either returned directly OR wrapped in a project-local `OffsetPagination`-shaped envelope on `sqlspec` stacks
+   - `OffsetPagination[T]` + `create_service_dependencies` / `create_filter_dependencies` on `advanced-alchemy` stacks (canonical)
+   - `LimitOffsetFilter` + `OrderByFilter` + `OffsetPagination[T]` (`SQLSpecAsyncService.paginate` / `paginate_limit_offset`) on `sqlspec` stacks
    - `.limit()` / `.offset()` + a hand-rolled envelope on raw-SQLAlchemy stacks
 
    Flag hand-rolled `limit` / `offset` query parameters inside handlers in advanced-alchemy or sqlspec projects.
@@ -65,8 +66,8 @@ Apply each criterion against THAT stack only. A `sqlspec` project that uses `SQL
 10. **Plugins** — first-party plugins where available, matching the project's chosen stack:
     - ASGI server: Granian or uvicorn (the one the project picked)
     - Background work: `litestar-queues` or SAQ (Redis or PG broker) — parallel first-party choices; review against whichever the project picked, do not push one onto a project committed to the other
-    - Frontend: `litestar-vite` when a frontend is present
-    - Other ecosystem plugins: `litestar-security`, `litestar-mcp`, `litestar-email`, etc.
+    - Frontend: `litestar-vite` (including Inertia via `ViteConfig(inertia=InertiaConfig(...))`), `litestar-htmx` when a frontend is present
+    - Other ecosystem plugins: `litestar-security`, `litestar-autowire`, `litestar-mcp`, `litestar-email`, `ChannelsPlugin` (`skills/litestar/references/channels-and-sse.md`), `litestar-ai`, etc.
     - Data access: `advanced-alchemy` and `sqlspec` are parallel first-party choices — do not prefer one over the other in projects already committed to the other
 
 11. **Return types** — explicit annotations on all handler return values.
@@ -74,7 +75,7 @@ Apply each criterion against THAT stack only. A `sqlspec` project that uses `SQL
 12. **`from __future__ import annotations`** — present in consumer modules that use modern annotation syntax; ABSENT from modules whose runtime registries cannot resolve postponed annotations. These include:
     - shared `msgspec.Struct` base modules consumed by runtime tools that do not resolve forward references
     - Dishka `@provide` providers and `Inject[T]` sites
-    - SAQ `@task` / `CronJob` registrations
+    - `litestar-queues` `@task` registrations and `litestar-saq` `QueueConfig` / `CronJob` registrations
     - Google ADK `Tool` definitions and callback registries
     - Litestar DI `Provide()` factories and DTO model introspection
 
@@ -131,11 +132,15 @@ Top issues:
 
 Read these before starting review:
 
-- `skills/litestar/SKILL.md` — guardrails + validation checkpoint
-- `skills/litestar-data-services/references/services.md` — repository service patterns (advanced-alchemy branch)
-- `skills/sqlspec/references/service-patterns.md` — repository service patterns (sqlspec branch)
-- `skills/litestar-auth-guards/references/guards.md` — guard patterns
-- `skills/litestar-dto-openapi/references/dto.md` — DTO conventions
-- `skills/litestar-exceptions/references/exceptions.md` — error handling patterns
-- `skills/litestar-data-services/references/pagination.md` — paginated response envelopes per stack
-- `skills/litestar-saq/SKILL.md` — canonical background-work branches
+- `skills/litestar/SKILL.md` & `skills/litestar-styleguide/SKILL.md` — guardrails + validation checkpoint + style baseline
+- `skills/litestar/references/services-and-repos.md` & `skills/advanced-alchemy/SKILL.md` — repository service patterns (advanced-alchemy branch)
+- `skills/sqlspec/references/service-patterns.md` & `skills/sqlspec/SKILL.md` — repository service patterns (sqlspec branch)
+- `skills/litestar/references/auth-and-guards.md` & `skills/litestar-security/SKILL.md` — guard and security policy patterns
+- `skills/litestar/references/di-and-dishka.md` — `Provide()`, `NamedDependency`, `SkipValidation`, and Dishka `FromDishka`
+- `skills/litestar/references/dtos.md`, `skills/litestar/references/openapi.md`, & `skills/msgspec/SKILL.md` — DTO, OpenAPI, and `msgspec.Struct` conventions
+- `skills/litestar/references/settings.md` & `skills/litestar/references/exceptions.md` — settings and error handling patterns
+- `skills/litestar/references/filters-and-pagination.md` — paginated response envelopes per stack
+- `skills/litestar-queues/SKILL.md` & `skills/litestar-saq/SKILL.md` — canonical background-work branches
+- `skills/litestar/references/handlers.md`, `skills/litestar/references/layout.md`, `skills/litestar-autowire/SKILL.md`, `skills/litestar/references/middleware.md`, & `skills/litestar/references/plugins.md` — controllers, discovery, middleware, and plugins
+- `skills/litestar-granian/SKILL.md`, `skills/litestar/references/channels-and-sse.md`, `skills/litestar/references/websockets.md`, `skills/litestar-vite/SKILL.md`, `skills/litestar-vite/references/inertia.md`, `skills/litestar-htmx/SKILL.md`, `skills/litestar-mcp/SKILL.md`, `skills/litestar-email/SKILL.md`, & `skills/litestar-ai/SKILL.md` — first-party ecosystem plugins
+- `skills/litestar-testing/SKILL.md`, `skills/pytest-databases/SKILL.md`, `skills/polyfactory/SKILL.md`, `skills/litestar-build/SKILL.md`, & `skills/litestar-deployment/SKILL.md` — testing, fixtures, factories, packaging, and deployment

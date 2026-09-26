@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -15,10 +15,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SESSION_START = REPO_ROOT / "hooks" / "session-start.sh"
 
 
-def _run(cwd: Path, env_overrides: dict[str, str]) -> dict[str, Any]:
+def _run(cwd: Path, env_overrides: dict[str, str], stdin_text: str | None = None) -> dict[str, Any]:
     overrides = {"PWD": str(cwd), **env_overrides}
     result = subprocess.run(
         [bash_executable(), str(SESSION_START)],
+        input=stdin_text,
+        stdin=subprocess.DEVNULL if stdin_text is None else None,
         capture_output=True,
         text=True,
         env=subprocess_env(overrides=overrides),
@@ -57,6 +59,48 @@ def test_codex_shape(litestar_cwd: Path) -> None:
     assert "systemMessage" not in out
 
 
+def test_antigravity_shape(litestar_cwd: Path) -> None:
+    out = _run(litestar_cwd, {"ANTIGRAVITY_PLUGIN_ROOT": "/fake/path"})
+    assert "injectSteps" in out
+    raw_steps = out["injectSteps"]
+    assert isinstance(raw_steps, list)
+    steps = cast("list[dict[str, str]]", raw_steps)
+    assert len(steps) == 1
+    assert "litestar:litestar" in steps[0]["ephemeralMessage"]
+
+
+def test_antigravity_skips_after_first_invocation(litestar_cwd: Path) -> None:
+    out = _run(
+        litestar_cwd,
+        {"ANTIGRAVITY_PLUGIN_ROOT": "/fake/path"},
+        stdin_text=json.dumps({"invocationNum": 2, "workspacePaths": [str(litestar_cwd)]}),
+    )
+    assert out == {}
+
+
+def test_antigravity_uses_stdin_workspace_paths(litestar_cwd: Path, tmp_path: Path) -> None:
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    out = _run(
+        empty_dir,
+        {"ANTIGRAVITY_PLUGIN_ROOT": "/fake/path"},
+        stdin_text=json.dumps({"invocationNum": 1, "workspacePaths": [str(litestar_cwd)]}),
+    )
+    assert "injectSteps" in out
+    assert "litestar:litestar" in out["injectSteps"][0]["ephemeralMessage"]
+
+
+def test_antigravity_empty_workspace_with_stdin_emits_empty(tmp_path: Path) -> None:
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    out = _run(
+        empty_dir,
+        {"ANTIGRAVITY_PLUGIN_ROOT": "/fake/path"},
+        stdin_text=json.dumps({"invocationNum": 1, "workspacePaths": [str(empty_dir)]}),
+    )
+    assert out == {}
+
+
 def test_cursor_shape(litestar_cwd: Path) -> None:
     out = _run(litestar_cwd, {"CURSOR_PLUGIN_ROOT": "/fake/path"})
     assert "additional_context" in out
@@ -83,9 +127,9 @@ def test_emission_is_valid_json(litestar_cwd: Path) -> None:
     for env in (
         {"CLAUDE_PLUGIN_ROOT": "/x"},
         {"CODEX_PLUGIN_ROOT": "/x"},
+        {"ANTIGRAVITY_PLUGIN_ROOT": "/x"},
         {"CURSOR_PLUGIN_ROOT": "/x"},
         {},
     ):
         out = _run(litestar_cwd, env)
-        # Round-trip via json.dumps then json.loads to confirm structure is JSON-clean.
         json.loads(json.dumps(out))

@@ -71,9 +71,9 @@ def _is_upstream(module: str) -> bool:
 def _resolve(module: str, name: str) -> object | None:
     try:
         imported = importlib.import_module(module)
+        return getattr(imported, name, None)
     except Exception:  # noqa: BLE001 - any import failure means "unverifiable"
         return None
-    return getattr(imported, name, None)
 
 
 def _accepted_keywords(obj: object) -> set[str] | None:

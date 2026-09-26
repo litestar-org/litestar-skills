@@ -1,6 +1,6 @@
 # Vector search with sqlspec
 
-This reference covers similarity search for semantic retrieval and intent classification against embeddings stored in the same transactional database as the application's data. It documents the Oracle `VECTOR_DISTANCE(..., COSINE)` pattern in full (sourced from [oracledb-vertexai-demo](https://github.com/cofin/oracledb-vertexai-demo)) with pgvector cross-reference for PostgreSQL stacks. For the Litestar handler and ADK runner that consume these services, see [`../../litestar-ai-serving/references/ai-serving.md`](../../litestar-ai-serving/references/ai-serving.md).
+This reference covers similarity search for semantic retrieval and intent classification against embeddings stored in the same transactional database as the application's data. It documents the Oracle `VECTOR_DISTANCE(..., COSINE)` pattern in full (sourced from [oracledb-vertexai-demo](https://github.com/cofin/oracledb-vertexai-demo)) with pgvector cross-reference for PostgreSQL stacks. For the Litestar handler and ADK runner that consume these services, see [`../../litestar-ai/references/adk-and-serving.md`](../../litestar-ai/references/adk-and-serving.md).
 
 ## Backend support matrix
 
@@ -10,7 +10,7 @@ This reference covers similarity search for semantic retrieval and intent classi
 | PostgreSQL + pgvector | `:a <=> :b` | `1 - (:a <=> :b)` | `LIMIT :n` |
 | SQLite + sqlite-vec | `vec_distance_cosine(:a, :b)` | `1 - vec_distance_cosine(...)` | `LIMIT :n` |
 
-This reference documents the **Oracle** path in full (sourced from `oracledb-vertexai-demo`). See [pgvector branch (short)](#pgvector-branch-short) for the PostgreSQL equivalent; full pgvector coverage will land when a canonical pgvector reference app is available.
+This reference documents the **Oracle** path in full (sourced from `oracledb-vertexai-demo`). See [pgvector & PostgreSQL Search Dialects](#pgvector--postgresql-search-dialects-pgvector-pgtextsearch-paradedb) for the PostgreSQL equivalent; full pgvector coverage will land when a canonical pgvector reference app is available.
 
 ## Vector-search service pattern (Oracle)
 
@@ -196,9 +196,9 @@ class VertexAISettings:
     CACHE_TTL_SECONDS: int = field(default_factory=lambda: int(os.getenv("VERTEX_AI_CACHE_TTL_SECONDS", "3600")))
 ```
 
-## pgvector branch (short)
+## pgvector & PostgreSQL Search Dialects (`PGVector`, `PGTextSearch`, `ParadeDB`)
 
-For PostgreSQL stacks with the `pgvector` extension, replace the Oracle `VECTOR_DISTANCE(..., COSINE)` expression with the `<=>` cosine-distance operator. Requires `CREATE EXTENSION vector` on the database.
+For PostgreSQL stacks with the `pgvector` extension, replace the Oracle `VECTOR_DISTANCE(..., COSINE)` expression with the `<=>` cosine-distance operator (or use `sql.column("embedding").vector_distance(query_vector, metric="cosine")` in the query builder). Requires `CREATE EXTENSION vector` on the database.
 
 ```sql
 SELECT id, title, description,
@@ -209,11 +209,17 @@ SELECT id, title, description,
  LIMIT :limit
 ```
 
-The `<=>` operator returns cosine distance (0 = identical, 2 = opposite); `1 - (embedding <=> :query_vector)` converts it to the same `[−1, 1]` similarity scale used in the Oracle path. See the [pgvector documentation](https://github.com/pgvector/pgvector) for index types (`ivfflat`, `hnsw`) that accelerate ANN queries at scale.
+The `<=>` operator returns cosine distance (0 = identical, 2 = opposite); `1 - (embedding <=> :query_vector)` converts it to the same `[−1, 1]` similarity scale used in the Oracle path.
+
+SQLSpec registers three PostgreSQL search dialects in `sqlspec.dialects` and probes `pg_extension` on first connection (`enable_pgvector`, `enable_pg_textsearch`, `enable_paradedb` in `driver_features`):
+
+- **`PGVector` (`dialect="pgvector"`)**: `<->` (L2), `<=>` (cosine), `<#>` (negative inner product), `<+>` (L1), `<~>` (Hamming), `<%>` (Jaccard).
+- **`PGTextSearch` (`dialect="pg_textsearch"`)**: adds the `<@>` BM25 relevance ranking operator (`content <@> 'search terms'` or `content <@> to_bm25query('terms', 'idx_name')`) on top of all `PGVector` distance operators for hybrid vector + BM25 search.
+- **`ParadeDB` (`dialect="paradedb"`)**: adds ParadeDB `pg_search` operators (`@@@`, `&&&`, `|||`, `###`) alongside `PGVector` distance operators.
 
 ## Cross-references
 
-- [`../../litestar-ai-serving/references/ai-serving.md`](../../litestar-ai-serving/references/ai-serving.md) — Litestar handler, ADK Runner wiring, Dishka provider chain, persona-augmented prompts
+- [`../../litestar-ai/references/adk-and-serving.md`](../../litestar-ai/references/adk-and-serving.md) — Litestar handler, ADK Runner wiring, Dishka provider chain, persona-augmented prompts
 - [`./service-patterns.md`](./service-patterns.md) — `SQLSpecAsyncService` base, named SQL templates, driver API
 - [`./observability.md`](./observability.md) — SQL broadcast telemetry (applies to embedding inserts if observability is needed)
 

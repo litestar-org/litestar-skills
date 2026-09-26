@@ -13,34 +13,40 @@ You are creating a new domain module following the canonical domain-driven struc
    This drives the initial model, service, schema, and controller.
 
 3. **Data access layer** — which is this project on?
-   - `advanced-alchemy` (default — opinionated ORM + repository service)
-   - `sqlspec` (direct SQL + driver methods + LimitOffsetFilter)
-   - `raw-sqlalchemy` (AsyncSession-based service, no repository abstraction)
+   - `advanced-alchemy` (default — opinionated ORM + `SQLAlchemyAsyncRepositoryService` — `skills/advanced-alchemy/SKILL.md`, `skills/litestar/references/services-and-repos.md`, `skills/litestar/references/filters-and-pagination.md`)
+   - `sqlspec` (direct SQL + `SQLSpecAsyncService` + `LimitOffsetFilter` — `skills/sqlspec/SKILL.md`, `skills/litestar/references/services-and-repos.md`, `skills/litestar/references/filters-and-pagination.md`)
+   - `raw-sqlalchemy` (`AsyncSession`-based service, no repository abstraction)
    This determines imports, service base class, pagination pattern, and Controller shape.
 
 4. **CRUD operations** — which of Create / Read (list + detail) / Update / Delete?
    Default: all four. User may exclude some (e.g., read-only domain).
 
-5. **Authentication** — does this domain need guards?
-   Options:
-   - `requires_active_user` (most common — any logged-in user)
-   - `requires_superuser` (admin-only)
-   - `requires_membership` (multi-tenant — user must be a member of the resource's tenant/team/workspace)
+5. **Authentication** — does this domain need guards or security policies?
+   - Native Litestar guards (`skills/litestar/references/auth-and-guards.md`):
+     - `requires_active_user` (most common — any logged-in user)
+     - `requires_superuser` (admin-only)
+     - `requires_membership` (multi-tenant — user must be a member of the resource's tenant/team/workspace)
+   - `litestar-security` (`skills/litestar-security/SKILL.md`):
+     - Subclass `SecureController` (`auth: ClassVar[AuthenticationPolicy] = required("session")` or `any_of(...)`) or `PublicController` (`opt = {"auth": ...}` is only for third-party/plugin controllers)
+     - `guards = [requires_role(...), requires_scope(...), requires_tenant(...)]` for snapshot-backed authorization predicates
+     - `current_user: NamedDependency[CurrentUser[User]]` in handlers that read the principal
    - None (public endpoint)
 
-6. **Background jobs** — will this domain have SAQ tasks? (e.g., import jobs, notification dispatch)
-   Default: no. If yes, create `jobs/` subpackage.
+6. **Background jobs** — will this domain dispatch background tasks? (e.g., import jobs, notification dispatch)
+   Default: no. If yes, create `jobs/` subpackage matching the project's queue library:
+   - `litestar-queues` (`@task` functions in `jobs/_{task}.py`, enqueued via `NamedDependency[QueueService]` — `skills/litestar-queues/SKILL.md`)
+   - `litestar-saq` (`async def task(ctx: dict[str, Any], ...)` functions in `jobs/_{task}.py`, enqueued via `NamedDependency[TaskQueues]` — `skills/litestar-saq/SKILL.md`)
 
-7. **Real-time events** — will this domain broadcast to WebSocket Channels?
+7. **Real-time events** — will this domain broadcast to WebSocket Channels or SSE? (`skills/litestar/references/channels-and-sse.md`, `skills/litestar/references/websockets.md`)
    Default: no. If yes, create `channels.py` with channel name patterns (broker backend already picked at app-scaffold time).
 
-8. **DI strategy** — which dependency injection does the project use?
+8. **DI strategy** — which dependency injection does the project use? (`skills/litestar/references/di-and-dishka.md`)
    Options:
-   - `provide` — Litestar built-in `Provide()` (default for small/mid apps)
+   - `provide` — Litestar built-in `Provide()` + `NamedDependency[T]` (default for small/mid apps)
    - `dishka` — Dishka `FromDishka as Inject[T]` (enterprise scope management)
    This determines how the service is injected into Controller handlers.
 
-9. **Serialization layer** — `msgspec` (default) or `pydantic`? Drives the schema base class.
+9. **Serialization layer** — `msgspec` (default — `skills/msgspec/SKILL.md`, `skills/litestar/references/dtos.md`, `skills/litestar/references/openapi.md`) or `pydantic`? Drives the schema base class.
 
 10. **Domain-specific eager-load configs** — any custom DI providers beyond the standard service injection?
     Default: no. If yes, create `deps.py` with the appropriate eager-load / join patterns for the chosen data-access layer.
@@ -65,7 +71,7 @@ domain/{name}/
 ├── channels.py               # (if real-time) Channel name patterns
 └── jobs/
     ├── __init__.py           # (if background jobs) Job registry
-    └── _{task}.py            # (if background jobs) SAQ task functions
+    └── _{task}.py            # (if background jobs) litestar-queues @task or SAQ task functions
 ```
 
 ## File content — canonical patterns
@@ -82,19 +88,22 @@ from app.lib.schema import CamelizedBaseStruct
 
 
 class {Resource}(CamelizedBaseStruct):
+    \"\"\"Public {Resource} representation with domain-specific fields.\"\"\"
+
     id: UUID
-    # TODO: add domain-specific fields
     created_at: datetime
     updated_at: datetime
 
 
 class {Resource}Create(CamelizedBaseStruct):
-    # TODO: add required creation fields
+    \"\"\"Payload for creating a {Resource}.\"\"\"
+
     pass
 
 
 class {Resource}Update(CamelizedBaseStruct):
-    # TODO: add optional update fields
+    \"\"\"Payload for partially updating a {Resource}.\"\"\"
+
     pass
 ```
 
@@ -106,20 +115,26 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from app.lib.schema import BaseSchema  # configures alias_generator=to_camel
+from app.lib.schema import BaseSchema
 
 
 class {Resource}(BaseSchema):
+    \"\"\"Public {Resource} representation configured with camelCase aliases via BaseSchema.\"\"\"
+
     id: UUID
     created_at: datetime
     updated_at: datetime
 
 
 class {Resource}Create(BaseSchema):
+    \"\"\"Payload for creating a {Resource}.\"\"\"
+
     pass
 
 
 class {Resource}Update(BaseSchema):
+    \"\"\"Payload for partially updating a {Resource}.\"\"\"
+
     pass
 ```
 
@@ -147,16 +162,18 @@ class {Resource}Service(SQLAlchemyAsyncRepositoryService[{Resource}]):
 ```python
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
-from app.lib.service import SQLSpecAsyncService
+from sqlspec.core import FilterTypes, OffsetPagination
+from sqlspec.service import SQLSpecAsyncService
 
 from app.domain.{name}.schemas import {Resource}
 
 
 class {Resource}Service(SQLSpecAsyncService):
-    async def list_and_count(self, *filters) -> tuple[list[{Resource}], int]:
-        return await self.driver.select_with_total(
+    async def list_and_count(self, *filters: FilterTypes) -> OffsetPagination[{Resource}]:
+        return await self.paginate_limit_offset(
             "SELECT * FROM {resources}",
             *filters,
             schema_type={Resource},
@@ -165,15 +182,28 @@ class {Resource}Service(SQLSpecAsyncService):
     async def get_one_or_none(self, item_id: UUID) -> {Resource} | None:
         return await self.driver.select_one_or_none(
             "SELECT * FROM {resources} WHERE id = :id",
-            parameters={{"id": item_id}},
+            {{"id": item_id}},
             schema_type={Resource},
         )
 
-    async def create(self, data: dict) -> {Resource}:
-        return await self.driver.insert_returning(
+    async def create(self, data: dict[str, Any]) -> {Resource}:
+        return await self.driver.select_one(
             "INSERT INTO {resources} (...) VALUES (...) RETURNING *",
-            parameters=data,
+            data,
             schema_type={Resource},
+        )
+
+    async def update(self, item_id: UUID, data: dict[str, Any]) -> {Resource}:
+        return await self.driver.select_one(
+            "UPDATE {resources} SET ... WHERE id = :id RETURNING *",
+            {{**data, "id": item_id}},
+            schema_type={Resource},
+        )
+
+    async def delete(self, item_id: UUID) -> None:
+        await self.driver.execute(
+            "DELETE FROM {resources} WHERE id = :id",
+            {{"id": item_id}},
         )
 ```
 
@@ -212,13 +242,13 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from litestar import Controller, get, post, patch, delete
-from litestar.di import NamedDependency
-from litestar.params import FromPath, SkipValidation  # Litestar >= 2.23
-from msgspec import to_builtins
 from advanced_alchemy.extensions.litestar.providers import create_service_dependencies
 from advanced_alchemy.filters import FilterTypes
 from advanced_alchemy.service import OffsetPagination
+from litestar import Controller, delete, get, patch, post
+from litestar.di import NamedDependency
+from litestar.params import FromPath, SkipValidation
+from msgspec import to_builtins
 
 from app.domain.{name}.schemas import {Resource}, {Resource}Create, {Resource}Update
 from app.domain.{name}.services import {Resource}Service
@@ -287,13 +317,15 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from litestar import Controller, get, post, patch, delete
-from litestar.di import NamedDependency
-from litestar.params import FromPath, SkipValidation  # Litestar >= 2.23
+from litestar import Controller, delete, get, patch, post
+from litestar.di import NamedDependency, Provide
+from litestar.params import FromPath, SkipValidation
 from msgspec import to_builtins
+from sqlspec.core import OffsetPagination
 from sqlspec.core.filters import FilterTypes
 from sqlspec.extensions.litestar.providers import create_filter_dependencies
 
+from app.domain.{name}.deps import provide_{resource}_service
 from app.domain.{name}.schemas import {Resource}, {Resource}Create, {Resource}Update
 from app.domain.{name}.services import {Resource}Service
 from app.lib.exceptions import NotFoundError
@@ -304,22 +336,24 @@ class {Resource}Controller(Controller):
     path = "/api/{name}"
     {guards_line}
     tags = ["{Resource}s"]
-    dependencies = create_filter_dependencies({{
-        "pagination_type": "limit_offset",
-        "pagination_size": 20,
-        "sort_field": "created_at",
-        "sort_order": "desc",
-        {search_fields}
-    }})
+    dependencies = {{
+        "{resource}_service": Provide(provide_{resource}_service),
+        **create_filter_dependencies({{
+            "pagination_type": "limit_offset",
+            "pagination_size": 20,
+            "sort_field": "created_at",
+            "sort_order": "desc",
+            {search_fields}
+        }}),
+    }}
 
     @get("/")
     async def list_{resources}(
         self,
         {resource}_service: NamedDependency[{Resource}Service],
         filters: NamedDependency[SkipValidation[list[FilterTypes]]],
-    ) -> list[{Resource}]:
-        rows, _total = await {resource}_service.list_and_count(*filters)
-        return rows
+    ) -> OffsetPagination[{Resource}]:
+        return await {resource}_service.list_and_count(*filters)
 
     @get("/{{item_id:uuid}}")
     async def get_{resource}(
@@ -335,6 +369,18 @@ class {Resource}Controller(Controller):
         self, data: {Resource}Create, {resource}_service: NamedDependency[{Resource}Service],
     ) -> {Resource}:
         return await {resource}_service.create(to_builtins(data))
+
+    @patch("/{{item_id:uuid}}")
+    async def update_{resource}(
+        self, item_id: FromPath[UUID], data: {Resource}Update, {resource}_service: NamedDependency[{Resource}Service],
+    ) -> {Resource}:
+        return await {resource}_service.update(item_id, to_builtins(data))
+
+    @delete("/{{item_id:uuid}}")
+    async def delete_{resource}(
+        self, item_id: FromPath[UUID], {resource}_service: NamedDependency[{Resource}Service],
+    ) -> None:
+        await {resource}_service.delete(item_id)
 ```
 
 ### `controllers/_{resource}.py` — Branch C: raw SQLAlchemy + `provide` DI
@@ -342,10 +388,14 @@ class {Resource}Controller(Controller):
 ```python
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from litestar import Controller, get
+from litestar.di import NamedDependency
+from litestar.params import FromPath
 
+from app.domain.{name}.schemas import {Resource}
 from app.domain.{name}.services import {Resource}Service
 from app.lib.exceptions import NotFoundError
 {guard_import}
@@ -357,15 +407,20 @@ class {Resource}Controller(Controller):
 
     @get("/")
     async def list_{resources}(
-        self, {resource}_service: {Resource}Service, limit: int = 20, offset: int = 0,
-    ) -> dict:
+        self,
+        {resource}_service: NamedDependency[{Resource}Service],
+        limit: int = 20,
+        offset: int = 0,
+    ) -> dict[str, Any]:
         rows, total = await {resource}_service.list_and_count(limit, offset)
         return {{"items": rows, "limit": limit, "offset": offset, "total": total}}
 
     @get("/{{item_id:uuid}}")
     async def get_{resource}(
-        self, item_id: UUID, {resource}_service: {Resource}Service,
-    ) -> "{Resource}":
+        self,
+        item_id: FromPath[UUID],
+        {resource}_service: NamedDependency[{Resource}Service],
+    ) -> {Resource}:
         row = await {resource}_service.get_one_or_none(item_id)
         if row is None:
             raise NotFoundError(detail="{Resource} not found")
@@ -374,10 +429,26 @@ class {Resource}Controller(Controller):
 
 ### Dishka DI overlay (applies to any branch)
 
-If the user chose Dishka, change handler params from `{resource}_service: {Resource}Service` to `{resource}_service: Inject[{Resource}Service]`:
+If the user chose Dishka (`skills/litestar/references/di-and-dishka.md`), change handler params from `{resource}_service: NamedDependency[{Resource}Service]` to `{resource}_service: Inject[{Resource}Service]` and decorate each route handler with `@inject` (or mount the controller under `DishkaRouter` / `AutowireConfig(integrations=["dishka"])`, because `FromDishka` parameters are not resolved without `@inject` or `DishkaRouter`):
 
 ```python
-from dishka.integrations.litestar import FromDishka as Inject
+from dishka.integrations.litestar import FromDishka as Inject, inject
+from litestar import Controller, get
+
+from app.domain.{name}.schemas import {Resource}
+from app.domain.{name}.services import {Resource}Service
+
+
+class {Resource}Controller(Controller):
+    path = "/api/{name}"
+
+    @get("/")
+    @inject
+    async def list_{resources}(
+        self,
+        {resource}_service: Inject[{Resource}Service],
+    ) -> list[{Resource}]:
+        ...
 ```
 
 After scaffolding, remind the user to register `{Resource}Service` in their Dishka `Provider` (in `lib/di.py` from the `/litestar:new-app` scaffold).
@@ -393,7 +464,7 @@ __all__ = ("controllers", "schemas", "services")
 
 ### `guards.py` (if auth selected)
 
-Generate the appropriate guard function based on the user's auth choice. Use the patterns from `skills/litestar-auth-guards/references/guards.md`.
+Generate the appropriate guard function or security policy based on the user's auth choice. Use `skills/litestar/references/auth-and-guards.md` for native `Guard` functions or `skills/litestar-security/SKILL.md` for `SecurityPlugin` policies (`SecureController` with `auth: ClassVar[AuthenticationPolicy] = required(...)` or `PublicController`, plus `guards = [requires_role(...), requires_scope(...)]`; reserve `opt = {"auth": ...}` for third-party/plugin controllers).
 
 ### `jobs/__init__.py` (if background jobs)
 
@@ -411,8 +482,7 @@ Generate the appropriate guard function based on the user's auth choice. Use the
 
 ## After generating
 
-1. **Register the domain's routes** — help the user add the controller to the app's
-   `route_handlers` list or Router composition:
+1. **Register the domain's routes** — if the project uses `litestar-autowire` (`AutowirePlugin(AutowireConfig(domain_packages=["app.domain"]))` — `skills/litestar-autowire/SKILL.md`), controllers and listeners in `app.domain.{name}` are discovered automatically. Otherwise, add the controller to the app's `route_handlers` list or `Router` composition (`skills/litestar/references/handlers.md`):
 
    ```python
    from app.domain.{name}.controllers import {Resource}Controller
@@ -420,31 +490,36 @@ Generate the appropriate guard function based on the user's auth choice. Use the
    app = Litestar(route_handlers=[..., {Resource}Controller])
    ```
 
-2. **Register DI providers** (if applicable) — add the service provider to the app's
-   `dependencies` dict (for `provide` DI) or to the Dishka `Provider` (for `dishka` DI).
+2. **Register DI providers** (if applicable) — add the service provider to the app's `dependencies` dict (for `provide` DI when not using `create_service_dependencies`) or to the Dishka `Provider` (for `dishka` DI — `skills/litestar/references/di-and-dishka.md`).
 
 3. **Create the model / schema pack** — the location depends on data-access:
-   - `advanced-alchemy`: add a SQLAlchemy model under `app/db/models/{resource}.py` extending `UUIDAuditBase`:
+   - `advanced-alchemy`: add a SQLAlchemy model under `app/db/models/{resource}.py` extending `UUIDAuditBase` (`skills/advanced-alchemy/SKILL.md`):
 
      ```python
      from advanced_alchemy.base import UUIDAuditBase
      from sqlalchemy.orm import Mapped, mapped_column
 
+
      class {Resource}(UUIDAuditBase):
+         \"\"\"SQLAlchemy model for {resources}; add Mapped[...] columns here.\"\"\"
+
          __tablename__ = "{resources}"
-         # TODO: add columns
      ```
 
-   - `sqlspec`: add a schema / TypedDict / msgspec Struct describing the row shape (no ORM model required); add a migration script with the CREATE TABLE.
-   - `raw-sqlalchemy`: same as advanced-alchemy but without `UUIDAuditBase` — use `DeclarativeBase` and handle id/created_at/updated_at columns explicitly.
+   - `sqlspec`: add a schema / TypedDict / `msgspec.Struct` describing the row shape (no ORM model required); add a SQL migration script with the `CREATE TABLE` (`skills/sqlspec/SKILL.md`).
+   - `raw-sqlalchemy`: same as advanced-alchemy but without `UUIDAuditBase` — use `DeclarativeBase` and handle `id` / `created_at` / `updated_at` columns explicitly.
 
 4. **Generate a migration** — tool depends on stack:
-   - `advanced-alchemy` / `raw-sqlalchemy`: `alembic revision --autogenerate -m "add {resources} table"`
-   - `sqlspec`: use the sqlspec migrations CLI or hand-write the SQL migration.
+   - `advanced-alchemy` / `raw-sqlalchemy`: `litestar database make-migrations -m "add {resources} table"` or `alembic revision --autogenerate -m "add {resources} table"` (`skills/advanced-alchemy/SKILL.md`)
+   - `sqlspec`: use the `litestar db` / `sqlspec` migrations CLI or hand-write the SQL migration (`skills/sqlspec/references/migrations.md`).
 
-5. **Register SAQ jobs** (if background tasks) — add the task dotted-path to the SAQ queue config in `server/plugins.py`. Broker DSN was picked at app-scaffold time (Redis or PostgreSQL).
+5. **Register background jobs** (if background tasks):
+   - `litestar-queues`: add `"app.domain.{name}.jobs"` to `QueueConfig(task_modules=[...])` or enable `AutowireConfig(integrations=["queues"])` (`skills/litestar-queues/SKILL.md`, `skills/litestar-autowire/SKILL.md`).
+   - `litestar-saq`: add the task dotted-path to `QueueConfig(tasks=[...])` in `server/plugins.py` (`skills/litestar-saq/SKILL.md`).
 
-6. **Run `make check`** — verify everything wires up clean.
+6. **Scaffold domain tests** — add handler and service tests using `AsyncTestClient`, `polyfactory` factories (`MsgspecFactory` / `ModelFactory`), and `pytest-databases` fixtures (`skills/litestar-testing/SKILL.md`, `skills/polyfactory/SKILL.md`, `skills/pytest-databases/SKILL.md`).
+
+7. **Run `make check`** — verify everything wires up clean (`skills/litestar-styleguide/SKILL.md`).
 
 ## Naming conventions
 

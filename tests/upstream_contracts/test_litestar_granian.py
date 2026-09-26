@@ -1,24 +1,36 @@
 import logging
 from importlib.metadata import version
+from typing import Any, cast, get_args
 
 import pytest
 from granian import Granian
 from granian.constants import HTTPModes, Interfaces, Loops, RuntimeModes, SSLProtocols, TaskImpl
+from granian.http import HTTP1Settings, HTTP2Settings
+from granian.log import LogLevels
+from granian.server.embed import Server as EmbeddedServer
+from litestar import Litestar
 from litestar.logging import LoggingConfig
 from litestar.plugins import CLIPluginProtocol, InitPlugin
-from litestar_granian import GranianPlugin
+from litestar_granian import GranianPlugin, __project__, __version__
+from litestar_granian._runner import main as runner_main
 from litestar_granian.cli import run_command
-from litestar_granian.logging import build_logging_config
+from litestar_granian.logging import build_logging_config, load_serialized_formatter
+from litestar_granian.plugin import StaticMode
 
 
 def test_litestar_granian_and_granian_versions() -> None:
     """Verify exact audited upstream versions for litestar-granian and granian."""
     assert version("litestar-granian") == "0.16.0"
-    assert version("granian") == "2.8.1"
+    assert __version__ == "0.16.0"
+    assert __project__ == "litestar-granian"
+    assert version("granian") == "2.8.3"
 
 
 def test_granian_plugin_contract() -> None:
     """Verify GranianPlugin initialization, protocols, and static option validation."""
+    assert set(get_args(StaticMode)) == {"off", "auto"}
+    assert callable(runner_main)
+
     plugin_default = GranianPlugin()
     assert plugin_default.static == "off"
     assert isinstance(plugin_default, (InitPlugin, CLIPluginProtocol))
@@ -27,12 +39,13 @@ def test_granian_plugin_contract() -> None:
     assert plugin_auto.static == "auto"
 
     with pytest.raises(ValueError, match="static must be 'off' or 'auto'"):
-        GranianPlugin(static="invalid")  # type: ignore[arg-type]
+        GranianPlugin(static=cast("Any", "invalid"))
 
 
 def test_litestar_granian_016_cli_contract() -> None:
-    """Verify presence of supported options and absence of retired flags in run_command."""
-    options = {option for parameter in run_command.params for option in parameter.opts}
+    """Verify presence of supported options, secondary flags, envvars, and absence of retired flags."""
+    options = {option for parameter in run_command.params for option in (*parameter.opts, *parameter.secondary_opts)}
+    params_by_name = {parameter.name: parameter for parameter in run_command.params}
 
     expected_options = {
         "--host",
@@ -49,6 +62,7 @@ def test_litestar_granian_016_cli_contract() -> None:
         "--url-path-prefix",
         "--http",
         "--ws",
+        "--no-ws",
         "--debug",
         "-d",
         "--pdb",
@@ -70,8 +84,11 @@ def test_litestar_granian_016_cli_contract() -> None:
         "--http1-buffer-size",
         "--http1-header-read-timeout",
         "--http1-keep-alive",
+        "--no-http1-keep-alive",
         "--http1-pipeline-flush",
+        "--no-http1-pipeline-flush",
         "--http2-adaptive-window",
+        "--no-http2-adaptive-window",
         "--http2-initial-connection-window-size",
         "--http2-initial-stream-window-size",
         "--http2-keep-alive-interval",
@@ -88,13 +105,17 @@ def test_litestar_granian_016_cli_contract() -> None:
         "--ssl-ca",
         "--ssl-crl",
         "--ssl-client-verify",
+        "--no-ssl-client-verify",
         "--create-self-signed-cert",
         "--granian-log",
+        "--granian-no-log",
         "--granian-log-level",
         "--granian-access-log",
+        "--granian-no-access-log",
         "--granian-access-log-fmt",
         "--log-config",
         "--respawn-failed-workers",
+        "--no-respawn-failed-workers",
         "--respawn-interval",
         "--workers-lifetime",
         "--workers-kill-timeout",
@@ -102,6 +123,7 @@ def test_litestar_granian_016_cli_contract() -> None:
         "--rss-sample-interval",
         "--rss-samples",
         "--reload",
+        "--no-reload",
         "-r",
         "--reload-paths",
         "-R",
@@ -115,11 +137,13 @@ def test_litestar_granian_016_cli_contract() -> None:
         "--reload-ignore-paths",
         "--reload-tick",
         "--reload-ignore-worker-failure",
+        "--no-reload-ignore-worker-failure",
         "--static-path-route",
         "--static-path-mount",
         "--static-path-dir-to-file",
         "--static-path-expires",
         "--metrics",
+        "--no-metrics",
         "--metrics-scrape-interval",
         "--metrics-address",
         "--metrics-port",
@@ -127,8 +151,26 @@ def test_litestar_granian_016_cli_contract() -> None:
         "--pid-file",
         "--working-dir",
         "--env-files",
+        "--in-subprocess",
+        "--no-subprocess",
+        "--use-litestar-logger",
+        "--no-litestar-logger",
     }
     assert expected_options <= options
+
+    assert params_by_name["host"].envvar == ["LITESTAR_HOST", "GRANIAN_HOST"]
+    assert params_by_name["port"].envvar == ["LITESTAR_PORT", "GRANIAN_PORT"]
+    assert params_by_name["wc"].envvar == ["LITESTAR_WEB_CONCURRENCY", "WEB_CONCURRENCY", "GRANIAN_WORKERS"]
+    assert params_by_name["uds"].envvar == ["LITESTAR_UNIX_DOMAIN_SOCKET", "GRANIAN_UDS"]
+    assert params_by_name["fd"].envvar == ["LITESTAR_FILE_DESCRIPTOR", "GRANIAN_FILE_DESCRIPTOR"]
+    assert params_by_name["reload"].envvar == ["LITESTAR_RELOAD", "GRANIAN_RELOAD"]
+    assert params_by_name["reload_paths"].envvar == ["LITESTAR_RELOAD_DIRS", "GRANIAN_RELOAD_PATHS"]
+    assert params_by_name["reload_include"].envvar == ["LITESTAR_RELOAD_INCLUDES", "GRANIAN_RELOAD_INCLUDE"]
+    assert params_by_name["reload_exclude"].envvar == ["LITESTAR_RELOAD_EXCLUDES", "GRANIAN_RELOAD_EXCLUDE"]
+    assert params_by_name["ssl_certificate"].envvar == ["LITESTAR_SSL_CERT_PATH", "GRANIAN_SSL_CERTIFICATE"]
+    assert params_by_name["ssl_keyfile"].envvar == ["LITESTAR_SSL_KEY_PATH", "GRANIAN_SSL_KEYFILE"]
+    assert params_by_name["ssl_client_verify"].envvar == ["LITESTAR_SSL_CLIENT_VERIFY", "GRANIAN_SSL_CLIENT_VERIFY"]
+    assert params_by_name["create_self_signed_cert"].envvar == "LITESTAR_CREATE_SELF_SIGNED_CERT"
 
     retired_flags = {
         "--threads",
@@ -141,17 +183,24 @@ def test_litestar_granian_016_cli_contract() -> None:
 
 
 def test_granian_embedded_server_contract() -> None:
-    """Verify programmatic Granian instantiation and constants."""
+    """Verify programmatic Granian and EmbeddedServer instantiation and constants."""
     assert HTTPModes.auto.value == "auto"
     assert HTTPModes.http1.value == "1"
     assert HTTPModes.http2.value == "2"
     assert Interfaces.ASGI.value == "asgi"
+    assert Interfaces.ASGINL.value == "asginl"
     assert Interfaces.RSGI.value == "rsgi"
     assert Interfaces.WSGI.value == "wsgi"
     assert Loops.auto.value == "auto"
     assert RuntimeModes.auto.value == "auto"
     assert TaskImpl.asyncio.value == "asyncio"
+    assert TaskImpl.rust.value == "rust"
+    assert SSLProtocols.tls12.value == "tls1.2"
     assert SSLProtocols.tls13.value == "tls1.3"
+    assert LogLevels.info.value == "info"
+    assert LogLevels.warn.value == "warn"
+    assert HTTP1Settings.max_buffer_size == 417792
+    assert HTTP2Settings.max_concurrent_streams == 200
 
     server = Granian(
         target="dummy.app:app",
@@ -170,9 +219,23 @@ def test_granian_embedded_server_contract() -> None:
     assert server.workers == 1
     assert server.interface == Interfaces.ASGI
 
+    app = Litestar(route_handlers=[])
+    embedded = EmbeddedServer(
+        target=app,
+        address="127.0.0.1",
+        port=8000,
+        interface=Interfaces.ASGI,
+        runtime_threads=1,
+        http=HTTPModes.auto,
+        websockets=True,
+    )
+    assert embedded.bind_addr == "127.0.0.1"
+    assert embedded.bind_port == 8000
+    assert embedded.interface == Interfaces.ASGI
+
 
 def test_logging_bridge_builds_config() -> None:
-    """Verify logging configuration serialization helper produces a config dict."""
+    """Verify logging configuration serialization helper produces a reconstructible formatter."""
     app_logger = logging.getLogger("test_litestar_granian_logging")
     app_logger.propagate = False
     handler = logging.StreamHandler()
@@ -185,5 +248,9 @@ def test_logging_bridge_builds_config() -> None:
         assert "formatters" in config
         assert "generic" in config["formatters"]
         assert "access" in config["formatters"]
+        payload = config["formatters"]["generic"]["payload"]
+        reconstructed = load_serialized_formatter(payload)
+        record = logging.LogRecord("test", logging.INFO, __file__, 1, "hello", (), None)
+        assert reconstructed.format(record) == "INFO: hello"
     finally:
         app_logger.removeHandler(handler)

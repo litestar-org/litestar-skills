@@ -2,11 +2,11 @@
 
 > Opinionated, first-party agent skills, plugins, subagents, slash commands, and MCP servers for the **Litestar** framework and its ecosystem — publishable to **every major AI agent and IDE** from a single repo.
 
-`litestar-skills` is a curated collection of agentic-development assets that teach AI coding agents how the Litestar team actually builds software. Dedicated package guidance covers Litestar, SQLSpec, Advanced Alchemy, msgspec, Polyfactory, pytest-databases, Litestar Autowire, Litestar Granian, Litestar SAQ, Litestar Queues, Litestar Vite, Litestar MCP, Litestar Email, and Litestar HTMX.
+`litestar-skills` is a curated collection of agentic-development assets that teach AI coding agents how the Litestar team actually builds software. Dedicated package guidance covers Litestar, SQLSpec, Advanced Alchemy, msgspec, Polyfactory, pytest-databases, Litestar Security, Litestar Autowire, Litestar Granian, Litestar SAQ, Litestar Queues, Litestar Vite, Litestar MCP, Litestar Email, and Litestar HTMX.
 
 ## Status
 
-**v0.8.0 — early access.** Multi-host plumbing, 31 skills, ~28,500 lines of canonical content. Full launch-skill catalog growing.
+**v0.9.0 — early access.** Multi-host plumbing, 20 skills, ~35,000 lines of canonical content. Full launch-skill catalog growing.
 
 **Breaking host identity note:** host-facing marketplace, plugin, extension, managed-config, and skill namespace IDs are `litestar`. Existing installs under `litestar-skills` should be removed and reinstalled; no alias is shipped. The Python package and repository remain `litestar-skills`.
 
@@ -17,7 +17,7 @@ This repo documents hosts by the artifacts it ships:
 | Host | Entry Point |
 | --- | --- |
 | Claude Code | `.claude-plugin/plugin.json` + marketplace metadata + `.claude-plugin/agents/*.md` |
-| Antigravity CLI | `plugin.json` + `hooks.json` + `agents/*.md` + `skills/` + `hooks/` |
+| Antigravity CLI | `plugin.json` + `hooks.json` + `rules/litestar-antigravity.md` + `agents/*.md` + `skills/` + `hooks/` |
 | Codex CLI | `.codex-plugin/plugin.json` + `.codex/agents/*.toml` |
 | OpenCode | `.opencode/plugins/litestar.js` + `.opencode/agents/*.md` |
 | Cursor | `.cursor-plugin/plugin.json` |
@@ -31,14 +31,14 @@ Different hosts expose the same repo assets with different command surfaces. Kee
 | Concept | Canonical Value |
 | --- | --- |
 | Plugin / marketplace identity | `litestar` |
-| Skill directory names | `skills/<skill-name>/SKILL.md`, e.g. `skills/litestar-routing/SKILL.md` |
-| Hook and policy namespace | `litestar:<skill-name>`, e.g. `litestar:litestar-routing` |
+| Skill directory names | `skills/<skill-name>/SKILL.md`, e.g. `skills/sqlspec/SKILL.md` |
+| Hook and policy namespace | `litestar:<skill-name>`, e.g. `litestar:sqlspec` |
 | Command files | `commands/litestar/{configure,new-app,new-domain,review}.toml` |
 
 | Harness | Skill Manual Trigger | Command Trigger | Reviewer Agent Trigger |
 | --- | --- | --- | --- |
-| Claude Code | `/litestar:litestar` for the hub skill; `/litestar:litestar-routing` for focused skills. Plugin policy uses `Skill(litestar:<skill-name>)`. | `/litestar:configure`, `/litestar:new-app`, `/litestar:new-domain`, `/litestar:review` | Select `litestar-reviewer` from `.claude-plugin/agents/` where Claude exposes plugin subagents. |
-| Antigravity CLI | Skills load from the `litestar` plugin or `.agents/skills/`; use the displayed skill/template name in Antigravity. SessionStart hooks inject `litestar:<skill-name>` reminders when project signals are detected. | No TOML slash-command surface in the Antigravity plugin schema. Use prompts backed by the skills or reviewer agent. | `litestar-reviewer` from top-level `agents/`. |
+| Claude Code | `/litestar:litestar` for the hub skill; `/litestar:sqlspec` for focused skills. Plugin policy uses `Skill(litestar:<skill-name>)`. | `/litestar:configure`, `/litestar:new-app`, `/litestar:new-domain`, `/litestar:review` | Select `litestar-reviewer` from `.claude-plugin/agents/` where Claude exposes plugin subagents. |
+| Antigravity CLI | Skills load from the `litestar` plugin or `.agents/skills/`; use the displayed skill/template name in Antigravity. `PreInvocation` hooks in root `hooks.json` and `rules/litestar-antigravity.md` inject `litestar:<skill-name>` reminders when project signals are detected. | No TOML slash-command surface in the Antigravity plugin schema. Use prompts backed by the skills or reviewer agent. | `litestar-reviewer` from top-level `agents/`. |
 | Codex CLI | Codex surfaces installed skills by displayed name. In `$`-trigger Codex surfaces, force the hub with `$litestar:litestar` and focused skills with `$litestar:<skill-name>`; natural language also works. | Codex plugins do not currently expose plugin-defined `/litestar:*` slash commands. Use natural language such as “Use Litestar review…” and the `litestar` skill router. | `$agent litestar-reviewer` from `.codex/agents/`. |
 | OpenCode | `opencode skill list` shows project-local copied skills; use the displayed skill name in the OpenCode UI. Plugin reminders use `litestar:<skill-name>`. | No TOML command loader in the OpenCode plugin. Use natural-language prompts or project-local command support. | `litestar-reviewer` from `.opencode/agents/`. |
 | Cursor | Skills are discovered from the plugin/rule path; use the displayed skill name in Cursor. | Host command support varies; shipped TOML commands remain under `commands/litestar/`. | No Cursor-specific reviewer dialect shipped. |
@@ -268,18 +268,18 @@ Per-host uninstall:
 
 ## What's In This Repo
 
-31 skills, focused references, ~28,500+ lines of canonical content:
+20 skills, focused references, ~35,000+ lines of canonical content:
 
 | Category | Skills |
 | --- | --- |
-| Core | `litestar` |
-| Litestar app surfaces | `litestar-routing`, `litestar-dto-openapi`, `litestar-auth-guards`, `litestar-security`, `litestar-di`, `litestar-data-services`, `litestar-settings`, `litestar-exceptions`, `litestar-middleware`, `litestar-plugins`, `litestar-realtime`, `litestar-ai-serving` |
+| Core | `litestar` (routing, DTOs, OpenAPI, DI/Dishka, guards, middleware, exceptions, plugins, Channels/SSE/WebSockets, settings, data services, filters & pagination) |
 | Foundation | `litestar-styleguide` |
-| Data | `advanced-alchemy`, `sqlspec`, `msgspec` |
+| Data & Serialization | `sqlspec`, `advanced-alchemy`, `msgspec` |
+| Security & Auth | `litestar-security` |
+| Tasks & Queues | `litestar-queues`, `litestar-saq` |
+| Frontend | `litestar-vite` (Vite + Inertia), `litestar-htmx` |
 | Server | `litestar-granian` |
-| Tasks | `litestar-saq`, `litestar-queues` |
-| Frontend | `litestar-vite`, `litestar-inertia`, `litestar-htmx` |
-| Integrations | `litestar-mcp`, `litestar-email`, `litestar-autowire` |
+| Integrations & AI | `litestar-mcp`, `litestar-email`, `litestar-autowire`, `litestar-ai` |
 | Packaging | `litestar-build` |
 | Deployment | `litestar-deployment` |
 | Testing | `litestar-testing`, `pytest-databases`, `polyfactory` |

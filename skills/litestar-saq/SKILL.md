@@ -1,6 +1,6 @@
 ---
 name: litestar-saq
-description: "Auto-activate for litestar_saq, SAQPlugin, SAQConfig, QueueConfig, TaskQueues, CronJob, litestar workers run, background jobs, schedules, or SAQ web UI. Not for Celery, RQ, or Dramatiq — use their respective integrations or litestar-queues."
+description: "Auto-activate for litestar_saq, SAQPlugin, SAQConfig, QueueConfig, TaskQueues, CronJob, litestar workers run, background jobs, schedules, or SAQ web UI. Not for litestar-queues, Celery, RQ, or Dramatiq."
 ---
 
 # litestar-saq
@@ -17,7 +17,7 @@ description: "Auto-activate for litestar_saq, SAQPlugin, SAQConfig, QueueConfig,
 
 - Use PEP 604 unions: `T | None`, never `Optional[T]`
 - Async all I/O — task bodies and enqueue calls are `async def`.
-- First positional arg of every task is `ctx: dict` (the SAQ context dict).
+- First positional arg of every task is `ctx: Context` (from `saq.types`) or `ctx: dict[str, Any]`.
 - Pass job payload as keyword arguments so task signatures and enqueue calls stay explicit.
 - Use `NamedDependency[TaskQueues]` for handler injection. `TaskQueues` is registered under the `task_queues` dependency key, and Litestar 2.24 deprecates implicit DI.
 
@@ -41,7 +41,7 @@ def create_saq_plugin() -> SAQPlugin:
         config=SAQConfig(
             use_server_lifespan=True,
             web_enabled=settings.saq.web_enabled,
-            enable_otel=None,
+            enable_otel=settings.saq.otel_enabled,
             queue_configs=[
                 QueueConfig(
                     name="default",
@@ -63,25 +63,62 @@ def create_saq_plugin() -> SAQPlugin:
 saq_plugin = create_saq_plugin()
 ```
 
-**PostgreSQL broker:** Install `litestar-saq[psycopg]` when PostgreSQL is the chosen backend:
+**PostgreSQL broker:** Install `litestar-saq[psycopg]` when PostgreSQL is the chosen backend. When sharing a database URL with SQLAlchemy (`postgresql+psycopg://` or `postgresql+asyncpg://`), strip the driver suffix so `QueueConfig.dsn` starts with `postgresql://`:
 
 ```python
-from litestar_saq import QueueConfig, SAQConfig, SAQPlugin
+from litestar_saq import (
+    CronJob,
+    QueueConfig,
+    SAQConfig,
+    SAQPlugin,
+    after_process_logger,
+    before_process_logger,
+    shutdown_logger,
+    startup_logger,
+    timing_after_process,
+    timing_before_process,
+)
 
 from app.lib.settings import get_settings
+from app.lib.worker import after_process, before_process, on_shutdown, on_startup
 
 
 def create_saq_plugin_pg() -> SAQPlugin:
     settings = get_settings()
+    dsn = settings.db.url.replace("postgresql+psycopg", "postgresql").replace("postgresql+asyncpg", "postgresql")
     return SAQPlugin(
         config=SAQConfig(
-            use_server_lifespan=True,
+            use_server_lifespan=settings.saq.use_server_lifespan,
+            worker_processes=settings.saq.processes,
             web_enabled=settings.saq.web_enabled,
             queue_configs=[
                 QueueConfig(
-                    name="default",
-                    dsn=settings.database.url,
-                    tasks=["app.domain.system.tasks.send_email"],
+                    name="background-tasks",
+                    dsn=dsn,
+                    concurrency=settings.saq.concurrency,
+                    broker_options={
+                        "jobs_table": "task_queue",
+                        "stats_table": "task_queue_stats",
+                        "versions_table": "task_queue_ddl_version",
+                        "manage_pool_lifecycle": True,
+                    },
+                    tasks=[
+                        "app.domain.reports.tasks.generate_report",
+                        "app.domain.reports.tasks.reap_abandoned_reports",
+                    ],
+                    scheduled_tasks=[
+                        CronJob(
+                            function="app.domain.reports.tasks.reap_abandoned_reports",
+                            cron="0 */3 * * *",
+                            timeout=60,
+                        ),
+                    ],
+                    startup=[startup_logger, on_startup],
+                    shutdown=[shutdown_logger, on_shutdown],
+                    before_process=[timing_before_process, before_process_logger, before_process],
+                    after_process=[after_process, timing_after_process, after_process_logger],
+                    shutdown_grace_period_s=60,
+                    cancellation_hard_deadline_s=10,
                 ),
             ],
         ),
@@ -92,11 +129,20 @@ Choose the broker already supported by the deployment. PostgreSQL job writes use
 SAQ's own pool and transaction; they are not automatically atomic with writes
 made through an application ORM or SQL session.
 
-Each `QueueConfig` accepts exactly one connection source: a supported `redis://`,
-`postgresql://`, or `http://` `dsn`, or a supported `broker_instance`. Supplying
-both or neither raises `ImproperlyConfiguredException`. PostgreSQL requires
-`litestar-saq[psycopg]`; configure queue behavior with `broker_options` and
-connection/client construction with `broker_instance_options`.
+Each `QueueConfig` accepts exactly one connection source: a supported `redis://`
+(`rediss://`, `redis+unix://`), `postgresql://`, or `http://` `dsn`, or a
+supported `broker_instance`. Supplying both or neither raises
+`ImproperlyConfiguredException`. PostgreSQL DSNs must start with
+`postgresql://` (`postgres://` raises `ImproperlyConfiguredException`).
+PostgreSQL requires `litestar-saq[psycopg]`; configure queue behavior with
+`broker_options` (`RedisQueueOptions` or `PostgresQueueOptions`; note that on
+`saq>=0.24`, `PostgresQueue.__init__` takes `jobs_table`, `stats_table`, and
+`versions_table`) and connection/client construction with
+`broker_instance_options`.
+In `litestar-saq` 0.8.0, set `enable_otel=True` explicitly when
+`litestar-saq[otel]` is installed (`SAQPlugin.get_workers()` evaluates
+`should_enable_otel()` without the `Litestar` app instance, so `enable_otel=None`
+resolves to `False`).
 
 ### Wire into Litestar
 
@@ -128,7 +174,7 @@ async def send_email(ctx: dict, *, recipient: str, subject: str, body: str) -> N
     await email_service.send(recipient, subject, body)
 ```
 
-For long-running work, set the job's `heartbeat` stale threshold and decorate the task with `monitored_job()` so the plugin signals its batched `HeartbeatManager` while the task runs. `heartbeat` is not an update interval: SAQ marks an active job stuck when its last touch is older than that threshold.
+For long-running work, set the job's `heartbeat` stale threshold (at least `60`s so it exceeds `HeartbeatManager`'s default `30.0`s batch flush interval) and decorate the task with `monitored_job()` so the plugin signals its batched `HeartbeatManager` while the task runs. `heartbeat` is not an update interval: SAQ marks an active job stuck when its last touch is older than that threshold.
 
 ```python
 from litestar_saq import monitored_job
@@ -170,6 +216,15 @@ class NotificationController(Controller):
         return {"status": "queued" if job is not None else "duplicate"}
 ```
 
+When a handler creates or updates database rows that the background job will read, explicitly commit the database session when `queue.enqueue()` succeeds (or roll back when a duplicate `key` returns `None`) so the worker never races ahead of Litestar's `before_send` autocommit hook:
+
+```python
+if job is not None:
+    await reports_service.repository.session.commit()
+else:
+    await reports_service.repository.session.rollback()
+```
+
 ### CLI
 
 ```bash
@@ -188,20 +243,23 @@ litestar --app app:app workers status
 
 ### Web UI
 
-When `web_enabled=True`, the SAQ web UI is mounted under the Litestar app for queue introspection and job retry.
+When `web_enabled=True`, the SAQ web UI and JSON API are mounted at `web_path` (default `"/saq"`), including `{web_path}/api/queues`, job detail/retry/abort endpoints, and `{web_path}/health`. Protect the UI in production with `web_guards=[...]` and opt into OpenAPI schema inclusion with `web_include_in_schema=True`.
 
 ### Job Options
 
 | Option | Default | Use |
 | --- | --- | --- |
-| `timeout` | `10` | **Always set explicitly** — SAQ's default is usually too low or too high for real jobs |
+| `timeout` | `10` | **Always set explicitly** — SAQ's default is usually too low or too high for real jobs (`0` disables) |
 | `retries` | `1` | Retry count on exception |
 | `retry_delay` | `0.0` | Seconds to wait before retrying |
-| `retry_backoff` | `False` | `True` for exponential backoff with jitter, or a numeric maximum delay |
-| `ttl` | `600` | Seconds to retain result after completion |
+| `retry_backoff` | `False` | `True` for exponential backoff with jitter, or a numeric maximum delay in seconds |
+| `ttl` | `600` | Seconds to retain result after completion (`0` retains indefinitely, `-1` disables) |
 | `key` | generated | Stable uniqueness key; enqueue returns `None` while that key already exists |
 | `heartbeat` | `0` | Maximum seconds an active job may go without a touch; `0` disables stale detection |
-| `scheduled` | `0` | Unix timestamp to delay start |
+| `scheduled` | `0` | Unix timestamp (epoch seconds) to delay start |
+| `priority` | `0` | Dequeue priority on PostgreSQL queues (`PostgresQueueOptions.priorities` defaults to `(0, 32767)`) |
+| `group_key` | `None` | Concurrency serialization key on PostgreSQL queues (at most one active job per `group_key`) |
+| `meta` | `{}` | Arbitrary metadata dictionary attached to the job (`CronJob` also accepts `meta`) |
 
 <workflow>
 
@@ -225,7 +283,7 @@ Wrap `QueueConfig`s in `SAQConfig`. Pick a supported broker DSN
 (`redis://...`, `postgresql://...`, or `http://...`) that matches the
 deployment. Set `use_server_lifespan=True` when the web process should own
 worker child processes. Toggle `web_enabled` / `web_guards` for the
-introspection UI and `enable_otel` for tracing.
+introspection UI and `enable_otel=True` when `litestar-saq[otel]` is installed.
 
 ### Step 4: Define Tasks
 
@@ -244,7 +302,7 @@ Inject `TaskQueues` into route handlers. Use `task_queues.get("name")` then `awa
 
 ### Step 7: Publish to Channels (optional)
 
-For real-time updates after a job completes, publish to Litestar Channels from inside the task. See `../litestar-realtime/references/websockets.md`.
+For real-time updates after a job completes, publish to Litestar Channels from inside the task. See `../litestar/references/websockets.md`.
 
 ### Step 8: Run
 
@@ -260,15 +318,19 @@ For portable multi-process workers, configure each queue with `dsn`. Under `spaw
 
 - **Use `litestar-saq`, not raw SAQ, in Litestar apps** — the plugin handles DI, lifespan, CLI, and the web UI. Raw SAQ misses all of that.
 - **Always set `timeout`** on tasks and CronJobs — SAQ defaults to 10s, which is rarely the correct production value.
-- **Pair `heartbeat` with `monitored_job()` for long-running jobs** — `heartbeat` defines when a job is stale; it does not emit updates. Keep the stale threshold longer than the decorator signal interval and the heartbeat manager's flush cadence.
+- **Pair `heartbeat` with `monitored_job()` for long-running jobs** — `heartbeat` defines when a job is stale; it does not emit updates. Keep the stale threshold longer than the decorator signal interval and `HeartbeatManager`'s 30s default flush cadence (e.g., `heartbeat >= 60`).
 - **Inject `TaskQueues` via DI** — don't import a global queue inside handlers. The plugin owns the queue lifecycle.
 - **Use `CronJob` for scheduled work** — not external cron. CronJobs participate in retries, timeouts, and observability.
 - **Handle `queue.enqueue()` returning `None`** — an existing unique key prevents insertion, so do not report every enqueue attempt as newly queued.
 - **Use `key=` for deduplication** — same logical job (per-user sync, per-resource refresh) should not stack. The key remains occupied until the stored job expires or is removed, including after terminal completion.
 - **`use_server_lifespan=True`** for dev and small-to-mid apps that should start worker child processes with the web server. For high-throughput production, run `litestar workers run --workers N` as a separate service.
 - **Use `dsn` for portable multi-process workers** — forkserver/spawn workers rebuild brokers from `QueueConfig.dsn`. A `broker_instance`-only queue works in the parent and under `fork`, but spawn preparation rejects it.
+- **Use `postgresql://` (not `postgres://`) for PostgreSQL DSNs** — `QueueConfig.get_broker()` checks `dsn.startswith("postgresql")` and raises `ImproperlyConfiguredException` for `postgres://`. When sharing an SQLAlchemy URL (`postgresql+psycopg://` or `postgresql+asyncpg://`), strip the driver dialect suffix first.
+- **Use `jobs_table`, `stats_table`, and `versions_table` in PostgreSQL `broker_options`** — `saq.queue.postgres.PostgresQueue.__init__` expects `jobs_table`, `stats_table`, and `versions_table` (not the legacy `table`/`stats`/`versions` keys in `PostgresQueueOptions`'s TypedDict annotations).
+- **Commit DB transactions before or immediately upon enqueueing** — SAQ workers use a separate connection pool and can dequeue a job before Litestar's `before_send` autocommit hook runs. Explicitly commit the database session when `queue.enqueue()` returns a `Job` (or roll back when a duplicate `key` returns `None`).
+- **Pass dotted-path lifecycle hooks as a list** — `QueueConfig.__post_init__` checks `isinstance(hook, Collection)`, which matches `str` and iterates character-by-character if a bare string is passed to `startup`, `shutdown`, `before_process`, or `after_process`. Always use `startup=["app.domain.system.tasks.worker_startup"]` (or pass the callable directly).
 - **Set graceful shutdown controls for long jobs** — use `shutdown_grace_period_s` and, when needed, `cancellation_hard_deadline_s` on `QueueConfig`.
-- **Publish to Litestar Channels from tasks** when the job result must update connected websocket clients. See `../litestar-realtime/references/websockets.md`.
+- **Publish to Litestar Channels from tasks** when the job result must update connected websocket clients. See `../litestar/references/websockets.md`.
 - **Pull shared resources from `ctx` populated by `QueueConfig` hooks**, not module-level globals — keeps tests deterministic and supports per-worker init.
 
 </guardrails>
@@ -283,15 +345,18 @@ Before delivering Litestar + SAQ code, verify:
 - [ ] `SAQConfig.use_server_lifespan` is set explicitly
 - [ ] `SAQConfig.worker_processes` or CLI `--workers` is set intentionally
 - [ ] Each `QueueConfig` has exactly one of `dsn` or `broker_instance`
+- [ ] PostgreSQL DSNs use the `postgresql://` scheme (never `postgres://` or `postgresql+psycopg://`)
+- [ ] Custom PostgreSQL table names in `broker_options` use `jobs_table`, `stats_table`, and `versions_table`
 - [ ] Multi-process worker configs use `dsn`, not `broker_instance` only
 - [ ] Each `QueueConfig` lists tasks by dotted path; the imports resolve
+- [ ] Dotted-path lifecycle hooks (`startup`, `shutdown`, `before_process`, `after_process`) are passed as a list of strings, never a bare `str`
 - [ ] All tasks have `ctx: dict` as the first positional arg and receive job data as keywords
 - [ ] Every task has `timeout` set
-- [ ] Long-running jobs have a `heartbeat` stale threshold longer than their update cadence
+- [ ] Long-running jobs have a `heartbeat` stale threshold longer than `HeartbeatManager`'s 30s flush cadence (`>= 60`s)
 - [ ] Long-running task functions use `monitored_job()` when they need automatic heartbeats
 - [ ] CronJobs have `timeout` and a sensible `cron` expression
 - [ ] Handlers enqueue via injected `TaskQueues`, not module globals
-- [ ] Handlers account for `queue.enqueue()` returning `None` for an existing unique key
+- [ ] Handlers account for `queue.enqueue()` returning `None` for an existing unique key and commit/roll back DB sessions accordingly
 - [ ] Job dedup uses `key=` where applicable
 - [ ] Production deploys run workers as a separate service (`litestar workers run --workers N`)
 
@@ -321,8 +386,8 @@ def create_saq_plugin() -> SAQPlugin:
                 QueueConfig(
                     name="default",
                     dsn=settings.redis.url,
-                    startup="app.domain.system.tasks.worker_startup",
-                    shutdown="app.domain.system.tasks.worker_shutdown",
+                    startup=["app.domain.system.tasks.worker_startup"],
+                    shutdown=["app.domain.system.tasks.worker_shutdown"],
                     tasks=[
                         "app.domain.system.tasks.send_email",
                         "app.domain.system.tasks.cleanup_sessions",
@@ -436,7 +501,7 @@ litestar --app app:app workers run --workers 4
 ## Cross-References
 
 - **[litestar](../litestar/SKILL.md)** — Litestar app initialization, plugins, and lifespan.
-- **[litestar websockets reference](../litestar-realtime/references/websockets.md)** — Publish from a SAQ task to Litestar Channels for real-time UI updates.
+- **[litestar websockets reference](../litestar/references/websockets.md)** — Publish from a SAQ task to Litestar Channels for real-time UI updates.
 
 ## Official References
 

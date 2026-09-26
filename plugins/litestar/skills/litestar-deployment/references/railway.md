@@ -23,7 +23,7 @@ Railway is a PaaS that deploys Docker containers from a git repo. Litestar apps 
 }
 ```
 
-### railway.worker.json (SAQ worker)
+### railway.worker.json (background worker — `litestar-saq` or `litestar-queues`)
 
 ```json
 {
@@ -40,10 +40,12 @@ Railway is a PaaS that deploys Docker containers from a git repo. Litestar apps 
 }
 ```
 
+If the project uses `litestar-queues` instead of `litestar-saq`, set `"startCommand": "litestar queues run --max-concurrency 10 --drain-timeout 30.0"` (or `litestar queues run-consumer --backend <broker>`).
+
 Key differences:
 
 - Worker has **no `healthcheckPath`** — it does not serve HTTP.
-- Worker must **not** use Railway sleep/serverless — it polls Redis, not HTTP.
+- Worker must **not** use Railway sleep/serverless — it polls Redis, SQL, or a message broker, not HTTP.
 - Both services share the same Railway project environment variables.
 
 ## Environment setup
@@ -64,7 +66,7 @@ echo "Migrations complete. Starting application..."
 exec app run --host 0.0.0.0 --port "${PORT:-8000}"
 ```
 
-For the worker service, use a simpler start:
+For the worker service, use a simpler start (`exec app workers run` for `litestar-saq` or `exec litestar queues run` for `litestar-queues`):
 
 ```bash
 #!/usr/bin/env bash
@@ -82,6 +84,7 @@ LITESTAR_APP=app.server.asgi:create_app
 SECRET_KEY=<generated-secret>
 DATABASE_URL=postgresql+asyncpg://<railway-postgres-url>
 SAQ_REDIS_URL=redis://<railway-redis-url>
+LITESTAR_TRUSTED_PROXIES=*
 
 # Railway provides
 PORT=<auto-assigned>

@@ -48,14 +48,14 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 WantedBy=multi-user.target
 ```
 
-## SAQ worker unit
+## Background worker unit (`litestar-saq` or `litestar-queues`)
 
 ```ini
 # /etc/systemd/system/litestar-worker.service
 [Unit]
-Description=Litestar SAQ Worker
+Description=Litestar Background Worker
 After=network.target postgresql.service redis.service
-Wants=redis.service
+Wants=postgresql.service redis.service
 
 [Service]
 Type=exec
@@ -63,7 +63,10 @@ User=litestar
 Group=litestar
 WorkingDirectory=/opt/litestar/app
 EnvironmentFile=/opt/litestar/.env
+# Option A (litestar-saq):
 ExecStart=/opt/litestar/app/.venv/bin/litestar workers run
+# Option B (litestar-queues):
+# ExecStart=/opt/litestar/app/.venv/bin/litestar queues run --max-concurrency 10 --drain-timeout 30.0
 KillSignal=SIGINT
 TimeoutStopSec=120
 Restart=on-failure

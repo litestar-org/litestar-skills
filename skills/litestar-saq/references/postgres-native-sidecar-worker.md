@@ -568,7 +568,7 @@ worker_plugin = WorkerPlugin(
 ## Cross-references
 
 - [`../SKILL.md`](../SKILL.md) — SAQ paths (Redis broker and PG broker)
-- [`../../litestar-settings/references/settings.md`](../../litestar-settings/references/settings.md) — settings patterns
+- [`../../litestar/references/settings.md`](../../litestar/references/settings.md) — settings patterns
 - [`../../sqlspec/references/service-patterns.md`](../../sqlspec/references/service-patterns.md) — `SQLSpecAsyncService` base class + canonical service patterns
 
 ## Shared Styleguide Baseline

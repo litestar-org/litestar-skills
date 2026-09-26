@@ -19,9 +19,23 @@ The transport is **POST-only and request-scoped**. `/mcp` accepts `POST` (and `O
 ## Request Metadata
 
 Every request supplies the protocol version, JSON-RPC method, and client
-capabilities in both the protocol metadata and matching headers. Calls that
-address a tool, resource, prompt, or task also supply a matching name, URI, or
-task ID header. Call `server/discover` to obtain capabilities.
+capabilities in both `params._meta` and matching HTTP headers. Calls that
+address a tool, resource, prompt, or task also supply a matching `Mcp-Name`
+header (`tools/call` → `params.name`, `resources/read` → `params.uri`,
+`prompts/get` → `params.name`, `tasks/*` → `params.taskId`). Tool schemas that
+declare `x-mcp-header` properties also require matching `Mcp-Param-<Header>`
+headers when those arguments are present. Call `server/discover` to obtain
+capabilities.
+
+| Surface | Key / Header | Purpose |
+| --- | --- | --- |
+| `params._meta` | `io.modelcontextprotocol/protocolVersion` | Must be `"2026-07-28"` |
+| `params._meta` | `io.modelcontextprotocol/clientCapabilities` | Client capability object (`{}` when none) |
+| `params._meta` | `io.modelcontextprotocol/clientInfo` | Optional `{"name": ..., "version": ...}` |
+| HTTP header | `MCP-Protocol-Version` | Must match `params._meta["io.modelcontextprotocol/protocolVersion"]` |
+| HTTP header | `Mcp-Method` | Must match the JSON-RPC `method` |
+| HTTP header | `Mcp-Name` | Required for `tools/call`, `resources/read`, `prompts/get`, and `tasks/*` |
+| HTTP header | `Mcp-Param-<Header>` | Required when an `x-mcp-header`-annotated tool argument is non-null |
 
 ## Subscriptions
 
@@ -72,10 +86,10 @@ The stdio bridge handles this transparently and additionally forwards independen
 
 ## Cross-References
 
-- **[litestar-realtime](../../litestar-realtime/SKILL.md)** — Channels backends for `subscription_channels`.
-- **[litestar-auth-guards](../../litestar-auth-guards/SKILL.md)** — guards applied to the MCP router.
+- **[Litestar Channels & SSE](../../litestar/references/channels-and-sse.md)** — Channels backends for `subscription_channels`.
+- **[Litestar Auth & Guards](../../litestar/references/auth-and-guards.md)** — guards applied to the MCP router.
 
 ## Official References
 
-- <https://github.com/cofin/litestar-mcp/blob/v0.13.0/docs/changelog.rst>
-- <https://github.com/cofin/litestar-mcp/tree/v0.13.0>
+- <https://github.com/cofin/litestar-mcp/blob/v0.13.2/docs/changelog.rst>
+- <https://github.com/cofin/litestar-mcp/tree/v0.13.2>

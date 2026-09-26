@@ -24,22 +24,39 @@ Configure `SecurityConfig(authorization_resolver=...)` with an object that
 implements async `resolve(principal)`. Return a snapshot for an authorized
 principal, `InvalidCredentials` for an expected denial, or
 `VerificationUnavailable` for an expected dependency failure. It runs **once
-per request** — which is exactly why guards must not perform I/O.
+per request** — project roles and tenant memberships already loaded on
+`principal.user` with zero extra database queries, and expand hierarchical
+workspace roles additively (`MEMBER` → `{"member"}`, `ADMIN` →
+`{"member", "admin"}`, ownership adding `{"admin", "owner"}`):
 
 ```python
-from litestar_security import AuthorizationSnapshot, Principal
+from litestar_security import AuthorizationSnapshot, InvalidCredentials, Principal
+
+WORKSPACE_ROLE_EXPANSION = {
+    "MEMBER": frozenset({"member"}),
+    "ADMIN": frozenset({"member", "admin"}),
+}
 
 
 class AppAuthorizationResolver:
-    async def resolve(self, principal: Principal[User]) -> AuthorizationSnapshot:
+    __slots__ = ()
+
+    async def resolve(self, principal: Principal[User]) -> AuthorizationSnapshot | InvalidCredentials:
         if not principal.is_authenticated:
             return AuthorizationSnapshot()
-        user = principal.require_user()
+        if principal.user is None:
+            return InvalidCredentials()
+        user = principal.user
+        tenant_roles: dict[str, frozenset[str]] = {}
+        for membership in user.workspaces:
+            roles = WORKSPACE_ROLE_EXPANSION.get(membership.role.upper(), frozenset({"member"}))
+            if membership.is_owner:
+                roles |= {"admin", "owner"}
+            tenant_roles[str(membership.workspace_id)] = roles
         return AuthorizationSnapshot(
-            roles=frozenset(user.roles),
+            roles=frozenset(role.slug for role in user.roles),
             scopes=frozenset(user.scopes),
-            tenant_ids=frozenset(user.tenant_ids),
-            tenant_roles={tenant.id: frozenset(tenant.roles) for tenant in user.tenants},
+            tenant_roles=tenant_roles,
         )
 ```
 
@@ -75,9 +92,12 @@ Passing a predicate to `any_of()` raises `AttributeError` at import time,
 because it expects a mechanism name.
 
 ```python
-from litestar import Controller, get
+from typing import ClassVar
 
+from litestar import get
 from litestar_security import (
+    AuthenticationPolicy,
+    SecureController,
     required,
     requires_any_of,
     requires_role,
@@ -85,9 +105,9 @@ from litestar_security import (
 )
 
 
-class ReportsController(Controller):
+class ReportsController(SecureController):
     path = "/reports"
-    opt = {"auth": required("session")}
+    auth: ClassVar[AuthenticationPolicy] = required("session")
     guards = [requires_role("analyst")]
 
     @get("/", guards=[requires_any_of(requires_scope("read:all"), requires_scope("read:reports"))])
@@ -98,53 +118,107 @@ class ReportsController(Controller):
 Controller-level guards apply to every handler beneath them; handler guards add
 to rather than replace them.
 
-## Path-Bound Checks
+## Path-Bound Tenant & Workspace Checks
 
 `requires_tenant` and `requires_tenant_role` compare the **path value** against
 the server-resolved snapshot, so changing the identifier in the URL cannot
-grant access:
+grant access. Expand hierarchical workspace roles additively in your
+`authorization_resolver` (for example `MEMBER` → `{"member"}`, `ADMIN` →
+`{"member", "admin"}`, owner → `{"member", "admin", "owner"}`) and combine
+global admin roles with `requires_any_of`:
 
 ```python
 from litestar import get
 
-from litestar_security import required, requires_tenant_role
+from litestar_security import (
+    AuthorizationPredicate,
+    required,
+    requires_any_of,
+    requires_role,
+    requires_tenant_role,
+)
+
+
+def requires_workspace_role(*roles: str) -> AuthorizationPredicate:
+    return requires_any_of(
+        requires_role("full-access"),
+        requires_tenant_role(tenant_parameter="workspace_id", roles=frozenset(roles)),
+    )
 
 
 @get(
-    "/tenants/{tenant_id:str}",
+    "/workspaces/{workspace_id:str}/settings",
     auth=required(),
-    guards=[requires_tenant_role(tenant_parameter="tenant_id", roles={"owner"})],
+    guards=[requires_workspace_role("owner")],
 )
-async def tenant_settings(tenant_id: str) -> dict[str, str]:
-    return {"tenant_id": tenant_id}
+async def workspace_settings(workspace_id: str) -> dict[str, str]:
+    return {"workspace_id": workspace_id}
+```
+
+## Custom Predicates
+
+Subclass `AuthorizationPredicate` and return an `AuthorizationDecision` to
+compose domain-specific synchronous checks (such as self-subject path matching)
+inside `requires_any_of` or `requires_all_of`:
+
+```python
+from typing import Any
+
+from litestar.connection import ASGIConnection
+from litestar_security import requires_any_of, requires_role
+from litestar_security.guards import AuthorizationDecision, AuthorizationPredicate
+
+
+class SelfSubjectPredicate(AuthorizationPredicate):
+    __slots__ = ()
+
+    def decide(self, connection: ASGIConnection[Any, Any, Any, Any]) -> AuthorizationDecision:
+        principal = connection.scope.get("user")
+        principal_id = getattr(principal, "id", None)
+        if principal_id is None:
+            return AuthorizationDecision(granted=False, authentication_required=True)
+        subject = connection.path_params.get("user_id")
+        return AuthorizationDecision(granted=subject is not None and str(subject) == str(principal_id))
+
+
+requires_self_or_admin = requires_any_of(requires_role("full-access"), SelfSubjectPredicate())
 ```
 
 ## Step-Up Authentication
 
-`requires_assurance` gates on evidence quality rather than grants — require a
-recent re-authentication or a stronger factor before a sensitive action:
+`requires_assurance` gates on evidence quality (`methods`, `AssuranceTrait`,
+`max_age`, `purpose`) rather than grants — require a recent re-authentication
+or a stronger factor before a sensitive action:
 
 ```python
 from datetime import timedelta
 
-from litestar_security import requires_assurance
+from litestar_security import AssuranceTrait, requires_assurance
 
-recent_mfa = requires_assurance(methods={"totp", "passkey"}, max_age=timedelta(minutes=5))
+recent_mfa = requires_assurance(
+    methods={"totp", "passkey"},
+    traits={AssuranceTrait.USER_VERIFIED},
+    max_age=timedelta(minutes=5),
+)
 ```
+
+Available `AssuranceTrait` values: `PHISHING_RESISTANT`, `USER_VERIFIED`,
+`HARDWARE_BACKED`.
 
 Unavailable verification fails closed as `503` rather than denying as `403`, so
 an outage in a verification dependency is distinguishable from a real denial.
 
 ## Injecting the User
 
-| Dependency | Behavior on anonymous |
-| --- | --- |
-| `principal` | Present, `is_authenticated` is `False` |
-| `security_context` | Present, empty evidence |
-| `current_user` | Rejected — also rejects userless service principals |
+| Dependency | Annotation | Behavior on anonymous |
+| --- | --- | --- |
+| `principal` | `NamedDependency[Principal[User]]` | Present, `is_authenticated` is `False` |
+| `security_context` | `NamedDependency[SecurityContext]` | Present, empty evidence |
+| `current_user` | `CurrentUser[User]` | Rejected — also rejects userless service principals |
 
 `principal` and `security_context` stay typed on public routes; `current_user`
-is the explicit narrowing dependency.
+is the explicit narrowing dependency (`CurrentUser[User]` is already a
+`NamedDependency[User]` alias).
 
 ## Cross-References
 

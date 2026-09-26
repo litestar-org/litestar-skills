@@ -2,13 +2,15 @@
 
 Common errors and fixes.
 
-## Asset URLs return 404
+## Asset URLs return 404 or 401
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `/static/main.tsx` 404 in prod | `manifest.json` missing or wrong path | Run `litestar assets build`; verify `bundle_dir` |
+| `/static/*` returns 401/403 under global auth middleware | `exclude_static_from_auth=False` or running pre-`0.30.1` router-level opt | Upgrade to `litestar-vite>=0.30.1` and keep `ViteConfig(exclude_static_from_auth=True)` (sets `opt={"exclude_from_auth": True}` on static handlers) |
 | `http://localhost:5173/...` 502 in prod | `dev_mode=True` left on in prod | Env-toggle `dev_mode` from `ENV` var |
 | Asset URL points at wrong CDN | `base` / `assetUrl` mismatch | Align `vite.config.ts` `base` with `assetUrl` and `ASSET_URL` env |
+| `HTMLEntryResolutionError` on secondary HTML entry | Entry missing from disk in prod or `/__litestar__/transform-index` unreachable in dev | Ensure `production_path` exists in `bundle_dir` after build and Vite dev server is running in dev (`0.30.0+`) |
 
 ## HMR Not Working
 
@@ -20,13 +22,14 @@ See `hmr.md` for the full debug checklist. Quick summary:
 - Missing `vite_hmr()` in template
 - Vite 8.1+ config still puts HMR network fields under `server.hmr` instead of `server.ws`
 
-## Type Generation Fails
+## Type Generation & CSRF Helpers
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `routes.ts` empty | Handlers missing `name=` parameter | Add `name=` to handlers; route names come from there |
 | `api/types.gen.ts` missing types | DTO not registered with OpenAPI | Ensure handler request/return annotations or DTO configuration exposes the schema |
 | `inertia-pages.json` empty | Pages use generic JSON responses | Use `component=` handlers or Inertia response helpers from `litestar_vite.inertia` |
+| Custom `CSRFConfig` header/cookie ignored on static pages | `window.__LITESTAR_CSRF_*__` globals absent when SPA HTML injection is skipped | Import `CSRF_COOKIE_NAME` and `CSRF_HEADER_NAME` from generated `routes.ts` (`0.31.0+`) and pass `{ headerName: CSRF_HEADER_NAME, cookieName: CSRF_COOKIE_NAME }` to `csrfFetch` / `csrfHeaders` |
 | CI diff after re-gen | Local types out of date | `litestar assets generate-types` then commit |
 
 ## Build Errors
@@ -38,7 +41,7 @@ See `hmr.md` for the full debug checklist. Quick summary:
 | Build outputs to wrong dir | `build.outDir` ≠ `bundleDir` | Both must point at `bundle_dir` |
 | `emptyOutDir` warning | `outDir` is outside Vite root | Set `build.emptyOutDir: true` to acknowledge |
 
-## Inertia Issues
+## Inertia, SSR, and Fragment Issues
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
@@ -46,8 +49,10 @@ See `hmr.md` for the full debug checklist. Quick summary:
 | Type errors on page props | `inertia-pages.json` / `page-props.ts` stale | Re-run `litestar assets generate-types` |
 | First-load works, navigations break | `root_template` missing Inertia head tags | Use Inertia layout pattern in `base.html` |
 | Structured handler return nests under `content` or boots as JSON | Running pre-0.24.1 behavior or bypassing the Inertia wrapper | Upgrade to `litestar-vite>=0.24.1`; return a prop bag from a `component=` handler |
+| Direct `msgspec.Struct` return ignores `rename="camel"` or `msgspec.field(name=...)` | Running pre-`0.30.0` `dataclasses.asdict`-style conversion | Upgrade to `litestar-vite>=0.30.0` (#347), which encodes `msgspec.Struct` via `msgspec.to_builtins()` |
 | Deferred metadata appears on a partial response | Running behavior older than `0.26.0` | Upgrade; partial responses omit all `deferredProps` metadata |
 | Mutation request becomes a 409 refresh | Running behavior older than `0.26.0` | Upgrade; version mismatch short-circuits stale `GET` visits only |
+| SSR or `ComponentResponse` / `vite_fragment` fails in dev (`0.32.0+`) | `litestarViteSsrPlugin` or `server.environments.ssr` missing in Vite 7+ | Register `litestarViteSsrPlugin()` from `litestar-vite-plugin/dev-ssr` or enable `InertiaSSRConfig(fallback_to_client=True, circuit_breaker_enabled=True)` |
 
 ## SPA Catch-All Issues
 
