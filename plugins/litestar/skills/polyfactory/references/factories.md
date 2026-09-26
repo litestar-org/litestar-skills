@@ -77,12 +77,13 @@ class OrderFactory(DataclassFactory[Order]):
 
 `Use(fn, *args, **kwargs)` calls `fn(*args, **kwargs)` per build. Access the factory's seeded `Random` via `Factory.__random__` so values stay deterministic when `__random_seed__` is set.
 
-### `PostGenerated(callable)`
+### `PostGenerated(callable)` and `@post_generated`
 
-Field generators that depend on values already produced for the same instance:
+Field generators that depend on values already produced for the same instance can use either `PostGenerated` or `@post_generated`:
 
 ```python
 from polyfactory import PostGenerated
+from polyfactory.decorators import post_generated
 
 
 def _slug_from_title(name: str, values: dict[str, object]) -> str:
@@ -91,9 +92,29 @@ def _slug_from_title(name: str, values: dict[str, object]) -> str:
 
 class ArticleFactory(DataclassFactory[Article]):
     slug = PostGenerated(_slug_from_title)
+
+    @post_generated
+    @classmethod
+    def summary(cls, title: str) -> str:
+        return f"Summary: {title}"
 ```
 
-The callback signature is `(field_name, generated_values, *args, **kwargs)`. The second argument maps all non-post-generated fields by name. Use it when one field derives from another.
+`PostGenerated(fn, *args, **kwargs)` passes `(field_name, generated_values, *args, **kwargs)` where `generated_values` maps all non-post-generated fields by name. `@post_generated` must be placed **above** `@classmethod`; it inspects parameter names after `cls` and passes the matching generated fields directly.
+
+### `Ignore()` and `Require()`
+
+```python
+from polyfactory import Ignore, Require
+
+
+class OrderFactory(DataclassFactory[Order]):
+    internal_note = Ignore()
+    tenant_id = Require()
+```
+
+- `Ignore()` skips value generation for that field so the model's own default or `default_factory` handles it.
+- `Require()` forces callers to supply the field as a keyword argument to `build()`, `batch()`, or `coverage()`. Omitting it raises `MissingBuildKwargException` (`from polyfactory.exceptions import MissingBuildKwargException`).
+- Always instantiate `Ignore()` and `Require()` (`field = Ignore()`, not `field = Ignore`).
 
 ## Default factory registration
 
@@ -111,7 +132,9 @@ class OrderFactory(DataclassFactory[Order]):
 
 Without the default flag, polyfactory introspects the nested type generically — fine for simple types, but loses any field overrides defined on `CustomerFactory`.
 
-## Determinism
+Note: Polyfactory pre-registers `ModelFactory`, `DataclassFactory`, `TypedDictFactory`, `MsgspecFactory`, `BeanieDocumentFactory`, and `OdmanticModelFactory` on startup. To resolve nested `@attrs.define` or SQLAlchemy models automatically, import `polyfactory.factories.attrs_factory` or `polyfactory.factories.sqlalchemy_factory` so the base factory registers in `BaseFactory.__base_factories__`.
+
+## Determinism and collection sizing
 
 ### Per-factory seed
 
@@ -146,9 +169,49 @@ class OrderFactory(DataclassFactory[Order]):
 
 Set `__use_defaults__ = True` to use model field defaults instead of generating replacements. It defaults to `False` and does not apply to `TypedDictFactory`.
 
+### Collection length bounds
+
+Control generated list, set, tuple, and dict lengths with class variables:
+
+```python
+class OrderFactory(DataclassFactory[Order]):
+    __randomize_collection_length__ = True
+    __min_collection_length__ = 1
+    __max_collection_length__ = 3
+```
+
+When `__randomize_collection_length__` is `False` (default), collections use `__min_collection_length__` (or `1` when `0` is not empty-allowed).
+
+### Custom type providers
+
+Register a custom generator for a domain or third-party type via `BaseFactory.add_provider`:
+
+```python
+from polyfactory.factories.base import BaseFactory
+
+
+BaseFactory.add_provider(CustomId, lambda: CustomId("cust_123"))
+```
+
 ### `__check_model__`
 
 This defaults to `True` in Polyfactory 3. It rejects `Use`, `PostGenerated`, `Ignore`, and `Require` declarations whose names do not exist on the model. It does not run a second model-validation pass.
+
+## Backend-specific options
+
+### `ModelFactory` (Pydantic)
+
+- `__use_examples__: ClassVar[bool] = False` — when `True`, picks from `Field(examples=[...])` on Pydantic fields.
+- `__by_name__: ClassVar[bool] = False` — when `True`, calls `model_validate(kwargs, by_name=True)` so fields with validation aliases can be populated by their Python attribute names.
+- `Factory.build(factory_use_construct=True, **kwargs)` and `Factory.coverage(factory_use_construct=True, **kwargs)` — bypass Pydantic validation via `model_construct`.
+
+### `TypedDictFactory`
+
+- Supports `typing.Required` and `typing.NotRequired` (including `total=False` `TypedDict` definitions).
+
+### `MsgspecFactory`
+
+- Supports `msgspec.Struct`, `msgspec.UnsetType` (`msgspec.UNSET`), `msgspec.msgpack.Ext`, and `msgspec.Meta` numeric, string, and collection constraints.
 
 ## Dynamic factory creation
 
@@ -241,7 +304,7 @@ Polyfactory 3 defaults all four SQLAlchemy inclusion flags to `True`:
 - `__set_primary_key__`
 - `__set_foreign_keys__`
 - `__set_relationships__`
-- `__set_association_proxy__`
+- `__set_association_proxy__` (skips read-only association proxies without a `creator`)
 
 Set flags explicitly when tests need a smaller object graph or database-generated keys:
 
@@ -255,7 +318,9 @@ class OrderModelFactory(SQLAlchemyFactory[OrderModel]):
     __set_association_proxy__ = False
 ```
 
-For built-in persistence, set `__session__` or `__async_session__` to a session or zero-argument session provider. Then call `create_sync()` / `create_batch_sync()` or await `create_async()` / `create_batch_async()`.
+`SQLAlchemyFactory` also respects `init=False` on `MappedAsDataclass` models and custom `collection_class` types on ORM relationships. Computed columns (`Column(..., Computed(...))`) are generated during `build()` and skipped during `create_sync()` / `create_async()` so the database can compute them.
+
+For built-in persistence, set `__session__` (`Session | Callable[[], Session] | scoped_session[Session]`) or `__async_session__` (`AsyncSession | Callable[[], AsyncSession] | async_scoped_session[AsyncSession]`). Then call `create_sync()` / `create_batch_sync()` or await `create_async()` / `create_batch_async()`.
 
 The default `SQLAlchemyPersistenceMethod.COMMIT` commits each save. Polyfactory 3.3 adds `SQLAlchemyPersistenceMethod.FLUSH` for transaction-controlled tests:
 
@@ -272,4 +337,4 @@ order = await OrderModelFactory.create_async()
 await async_session.rollback()
 ```
 
-Async persistence refreshes saved instances so server-generated defaults are available and leaves the supplied async session open. `create_sync()` and `create_async()` skip computed columns so the database can populate them.
+Async persistence refreshes saved instances so server-generated defaults are available and leaves the supplied async session open.

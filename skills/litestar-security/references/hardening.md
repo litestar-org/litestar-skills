@@ -50,8 +50,9 @@ session-capable policies.
 - `auth=public()` excludes a stateless route from native CSRF.
 - A public handler that establishes cookie-authenticated state must declare
   `csrf_required=True` (HTTP-only).
-- `auth=exclude()` bypasses authentication only; session-capable excluded
-  routes keep their derived CSRF coverage.
+- `auth=exclude()` derives no CSRF demand from default mechanisms and writes no
+  native CSRF exclusion, leaving the route to Litestar's own CSRF middleware
+  unless `csrf_required=True` is declared.
 
 ## Rate Limiting
 
@@ -71,10 +72,39 @@ documents, negative caching, stale policy, and explicit sync-worker
 normalization. **Keep retired verification keys through the maximum issued-token
 lifetime.**
 
-## Secrets
+## Secrets and HKDF Subkey Derivation
 
 Store private keys, peppers, OAuth client secrets, session secrets, and
 attestation roots in application secret management.
+
+When deriving multiple purpose-specific 32-byte keys (`purpose-token-pepper`,
+`recovery-code-pepper`, `totp-protector`, `session-binding-pepper`,
+`api-key-pepper`, `session-cookie-secret`, `capability-signing`) from a single
+high-entropy application `SECRET_KEY`, use `HKDF` with `SHA256` and a distinct
+`info` label per purpose so no two subsystems share raw key material:
+
+```python
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+
+def derive_subkey(master_secret: str, info: bytes, *, length: int = 32) -> bytes:
+    return HKDF(
+        algorithm=hashes.SHA256(),
+        length=length,
+        salt=None,
+        info=info,
+    ).derive(master_secret.encode("utf-8"))
+
+
+purpose_token_pepper = derive_subkey(secret_key, b"app.auth.purpose-token-pepper.v1")
+recovery_code_pepper = derive_subkey(secret_key, b"app.auth.recovery-code-pepper.v1")
+totp_protector_key = derive_subkey(secret_key, b"app.auth.totp-protector.v1")
+session_binding_pepper = derive_subkey(secret_key, b"app.auth.session-binding-pepper.v1")
+api_key_pepper = derive_subkey(secret_key, b"app.auth.api-key-pepper.v1")
+session_cookie_secret = derive_subkey(secret_key, b"app.auth.session-cookie-secret.v1")
+capability_signing_key = derive_subkey(secret_key, b"app.auth.capability-signing.v1")
+```
 
 Never log raw credentials, nonces, refresh tokens, API keys, recovery codes,
 passkey challenges, or MFA login challenges.
@@ -102,10 +132,19 @@ Check an application-owned replacement with
 
 ## MFA Rollout
 
-Before enabling `MFAConfig.require_at_login` in a deployment:
+`MFAConfig.require_at_login` supports three modes:
 
-- Enroll a viable factor for **every** affected account, or those accounts lock
-  themselves out.
+- `False` (default) — MFA is used for step-up authentication; login succeeds on
+  primary factor alone.
+- `"enrolled"` — Login requires MFA completion only for accounts that have
+  already enrolled a viable factor, allowing phased rollout.
+- `True` — Login requires MFA completion for **every** account.
+
+Before enabling `MFAConfig(require_at_login=True)` in a deployment:
+
+- Use `require_at_login="enrolled"` during migration and enroll a viable factor
+  for **every** affected account first, or unenrolled accounts lock themselves
+  out.
 - Verify the completion routes with the same CSRF and session middleware used
   in production.
 - Ensure the MFA-login challenge store **atomically burns** a revealed
@@ -114,11 +153,27 @@ Before enabling `MFAConfig.require_at_login` in a deployment:
 - Treat the reveal-once challenge and the completion proof like passwords —
   keep both out of application, proxy, and audit logs.
 
+## Audit Events and Store Conformance Testing
+
+Implement `SecurityEventSink` (`async def emit(self, event: SecurityEvent) -> None`)
+and pass it to `LocalAuth`, `MFAConfig`, and custom audit hooks (such as MCP
+`after_tool_call` callbacks) to persist structured `SecurityEvent` records.
+
+Verify custom database-backed stores and rate limiters against the upstream
+contract using `litestar_security.testing`:
+
+- `assert_rate_limiter_conformance`
+- `assert_api_key_store_conformance`
+- `assert_security_backend_conformance`
+- `assert_session_registry_conformance`
+- `assert_secret_protector_conformance`
+- `assert_oauth_transaction_protector_conformance`
+
 ## Cross-References
 
 - **[Providers](providers.md)** — protector construction and rotation order.
 - **[WebSockets](websockets.md)** — Origin validation and close-code discipline.
-- **[litestar-middleware](../../litestar-middleware/SKILL.md)** — CORS, CSRF, and allowed-hosts configuration.
+- **[Litestar middleware](../../litestar/references/middleware.md)** — CORS, CSRF, and allowed-hosts configuration.
 
 ## Official References
 

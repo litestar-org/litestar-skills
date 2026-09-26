@@ -108,7 +108,7 @@ spec:
                 topologyKey: kubernetes.io/hostname
 ```
 
-## Worker Deployment
+## Worker Deployment (`litestar-saq` or `litestar-queues`)
 
 ```yaml
 apiVersion: apps/v1
@@ -134,7 +134,8 @@ spec:
       containers:
         - name: worker
           image: {{ worker_image_repo }}:{{ image_tag }}
-          # Uses Dockerfile.worker CMD: app workers run
+          # Uses Dockerfile.worker CMD: `litestar workers run` (litestar-saq)
+          # or `litestar queues run --max-concurrency 10 --drain-timeout 30.0` (litestar-queues)
           env:
             - name: SAQ_USE_SERVER_LIFESPAN
               value: "false"
@@ -164,7 +165,7 @@ spec:
           emptyDir: {}
 ```
 
-No HTTP probes for the worker. Kubernetes restarts the pod if the process exits. Set `terminationGracePeriodSeconds: 120` to allow in-flight tasks to finish.
+No HTTP probes for the worker. Kubernetes restarts the pod if the process exits. Set `terminationGracePeriodSeconds: 120` to allow in-flight tasks to finish before `SIGKILL`. When using `litestar-queues`, add a Kubernetes `CronJob` that invokes `litestar queues run-maintenance` periodically to recover expired leases and prune old task history.
 
 ## HorizontalPodAutoscaler
 

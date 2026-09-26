@@ -208,13 +208,9 @@ type UserPreview = Pick<User, 'id' | 'name'>;
 
 ## Tooling
 
-- **Formatter/Linter**: `prettier`/`eslint` OR `biome` (see `bun` skill)
-- **Build**: `vite`, `esbuild`, or `tsc`
-- **Test runner**: `vitest` or `bun test` (see `bun` skill)
-
-## Performance Patterns
-
-See `performance-patterns` skill for IPC and serialization details.
+- **Formatter/Linter**: `oxlint` / `biome` or `prettier` + `eslint`
+- **Build & Litestar integration**: `vite` via `litestar-vite` (see [litestar-vite](../../litestar-vite/SKILL.md)), `esbuild`, or `tsc`
+- **Test runner**: `vitest` or `bun test` (see [testing.md](testing.md))
 
 ## Anti-Patterns
 

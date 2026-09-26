@@ -1,6 +1,6 @@
 ---
 name: litestar-htmx
-description: "Auto-activate for litestar_htmx, HTMXPlugin, HTMXConfig, HTMXRequest, HTMXTemplate, HXLocation, ReplaceUrl, TriggerEvent, HX-* headers, or Litestar partial HTML. Not for generic browser-side HTMX or Litestar Vite JSON templating — those are client concerns."
+description: "Auto-activate for litestar_htmx, HTMXPlugin, HTMXConfig, HTMXRequest, HTMXTemplate, HXLocation, ReplaceUrl, TriggerEvent, HX-* headers, or Litestar partial HTML. Not for client-only HTMX or Litestar Vite JSON."
 ---
 
 # litestar-htmx
@@ -11,9 +11,8 @@ application plugin, template responses, and typed HTMX response-header helpers.
 
 ## Code Style Rules
 
-- Import the integration from `litestar_htmx`, never
-  `litestar.plugins.htmx`; Litestar no longer owns this package's import
-  surface.
+- Import the integration from `litestar_htmx`, never the
+  `litestar.plugins.htmx` compatibility re-export shim.
 - Use `HTMXRequest` when handlers inspect HTMX request headers.
 - Return template fragments from HTMX endpoints; keep full-page routes and
   fragment routes distinct.
@@ -35,9 +34,10 @@ app = Litestar(
 )
 ```
 
-`HTMXPlugin()` is the convenience path: it registers the package's request and
-response types. Its default `HTMXConfig(set_request_class_globally=True)` sets
-`HTMXRequest` only when the application does not already have a request class.
+`HTMXPlugin()` is the convenience path: its `on_app_init` hook registers
+`HTMXRequest` and all ten HTMX response classes in `app_config.signature_types`.
+Its default `HTMXConfig(set_request_class_globally=True)` sets `HTMXRequest`
+only when `app_config.request_class is None`.
 
 Preserve an existing custom request class by extending `HTMXRequest`:
 
@@ -90,9 +90,10 @@ Available request helpers:
 | `request.htmx.trigger_name` | `HX-Trigger-Name` | `str \| None` |
 | `request.htmx.triggering_event` | `Triggering-Event` | Decoded JSON value, or `None` |
 
-`triggering_event` is supplied by HTMX's `event-header` extension. Malformed
-JSON resolves to `None`. Headers accompanied by
-`<Header>-URI-AutoEncoded: true` are URL-decoded before use.
+`triggering_event` is supplied by HTMX's `event-header` extension and decoded
+using the active route handler's `type_decoders`. Malformed JSON resolves to
+`None`. Headers accompanied by `<Header>-URI-AutoEncoded: true` are URL-decoded
+before use.
 
 ### Return template fragments with HTMX headers
 
@@ -120,7 +121,10 @@ async def item_list() -> Template:
 ```
 
 `trigger_event`, `params`, and `after` form one event declaration. When
-triggering an event, set `after` to `"receive"`, `"settle"`, or `"swap"`.
+`trigger_event` is set, `after` must be `"receive"`, `"settle"`, or `"swap"`
+(leaving `after=None` raises `ImproperlyConfiguredException`). `HTMXTemplate`
+supports `push_url`, `re_swap`, `re_target`, `trigger_event`, `params`, and
+`after`; it does not accept `replace_url`.
 
 ### Response helper signatures
 
@@ -129,18 +133,34 @@ All helpers are exported from `litestar_htmx` and
 
 | Helper | Constructor | Behavior |
 | --- | --- | --- |
-| `HXStopPolling` | `HXStopPolling()` | Returns status `286` |
-| `ClientRedirect` | `ClientRedirect(redirect_to)` | Sets `HX-Redirect`; no `Location` header |
-| `ClientRefresh` | `ClientRefresh()` | Sets `HX-Refresh: true` |
-| `PushUrl` | `PushUrl(content, push_url, **response_kwargs)` | Sets `HX-Push-Url` |
-| `ReplaceUrl` | `ReplaceUrl(content, replace_url, **response_kwargs)` | Sets `HX-Replace-Url` |
+| `HXStopPolling` | `HXStopPolling()` | Returns status `286` (`HTMX_STOP_POLLING`) |
+| `ClientRedirect` | `ClientRedirect(redirect_to)` | Status `200`; sets URL-quoted `HX-Redirect` and deletes `Location` |
+| `ClientRefresh` | `ClientRefresh()` | Status `200`; sets `HX-Refresh: true` |
+| `PushUrl` | `PushUrl(content, push_url, **response_kwargs)` | Status `200`; sets `HX-Push-Url` |
+| `ReplaceUrl` | `ReplaceUrl(content, replace_url, **response_kwargs)` | Status `200`; sets `HX-Replace-Url` |
 | `Reswap` | `Reswap(content, method, **response_kwargs)` | Sets `HX-Reswap` |
 | `Retarget` | `Retarget(content, target, **response_kwargs)` | Sets `HX-Retarget` |
-| `TriggerEvent` | `TriggerEvent(content, name, after, params=None, **response_kwargs)` | Sets the selected `HX-Trigger*` header |
-| `HXLocation` | `HXLocation(redirect_to, source=None, event=None, target=None, select=None, swap=None, hx_headers=None, values=None, **response_kwargs)` | Sets JSON in `HX-Location` |
+| `TriggerEvent` | `TriggerEvent(content, name, after, params=None, **response_kwargs)` | Sets `HX-Trigger`, `HX-Trigger-After-Settle`, or `HX-Trigger-After-Swap` |
+| `HXLocation` | `HXLocation(redirect_to, source=None, event=None, target=None, select=None, swap=None, hx_headers=None, values=None, **response_kwargs)` | Status `200`; sets JSON in `HX-Location` and deletes `Location` |
 
-`push_url=False` and `replace_url=False` emit `"false"` to prevent the
-corresponding history update.
+Pass a URL `str` to `push_url` or `replace_url` to update history, or `False`
+(or `"False"`) to emit `"false"` and prevent the history update. Do not pass
+`True`: any `bool` value is serialized as `"false"`.
+
+### Exported types and header enum
+
+`litestar_htmx` (and `litestar_htmx.types`) exports the typing definitions and
+header enum used across request and response helpers:
+
+| Export | Kind | Definition / Values |
+| --- | --- | --- |
+| `HTMXHeaders` | `str, Enum` | Request and response header names (`REQUEST`, `BOOSTED`, `CURRENT_URL`, `HISTORY_RESTORE_REQUEST`, `PROMPT`, `TARGET`, `TRIGGER_ID`, `TRIGGER_NAME`, `TRIGGERING_EVENT`, `REDIRECT`, `REFRESH`, `PUSH_URL`, `REPLACE_URL`, `RE_SWAP`, `RE_TARGET`, `LOCATION`, `TRIGGER_EVENT`, `TRIGGER_AFTER_SETTLE`, `TRIGGER_AFTER_SWAP`) |
+| `EventAfterType` | `Literal` | `"receive" \| "settle" \| "swap" \| None` |
+| `PushUrlType` | `Union` | `str \| bool` (use URL `str` or `False`) |
+| `ReSwapMethod` | `Literal` | `"innerHTML" \| "outerHTML" \| "beforebegin" \| "afterbegin" \| "beforeend" \| "afterend" \| "delete" \| "none" \| None` |
+| `LocationType` | `TypedDict` | `path`, `source`, `event`, `target`, `select`, `swap`, `values`, `hx_headers` |
+| `TriggerEventType` | `TypedDict` | `name`, `params`, `after` |
+| `HtmxHeaderType` | `TypedDict(total=False)` | `location`, `redirect`, `refresh`, `push_url`, `replace_url`, `re_swap`, `re_target`, `trigger_event` |
 
 ### Soft navigation with `HXLocation`
 
@@ -230,10 +250,14 @@ project already uses Litestar Vite and needs client-side JSON swaps. See
 ## Guardrails
 
 - **Use `litestar_htmx`, never `litestar.plugins.htmx`.** The 0.5.0 package is a
-  standalone distribution with its own public import root.
+  standalone distribution; `litestar.plugins.htmx` is only a compatibility
+  re-export shim.
 - **Pass every required response-helper argument.** `TriggerEvent` requires
-  `content`, `name`, and `after`; `PushUrl`, `ReplaceUrl`, `Reswap`, and
-  `Retarget` also require content.
+  `content`, `name`, and a non-null `after` (`"receive"`, `"settle"`, or
+  `"swap"`); `PushUrl`, `ReplaceUrl`, `Reswap`, and `Retarget` also require
+  `content`.
+- **Pass a URL `str` or `False` for `push_url` and `replace_url`.** Any boolean
+  value (including `True`) is serialized as `"false"`.
 - **Use `select=` on `HXLocation` to choose returned content.** Do not confuse
   it with `target=`, which chooses the receiving element.
 - **Do not assume `HTMXPlugin` overrides an existing request class.** It
@@ -241,7 +265,7 @@ project already uses Litestar Vite and needs client-side JSON swaps. See
 - **Do not treat `request.htmx` as an optional object.** Test its truth value to
   identify HTMX requests.
 - **Do not send a normal redirect for `HXLocation` or `ClientRedirect`.** These
-  helpers return `200` with HTMX response headers.
+  helpers return `200` with HTMX response headers and delete `Location`.
 - **Do not attribute `hx-ext="litestar"` to `litestar-htmx`.** That browser
   extension ships with Litestar Vite's npm package.
 - **Do not return unsanitized, concatenated HTML.** Render templates so escaping
@@ -257,8 +281,8 @@ project already uses Litestar Vite and needs client-side JSON swaps. See
 - [ ] `HTMXPlugin()` or `request_class=HTMXRequest` wires request helpers
 - [ ] A custom global request class extends `HTMXRequest`
 - [ ] Full pages and HTMX fragments have explicit boundaries
-- [ ] `TriggerEvent` includes `content`, `name`, and a valid `after` value
-- [ ] `ReplaceUrl` uses `replace_url=`, not `push_url=`
+- [ ] `TriggerEvent` and `HTMXTemplate(trigger_event=...)` set `after` to `"receive"`, `"settle"`, or `"swap"`
+- [ ] `PushUrl`, `ReplaceUrl`, and `HTMXTemplate(push_url=...)` pass a URL `str` or `False` (never `True`)
 - [ ] `HXLocation.select` and `HXLocation.target` serve distinct purposes
 - [ ] State-changing HTMX requests include the application's CSRF token
 - [ ] Tests assert the exact status, body, and `HX-*` response header

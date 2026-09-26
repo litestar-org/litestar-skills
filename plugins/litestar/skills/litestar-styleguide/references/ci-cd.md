@@ -24,8 +24,10 @@ jobs:
         run: uv python install 3.13
       - name: Create virtual environment
         run: uv sync --all-extras --dev
-      - name: Pre-commit
-        run: uv run pre-commit run --all-files
+      - name: Pre-commit (prek)
+        run: |
+          uv tool install prek
+          prek run --all-files
 ```
 
 ## Job Patterns
@@ -36,7 +38,7 @@ Standard jobs for Python projects:
 
 | Job | Command | Purpose |
 | --- | --- | --- |
-| validate | `uv run pre-commit run --all-files` | Formatting, linting hooks |
+| validate | `prek run --all-files` (or `uv run pre-commit run --all-files`) | Formatting, linting hooks |
 | mypy | `uv run mypy` | Type checking (gradual) |
 | pyright | `uv run pyright` | Type checking (strict) |
 | slotscheck | `uv run slotscheck` | Verify `__slots__` correctness |
@@ -73,12 +75,14 @@ js-lint:
 
 ## Caching
 
-### Pre-commit Cache
+### Pre-commit / prek Cache
 
 ```yaml
 - uses: actions/cache@v5
   with:
-    path: ~/.cache/pre-commit/
+    path: |
+      ~/.cache/prek/
+      ~/.cache/pre-commit/
     key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
 ```
 
@@ -90,9 +94,9 @@ js-lint:
     enable-cache: true
 ```
 
-## Pre-Commit Hook Stack
+## Pre-Commit Hook Stack (`prek`)
 
-Standard `.pre-commit-config.yaml`:
+Prefer `prek` (`uv tool install prek && prek install`) to execute `.pre-commit-config.yaml` locally and in CI. Standard `.pre-commit-config.yaml`:
 
 ```yaml
 default_language_version:
@@ -116,8 +120,8 @@ repos:
       - id: mixed-line-ending
       - id: trailing-whitespace
 
-  - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.15.0"
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: "v0.16.9"
     hooks:
       - id: ruff
         args: ["--fix"]

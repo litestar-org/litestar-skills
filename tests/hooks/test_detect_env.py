@@ -139,10 +139,11 @@ def htmx_project(tmp_path: Path) -> Path:
 
 
 def test_skill_map_exists() -> None:
-    """skill-map.json must exist and be valid JSON with required structure."""
+    """skill-map.json must exist and be valid JSON with required 20-skill structure."""
     assert SKILL_MAP.exists(), f"skill-map.json missing: {SKILL_MAP}"
     data = json.loads(SKILL_MAP.read_text(encoding="utf-8"))
     assert isinstance(data.get("matchers"), list)
+    assert len(data["matchers"]) == 20
     assert isinstance(data.get("static_intro"), str)
     assert all("skill" in m and "signals" in m and "reminder" in m for m in data["matchers"])
 
@@ -161,6 +162,7 @@ def test_litestar_pyproject_dep_detected(litestar_project: Path) -> None:
     assert "litestar" in out["detected_skills"]
     assert "msgspec" in out["detected_skills"]
     assert "litestar:litestar" in out["context"]
+    assert len(str(out["context"])) <= 500
 
 
 def test_litestar_plus_sqlspec(litestar_sqlspec_project: Path) -> None:
@@ -185,26 +187,25 @@ def test_python_import_signal(import_only_project: Path) -> None:
     assert "litestar" in out["detected_skills"]
 
 
-def test_controller_signal_triggers_routing_skill(routing_project: Path) -> None:
-    """Controller and route decorators should trigger the focused routing skill."""
+def test_controller_signal_consolidates_to_litestar_skill(routing_project: Path) -> None:
+    """Controller and route decorators consolidate into the core litestar skill."""
     out = _run(routing_project)
-    assert "litestar" in out["detected_skills"]
-    assert "litestar-routing" in out["detected_skills"]
-    assert "litestar:litestar-routing" in str(out["context"])
+    assert out["detected_skills"] == ["litestar"]
+    assert "litestar:litestar" in str(out["context"])
 
 
-def test_websocket_signal_triggers_realtime_skill(realtime_project: Path) -> None:
-    """WebSocket and Channels usage should trigger the focused realtime skill."""
+def test_websocket_signal_consolidates_to_litestar_skill(realtime_project: Path) -> None:
+    """WebSocket and Channels usage consolidate into the core litestar skill."""
     out = _run(realtime_project)
-    assert "litestar-realtime" in out["detected_skills"]
-    assert "litestar:litestar-realtime" in str(out["context"])
+    assert out["detected_skills"] == ["litestar"]
+    assert "litestar:litestar" in str(out["context"])
 
 
-def test_settings_signal_triggers_settings_skill(settings_project: Path) -> None:
-    """Litestar env-loading settings modules should trigger the focused settings skill."""
+def test_settings_signal_consolidates_to_litestar_skill(settings_project: Path) -> None:
+    """Litestar settings modules consolidate into the core litestar skill."""
     out = _run(settings_project)
-    assert "litestar-settings" in out["detected_skills"]
-    assert "litestar:litestar-settings" in str(out["context"])
+    assert out["detected_skills"] == ["litestar"]
+    assert "litestar:litestar" in str(out["context"])
 
 
 def test_htmx_signal_triggers_htmx_skill(htmx_project: Path) -> None:
@@ -212,6 +213,43 @@ def test_htmx_signal_triggers_htmx_skill(htmx_project: Path) -> None:
     out = _run(htmx_project)
     assert "litestar-htmx" in out["detected_skills"]
     assert "litestar:litestar-htmx" in str(out["context"])
+
+
+def test_inertia_signal_triggers_vite_skill(tmp_path: Path) -> None:
+    """Inertia signals are folded into the litestar-vite skill."""
+    src = tmp_path / "src" / "myapp"
+    src.mkdir(parents=True)
+    (src / "app.py").write_text("from litestar_vite.inertia import InertiaConfig\n")
+    out = _run(tmp_path)
+    assert "litestar-vite" in out["detected_skills"]
+    assert "litestar:litestar-vite" in str(out["context"])
+
+
+def test_litestar_ai_signals_trigger_ai_skill(tmp_path: Path) -> None:
+    """Google ADK / GenAI signals trigger litestar-ai."""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "agent"\ndependencies = ["litestar", "google-genai"]\n')
+    out = _run(tmp_path)
+    assert "litestar-ai" in out["detected_skills"]
+    assert "litestar:litestar-ai" in str(out["context"])
+
+
+def test_hidden_or_plugin_skills_do_not_false_trigger_styleguide(tmp_path: Path) -> None:
+    """Consumer repos with .agents/skills/*/SKILL.md or plugins/*/skills/*/SKILL.md must not trigger styleguide."""
+    hidden_skill = tmp_path / ".agents" / "skills" / "demo" / "SKILL.md"
+    hidden_skill.parent.mkdir(parents=True)
+    hidden_skill.write_text("---\nname: demo\n---\n")
+    plugin_skill = tmp_path / "plugins" / "litestar" / "skills" / "demo" / "SKILL.md"
+    plugin_skill.parent.mkdir(parents=True)
+    plugin_skill.write_text("---\nname: demo\n---\n")
+
+    out = _run(tmp_path)
+    assert "litestar-styleguide" not in out["detected_skills"]
+
+    root_skill = tmp_path / "skills" / "demo" / "SKILL.md"
+    root_skill.parent.mkdir(parents=True)
+    root_skill.write_text("---\nname: demo\n---\n")
+    out_with_root = _run(tmp_path)
+    assert "litestar-styleguide" in out_with_root["detected_skills"]
 
 
 def test_litestar_queues_dependency_triggers_queues_skill(tmp_path: Path) -> None:
@@ -301,3 +339,45 @@ def test_hatch_binary_triggers_litestar_build(tmp_path: Path) -> None:
     )
     out = _run(tmp_path)
     assert "litestar-build" in out["detected_skills"]
+
+
+def test_upstream_library_workspace_suppresses_own_skill(tmp_path: Path) -> None:
+    """Working in the sqlspec repository suppresses the sqlspec consumer skill and warns in context."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "sqlspec"\ndependencies = ["msgspec", "pytest-databases"]\n'
+    )
+    src = tmp_path / "sqlspec"
+    src.mkdir(parents=True)
+    (src / "core.py").write_text("import sqlspec\n")
+    out = _run(tmp_path)
+    assert "sqlspec" not in out["detected_skills"]
+    assert "msgspec" in out["detected_skills"]
+    assert "pytest-databases" in out["detected_skills"]
+    ctx = str(out["context"])
+    assert "Upstream library workspace detected (`sqlspec`)" in ctx
+    assert "Do NOT rely on `litestar:sqlspec` or consumer skills" in ctx
+    assert "Detected stack skills: litestar:msgspec, litestar:pytest-databases" in ctx
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not available")
+def test_js_detector_upstream_library_workspace_suppresses_own_skill(tmp_path: Path) -> None:
+    """Node detect-env.js matches Python detector when working in an upstream library repository."""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "sqlspec"\ndependencies = ["msgspec"]\n')
+    src = tmp_path / "sqlspec"
+    src.mkdir(parents=True)
+    (src / "core.py").write_text("import sqlspec\n")
+    detect_js = REPO_ROOT / "hooks" / "lib" / "detect-env.js"
+    result = subprocess.run(
+        ["node", str(detect_js), str(tmp_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    out: dict[str, Any] = json.loads(result.stdout)
+    assert "sqlspec" not in out["detected_skills"]
+    assert "msgspec" in out["detected_skills"]
+    ctx = str(out["context"])
+    assert "Upstream library workspace detected (`sqlspec`)" in ctx
+    assert "Do NOT rely on `litestar:sqlspec` or consumer skills" in ctx

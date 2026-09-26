@@ -43,6 +43,32 @@ class Tag(CamelizedBaseStruct):
 `rename="camel"` serializes `snake_case` field names as `camelCase` JSON keys automatically.
 Library/shared modules that define runtime-introspected `msgspec.Struct` subclasses usually avoid postponed annotations unless the consuming tool resolves them. Consumer modules that import/use these structs MAY use future annotations freely.
 
+### Partial Updates (`PATCH`) with `msgspec.UNSET`
+
+Use `msgspec.UNSET` (`msgspec.UnsetType`) on `PATCH` request Structs so handlers can distinguish an
+omitted key from an explicit `null`:
+
+```python
+from typing import Any
+import msgspec
+
+
+class PatchBaseStruct(CamelizedBaseStruct, kw_only=True, forbid_unknown_fields=True):
+    def to_update_dict(self) -> dict[str, Any]:
+        """Return set fields keyed by Python attribute name for service/repository updates."""
+        return {f: val for f in self.__struct_fields__ if (val := getattr(self, f)) is not msgspec.UNSET}
+
+
+class TagUpdate(PatchBaseStruct):
+    name: str | msgspec.UnsetType = msgspec.UNSET
+    description: str | None | msgspec.UnsetType = msgspec.UNSET
+```
+
+- `msgspec.to_builtins(self)` recursively converts to builtin types using wire names (`camelCase`)
+  and omits `msgspec.UNSET` fields.
+- `msgspec.structs.asdict(self)` returns a shallow dict keyed by Python attribute names
+  (`snake_case`) and retains `msgspec.UNSET` values unless filtered as shown in `to_update_dict()`.
+
 ## to_json — pick the branch that matches your stack
 
 ### Branch A — sqlspec-stack
@@ -166,6 +192,8 @@ class Order(CamelizedBaseStruct, kw_only=True):
 0.21.0, `msgspec.structs.replace()` and Python's `copy.replace()`. Direct construction does not
 validate field annotations first. Typed decode and `convert()` validate fields before the hook;
 in those paths a `ValueError` or `TypeError` becomes a path-aware `msgspec.ValidationError`.
+To normalize a field inside `__post_init__` on a `frozen=True` Struct, call
+`msgspec.structs.force_setattr(self, "field_name", normalized_value)`.
 
 ## DTO vs response schema
 

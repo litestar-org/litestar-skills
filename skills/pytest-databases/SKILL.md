@@ -1,6 +1,6 @@
 ---
 name: pytest-databases
-description: "Auto-activate for pytest_databases, Docker DB fixtures, PostgreSQL/pgvector/ParadeDB, MySQL/MariaDB, Oracle/SQL Server, CockroachDB/YugabyteDB, MongoDB, Redis/Valkey, Elasticsearch, BigQuery/Spanner, Azurite, MinIO, or RustFS tests. Not for mocked databases."
+description: "Auto-activate for pytest_databases, Docker DB fixtures, PostgreSQL/pgvector/ParadeDB, MySQL/MariaDB, Oracle/SQL Server, CockroachDB, MongoDB, Redis/Valkey, BigQuery/Spanner, MinIO, or RustFS. Not for mocked DBs."
 ---
 
 # pytest-databases
@@ -82,9 +82,17 @@ ready-client matrix. Do not infer a `*_connection` fixture from a
   (`*_connection`, `*_client`) exist for PostgreSQL-family, CockroachDB,
   Oracle, GizmoSQL, BigQuery, Spanner, MongoDB, and Azure Blob. Service-only
   backends (MySQL, MariaDB, SQL Server, YugabyteDB, Dolt, Redis, Dragonfly,
-  KeyDB, Valkey, Elasticsearch, MinIO, and RustFS) export service fixtures but
-  no ready client. Build the project's client from the service object's
-  coordinates; convenience `*_host`/`*_port` fixtures are backend-specific.
+  KeyDB, Valkey, Elasticsearch, MinIO, and RustFS) export `*_service` fixtures
+  but no ready client fixture. Note that `redis`, `valkey`, and `elastic_search`
+  still import their Python client package at module load time for readiness
+  checks, whereas `mysql`, `mariadb`, `mssql`, `yugabyte`, `dolt`, `minio`, and
+  `rustfs` require no Python client dependency to start the service.
+- **Avoid broken alias fixtures in `v0.19.0`**:
+  `elasticsearch_service` requests an undefined `elasticsearch8_service` fixture
+  (missing underscore) — request `elasticsearch_8_service` or
+  `elasticsearch_7_service` directly. `oracle_startup_connection` requests an
+  undefined `oracle_23ai_startup_connection` fixture — request
+  `oracle_23ai_connection` or `oracle_18c_connection` instead.
 - **Use `azure_blob_*` names.** The module is
   `pytest_databases.docker.azure_blob`, the service is `AzureBlobService`, and
   the ready clients are `azure_blob_container_client` and

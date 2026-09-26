@@ -5,7 +5,7 @@
 //   * Imported as ESM:  import { detectEnv } from "./detect-env.js";
 //   * Run as CLI:        node hooks/lib/detect-env.js <project_root>
 //
-// Reused by the OpenCode plugin (Ch4) — keep ESM-clean.
+// Reused by the OpenCode plugin — keep ESM-clean.
 // Honors LITESTAR_SKILLS_HOOK_DISABLE=1 (returns {} from detectEnv()).
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -23,6 +23,7 @@ const SKIP_DIRS = new Set([
   "__pycache__",
   "dist",
   "build",
+  "plugins",
   ".git",
   ".mypy_cache",
   ".ruff_cache",
@@ -33,6 +34,28 @@ const PY_DEPTH_CAP = 4;
 
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeDepName(name) {
+  return name.trim().toLowerCase().replace(/[-_.]+/g, "-");
+}
+
+function extractProjectName(pyprojectText) {
+  let inTargetSection = false;
+  for (const rawLine of pyprojectText.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    if (line.startsWith("[") && line.endsWith("]")) {
+      const section = line.slice(1, -1).trim();
+      inTargetSection = section === "project" || section === "tool.poetry";
+      continue;
+    }
+    if (inTargetSection) {
+      const m = line.match(/^name\s*=\s*["']([^"']+)["']/);
+      if (m) return normalizeDepName(m[1]);
+    }
+  }
+  return "";
 }
 
 function isDir(path) {
@@ -92,6 +115,7 @@ function matchAtDir(dir, parts, idx) {
 
   if (segment === "*") {
     for (const entry of entries) {
+      if (entry.startsWith(".") || SKIP_DIRS.has(entry)) continue;
       const full = join(dir, entry);
       if (last) return true;
       if (isDir(full) && matchAtDir(full, parts, idx + 1)) return true;
@@ -101,6 +125,7 @@ function matchAtDir(dir, parts, idx) {
   if (segment.includes("*")) {
     const re = new RegExp("^" + segment.split("*").map(escapeRegex).join(".*") + "$");
     for (const entry of entries) {
+      if ((!segment.startsWith(".") && entry.startsWith(".")) || SKIP_DIRS.has(entry)) continue;
       if (!re.test(entry)) continue;
       const full = join(dir, entry);
       if (last) return true;
@@ -109,6 +134,7 @@ function matchAtDir(dir, parts, idx) {
     return false;
   }
   // literal segment
+  if (!last && (segment.startsWith(".") || SKIP_DIRS.has(segment))) return false;
   const full = join(dir, segment);
   if (last) return pathExists(full);
   return isDir(full) && matchAtDir(full, parts, idx + 1);
@@ -137,7 +163,16 @@ export async function detectEnv(projectRoot) {
   const pythonImports = new Map();
   const pythonRegexes = [];
   const fileGlobs = [];
+  const ownPackageToSkill = new Map();
   for (const m of matchers) {
+    if (typeof m.own_package === "string" && m.own_package.trim()) {
+      ownPackageToSkill.set(normalizeDepName(m.own_package), [m.own_package.trim(), m.skill]);
+    }
+    for (const pkg of m.own_packages || []) {
+      if (typeof pkg === "string" && pkg.trim()) {
+        ownPackageToSkill.set(normalizeDepName(pkg), [pkg.trim(), m.skill]);
+      }
+    }
     for (const sig of m.signals || []) {
       if (sig.type === "pyproject_dep") pyprojectDeps.set(sig.name.toLowerCase(), m.skill);
       else if (sig.type === "pyproject_section") pyprojectSections.push([sig.section, m.skill]);
@@ -148,8 +183,7 @@ export async function detectEnv(projectRoot) {
         } catch {
           // Ignore malformed optional signals; validation catches shipped map errors.
         }
-      }
-      else if (sig.type === "file_glob") fileGlobs.push([sig.pattern, m.skill]);
+      } else if (sig.type === "file_glob") fileGlobs.push([sig.pattern, m.skill]);
     }
   }
 
@@ -157,12 +191,14 @@ export async function detectEnv(projectRoot) {
 
   // pyproject.toml
   let pyprojectText = "";
+  let projectName = "";
   try {
     pyprojectText = readFileSync(join(root, "pyproject.toml"), "utf8");
   } catch {
     pyprojectText = "";
   }
   if (pyprojectText) {
+    projectName = extractProjectName(pyprojectText);
     const lower = pyprojectText.toLowerCase();
     for (const [name, skill] of pyprojectDeps) {
       const re = new RegExp(`["']${escapeRegex(name)}(?:[\\[\\s>=<!~,"']|$)`);
@@ -211,6 +247,11 @@ export async function detectEnv(projectRoot) {
     if (globExists(root, pattern)) detected.add(skill);
   }
 
+  const ownEntry = projectName ? ownPackageToSkill.get(projectName) : undefined;
+  if (ownEntry) {
+    detected.delete(ownEntry[1]);
+  }
+
   // Order by priority (desc) then declaration order
   const ordered = matchers
     .map((m, i) => ({ m, i }))
@@ -218,19 +259,35 @@ export async function detectEnv(projectRoot) {
     .map(({ m }) => m.skill);
   const finalSkills = ordered.filter((s) => detected.has(s));
 
-  const matchersBySkill = Object.fromEntries(matchers.map((m) => [m.skill, m]));
   const parts = [];
   if (intro) parts.push(intro);
-  for (const s of finalSkills) {
-    const reminder = matchersBySkill[s]?.reminder;
-    if (reminder) parts.push(reminder);
+  if (ownEntry) {
+    const [ownPkgDisplay, ownSkill] = ownEntry;
+    parts.push(
+      `Upstream library workspace detected (\`${ownPkgDisplay}\`). Do NOT rely on \`litestar:${ownSkill}\` or consumer skills for \`${ownPkgDisplay}\` internals or APIs — you are working on the library itself; treat this repository's source code as the source of truth (changes here may require a follow-up update to \`litestar-skills\`).`,
+    );
+    if (finalSkills.length > 0) {
+      const qualified = finalSkills.map((s) => `litestar:${s}`).join(", ");
+      parts.push(
+        `Detected stack skills: ${qualified} (use only for sibling-library conventions, never for \`${ownPkgDisplay}\` internals).`,
+      );
+    }
+  } else if (finalSkills.length > 0) {
+    const qualified = finalSkills.map((s) => `litestar:${s}`).join(", ");
+    parts.push(
+      `Detected stack skills: ${qualified}. Load the matching skill before implementing or reviewing changes.`,
+    );
   }
 
-  return {
+  const result = {
     detected_skills: finalSkills,
-    context: parts.join("\n\n"),
+    context: parts.join(" "),
     project_root: root,
   };
+  if (ownEntry) {
+    result.suppressed_own_skill = ownEntry[1];
+  }
+  return result;
 }
 
 // CLI entry: run only when invoked directly.

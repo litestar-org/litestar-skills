@@ -101,7 +101,16 @@ The process-local caches cover:
 - missing optional module results.
 
 Public discovery functions return copies where appropriate so callers cannot
-mutate cached lists. Clear every cache with:
+mutate cached lists:
+
+- `discover_feature_packages(packages)` -> `tuple[str, ...]`
+- `discover_controllers(packages, module_names=("controllers", "routes", "controller", "route"))` -> `list[type[Controller]]`
+- `discover_listeners(packages, module_names=("events", "listeners"))` -> `list[EventListener]`
+- `discover_queue_tasks(packages, module_names=("jobs",), *, force_reload=False)` -> `tuple[str, ...]`
+- `find_controllers_in_module(module)` -> `list[type[Controller]]`
+- `find_listeners_in_module(module)` -> `list[EventListener]`
+
+Clear every cache with:
 
 ```python
 from litestar_autowire import clear_autowire_cache

@@ -1,19 +1,108 @@
+import inspect as stdlib_inspect
+from decimal import Decimal
 from importlib.metadata import version
-from typing import Any, cast
+from typing import Annotated, Any, cast
 
 import msgspec
 import pytest
 
 
-def test_msgspec_0211_rename_and_meta_contract() -> None:
+def test_msgspec_0211_public_api_and_exceptions_contract() -> None:
+    """Verify top-level exports, submodules, and exception hierarchy in msgspec 0.21.1."""
     assert version("msgspec") == "0.21.1"
+    assert msgspec.__version__ == "0.21.1"
 
-    class User(msgspec.Struct, rename="camel"):
+    expected_exports = {
+        "NODEFAULT",
+        "UNSET",
+        "DecodeError",
+        "EncodeError",
+        "Meta",
+        "MsgspecError",
+        "Raw",
+        "Struct",
+        "StructMeta",
+        "UnsetType",
+        "ValidationError",
+        "convert",
+        "defstruct",
+        "field",
+        "inspect",
+        "json",
+        "msgpack",
+        "structs",
+        "to_builtins",
+        "toml",
+        "yaml",
+    }
+    assert expected_exports <= set(dir(msgspec))
+    assert issubclass(msgspec.EncodeError, msgspec.MsgspecError)
+    assert issubclass(msgspec.DecodeError, msgspec.MsgspecError)
+    assert issubclass(msgspec.ValidationError, msgspec.DecodeError)
+    assert isinstance(msgspec.UNSET, msgspec.UnsetType)
+    assert bool(msgspec.UNSET) is False
+
+
+def test_msgspec_0211_struct_options_and_helpers_contract() -> None:
+    """Verify Struct options, StructConfig, structs helpers, and 0.20/0.21 behavior."""
+    with pytest.raises(ValueError, match="Cannot set gc=False and dict=True"):
+        msgspec.defstruct("InvalidStruct", [("x", int)], gc=False, dict=True)
+
+    class User(
+        msgspec.Struct,
+        tag="user",
+        tag_field="kind",
+        rename="camel",
+        omit_defaults=True,
+        forbid_unknown_fields=True,
+        frozen=True,
+        eq=True,
+        order=True,
+        kw_only=True,
+        repr_omit_defaults=True,
+        array_like=False,
+        gc=True,
+        weakref=True,
+        dict=True,
+        cache_hash=True,
+    ):
         first_name: str
+        nickname: str | msgspec.UnsetType = msgspec.UNSET
+        role: str = msgspec.field(default="member", name="userRole")
 
-    assert msgspec.to_builtins(User(first_name="Ada")) == {"firstName": "Ada"}
-    with pytest.raises(TypeError):
-        cast("Any", msgspec.Meta)(rename="camel")
+    cfg = User.__struct_config__
+    assert isinstance(cfg, msgspec.structs.StructConfig)
+    assert cfg.tag == "user"
+    assert cfg.tag_field == "kind"
+    assert cfg.omit_defaults is True
+    assert cfg.forbid_unknown_fields is True
+    assert cfg.frozen is True
+    assert cfg.eq is True
+    assert cfg.order is True
+    assert cfg.repr_omit_defaults is True
+    assert cfg.array_like is False
+    assert cfg.gc is True
+    assert cfg.weakref is True
+    assert cfg.dict is True
+    assert cfg.cache_hash is True
+
+    u = User(first_name="Ada")
+    assert msgspec.to_builtins(u) == {"kind": "user", "firstName": "Ada"}
+    assert msgspec.structs.asdict(u) == {"first_name": "Ada", "nickname": msgspec.UNSET, "role": "member"}
+    assert msgspec.structs.astuple(u) == ("Ada", msgspec.UNSET, "member")
+
+    msgspec.structs.force_setattr(u, "first_name", "Grace")
+    assert u.first_name == "Grace"
+
+    field_infos = msgspec.structs.fields(User)
+    assert [f.name for f in field_infos] == ["first_name", "nickname", "role"]
+    assert [f.encode_name for f in field_infos] == ["firstName", "nickname", "userRole"]
+    assert [f.required for f in field_infos] == [True, False, False]
+    assert field_infos[0].default is msgspec.NODEFAULT
+
+    assert msgspec.inspect.is_struct(u) is True
+    assert msgspec.inspect.is_struct_type(User) is True
+    assert isinstance(User, msgspec.StructMeta)
 
     class PostInitStruct(msgspec.Struct):
         count: int
@@ -25,3 +114,51 @@ def test_msgspec_0211_rename_and_meta_contract() -> None:
     replaced = msgspec.structs.replace(PostInitStruct(count=1), count=2)
     assert replaced.count == 2
     assert replaced.initialized is True
+
+    copied = PostInitStruct(count=1).__replace__(count=3)
+    assert copied.count == 3
+    assert copied.initialized is True
+
+
+def test_msgspec_0211_meta_schema_and_codecs_contract() -> None:
+    """Verify Meta constraints, JSON Schema 0.21 options, Raw, and dec_hook 0.21.1 error propagation."""
+    with pytest.raises(TypeError):
+        cast("Any", msgspec.Meta)(rename="camel")
+
+    with pytest.raises(TypeError):
+        msgspec.json.Decoder(Annotated[Decimal, msgspec.Meta(gt=0)])
+
+    with pytest.raises(TypeError):
+        msgspec.json.Decoder(Annotated[tuple[int, str], msgspec.Meta(min_length=1)])
+
+    class Item(msgspec.Struct):
+        tags: set[Annotated[str, msgspec.Meta(min_length=1)]]
+        scores: Annotated[tuple[int, ...], msgspec.Meta(min_length=1)]
+
+    schema_sig = stdlib_inspect.signature(msgspec.json.schema)
+    assert "ref_template" in schema_sig.parameters
+    assert "schema_hook" in schema_sig.parameters
+
+    item_schema = msgspec.json.schema(Item, ref_template="#/components/schemas/{name}")
+    assert item_schema["$ref"] == "#/components/schemas/Item"
+    defs = item_schema["$defs"]["Item"]
+    assert defs["properties"]["tags"]["uniqueItems"] is True
+
+    raw = msgspec.Raw(b'{"tags":["a"],"scores":[1,2]}')
+    assert msgspec.convert(raw.copy(), msgspec.Raw) == raw
+    decoded = msgspec.json.decode(raw.copy(), type=Item)
+    assert decoded == Item(tags={"a"}, scores=(1, 2))
+
+    def raising_dec_hook(tp: type, obj: object) -> object:
+        if tp is complex:
+            raise msgspec.DecodeError("custom decode failure")
+        raise NotImplementedError
+
+    with pytest.raises(msgspec.DecodeError) as exc_info:
+        msgspec.json.decode(b'"bad"', type=complex, dec_hook=raising_dec_hook)
+    assert type(exc_info.value) is msgspec.DecodeError
+
+    assert {"Encoder", "Decoder", "encode", "decode", "format", "schema", "schema_components"} <= set(dir(msgspec.json))
+    assert {"Encoder", "Decoder", "Ext", "encode", "decode"} <= set(dir(msgspec.msgpack))
+    assert set(msgspec.yaml.__all__) == {"encode", "decode"}
+    assert set(msgspec.toml.__all__) == {"encode", "decode"}

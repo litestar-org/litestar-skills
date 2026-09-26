@@ -26,9 +26,11 @@ In dev mode:
 7. The browser opens the HMR WebSocket against Litestar; Litestar proxies it
    to Vite.
 
-This single-port ASGI contract is the supported development path. Legacy
+This single-port ASGI contract (`ViteProxyMiddleware` + `/static/vite-hmr`, implemented with AnyIO byte-streaming in `0.32.0+`) is the supported development path across `spa`, `hybrid`, and `template` modes. Legacy
 `VITE_PROXY_MODE=direct` warns and becomes `"vite"`; `"direct"` is not a valid
 `RuntimeConfig.proxy_mode`.
+
+For secondary HTML documents opened outside the application origin and resolved via `ViteAssetLoader.resolve_html_entry(...)`, pass `absolute_dev_asset_urls=True` (`0.30.0+`).
 
 ## React Fast Refresh
 

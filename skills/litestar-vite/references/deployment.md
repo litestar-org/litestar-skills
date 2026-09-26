@@ -24,9 +24,8 @@ assets/main.<hash>.css           hashed CSS bundles
 
 ```python
 ViteConfig(
-    dev_mode=False,                   # CRITICAL — env-toggled
+    dev_mode=False,
     runtime=RuntimeConfig(start_dev_server=False),
-    ...
 )
 ```
 
@@ -42,20 +41,24 @@ runtime even when a CDN serves the hashed assets.
 
 ## Static Hosting Options
 
-### Litestar serves static (small/medium apps)
+### Litestar serves static (small/medium apps) or Granian native static (`0.30.1+`)
 
 ```python
+from litestar import Litestar
 from litestar_vite import RuntimeConfig, ViteConfig, VitePlugin
 
 vite_config = ViteConfig(
     runtime=RuntimeConfig(set_static_folders=True),
+    exclude_static_from_auth=True,
     dev_mode=False,
 )
 
-app = Litestar(plugins=[VitePlugin(config=vite_config)])
+vite_plugin = VitePlugin(config=vite_config)
+app = Litestar(plugins=[vite_plugin])
 ```
 
-The plugin registers production static routing from `PathConfig`.
+- `ViteConfig.exclude_static_from_auth=True` (default) attaches `opt={"exclude_from_auth": True}` directly to static route handlers (`0.30.1+`).
+- `vite_plugin.get_static_server_config()` returns `StaticServerConfig(placement=StaticPlacement.NATIVE | StaticPlacement.ASGI, mounts=(StaticServerMount(...),), reason=...)`. Granian 0.16+ (`GranianPlugin(static="auto")`) consumes `StaticPlacement.NATIVE` mounts when `dev_mode=False`, `set_static_folders=True`, `asset_url` is a local path prefix, and no custom `static_files_config` overrides are set.
 
 ### Reverse proxy (nginx, Caddy, Cloudflare)
 
@@ -70,10 +73,13 @@ from litestar_vite import DeployConfig, ViteConfig
 
 vite_config = ViteConfig(
     deploy=DeployConfig(
+        enabled=True,
         storage_backend="s3://my-bucket/assets",
+        storage_options={"anon": False},
         asset_url="https://cdn.example.com/assets/",
         delete_orphaned=True,
         include_manifest=True,
+        content_types={".wasm": "application/wasm"},
     )
 )
 ```
@@ -84,10 +90,11 @@ apply:
 ```bash
 litestar assets deploy --dry-run
 litestar assets deploy
+litestar assets deploy --storage gcs://my-bucket/assets --storage-option project=my-proj --no-delete
 ```
 
 The command builds first, recursively compares nested bundle assets, uploads
-changed files, and removes remote orphans when `delete_orphaned=True`. Use
+changed files, and removes remote orphans when `delete_orphaned=True` (`VITE_DEPLOY_DELETE`). Use
 `--no-build` only for an already verified bundle and `--no-delete` for
 additive-only rollout.
 

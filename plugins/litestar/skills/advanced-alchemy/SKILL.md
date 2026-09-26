@@ -1,6 +1,6 @@
 ---
 name: advanced-alchemy
-description: "Auto-activate for advanced_alchemy imports, alembic/, SQLAlchemyAsyncRepositoryService, SQLAlchemyAsyncConfig, repository_type, service_class, filters, or storage. Not for raw SQLAlchemy without Advanced Alchemy — use SQLAlchemy guidance."
+description: "Auto-activate for advanced_alchemy, alembic/, SQLAlchemyAsyncRepositoryService, SQLAlchemyAsyncConfig, repository_type, service_class, filters, or storage. Not for raw SQLAlchemy without Advanced Alchemy."
 ---
 
 # Advanced Alchemy
@@ -38,9 +38,9 @@ Advanced Alchemy is NOT a raw ORM — it is a **service/repository layer** built
 
 - **Base models** with automatic `id`, `created_at`, `updated_at` fields
 - **Repository pattern** for type-safe async CRUD
-- **Service layer** with lifecycle hooks (`to_model_on_create`, `to_model_on_update`)
+- **Service layer** with lifecycle hooks (`to_model_on_create`, `to_model_on_update`, `to_model_on_upsert`, `to_model_on_delete`)
 - **Framework plugins** for automatic session/transaction management
-- **Custom types**: `EncryptedString`, `FileObject`, `DateTimeUTC`, `GUID`, `Bool`, `Vector`, `TOTPSecret`, `OneTimeCode`
+- **Custom types**: `EncryptedString`, `EncryptedText`, `PasswordHash`, `FileObject`, `StoredObject`, `DateTimeUTC`, `GUID`, `Bool`, `JsonB`, `Vector`, `TOTPSecret`, `OneTimeCode`
 - **Alembic integration** for migrations via CLI
 
 ## Quick Reference
@@ -51,41 +51,45 @@ Advanced Alchemy is NOT a raw ORM — it is a **service/repository layer** built
 | --- | --- | --- | --- |
 | `UUIDAuditBase` | UUID v4 | `created_at`, `updated_at` | Default choice for most models |
 | `UUIDBase` | UUID v4 | None | Lookup tables, tags, no audit needed |
-| `UUIDv7AuditBase` | UUID v7 | `created_at`, `updated_at` | Time-ordered IDs when `uuid-utils` is installed or Python supplies UUIDv7 |
-| `BigIntAuditBase` | BigInt auto-increment | `created_at`, `updated_at` | Legacy systems, integer PKs |
-| `NanoIDAuditBase` | NanoID string | `created_at`, `updated_at` | URL-friendly short IDs |
-| `IdentityAuditBase` | database identity | `created_at`, `updated_at` | Native IDENTITY columns |
-| `DefaultBase` | None (define yourself) | None | Custom primary keys with AA table naming |
+| `UUIDv7AuditBase` / `UUIDv7Base` | UUID v7 | `created_at`, `updated_at` / None | Time-ordered IDs when `uuid-utils` is installed or Python supplies UUIDv7 |
+| `UUIDv6AuditBase` / `UUIDv6Base` | UUID v6 | `created_at`, `updated_at` / None | Time-ordered UUIDv6 IDs |
+| `BigIntAuditBase` / `BigIntBase` | BigInt auto-increment | `created_at`, `updated_at` / None | Legacy systems, integer PKs |
+| `NanoIDAuditBase` / `NanoIDBase` | NanoID string | `created_at`, `updated_at` / None | URL-friendly short IDs |
+| `IdentityAuditBase` / `IdentityBase` | database identity | `created_at`, `updated_at` / None | Native IDENTITY columns |
+| `DefaultBase` | None (define yourself) | None | Custom or composite primary keys with AA table naming |
+| `SQLQuery` | None | None | Custom mapped read-only SQL query projections |
 
 ### Repository Pattern
 
 | Repository | Purpose |
 | --- | --- |
-| `SQLAlchemyAsyncRepository[Model]` | Standard async CRUD |
-| `SQLAlchemyAsyncSlugRepository[Model]` | CRUD + automatic slug generation |
-| `SQLAlchemyAsyncQueryRepository` | Complex read-only queries (no model_type) |
+| `SQLAlchemyAsyncRepository[Model]` / `SQLAlchemySyncRepository[Model]` | Standard async/sync CRUD |
+| `SQLAlchemyAsyncSlugRepository[Model]` / `SQLAlchemySyncSlugRepository[Model]` | CRUD + slug generation helpers |
+| `SQLAlchemyAsyncQueryRepository` / `SQLAlchemySyncQueryRepository` | Complex read-only queries (no `model_type`) |
 
 ### Service Layer
 
 | Service | Purpose |
 | --- | --- |
-| `SQLAlchemyAsyncRepositoryService[Model]` | Full CRUD with lifecycle hooks |
-| `SQLAlchemyAsyncRepositoryReadService[Model]` | Read-only (get_many, get, count, exists) |
+| `SQLAlchemyAsyncRepositoryService[Model]` / `SQLAlchemySyncRepositoryService[Model]` | Full CRUD with lifecycle hooks |
+| `SQLAlchemyAsyncRepositoryReadService[Model]` / `SQLAlchemySyncRepositoryReadService[Model]` | Read-only (`get_many`, `get`, `count`, `exists`) |
+| `SQLAlchemyAsyncQueryService` / `SQLAlchemySyncQueryService` | Service wrapper around arbitrary SQL queries |
 
-Key lifecycle hooks: `to_model_on_create`, `to_model_on_update`, `to_model_on_upsert`.
+Key lifecycle hooks: `to_model_on_create`, `to_model_on_update`, `to_model_on_upsert`, `to_model_on_delete`.
 
 ## Custom Types
 
 | Type | Purpose | Notes |
 | --- | --- | --- |
-| `FileObject` | Object storage with lifecycle hooks | Tracks file state across session; auto-deletes on row delete via `StoredObject` tracker |
-| `PasswordHash` | Hashed password storage | Supports Argon2, Passlib, and Pwdlib backends; hashes on assignment |
-| `EncryptedString` | Transparent encryption at rest | Pass a stable key explicitly; the random default is deprecated |
-| `UUID6` / `UUID7` | Time-sortable UUID variants | UUID7 preferred for standardized timestamp-ordered identifiers |
-| `DateTimeUTC` | Timezone-aware UTC datetime | Stores as UTC; raises on naive datetimes |
-| `Bool` | Dialect-aware boolean | Uses Oracle 23c native `BOOLEAN` when SQLAlchemy exposes it; falls back to stock SQLAlchemy `Boolean` |
+| `FileObject` / `StoredObject` | Object storage with lifecycle hooks | Tracks file state across session; auto-deletes on row delete via `StoredObject` tracker; use `FileObjectList` for multi-file JSON arrays |
+| `PasswordHash` | Hashed password storage | Supports Argon2, Passlib, and Pwdlib backends; returns `HashedPassword` with `.verify()` and `.verify_and_update()` |
+| `EncryptedString` / `EncryptedText` | Transparent encryption at rest | Supports `FernetBackend` (client-side) and `PGCryptoBackend` (server-side); pass a stable key explicitly |
+| `GUID` | Cross-dialect UUID column | Native `UUID` on PostgreSQL/DuckDB/CockroachDB, `BINARY(16)` or `CHAR(32)` fallback elsewhere; pair with `UUIDv7AuditBase` / `UUIDv6AuditBase` for time-sortable UUIDs |
+| `DateTimeUTC` | Timezone-aware UTC datetime | Stores as UTC; normalizes or raises on naive datetimes |
+| `Bool` | Dialect-aware boolean | Uses Oracle 23ai native `BOOLEAN` when SQLAlchemy exposes it; falls back to stock SQLAlchemy `Boolean` |
+| `JsonB` | Dialect-aware JSON / JSONB | Uses `JSONB` on PostgreSQL/CockroachDB, `JSON` on other backends, `BLOB` with `OSON` on Oracle |
 | `Vector` | Dialect-aware vector storage and distance operators | Oracle 23ai `VECTOR`, PostgreSQL/CockroachDB `pgvector`, JSON fallback without distance operators |
-| `TOTPSecret` / `OneTimeCode` | MFA and single-use code storage | `TOTPSecret` encrypts shared secrets; `OneTimeCode` hashes codes and requires an explicit hashing backend |
+| `TOTPSecret` / `OneTimeCode` | MFA and single-use code storage | `TOTPSecret` encrypts shared secrets and returns `TOTPProvider`; `OneTimeCode` hashes codes with TTL/attempt tracking and returns `HashedOneTimeCode` |
 
 ## Repository Service Layer
 

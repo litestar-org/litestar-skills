@@ -4,7 +4,11 @@ Detailed guide covering programmatic embedded Granian execution, parent supervis
 
 ## Embedded Programmatic Runtime
 
-In addition to the `litestar run` CLI, Granian can be instantiated and executed programmatically within Python scripts, integration test runners, or custom deployment harnesses.
+In addition to the `litestar run` CLI, Granian provides two programmatic entry points:
+
+### 1. Multi-Process / Multi-Thread Supervisor (`granian.Granian`)
+
+`granian.Granian` (alias for `granian.server.Server`, resolving to `MPServer` on GIL builds and `MTServer` on free-threaded builds) manages a full worker pool from a target import string and exposes lifecycle hooks (`on_startup`, `on_reload`, `on_shutdown`):
 
 ```python
 from pathlib import Path
@@ -14,7 +18,7 @@ from granian.http import HTTP1Settings, HTTP2Settings
 
 
 def start_server() -> None:
-    """Run an embedded Granian instance programmatically."""
+    """Run a programmatic Granian server pool."""
     server = Granian(
         target="app.server:app",
         address="0.0.0.0",
@@ -32,7 +36,7 @@ def start_server() -> None:
         http2_settings=HTTP2Settings(adaptive_window=True),
         log_enabled=True,
         log_access=True,
-        log_access_format='[%(time)s] "%(method)s %(path)s" %(status)d %(dt_ms).3f',
+        log_access_format='[%(time)s] "%(method)s %(path)s" %(status)d %(dt_ms).3f %(header{x-request-id})s',
         ssl_cert=Path("/etc/ssl/certs/app.crt"),
         ssl_key=Path("/etc/ssl/private/app.key"),
         metrics_enabled=False,
@@ -44,12 +48,40 @@ if __name__ == "__main__":
     start_server()
 ```
 
+### 2. Async In-Loop Embedded Server (`granian.server.embed.Server`)
+
+For running a live `Litestar` instance inside an existing `asyncio` event loop (such as custom async orchestrators or integration harnesses), use `granian.server.embed.Server`:
+
+```python
+from granian.constants import HTTPModes, Interfaces
+from granian.server.embed import Server as EmbeddedServer
+from litestar import Litestar
+
+
+async def serve_in_loop(app: Litestar) -> None:
+    """Run an embedded Granian server inside the active asyncio loop."""
+    server = EmbeddedServer(
+        target=app,
+        address="127.0.0.1",
+        port=8000,
+        interface=Interfaces.ASGI,
+        runtime_threads=1,
+        http=HTTPModes.auto,
+        websockets=True,
+    )
+    await server.serve()
+```
+
+- `server.stop()` triggers a graceful shutdown of the embedded server.
+- `server.reload()` triggers a worker reload inside the loop.
+- Embedded mode is experimental and does not support `Interfaces.WSGI`, `reload=True`, `workers_max_rss`, or `metrics_enabled=True`.
+
 ### Interface Types (`granian.constants.Interfaces`)
 
-- `Interfaces.ASGI` (`"asgi"`): Standard Asynchronous Server Gateway Interface consumed by Litestar.
-- `Interfaces.RSGI` (`"rsgi"`): Granian's native Rust Server Gateway Interface for zero-copy buffer transfers and optimized asynchronous Python execution.
-- `Interfaces.WSGI` (`"wsgi"`): Synchronous Web Server Gateway Interface.
+- `Interfaces.ASGI` (`"asgi"`): Standard Asynchronous Server Gateway Interface with lifespan support consumed by Litestar.
 - `Interfaces.ASGINL` (`"asginl"`): ASGI No-Lifespan variant for environments where lifespan events are handled externally.
+- `Interfaces.RSGI` (`"rsgi"`): Granian's native Rust Server Gateway Interface.
+- `Interfaces.WSGI` (`"wsgi"`): Synchronous Web Server Gateway Interface.
 
 ---
 
@@ -75,11 +107,14 @@ When executing `litestar run` with `GranianPlugin`, the execution model consists
 └──────────────────────────┬─────────────────────────────┘
                            │ Supervised child group
 ┌──────────────────────────▼─────────────────────────────┐
-│  Granian Child Process Group (granian CLI / _runner)   │
+│  Granian Child Process Group (granian / _runner)       │
 │  - Master process manages worker pool                  │
 │  - Worker 1 .. Worker N execute ASGI application       │
 └────────────────────────────────────────────────────────┘
 ```
+
+- **Default Runner (`python -m granian`):** By default, `litestar-granian` invokes `python -m granian <app_path> --interface=asgi` (and appends `--factory` automatically when the Litestar target is an application factory).
+- **Compatibility Runner (`python -m litestar_granian._runner`):** Used automatically when `--fd`, `--reload-include`, or `--reload-exclude` is passed, patching `granian.cli.Server` with `LITESTAR_GRANIAN_FILE_DESCRIPTOR`, `LITESTAR_GRANIAN_RELOAD_INCLUDES`, or `LITESTAR_GRANIAN_RELOAD_EXCLUDES`.
 
 ### Signal Handling and Termination Deadlines
 
@@ -110,11 +145,11 @@ When `static="auto"` is configured:
 1. `litestar-granian` inspects all plugins registered on the `Litestar` application.
 2. It filters for plugins implementing the `get_static_server_config()` protocol (such as `litestar-vite`).
 3. If **exactly one** valid static provider is found, its configuration is validated:
-   - Placement must be `"native"`.
-   - Mount routes must be local absolute URL paths (e.g. `/static/web/`).
-   - Directories must exist on disk and contain at least one file.
-   - All mounts must share a consistent directory index (e.g. `index.html`).
-4. If validation succeeds, Granian natively configures `--static-path-route`, `--static-path-mount`, and `--static-path-expires`.
+   - Placement (when present) must be `"native"` (`"asgi"` placement or a truthy `fallback_reason` triggers fallback).
+   - Mount routes must be local absolute URL paths starting with `/` (e.g. `/static/web/`).
+   - Directories must exist on disk and contain at least one entry.
+   - All mounts must share a consistent directory index filename (e.g. `index.html` or `None`).
+4. If validation succeeds, Granian natively configures `--static-path-route`, `--static-path-mount`, `--static-path-dir-to-file` (when a directory index is set), and `--static-path-expires`.
 5. If zero or multiple static providers exist, or if validation fails, the supervisor logs an informational message (`"Using Litestar for static files"`) and falls back to Litestar's standard ASGI static routing.
 
 ### Explicit CLI Precedence
@@ -129,10 +164,10 @@ Granian runs in child worker processes and cannot share Python logger locks, str
 
 To provide consistent log formatting without cross-process corruption:
 
-1. `litestar_granian.logging.build_logging_config` inspects the parent application's logging configuration (standard library `logging` or `StructlogPlugin`).
-2. It extracts and pickles the active `Formatter` instance.
-3. It generates a temporary JSON configuration file with `load_serialized_formatter` instructions for Granian worker processes.
-4. Granian workers reconstruct identical formatting instances locally in child processes.
+1. `litestar_granian.logging.build_logging_config` first inspects the active `"litestar"` standard-library logger's handlers (including `QueueHandler` listeners) and falls back to `app.logging_config` (or `standard_lib_logging_config` wrapped by `StructlogPlugin`).
+2. It detaches and pickles a clean copy of the active `Formatter` instance (preserving processor lists such as `processors` and `foreign_pre_chain`).
+3. It generates a temporary mode-600 JSON configuration file replacing Granian's `generic` (`_granian`) and `access` (`granian.access`) formatters with `litestar_granian.logging.load_serialized_formatter`.
+4. Granian workers reconstruct identical formatting instances locally in child processes without sharing handlers, queues, or locks.
 5. Providing an explicit `--log-config /path/to/config.json` CLI option overrides this bridge completely.
 
 ---
@@ -153,4 +188,4 @@ litestar --app app:app run \
 
 - **Exposed Data:** Rust runtime performance, TCP connection counts, in-flight backpressure queues, HTTP/1 & HTTP/2 stream counts, and worker memory metrics.
 - **Endpoint:** Serves Prometheus metrics on `http://<metrics-address>:<metrics-port>/metrics`.
-- **Application Request Metrics:** `--metrics` exports server-level metrics only. For Litestar route-level metrics (status codes, handler durations, route labels), register Litestar's `PrometheusPlugin` on the `Litestar` application.
+- **Application Request Metrics:** `--metrics` exports server-level metrics only. When enabled without Litestar's `PrometheusPlugin` or `PrometheusMiddleware`, `litestar run` prints a warning that application-level request metrics are not being exported. Register Litestar's `PrometheusPlugin` on the `Litestar` application to export route-level request metrics.

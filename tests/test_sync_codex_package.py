@@ -19,10 +19,12 @@ def _write_fake_repo(root: Path) -> None:
         ".codex-plugin/plugin.json": '{"name": "litestar"}\n',
         ".codex/agents/litestar-reviewer.toml": 'name = "litestar-reviewer"\n',
         ".codex/config.toml": "[profiles.litestar]\n",
+        ".codex/hooks.json": '{"hooks": {"SessionStart": []}}\n',
         "skills/litestar/SKILL.md": "---\nname: litestar\n---\n",
         "skills/litestar/references/example.md": "# Example\n",
         "commands/litestar/review.toml": 'description = "Review"\n',
-        "hooks/hooks-codex.json": "{}\n",
+        "hooks/hooks.json": '{"hooks": {"SessionStart": [{"matcher": "claude"}]}}\n',
+        "hooks/hooks-codex.json": '{"hooks": {"SessionStart": []}}\n',
         "hooks/lib/skill-map.json": "{}\n",
     }
     for rel_path, content in files.items():
@@ -61,6 +63,9 @@ def test_sync_creates_real_package_tree_from_canonical_sources(fake_repo: Path) 
     assert (package / "commands" / "litestar" / "review.toml").is_file()
     assert (package / ".codex" / "agents" / "litestar-reviewer.toml").is_file()
     assert (package / "hooks" / "lib" / "skill-map.json").is_file()
+    expected_codex_hook = '{"hooks": {"SessionStart": []}}\n'
+    assert (package / "hooks" / "hooks.json").read_text(encoding="utf-8") == expected_codex_hook
+    assert (package / ".codex" / "hooks.json").read_text(encoding="utf-8") == expected_codex_hook
     _assert_no_symlinks(package)
 
 

@@ -34,7 +34,7 @@ same tagged template registry.
 | **Nuxt (Vue SSR)** | framework (`ssr`) | [`nuxt/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/nuxt) | Nuxt's own Vite setup | Litestar proxies API; Nuxt owns rendering. Type output → `./app/generated`. |
 | **SvelteKit** | framework (`ssr`) | [`sveltekit/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/sveltekit) | SvelteKit's own Vite setup | Framework owns rendering; Litestar is the API. |
 | **Astro** | framework (`ssg`) | [`astro/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/astro) | **`litestar-vite-plugin/astro`** (different import!) | Uses Astro's own `astro.config.mjs`; `apiProxy` points at Litestar. No `vite.config.ts` needed. |
-| **Inertia + React** | hybrid | [`react-inertia/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/react-inertia) | `@vitejs/plugin-react` | Server routing via `component=` route handlers. See [`../../litestar-inertia/SKILL.md`](../../litestar-inertia/SKILL.md). |
+| **Inertia + React** | hybrid | [`react-inertia/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/react-inertia) | `@vitejs/plugin-react` | Server routing via `component=` route handlers. See [`inertia.md`](inertia.md). |
 | **Inertia + React + Jinja** | hybrid | [`react-inertia-jinja/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/react-inertia-jinja) | `@vitejs/plugin-react` | Inertia with Jinja root template (useful for auth-guarded vs public shells). |
 | **Inertia + Vue** | hybrid | [`vue-inertia/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/vue-inertia) | `@vitejs/plugin-vue` | Server routing + Vue page components. |
 | **Inertia + Vue + Jinja** | hybrid | [`vue-inertia-jinja/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/vue-inertia-jinja) | `@vitejs/plugin-vue` | Inertia + Jinja root template. |
@@ -300,7 +300,7 @@ app = Litestar(
 
 TypeGen output path convention: **`./resources/generated`** for Inertia.
 
-See [`../../litestar-inertia/SKILL.md`](../../litestar-inertia/SKILL.md) for the full four-library integration.
+See [`inertia.md`](inertia.md) for the full four-library integration.
 
 ---
 
@@ -384,6 +384,86 @@ export default defineConfig({
   ],
 })
 ```
+
+---
+
+## Secondary HTML Entrypoints (`0.30.0+`)
+
+When an application serves extra Vite-transformed HTML entrypoints alongside its primary shell (for example, an embedded widget or secondary micro-frontend shell), resolve them through `ViteAssetLoader.resolve_html_entry()` or `resolve_html_entry_sync()`:
+
+```python
+from pathlib import Path
+from litestar import get
+from litestar.response import Response
+from litestar_vite import HTMLEntryResolutionError, ViteAssetLoader
+
+loader = ViteAssetLoader(config=vite_config)
+
+
+@get("/widget", media_type="text/html")
+async def widget() -> Response[str]:
+    try:
+        html = await loader.resolve_html_entry(
+            "resources/widget.html",
+            production_path=Path("public/widget.html"),
+            absolute_dev_asset_urls=True,
+        )
+    except HTMLEntryResolutionError as exc:
+        return Response(content=str(exc), status_code=503)
+    return Response(content=html, media_type="text/html")
+```
+
+- In dev mode, `resolve_html_entry` POSTs `{ "entry": "resources/widget.html" }` to the JS plugin's `/__litestar__/transform-index` middleware and optionally rewrites root-relative asset URLs to absolute Vite dev server URLs when `absolute_dev_asset_urls=True`.
+- In production, it reads `production_path` from disk.
+- Missing files or dev-server errors raise `HTMLEntryResolutionError`.
+
+---
+
+## UI Component Fragments & `<litestar-island>` (`0.32.0+`)
+
+On `0.32.0` (`feat/ssr-fragments`), template and HTMX applications can server-render individual React (`.tsx`/`.jsx`), Vue (`.vue`), Svelte (`.svelte`), or Astro (`.astro`) components without converting the entire route to Inertia or a SPA:
+
+- **Static fragments (`mode="static"`)**: Zero client-side JS hydration; returns pure HTML prepended with scoped `<link rel="stylesheet">` tags extracted from `manifest.json` (including transitive `imports` CSS chunks).
+- **Interactive islands (`mode="island"`)**: Wraps rendered markup in `<litestar-island data-island-component="..." data-island-props="..." id="island-...">` so `getIslandClientScript()` (`litestar-vite-plugin/fragments`) hydrates only the interactive island on the client.
+
+### Returning a fragment from a Litestar handler
+
+```python # pragma: legacy-example
+from litestar import get
+from litestar_vite import ComponentResponse
+
+
+@get("/fragments/user-card")
+async def user_card() -> ComponentResponse:
+    return ComponentResponse(
+        "resources/components/UserCard.vue",
+        props={"name": "Ada", "role": "Admin"},
+        mode="static",
+    )
+
+
+@get("/fragments/counter")
+async def counter_island() -> ComponentResponse:
+    return ComponentResponse(
+        "resources/components/Counter.tsx",
+        props={"initial": 10},
+        mode="island",
+    )
+```
+
+### Rendering fragments inside Jinja2 templates
+
+`VitePlugin` registers `vite_fragment` (and alias `render_fragment`) as Jinja2 template callables:
+
+```html
+<!-- Static server-rendered component -->
+{{ vite_fragment("resources/components/UserProfile.vue", user=user) }}
+
+<!-- Interactive island -->
+{{ vite_fragment("resources/components/Counter.tsx", props={"initial": 0}, mode="island") }}
+```
+
+In development, `FragmentEngine` dispatches `render_fragment` over `TCPStreamIPCTransport` to `/__litestar_ssr__` (`litestarViteSsrPlugin` using Vite 7+ `ModuleRunner`). In production, it uses `StdioIPCTransport` backed by `litestar-vite-ssr-worker`.
 
 ---
 

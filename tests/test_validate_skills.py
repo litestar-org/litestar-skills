@@ -100,10 +100,10 @@ class TestValidateSkill:
     def test_description_too_long_yields_violation(self, tmp_path: Path) -> None:
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
-        long_desc = "x" * 1025
+        long_desc = "x" * 221
         skill = _write_skill(tmp_path, "toolong", description=long_desc)
         violations = mod.validate_skill(skill)
-        assert any("1025" in v.message for v in violations)
+        assert any("221" in v.message for v in violations)
 
     def test_description_empty_yields_violation(self, tmp_path: Path) -> None:
         mod = _load_validator()
@@ -187,6 +187,17 @@ class TestValidateSkill:
         skill = _write_skill(tmp_path, "broken-link", body=body)
         violations = mod.validate_skill(skill)
         assert any("broken link" in v.message.lower() for v in violations)
+
+    def test_links_inside_fenced_and_inline_code_are_ignored(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        body = (
+            VALID_SKILL_BODY
+            + "\nInline `[fake](./missing-inline.md)` and fenced:\n\n```markdown\n[fake](./missing-fenced.md)\n```\n"
+        )
+        skill = _write_skill(tmp_path, "code-links", body=body)
+        violations = mod.validate_skill(skill)
+        assert violations == []
 
     def test_valid_relative_link_resolves(self, tmp_path: Path) -> None:
         mod = _load_validator()
@@ -457,7 +468,9 @@ class TestValidateHookManifest:
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
         root_hook = tmp_path / "hooks.json"
-        root_hook.write_text(json.dumps({"hooks": {"SessionStart": []}}) + "\n")
+        root_hook.write_text(
+            json.dumps({"litestar-priming": {"PreInvocation": [{"type": "command", "command": "x"}]}}) + "\n"
+        )
         claude_hook = self._write_manifest(
             tmp_path,
             'r="${CLAUDE_PLUGIN_ROOT:-}"; [ -n "$r" ] || exit 0; bash "${r%/}/hooks/session-start.sh"',
@@ -467,6 +480,43 @@ class TestValidateHookManifest:
 
         assert manifests[root_hook] == "antigravity"
         assert manifests[claude_hook] == "claude"
+
+    def test_antigravity_rejects_session_start_schema(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        root_hook = tmp_path / "hooks.json"
+        root_hook.write_text(json.dumps({"hooks": {"SessionStart": []}}) + "\n")
+        violations = mod.validate_hook_manifest(root_hook, "antigravity")
+        assert any("preinvocation" in v.message.lower() for v in violations)
+
+    def test_antigravity_accepts_named_pre_invocation_schema(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        root_hook = tmp_path / "hooks.json"
+        cmd = 'r="${ANTIGRAVITY_PLUGIN_ROOT:-}"; [ -n "$r" ] || exit 0; bash "${r%/}/hooks/session-start.sh"'
+        root_hook.write_text(
+            json.dumps({"litestar-priming": {"PreInvocation": [{"type": "command", "command": cmd, "timeout": 25}]}})
+            + "\n"
+        )
+        violations = mod.validate_hook_manifest(root_hook, "antigravity")
+        assert violations == []
+
+    def test_codex_mirror_mismatch_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        self._write_manifest(
+            tmp_path,
+            'r="${CODEX_PLUGIN_ROOT:-}"; [ -n "$r" ] || exit 0; bash "${r%/}/hooks/session-start.sh"',
+            filename="hooks-codex.json",
+        )
+        codex_dir = tmp_path / ".codex"
+        codex_dir.mkdir(parents=True, exist_ok=True)
+        mirror = codex_dir / "hooks.json"
+        mirror.write_text(
+            json.dumps({"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "other"}]}]}}) + "\n"
+        )
+        violations = mod.validate_hook_manifest(mirror, "codex")
+        assert any("must match" in v.message.lower() for v in violations)
 
 
 class TestValidateCodexAgent:
@@ -562,6 +612,7 @@ class TestValidateManifest:
     def test_valid_claude_manifest_no_violations(self, tmp_path: Path) -> None:
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
+        (tmp_path / "a.md").write_text("# agent\n")
         manifest_dir = tmp_path / ".claude-plugin"
         manifest_dir.mkdir(parents=True, exist_ok=True)
         manifest = manifest_dir / "plugin.json"
@@ -572,14 +623,24 @@ class TestValidateManifest:
     def test_invalid_claude_agents_yields_violation(self, tmp_path: Path) -> None:
         mod = _load_validator()
         _patch_roots(mod, tmp_path)
+        (tmp_path / "dir").mkdir(parents=True, exist_ok=True)
         manifest_dir = tmp_path / ".claude-plugin"
         manifest_dir.mkdir(parents=True, exist_ok=True)
         manifest = manifest_dir / "plugin.json"
-        # Claude requires array for agents
         manifest.write_text('{"name": "x", "version": "0.1", "agents": "./dir/"}')
         violations = mod.validate_manifest(manifest)
         assert len(violations) == 1
         assert "array" in violations[0].message.lower()
+
+    def test_missing_manifest_path_yields_violation(self, tmp_path: Path) -> None:
+        mod = _load_validator()
+        _patch_roots(mod, tmp_path)
+        manifest_dir = tmp_path / ".codex-plugin"
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        manifest = manifest_dir / "plugin.json"
+        manifest.write_text('{"name": "x", "version": "0.1", "hooks": "./hooks/missing.json"}')
+        violations = mod.validate_manifest(manifest)
+        assert any("does not exist" in v.message.lower() for v in violations)
 
 
 class TestAgentsLeakGuard:

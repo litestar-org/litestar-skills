@@ -25,8 +25,22 @@ import { fileURLToPath } from "node:url";
 import { detectEnv } from "../../hooks/lib/detect-env.js";
 
 const PLUGIN_NAME = "litestar";
+const CACHE_TTL_MS = 30_000;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = resolve(__dirname, "../..");
+const _detectCache = new Map();
+
+async function detectEnvCached(cwd) {
+  const key = resolve(cwd || process.cwd());
+  const now = Date.now();
+  const cached = _detectCache.get(key);
+  if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+    return cached.value;
+  }
+  const value = await detectEnv(key);
+  _detectCache.set(key, { timestamp: now, value });
+  return value;
+}
 
 function isPluginDisabledByManagedConfig(ctx) {
   const managed = ctx?.config?.managedConfig ?? ctx?.config?.managed ?? null;
@@ -59,7 +73,7 @@ export default async (ctx) => {
       }
       try {
         const cwd = ctx?.project?.path || ctx?.directory || ctx?.worktree || process.cwd();
-        const detector = await detectEnv(cwd);
+        const detector = await detectEnvCached(cwd);
         const context = detector?.context;
         if (typeof context === "string" && context.length > 0) {
           output.system.push(context);

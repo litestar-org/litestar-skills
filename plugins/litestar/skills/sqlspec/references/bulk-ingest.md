@@ -2,13 +2,14 @@
 
 ## Overview
 
-SQLSpec `v0.62.0` exposes adapter-gated bulk ingest through three storage bridge methods:
+SQLSpec `v0.64.0` exposes adapter-gated bulk ingest and export through four storage bridge methods:
 
 - `load_from_arrow(table, source, *, overwrite=False)` -- load an Arrow table or coercible Arrow source.
-- `load_from_storage(table, source, *, file_format, overwrite=False)` -- load a local path or cloud URI.
+- `load_from_storage(table, source, *, file_format, overwrite=False)` -- load a local path, registered alias, or cloud URI.
 - `load_from_records(table, records, *, columns=None, overwrite=False)` -- load in-memory rows.
+- `select_to_storage(statement, *parameters, destination, format_hint=None, **kwargs)` -- export query results to local or cloud storage.
 
-All three return `StorageBridgeJob`; inspect `job.telemetry["rows_processed"]`, `bytes_processed`, and adapter-specific `extra` metadata.
+All four return `StorageBridgeJob`; inspect `job.telemetry["rows_processed"]`, `bytes_processed`, and adapter-specific `extra` metadata.
 
 ---
 
@@ -35,18 +36,18 @@ Records normalize to Arrow and route through the adapter's `load_from_arrow()` p
 
 ## Adapter Matrix
 
-| Adapter | Native ingest path | Gate / caveat |
+| Adapter | Native ingest / export path | Gate / caveat |
 | --- | --- | --- |
-| `asyncpg` | `COPY` via `copy_records_to_table` | Always on; atomic with exact row counts |
+| `asyncpg` | `COPY` via `copy_records_to_table` / `copy_from_query` | Always on; atomic with exact row counts |
 | `psycopg` sync/async | `COPY` streaming `write_row` | Always on; atomic with exact row counts |
-| `cockroach_asyncpg` / `cockroach_psycopg` | PostgreSQL-family `COPY` paths | Use the Cockroach-specific configs so retry and dialect behavior stay enabled |
+| `cockroach_asyncpg` / `cockroach_psycopg` | PostgreSQL-family `COPY` paths; opt-in `EXPORT INTO` / `IMPORT INTO` for cloud URIs | Set `enable_export_into=True` / `enable_import_into=True` in `driver_features` when using native CockroachDB cloud object-store SQL |
 | `psqlpy` | Binary `COPY` with `INSERT` fallback | Always on |
 | `adbc` | `adbc_ingest` | Driver-dependent; Flight SQL may fall back per row |
-| `duckdb` | register Arrow table, then `INSERT ... SELECT` | Single connection transaction |
+| `duckdb` | Register Arrow table (`INSERT ... SELECT`); direct `COPY` / `read_parquet` / `read_csv` / `read_json_auto` for `s3://`, `gs://`, `gcs://`, `r2://` when native secrets are configured | Falls back to `SyncStoragePipeline` when DuckDB native object-store secrets are not configured |
 | `sqlite` / `aiosqlite` | `executemany` in one `BEGIN IMMEDIATE` | Atomic when the driver owns the transaction |
 | `oracledb` | Direct path load in Thin mode; `executemany` fallback | Set `enable_direct_path_load=False` to force fallback |
 | `pymysql`, `asyncmy`, `aiomysql`, `mysqlconnector` | `executemany`; opt-in `LOAD DATA LOCAL INFILE` | Requires feature and connection local-infile gate |
-| `bigquery` | Parquet load job; optional Storage Write API for appends | `enable_storage_write_api`; `overwrite=True` uses Parquet `WRITE_TRUNCATE` |
+| `bigquery` | Parquet load job; optional Storage Write API for appends; `select_to_storage` via `EXPORT DATA` to `gs://` | `enable_storage_write_api`; `overwrite=True` uses Parquet `WRITE_TRUNCATE`; `select_to_storage` requires `gs://` destination |
 | `spanner` | `insert_or_update` mutations; optional Batch Write API | `enable_batch_write_api`; Batch Write commits groups independently |
 | `mssql_python` | `cursor.bulkcopy()` | Driver-managed |
 | `arrow_odbc` | `bulk_insert_arrow` | Driver-managed |
@@ -73,6 +74,6 @@ Spanner Batch Write API uses independently committed mutation groups. Treat it a
 
 - Use `load_from_records()` for in-memory data instead of hand-written `execute_many()` loops when ingest volume matters.
 - Use `load_from_arrow()` when the upstream step already produced Arrow.
-- Use `load_from_storage()` for staged files and cloud URIs. BigQuery requires `gs://` staging for load paths.
+- Use `load_from_storage()` and `select_to_storage()` for staged files and cloud URIs. BigQuery requires `gs://` staging for load and `EXPORT DATA` paths.
 - Check `config.storage_capabilities()` before building generic ingest tooling.
 - Keep adapter gates in configuration rather than per-call overrides.

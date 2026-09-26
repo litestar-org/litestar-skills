@@ -193,14 +193,20 @@ Backend config fields:
 | `ResendConfig` | `api_key=""`, `timeout=30`, `http_transport="httpx"` |
 | `SendGridConfig` | `api_key=""`, `timeout=30`, `http_transport="httpx"` |
 | `MailgunConfig` | `api_key=""`, `domain=""`, `region="us"`, `timeout=30`, `http_transport="httpx"` |
-| `SESConfig` | `region="us-east-1"`, optional AWS credentials, `timeout=30`, `http_transport="httpx"` |
+| `SESConfig` | `region="us-east-1"`, `aws_access_key_id=None`, `aws_secret_access_key=None`, `aws_session_token=None`, `timeout=30`, `http_transport="httpx"` |
 
 For SMTP, `use_tls=True` performs STARTTLS after connecting; `use_ssl=True`
 uses implicit TLS. Select the mode required by the SMTP server.
 
 For HTTP backends, `http_transport` accepts `"httpx"`, `"aiohttp"`, or an
-`HTTPTransport` class. Keep the default when the project has no transport
-preference.
+`HTTPTransport` class (`from litestar_email.transports import HTTPTransport, HTTPResponse, get_transport`). Keep the default when the project has no transport preference.
+
+For custom backends, subclass `BaseEmailBackend` and either pass its dotted
+import path to `EmailConfig(backend="my_app.email.CustomBackend")` or register a
+short name with `@email_backend("custom")`. Inspect registered names with
+`list_backends()` and resolve classes or instances with `get_backend_class()` or
+`get_backend()`. `ConsoleBackend` also accepts `stream: TextIO | None = None`
+when instantiated directly.
 
 ### Amazon SES Contract
 
@@ -208,7 +214,8 @@ The 0.4.0 SES backend:
 
 - calls the SES API v2 `SendEmail` endpoint with `Simple` content;
 - signs the exact transmitted JSON bytes with botocore SigV4;
-- uses explicit `SESConfig` credentials when both key fields are set;
+- uses explicit `SESConfig` credentials when both `aws_access_key_id` and
+  `aws_secret_access_key` are set (with optional `aws_session_token`);
 - otherwise uses botocore's default credential chain;
 - supports text plus the first `text/html` alternative;
 - supports `to`, `cc`, `bcc`, and the complete `reply_to` list;
@@ -216,7 +223,8 @@ The 0.4.0 SES backend:
   not support raw MIME attachments;
 - rejects messages with neither a non-empty text body nor an HTML alternative;
 - always propagates `EmailRateLimitError` and `EmailAuthenticationError`, even
-  when `fail_silently=True`.
+  when `fail_silently=True` (all HTTP API backends — Resend, SendGrid, Mailgun,
+  and SES — always propagate `EmailRateLimitError`).
 
 Use SMTP or another attachment-capable backend when the message includes
 files. Do not imply that SES 0.4.0 sends raw MIME content.
@@ -363,8 +371,9 @@ For direct backend tests, use `backend = config.get_backend()` and await
   `backend=ResendConfig(...)`, `backend=SendGridConfig(...)`,
   `backend=MailgunConfig(...)`, or `backend=SESConfig(...)`.
 - Do not send SES attachments. Select an attachment-capable backend.
-- Do not assume `fail_silently=True` suppresses every exception. SES
-  authentication and rate-limit failures always propagate.
+- Do not assume `fail_silently=True` suppresses every exception. Rate-limit
+  failures (`EmailRateLimitError`) on HTTP API backends and SES authentication
+  failures (`EmailAuthenticationError`) always propagate.
 - Do not hard-code API keys, SMTP passwords, or AWS credentials.
 - Do not force a provider migration. Match the project's deployed backend and
   operational constraints.
@@ -450,8 +459,8 @@ app = Litestar(
 
 ## References Index
 
-- [Litestar dependency injection](../litestar-di/SKILL.md)
-- [Litestar settings](../litestar-settings/SKILL.md)
+- [Litestar dependency injection](../litestar/references/di-and-dishka.md)
+- [Litestar settings](../litestar/references/settings.md)
 - [Litestar Queues](../litestar-queues/SKILL.md)
 - [Litestar SAQ](../litestar-saq/SKILL.md)
 - [Litestar testing](../litestar-testing/SKILL.md)

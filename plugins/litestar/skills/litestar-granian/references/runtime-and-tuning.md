@@ -1,6 +1,6 @@
 # Granian Runtime Architecture and Tuning Guide
 
-Deep-dive into concurrency models, thread architectures, HTTP protocol tuning, memory recycling, and runtime optimization with `litestar-granian` 0.16.0 and `granian` 2.8.1.
+Deep-dive into concurrency models, thread architectures, HTTP protocol tuning, memory recycling, and runtime optimization with `litestar-granian` 0.16.0 and `granian` 2.8.3.
 
 ## Concurrency and Process Model
 
@@ -23,7 +23,7 @@ Granian is built in Rust using Tokio, PyO3, and Hyper. It separates connection h
 │  │ Python Worker Runtime                  │  │
 │  │ - Event Loop: uvloop / rloop / asyncio │  │
 │  │ - Runtime Threads (1..N)               │  │
-│  │ - Blocking Thread Pool (sync handlers) │  │
+│  │ - Python Thread (1 on ASGI/RSGI)       │  │
 │  │ - Litestar ASGI Application            │  │
 │  └────────────────────────────────────────┘  │
 └──────────────────────────────────────────────┘
@@ -32,7 +32,7 @@ Granian is built in Rust using Tokio, PyO3, and Hyper. It separates connection h
 ### Worker Allocation (`--workers`)
 
 - **Default:** `1` worker.
-- **Rule of thumb:** `(2 * CPU_CORES) + 1` for I/O-bound workloads, or `1 * CPU_CORES` in memory-constrained container environments (e.g. Cloud Run, Kubernetes pods with 1-2 vCPUs).
+- **Rule of thumb:** `1 * CPU_CORES` (Granian warns when `--workers` exceeds `multiprocessing.cpu_count()`) or `(2 * CPU_CORES) + 1` only when load tests on I/O-bound workloads confirm higher throughput.
 - **Scale out over scale up:** Multiple worker processes provide GIL isolation in standard CPython builds.
 
 ### Threading Architecture
@@ -43,33 +43,34 @@ Granian provides three distinct thread tuning knobs:
    Number of Rust network-I/O threads per worker. This does not set the
    number of Python application threads.
 
-2. **`--runtime-blocking-threads` (default: automatically selected):**
+2. **`--runtime-blocking-threads` (default: unset, resolves to `512` in Granian):**
    Rust runtime threads used for blocking operations such as filesystem I/O.
 
 3. **`--blocking-threads` & `--blocking-threads-idle-timeout`:**
-   Threads per worker that interact with the Python interpreter. This setting
-   is primarily relevant to synchronous protocols; on asynchronous protocols
-   the value is fixed to one. Unused threads are terminated after the idle
-   timeout (default: 30s).
+   Threads per worker that interact with the Python interpreter. On ASGI and
+   RSGI, `blocking_threads` defaults to `1` and passing `--blocking-threads > 1`
+   raises `ConfigurationError('blocking_threads')` (multi-thread pools are only
+   used on `WSGI`). Unused threads are terminated after the idle timeout
+   (default: `30s`, valid range `5`–`600s`).
 
 ### Runtime Modes (`--runtime-mode`)
 
-- **`auto` (default in 0.16.0):** Granian selects the optimal runtime configuration based on the installed Python build and operating system.
-- **`mt` (Multi-Threaded):** Configures multi-threaded async execution across configured runtime threads.
-- **`st` (Single-Threaded):** Pins single-threaded event loop execution. Use when third-party libraries require thread affinity.
+- **`auto` (default in 0.16.0):** Granian selects the runtime mode automatically. Because Litestar runs over `Interfaces.ASGI` (`!= Interfaces.RSGI`), `auto` always resolves to `mt` on ASGI (as well as whenever `runtime_threads > 1` or `http == "2"`).
+- **`mt` (Multi-Threaded):** Configures multi-threaded Rust runtime execution across configured runtime threads.
+- **`st` (Single-Threaded):** Pins single-threaded Rust runtime execution. Use when third-party native extensions require strict thread affinity.
 
 ### Event Loops and Task Implementations
 
 - **`--loop`:**
   - `auto` (default): Uses Granian's standard loop selection. Optional loop
-    implementations require their matching package extra and explicit selection.
+    implementations require their matching package extra (`litestar-granian[uvloop]`, `litestar-granian[rloop]`, or `litestar-granian[winloop]`) and explicit selection.
   - `uvloop`: High-performance libuv-backed event loop.
   - `rloop`: Optional Rust-backed event loop installed with the `rloop` extra.
   - `asyncio`: Standard library asyncio event loop.
   - `winloop`: Windows-optimized event loop.
 - **`--task-impl`:**
   - `asyncio` (default): Standard Python task scheduling.
-  - `rust`: Delegates coroutine scheduling and wakeups directly to Granian's Rust core for reduced dispatch overhead.
+  - `rust`: Experimental Rust coroutine scheduler. Only available on Python < 3.12; on Python >= 3.12 Granian logs a warning and falls back to `asyncio`.
 
 ---
 
@@ -89,7 +90,7 @@ When the accepted-connection count reaches the backpressure threshold:
 2. The operating system holds client connections in the TCP queue.
 3. Once in-flight requests complete, the worker resumes socket reading.
 
-This prevents memory exhaustion and event loop starvation under sudden traffic spikes.
+This prevents memory exhaustion and event loop starvation under sudden traffic spikes. Granian 2.8+ also applies built-in backpressure over streamed/iterable ASGI responses.
 
 ---
 
@@ -100,7 +101,7 @@ This prevents memory exhaustion and event loop starvation under sudden traffic s
 - `--http auto` (default): Negotiates HTTP/1.1 and HTTP/2 via ALPN during TLS handshake; accepts HTTP/1.1 on cleartext TCP.
 - `--http 1`: Forces HTTP/1.1 only.
 - `--http 2`: Forces HTTP/2 only. **Note:** WebSockets are automatically disabled in HTTP/2-only mode.
-- *Note on HTTP/3:* Granian 2.8.1 does not support HTTP/3 / QUIC. Deploy an edge reverse proxy (such as Cloudflare, NGINX, or Envoy) in front of Granian for HTTP/3 termination.
+- *Note on HTTP/3:* Granian 2.8.3 does not support HTTP/3 / QUIC. Deploy an edge reverse proxy (such as Cloudflare, NGINX, or Envoy) in front of Granian for HTTP/3 termination.
 
 ### HTTP/1 Performance Knobs
 
@@ -152,27 +153,31 @@ litestar --app app:app run --workers-lifetime 4h
 
 ### Respawn and Termination Controls
 
-- `--respawn-failed-workers`: Automatically starts a replacement worker if an existing worker exits unexpectedly.
-- `--respawn-interval` (default: `3.5`s): Cooldown between respawning failed workers to prevent crash looping.
+- `--respawn-failed-workers`: Automatically starts a replacement worker if an existing worker exits unexpectedly (stops if a worker crashes again within 5.5 seconds of respawn).
+- `--respawn-interval` (default: `3.5`s): Cooldown between respawning workers during reload or lifetime rotation.
 - `--workers-kill-timeout` (default: `5`s in the Litestar CLI): Grace period
   allowed for worker shutdown; the supervisor adds five seconds before forced
   termination.
+- **Linux TCP Migration (`net.ipv4.tcp_migrate_req`):** On Linux (kernel >= 5.14), when running `--workers > 1` with `--workers-lifetime` or `--workers-max-rss` over TCP (not UDS), enable `sysctl net.ipv4.tcp_migrate_req=1` so queued connections are migrated instead of reset when a worker respawns.
+- **Reload Exclusions:** Enabling `--reload` (or passing `--reload-paths` / `--reload-dir`, `--reload-include`, or `--reload-exclude`) automatically disables `--workers-lifetime`, `--workers-max-rss`, and `--metrics` in Granian.
 
 ---
 
 ## Python Runtime & Platform Constraints
 
-### Free-Threaded Python (PEP 703 / Python 3.13+ GIL-Disabled)
+### Free-Threaded Python (PEP 703 / GIL-Disabled)
 
-When running on Python builds with the GIL disabled (`Py_GIL_DISABLED=1`):
+When running on Python builds with the GIL disabled (`Py_GIL_DISABLED=1`, Python 3.14+ in Granian 2.8+):
 
 - `--reload` is not supported and will raise a `UsageError`.
 - `--workers-max-rss` is not supported and will raise a `UsageError`.
-- On free-threaded Python, Granian workers are threads rather than processes;
+- On free-threaded Python, Granian workers are threads (`MTServer`) rather than processes (`MPServer`);
   ASGI still runs one event loop per worker. Free-threaded support is
   experimental, so tune workers and threads against the actual workload.
 
 ### Windows Platform Differences
 
-- `--fd` / `--file-descriptor` socket activation is not supported on Windows.
+- `--fd` / `--file-descriptor` socket activation is not supported on Windows (`UsageError`).
+- `--uds` / `--unix-domain-socket` is not supported on Windows (`ConfigurationError`).
+- `--workers > 1` falls back to `1` worker on Windows due to OS non-blocking socket sharing limitations.
 - Process termination uses `CTRL_BREAK_EVENT` with fallback to `taskkill /PID ... /T /F`.

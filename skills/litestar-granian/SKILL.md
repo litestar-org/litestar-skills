@@ -5,9 +5,10 @@ description: "Auto-activate for litestar_granian, GranianPlugin, litestar run Gr
 
 # litestar-granian
 
-`litestar-granian` 0.16.0 replaces Litestar's `run` command with a Granian-backed
-command and integrates Granian loggers with Litestar logging. It requires
-Granian 2.7.9 or later (the current lock uses 2.8.1).
+`litestar-granian` 0.16.0 replaces Litestar's `run` command with a
+supervised Granian command and bridges Litestar's active log formatter into
+Granian worker processes. It requires Granian 2.7.9 or later (the current
+lock uses 2.8.3).
 
 ## Code Style Rules
 
@@ -41,13 +42,15 @@ app = Litestar(
 litestar --app app:app run
 ```
 
-`GranianPlugin` registers the Granian-backed `run` command. During app
-initialization, it adds missing `_granian` and `granian.access` logger entries
-and a compatible formatter without replacing user-defined entries. It also
-handles the standard-library logging configuration wrapped by Litestar's
-`StructlogPlugin`.
+`GranianPlugin` registers the Granian-backed `run` command. When `litestar run`
+starts, `litestar-granian` inspects the active `"litestar"` standard-library
+logger (or `app.logging_config`, including `standard_lib_logging_config`
+wrapped by `StructlogPlugin`), serializes the active formatter into a temporary
+JSON `dictConfig` (`--log-config`), and reconstructs matching `generic`
+(`_granian`) and `access` (`granian.access`) formatters inside Granian worker
+processes.
 
-### Defaults in 0.16.0 / Granian 2.8.1
+### Defaults in 0.16.0 / Granian 2.8.3
 
 | Concern | Default |
 | --- | --- |
@@ -55,11 +58,11 @@ handles the standard-library logging configuration wrapped by Litestar's
 | HTTP mode | `auto` (HTTP/1 and HTTP/2 supported; HTTP/3 not supported) |
 | Workers | `1` worker (process on GIL builds; thread on free-threaded builds) |
 | Runtime threads | `1` per worker |
-| Runtime blocking threads | Automatically selected |
-| Blocking threads | Automatically selected (`30s` idle timeout) |
-| Runtime mode | `auto` (selects single- or multi-threaded Rust runtime) |
+| Runtime blocking threads | Automatically selected (`512` in Granian when unset) |
+| Blocking threads | `1` on ASGI (fixed; `> 1` only supported on WSGI; `30s` idle timeout) |
+| Runtime mode | `auto` (resolves to `mt` on ASGI) |
 | Event loop | `auto` (Granian's standard selection; optional loops require their extras) |
-| Async task implementation | `asyncio` (optional `rust` task scheduling) |
+| Async task implementation | `asyncio` (optional experimental `rust` on Python < 3.12) |
 | Backlog | `1024` globally (minimum `128`) |
 | Backpressure | `backlog / workers` per worker (minimum `1`) |
 | Granian log | Enabled at `info` (`--granian-log`, `--granian-log-level`) |
@@ -94,15 +97,15 @@ Use these option families:
 
 | Concern | Options |
 | --- | --- |
-| Processes and runtime | `--workers`, `--blocking-threads`, `--blocking-threads-idle-timeout`, `--runtime-threads`, `--runtime-blocking-threads`, `--runtime-mode`, `--loop`, `--task-impl` |
+| Processes and runtime | `--workers` (`--wc`, `--web-concurrency`, `-W`), `--blocking-threads`, `--blocking-threads-idle-timeout`, `--runtime-threads`, `--runtime-blocking-threads`, `--runtime-mode`, `--loop`, `--task-impl` |
 | Capacity and flow control | `--backlog`, `--backpressure` |
 | Protocols | `--http [auto\|1\|2]`, `--ws` / `--no-ws`, `--http1-*`, `--http2-*` |
-| Granian logging | `--granian-log`, `--granian-log-level`, `--granian-access-log`, `--granian-access-log-fmt` |
+| Granian logging | `--granian-log` / `--granian-no-log`, `--granian-log-level`, `--granian-access-log` / `--granian-no-access-log`, `--granian-access-log-fmt` |
 | Litestar logging | `--log-config` (formatter matching is automatic) |
-| TLS & mTLS | `--ssl-certificate` (`--ssl-certfile` alias), `--ssl-keyfile`, `--ssl-keyfile-password`, `--ssl-protocol-min`, `--ssl-ca`, `--ssl-crl`, `--ssl-client-verify` |
-| Worker lifecycle | `--respawn-failed-workers`, `--respawn-interval`, `--workers-lifetime`, `--workers-kill-timeout`, `--workers-max-rss`, `--rss-sample-interval`, `--rss-samples` |
-| Reload (dev) | `--reload`, `--reload-paths` (`--reload-include` alias), `--reload-ignore-dirs` (`--reload-exclude` alias), `--reload-ignore-patterns`, `--reload-ignore-paths`, `--reload-tick`, `--reload-ignore-worker-failure` |
-| Operations | `--uds`, `--uds-permissions`, `--fd`, `--process-name`, `--pid-file`, `--working-dir`, `--env-files`, `--metrics`, `--metrics-address`, `--metrics-port`, `--metrics-scrape-interval` |
+| TLS & mTLS | `--ssl-certificate` (`--ssl-certfile` alias), `--ssl-keyfile`, `--ssl-keyfile-password`, `--ssl-protocol-min`, `--ssl-ca`, `--ssl-crl`, `--ssl-client-verify` / `--no-ssl-client-verify`, `--create-self-signed-cert` |
+| Worker lifecycle | `--respawn-failed-workers` / `--no-respawn-failed-workers`, `--respawn-interval`, `--workers-lifetime`, `--workers-kill-timeout`, `--workers-max-rss`, `--rss-sample-interval`, `--rss-samples` |
+| Reload & debug (dev) | `--reload` (`-r`), `--reload-paths` (`--reload-dir`, `-R`), `--reload-include` (`-I`), `--reload-exclude` (`-E`), `--reload-ignore-dirs`, `--reload-ignore-patterns`, `--reload-ignore-paths`, `--reload-tick`, `--reload-ignore-worker-failure`, `--debug` (`-d`), `--pdb` (`--use-pdb`, `-P`) |
+| Operations | `--uds` (`--unix-domain-socket`, `-U`), `--uds-permissions`, `--fd` (`--file-descriptor`, `-F`), `--url-path-prefix`, `--process-name`, `--pid-file`, `--working-dir`, `--env-files`, `--metrics` / `--no-metrics`, `--metrics-address`, `--metrics-port`, `--metrics-scrape-interval` |
 | Static mounts | Repeatable `--static-path-route` and `--static-path-mount`, plus `--static-path-dir-to-file` and `--static-path-expires` |
 
 ### Supervision and Litestar CLI Parity
@@ -266,9 +269,11 @@ WebSocket endpoints, and load-test production capacity settings.
 - **Do not perform blocking I/O in an async handler.** Use an async client or
   explicitly offload blocking work according to the application's concurrency
   model; Granian's blocking-thread setting does not make arbitrary ASGI code non-blocking.
+- **Do not set `--blocking-threads` greater than 1 on ASGI.** Granian fixes
+  `blocking_threads` to `1` on ASGI/RSGI and rejects `--blocking-threads > 1` with `ConfigurationError`.
 - **Do not attempt `--reload` or `--workers-max-rss` on free-threaded Python.**
   Free-threaded Python builds (GIL disabled) reject these flags with `UsageError`.
-- **Do not expect HTTP/3 support.** Granian 2.8.1 supports HTTP/1.1 and HTTP/2; terminate HTTP/3 at an external proxy.
+- **Do not expect HTTP/3 support.** Granian 2.8.3 supports HTTP/1.1 and HTTP/2; terminate HTTP/3 at an external proxy.
 
 </guardrails>
 
@@ -342,10 +347,10 @@ application-level request metrics.
 
 - **[CLI Reference](references/cli-reference.md)** — Exhaustive parameter matrix for `litestar run` with `litestar-granian` and standalone `granian`.
 - **[Runtime & Tuning Guide](references/runtime-and-tuning.md)** — Concurrency models, thread pools, HTTP/1 & HTTP/2 flow control, memory limits, and platform constraints.
-- **[Embedded Runtime & Lifecycle](references/embedded-and-lifecycle.md)** — Programmatic `granian.Granian` execution, supervisor architecture, signals, lifespans, and static provider discovery.
+- **[Embedded Runtime & Lifecycle](references/embedded-and-lifecycle.md)** — Programmatic `granian.Granian` and `granian.server.embed.Server` execution, supervisor architecture, signals, lifespans, and static provider discovery.
 - **[litestar](../litestar/SKILL.md)** — Application initialization and plugin registration.
 - **[litestar-deployment](../litestar-deployment/SKILL.md)** — Deployment target, proxy, container, and process-manager selection.
-- **[litestar-plugins](../litestar-plugins/SKILL.md)** — Litestar plugin protocols and initialization behavior.
+- **[litestar plugins](../litestar/references/plugins.md)** — Litestar plugin protocols and initialization behavior.
 
 ## Official References
 
@@ -354,7 +359,7 @@ application-level request metrics.
 - [v0.16.0 plugin implementation](https://github.com/cofin/litestar-granian/blob/v0.16.0/litestar_granian/plugin.py)
 - [v0.16.0 changelog](https://github.com/cofin/litestar-granian/blob/v0.16.0/docs/changelog.rst)
 - [litestar-granian 0.16.0 on PyPI](https://pypi.org/project/litestar-granian/0.16.0/)
-- [granian v2.8.1 repository](https://github.com/emmett-framework/granian/tree/v2.8.1)
+- [granian v2.8.3 repository](https://github.com/emmett-framework/granian/tree/v2.8.3)
 - [granian documentation](https://granian.readthedocs.io/)
 
 ## Shared Styleguide Baseline

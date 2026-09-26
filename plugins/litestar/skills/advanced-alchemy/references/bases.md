@@ -450,11 +450,45 @@ class Setting(ProjectBase):
 
 ---
 
+## Custom Type Annotation Registry (`create_registry`)
+
+`orm_registry` (created by `create_registry()`) maps `UUID -> GUID`, `datetime.datetime -> DateTimeUTC`, `datetime.date -> Date`, `dict` / `dict[str, Any]` / `dict[str, str] -> JsonB`, `FileObject -> StoredObject`, and `FileObjectList -> StoredObject` (plus optional Pydantic URL/EmailStr/IP/Json types).
+
+SQLAlchemy resolves `type_annotation_map` via exact concrete type lookups, so concrete `msgspec.Struct` subclasses and `@dataclass` classes are not matched automatically. Either pass `mapped_column(JsonB)` explicitly on the column or register concrete types with `create_registry(custom_annotation_map=...)`:
+
+```python
+from advanced_alchemy.base import UUIDAuditBase, create_registry
+from advanced_alchemy.types import JsonB
+import msgspec
+from sqlalchemy.orm import Mapped, mapped_column
+
+
+class MetadataPayload(msgspec.Struct):
+    version: int
+    tags: list[str]
+
+
+custom_registry = create_registry(custom_annotation_map={MetadataPayload: JsonB})
+
+
+class CustomAuditBase(UUIDAuditBase):
+    __abstract__ = True
+    registry = custom_registry
+
+
+class Document(CustomAuditBase):
+    __tablename__ = "document"
+    payload: Mapped[MetadataPayload] = mapped_column()
+```
+
+---
+
 ## Quick Reference Table
 
 | Base Class | PK Type | Audit Fields | Best For |
 | --- | --- | --- | --- |
-| `DefaultBase` | None (define your own) | None | Custom primary keys with AA table naming |
+| `DefaultBase` | None (define your own) | None | Custom or composite primary keys with AA table naming |
+| `SQLQuery` | None | None | Custom mapped read-only SQL query projections |
 | `UUIDBase` | UUID v4 | None | Simple lookup tables |
 | `UUIDAuditBase` | UUID v4 | `created_at`, `updated_at` | General-purpose models |
 | `UUIDv6Base` | UUID v6 | None | Time-sortable without audit |

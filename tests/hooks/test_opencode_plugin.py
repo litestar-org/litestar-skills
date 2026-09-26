@@ -7,9 +7,10 @@ These tests exercise the plugin module in a Node subprocess, asserting:
    and `shell.env` handlers.
 3. The transform handler pushes a Litestar reminder into `output.system` when
    the cwd looks like a Litestar project.
-4. The transform handler is a no-op when `output.system` is missing.
-5. Managed-config (`disabledPlugins`/`allowedPlugins`) early-returns to `{}`.
-6. `shell.env` returns `LITESTAR_SKILLS_PLUGIN_ROOT`.
+4. The transform handler caches detection per cwd within the 30s TTL window.
+5. The transform handler is a no-op when `output.system` is missing.
+6. Managed-config (`disabledPlugins`/`allowedPlugins`) early-returns to `{}`.
+7. `shell.env` returns `LITESTAR_SKILLS_PLUGIN_ROOT`.
 """
 
 from __future__ import annotations
@@ -93,6 +94,24 @@ def test_transform_pushes_reminder(litestar_cwd: Path) -> None:
     assert len(system) == 1
     assert "litestar:litestar" in system[0]
     assert "litestar:sqlspec" in system[0]
+
+
+def test_transform_uses_ttl_cache_per_cwd(litestar_cwd: Path) -> None:
+    out = _run_node(
+        """
+        const { writeFileSync } = await import('node:fs');
+        const handlers = await mod.default({ directory: process.cwd() });
+        const first = {system: []};
+        await handlers['experimental.chat.system.transform']({}, first);
+        writeFileSync('pyproject.toml', '[project]\\nname = "myapp"\\ndependencies = []\\n');
+        const second = {system: []};
+        await handlers['experimental.chat.system.transform']({}, second);
+        process.stdout.write(JSON.stringify({first: first.system, second: second.system}));
+        """,
+        litestar_cwd,
+    )
+    assert out["first"] == out["second"]
+    assert "litestar:sqlspec" in out["second"][0]
 
 
 def test_transform_noops_when_output_shape_unrecognised(tmp_path: Path) -> None:

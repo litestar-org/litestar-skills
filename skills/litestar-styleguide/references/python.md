@@ -72,16 +72,18 @@ def calculate_total(items: list[Item], tax_rate: float) -> Decimal:
 | Constants | `SCREAMING_SNAKE_CASE` | `MAX_RETRIES` |
 | Private | `_leading_underscore` | `_internal_cache` |
 
-## Data Classes and Models
+## Schemas and Data Classes
+
+Prefer `msgspec.Struct` for wire schemas / DTOs in Litestar applications (match the project's stack when dataclasses or Pydantic are already in use).
 
 ```python
 from dataclasses import dataclass
 from uuid import UUID
+import msgspec
 
 
-@dataclass
-class UserCreate:
-    """Data for creating a new user."""
+class UserCreate(msgspec.Struct):
+    """Payload for creating a new user."""
 
     email: str
     name: str | None = None
@@ -89,7 +91,7 @@ class UserCreate:
 
 @dataclass
 class User:
-    """User entity."""
+    """User domain entity."""
 
     id: UUID
     email: str
@@ -109,16 +111,33 @@ class UserNotFoundError(Exception):
         super().__init__(f"User not found: {user_id}")
 
 
-# Catch specific exceptions, never bare except
+# Catch specific exceptions, never bare except; always chain with `from exc` or `from None` (Ruff B904)
 try:
     user = await get_user(user_id)
-except UserNotFoundError:
-    raise HTTPException(status_code=404)
+except UserNotFoundError as exc:
+    raise HTTPException(status_code=404, detail=str(exc)) from exc
 ```
 
 ## Dependency Injection Pattern
 
+Match the application's DI stack: Litestar built-in `Provide` + `NamedDependency[T]` for small/medium apps, or Dishka `Provider` when explicit multi-scope management is required.
+
 ```python
+# Option A: Litestar built-in DI
+from litestar.di import NamedDependency, Provide
+
+
+async def provide_user_service(
+    db_session: NamedDependency[AsyncSession],
+) -> UserService:
+    return UserService(session=db_session)
+
+
+dependencies = {"users_service": Provide(provide_user_service)}
+```
+
+```python
+# Option B: Dishka Provider
 from dishka import Provider, Scope, provide
 
 
@@ -181,10 +200,11 @@ from app.domain.users.service import UserService
 
 ```python
 import pytest
+from litestar.testing import AsyncTestClient
 
 
 # Function-based tests (not class-based)
-def test_user_creation():
+def test_user_creation() -> None:
     user = User(id=uuid4(), email="test@example.com", name=None)
     assert user.is_active is True
 
@@ -198,34 +218,58 @@ def test_user_creation():
         ("", False),
     ],
 )
-def test_email_validation(email: str, valid: bool):
+def test_email_validation(email: str, valid: bool) -> None:
     assert validate_email(email) == valid
 
 
-# Async tests
+# Async tests with Litestar AsyncTestClient
 @pytest.mark.anyio
-async def test_fetch_user(client: AsyncClient):
-    response = await client.get("/api/users/1")
+async def test_fetch_user(async_client: AsyncTestClient) -> None:
+    response = await async_client.get("/api/users/1")
     assert response.status_code == 200
 ```
 
-## Tooling
+## Tooling & Configuration (`ruff`, `mypy`, `pyright`, `prek`)
 
-- **Quality & Typing**: See `python-quality` skill (Ruff, Pyright).
-- **Emerging**: See `ty` skill (if installed).
-- **Test runner**: `pytest`
+- **Package & environment manager**: `uv` (`uv sync`, `uv run ...`, `uvx ...`)
+- **Linter & formatter**: `ruff` (`ruff check`, `ruff format`) — never combine with `black`, `isort`, or `flake8`
+- **Static type checkers**: `mypy` (strict mode) + `pyright` (strict mode)
+- **Pre-commit runner**: `prek` (Rust-based drop-in replacement for `pre-commit` that executes `.pre-commit-config.yaml` hooks with zero Python bootstrap overhead: `uv tool install prek`, `prek install`, `prek run --all-files`)
+- **Test runner**: `pytest` + `anyio` (see [testing.md](testing.md) and [litestar-testing](../../litestar-testing/SKILL.md))
+- **Build & packaging**: `hatchling` / `uv build` / PyApp (see [litestar-build](../../litestar-build/SKILL.md))
 
-## Build System
+### Canonical `pyproject.toml` Tool Configuration
 
-- **Backend**: `hatchling` (see `python-build` skill)
-- **Manager**: `uv` (see `python-uv` skill)
+```toml
+[tool.ruff]
+target-version = "py312"
+line-length = 120
 
-## Performance Optimizations
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "A", "S", "C4", "T20", "RET", "SIM", "ARG"]
+ignore = ["S101"]
 
-For performance-critical paths:
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "ARG", "T201", "S603", "S607"]
+# When using `from __future__ import annotations` with Dishka or Litestar controllers,
+# prevent flake8-type-checking (TC) from moving runtime-inspected types into TYPE_CHECKING:
+"**/controllers.py" = ["TC001", "TC002", "TC003"]
 
-- **MyPyC**: Compile native classes (see `python-mypyc` skill).
-- **Cython**: Use typed memoryviews (see `python-cython` skill).
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+```
 
 ## Anti-Patterns to Avoid
 

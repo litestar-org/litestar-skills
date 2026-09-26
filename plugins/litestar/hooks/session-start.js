@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 // hooks/session-start.js
-// SessionStart hook for litestar-skills (Node ESM port).
+// SessionStart / PreInvocation hook for litestar-skills (Node ESM port).
 // Detects host via env vars and emits the host-correct JSON shape.
 //
 // Hosts:
-//   CLAUDE_PLUGIN_ROOT  -> Claude Code  -> hookSpecificOutput.additionalContext
-//   CODEX_PLUGIN_ROOT   -> Codex CLI    -> hookSpecificOutput.additionalContext
-//   CURSOR_PLUGIN_ROOT  -> Cursor       -> additional_context
-//   (none of the above) -> Unknown      -> additional_context (Cursor-shape fallback)
+//   CLAUDE_PLUGIN_ROOT      -> Claude Code     -> hookSpecificOutput.additionalContext
+//   CODEX_PLUGIN_ROOT       -> Codex CLI       -> hookSpecificOutput.additionalContext
+//   ANTIGRAVITY_PLUGIN_ROOT -> Antigravity CLI -> injectSteps[].ephemeralMessage
+//   CURSOR_PLUGIN_ROOT      -> Cursor          -> additional_context
+//   (none of the above)     -> Unknown         -> additional_context (Cursor-shape fallback)
 
 import { detectEnv } from "./lib/detect-env.js";
 
 function pickHost(env) {
   if (env.CLAUDE_PLUGIN_ROOT) return "claude";
   if (env.CODEX_PLUGIN_ROOT) return "codex";
+  if (env.ANTIGRAVITY_PLUGIN_ROOT || env.AGY_PLUGIN_ROOT) return "antigravity";
   if (env.CURSOR_PLUGIN_ROOT) return "cursor";
   return "unknown";
 }
@@ -22,6 +24,11 @@ function shape(host, context) {
   if (host === "claude" || host === "codex") {
     return {
       hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: context },
+    };
+  }
+  if (host === "antigravity") {
+    return {
+      injectSteps: [{ ephemeralMessage: context }],
     };
   }
   // cursor + unknown

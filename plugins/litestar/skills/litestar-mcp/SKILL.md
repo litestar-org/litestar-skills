@@ -1,13 +1,13 @@
 ---
 name: litestar-mcp
-description: "Auto-activate for litestar_mcp, LitestarMCP, MCP, MCPConfig, mcp.app, mcp.run(), @mcp.tool/resource/prompt, MCPAuthConfig, MCPAuthBackend, mcp_tool=, mcp_resource=, Streamable HTTP, stdio, or OIDC MCP endpoints. Not for non-Litestar MCP servers or clients — use the official MCP Python SDK instead."
+description: "Auto-activate for litestar_mcp, LitestarMCP, MCP, MCPConfig, @mcp.tool/resource/prompt, MCPAuthConfig, mcp_tool=, mcp_resource=, Streamable HTTP, or stdio MCP endpoints. Not for non-Litestar MCP SDK servers."
 ---
 
 # litestar-mcp
 
 `litestar-mcp` exposes explicitly marked Litestar route handlers as [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools, resources, and prompts over JSON-RPC 2.0.
 
-Version `0.13.0` follows the stateless MCP specification (protocol `2026-07-28`). The transport is **POST-only and request-scoped**: the legacy `initialize` handshake, sessions and `Mcp-Session-Id`, `ping`, `GET` and `DELETE` transport handlers, replay, and `/.well-known/mcp-server.json` are removed. Each request supplies protocol version, method, and client capabilities; named calls also supply matching name or URI metadata. Call `server/discover` for capabilities. See [Stateless Protocol](references/stateless-protocol.md).
+Version `0.13.2` follows the stateless MCP specification (protocol `2026-07-28`). The transport is **POST-only and request-scoped**: the legacy `initialize` handshake, sessions and `Mcp-Session-Id`, `ping`, `GET` and `DELETE` transport handlers, replay, and `/.well-known/mcp-server.json` are removed. Each request supplies protocol version, method, and client capabilities; named calls also supply matching name or URI metadata. Call `server/discover` for capabilities. See [Stateless Protocol](references/stateless-protocol.md).
 
 Mark routes by passing `mcp_tool="name"`, `mcp_resource="name"`, or `mcp_prompt="name"` directly to the Litestar route decorator — Litestar funnels unknown kwargs into `handler.opt`, so no `opt={...}` wrapper is needed. Use the decorator forms for structured metadata: `@mcp_tool` adds schemas, annotations, scopes, and task policy; `@mcp_prompt` adds title, arguments, and icons. Route description keys are `mcp_description`, `mcp_resource_description`, and `mcp_prompt_description`; `MCPOptKeys` can rename every key the plugin reads. There is no `opt={"mcp_tool_name": ...}` form or `mcp_exclude` key. To hide a route, leave it unmarked.
 
@@ -375,6 +375,8 @@ To drop marked routes in bulk, use `MCPConfig` filters (`exclude_tags` / `exclud
 
 ### JSON-RPC Call
 
+Every HTTP `POST /mcp` request requires `params._meta` (`io.modelcontextprotocol/protocolVersion` and `io.modelcontextprotocol/clientCapabilities`) plus matching `MCP-Protocol-Version: 2026-07-28`, `Mcp-Method`, and (for named calls) `Mcp-Name` headers:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -382,7 +384,11 @@ To drop marked routes in bulk, use `MCPConfig` filters (`exclude_tags` / `exclud
   "method": "tools/call",
   "params": {
     "name": "add_to_cart",
-    "arguments": { "product_id": 42, "quantity": 3 }
+    "arguments": { "product_id": 42, "quantity": 3 },
+    "_meta": {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": {}
+    }
   }
 }
 ```
@@ -391,7 +397,11 @@ To drop marked routes in bulk, use `MCPConfig` filters (`exclude_tags` / `exclud
 
 `tools/list`, `resources/list`, `resources/templates/list`, and `prompts/list` use opaque cursor pagination. Clients pass `params.cursor` from `nextCursor` until the response omits it; clients do not send `limit`. Set server page size with `MCPConfig(list_page_size=...)`; invalid cursors return `INVALID_PARAMS` (`-32602`).
 
-Tool arguments are validated against Litestar's `handler.parsed_fn_signature` before dispatch.
+Tool arguments are validated against Litestar's `handler.parsed_fn_signature` before dispatch:
+
+- **Controller and route path parameters**: Handlers declared on `Controller` classes or standalone routes resolve path parameters per application (`app.state`) without requiring weak-referenceable handler objects.
+- **Omitted vs. explicit falsey bodies**: Omitting an optional `data` body preserves the handler's declared default, while explicit falsey JSON values (`null`, `false`, `0`, `""`, `[]`, `{}`) pass through unchanged.
+- **Parameter wire aliases**: Query parameter wire names declared via `QueryParameter(name=...)` or `Parameter(query=...)` (`ParameterKwarg.name`, including `advanced-alchemy` and `sqlspec` `create_filter_dependencies` providers such as `categoryNameIn`, `currentPage`, `pageSize`) are advertised in `inputSchema` and dispatched under their wire alias. `HeaderParameter` and `CookieParameter` annotations are skipped for query wire-name resolution. For backwards compatibility, callers sending the Python parameter name are rewritten to the wire name with a warning; when both are supplied, the wire name wins.
 
 Tool execution errors stay inside the tool result with `isError: true`; protocol errors such as unknown tool names use JSON-RPC errors. Resource and prompt handler failures use primitive-level JSON-RPC codes and preserve the handler HTTP status in `error.data.statusCode` when a handler response produced one.
 
@@ -401,7 +411,7 @@ Use `MCPConfig.before_tool_call` and `MCPConfig.after_tool_call` for audit, metr
 
 ### Dependency Providers And Dishka
 
-Litestar `Provide(...)` factory parameters that are user inputs, such as pagination or filter values, remain in tool schemas and forward during `tools/call`. When `dishka.integrations.litestar.setup_dishka()` is attached, provider-factory parameters whose annotated type is resolvable from `app.state.dishka_container` are treated as DI inputs instead of MCP arguments. Dishka remains optional.
+Litestar `Provide(...)` factory parameters that are user inputs, such as pagination or filter values (including wire-aliased `QueryParameter(name=...)` parameters from `advanced-alchemy` and `sqlspec` filter providers), remain in tool schemas and forward during `tools/call`. When `dishka.integrations.litestar.setup_dishka()` is attached, provider-factory parameters whose annotated type is resolvable from `app.state.dishka_container` are treated as DI inputs instead of MCP arguments. Dishka remains optional.
 
 ### Built-in OpenAPI Resource
 
@@ -611,11 +621,11 @@ app = Litestar(
 ## Cross-References
 
 - Use this skill for route marking, transport and stdio behavior, binary content, MCP auth metadata, and verification requests.
-- Use [litestar-auth-guards](../litestar-auth-guards/SKILL.md) when auth logic lives in normal Litestar guards or middleware.
+- Use [Litestar auth & guards](../litestar/references/auth-and-guards.md) when auth logic lives in normal Litestar guards or middleware.
 
 ## Official References
 
-- <https://github.com/cofin/litestar-mcp/tree/v0.13.0> — audited v0.13.0 source and tests
+- <https://github.com/cofin/litestar-mcp/tree/v0.13.2> — audited v0.13.2 source and tests
 - <https://cofin.github.io/litestar-mcp/>
 - <https://github.com/cofin/litestar-mcp>
 - <https://modelcontextprotocol.io/>

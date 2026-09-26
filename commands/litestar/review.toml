@@ -11,23 +11,23 @@ Review the files changed in the current branch (or the files the user points at)
 Apply the project's existing stack to each criterion — flag a violation only when code uses a pattern from a *different* stack than the rest of the project, not when it uses a valid alternative.
 
 1. **DTO / serialization correctness** — if project is on `msgspec`, are DTOs Structs with the class option `rename="camel"`? If on Pydantic, do models use `alias_generator=to_camel` + `ConfigDict(populate_by_name=True)`? Flag mixed stacks (msgspec Struct AND `BaseModel` in the same request path).
-2. **Guards** — auth enforced via Guards at Controller class level? No inline `if not request.user:` checks?
-3. **DI** — services injected via `Provide()` or Dishka `Inject[T]` per the project's DI choice? Nothing instantiated inside handlers?
+2. **Guards & security** — auth enforced via Guards at Controller class level (`skills/litestar/references/auth-and-guards.md`), or via `litestar-security` (`SecureController` with `auth: ClassVar[AuthenticationPolicy] = required(...)` / `any_of(...)` or `PublicController` on domain controllers, reserving `opt={"auth": ...}` for third-party/plugin controllers, plus `guards=[requires_role(...), requires_scope(...), requires_tenant(...)]` for snapshot-backed authorization predicates — `skills/litestar-security/SKILL.md`)? No inline `if not request.user:` checks or database I/O inside guard callables?
+3. **DI** — services injected via `Provide()` + `NamedDependency[T]` or Dishka `FromDishka as Inject[T]` per the project's DI choice (`skills/litestar/references/di-and-dishka.md`)? Nothing instantiated inside handlers?
 4. **Data access** — matches the project's stack? `SQLAlchemyAsyncRepositoryService` in an `advanced-alchemy` project, `SQLSpecAsyncService` + driver methods in a `sqlspec` project, or `async_sessionmaker` + hand-rolled statements in a raw-SA project. Flag cross-stack imports (e.g., an `advanced_alchemy` import inside a sqlspec-only repo).
-5. **Pagination** — matches the project's stack? `OffsetPagination[T]` + `create_filter_dependencies` for `advanced-alchemy`; `LimitOffsetFilter` + `OrderByFilter` for `sqlspec`; `.limit()` / `.offset()` + hand-rolled envelope for raw-SA. Flag hand-rolled `limit` / `offset` query params inside handlers in AA / sqlspec projects.
+5. **Pagination** — matches the project's stack? `OffsetPagination[T]` + `create_service_dependencies` / `create_filter_dependencies` for `advanced-alchemy`; `LimitOffsetFilter` + `OrderByFilter` + `OffsetPagination[T]` (`SQLSpecAsyncService.paginate` / `paginate_limit_offset`) for `sqlspec`; `.limit()` / `.offset()` + hand-rolled envelope for raw-SA. Flag hand-rolled `limit` / `offset` query params inside handlers in AA / sqlspec projects.
 6. **Exceptions** — custom hierarchy extending `ApplicationError`? Registered via `exception_handlers`? No inline try/except in handlers?
 7. **Settings** — matches the project's stack? `@dataclass(frozen=True)` + `get_env()` + `@lru_cache` if fresh project / no Pydantic; `pydantic_settings.BaseSettings` if Pydantic is already in-stack. Flag mixed (half-dataclass, half-BaseSettings). Flag `msgspec.Struct` used for config.
-8. **Async** — all I/O handlers are `async def`? No `asyncio.create_task()` for background work (dispatch to `litestar-queues` or SAQ, whichever the project picked)?
+8. **Async** — all I/O handlers are `async def`? No `asyncio.create_task()` for background work (dispatch to `litestar-queues` or `litestar-saq`, whichever the project picked)?
 9. **Controller structure** — domain-clustered (`/api/accounts`, `/api/teams`)? Not HTTP-method-clustered?
-10. **Plugin usage** — first-party plugins used where available? Check against the project's picked stack: Granian or uvicorn (the one the project chose), litestar-queues or SAQ with a broker matching the project, litestar-vite if there's a frontend, litestar-security, litestar-mcp, litestar-email, etc.
+10. **Plugin usage** — first-party plugins used where available? Check against the project's picked stack: Granian or uvicorn (the one the project chose), `litestar-queues` or `litestar-saq` with a backend/broker matching the project, `litestar-vite` (including Inertia via `ViteConfig(inertia=InertiaConfig(...))`) / `litestar-htmx` if there's a frontend, `litestar-security`, `litestar-autowire`, `litestar-mcp`, `litestar-email`, `ChannelsPlugin`, `litestar-ai`, etc.
 11. **Return types** — all handlers have explicit return type annotations?
 12. **`from __future__ import annotations`** — present in consumer app modules? Absent from library-introspected modules?
-13. **Match-your-stack hygiene** — no forced-path language inside the project's own docs / READMEs (e.g., "use X, not Y" where both are valid alternatives). Decision points to check: data access (`advanced-alchemy` / `sqlspec` / raw SA), DI (`Provide` / Dishka), background tasks (SAQ + Redis / SAQ + PostgreSQL), Channels backend (Memory / Redis / AsyncPg / PsycoPg / SQLSpec events), settings (`@dataclass` / `pydantic_settings`), serialization (`msgspec` / Pydantic), ASGI server (Granian / uvicorn), deployment target, caching, migrations, logging. Flag any doc that recommends one path as "canonical" while silently dismissing a valid alternative.
+13. **Match-your-stack hygiene** — no forced-path language inside the project's own docs / READMEs (e.g., "use X, not Y" where both are valid alternatives). Decision points to check: data access (`advanced-alchemy` / `sqlspec` / raw SA), DI (`Provide` / Dishka), background tasks (`litestar-queues` with SQLSpec / Advanced Alchemy / Redis / Valkey, or `litestar-saq` with Redis / PostgreSQL), Channels backend (Memory / Redis / AsyncPg / PsycoPg / SQLSpec events), settings (`@dataclass(frozen=True)` / `pydantic_settings`), serialization (`msgspec` / Pydantic), auth (`litestar-security` / native `Guard`), domain discovery (`litestar-autowire` / explicit `Router`), ASGI server (Granian / uvicorn), deployment target, caching, migrations, logging. Flag any doc that recommends one path as "canonical" while silently dismissing a valid alternative.
 
 ## Process
 
 1. Get the diff: `git diff main...HEAD` (or whatever the user specifies)
-2. For each file in the diff, check against the 12 criteria above
+2. For each file in the diff, check against the 13 criteria above
 3. Report findings as:
    - **Violation**: [criterion] in [file:line] — [what's wrong] — [fix suggestion]
    - **Good pattern**: [criterion] in [file:line] — correctly follows canonical pattern
@@ -37,8 +37,16 @@ Apply the project's existing stack to each criterion — flag a violation only w
 ## References
 
 Consult these skills for the canonical patterns:
-- `skills/litestar/SKILL.md` — guardrails + validation checklist
-- `skills/litestar-*/references/` — focused deep-dive references per topic
-- `skills/advanced-alchemy/SKILL.md` — service + repository patterns
-- `skills/msgspec/SKILL.md` — DTO patterns
+- `skills/litestar/SKILL.md` & `skills/litestar-styleguide/SKILL.md` — guardrails, validation checklist, and style baseline
+- `skills/litestar/references/handlers.md`, `skills/litestar/references/layout.md`, & `skills/litestar-autowire/SKILL.md` — Controllers, Routers, and domain-package discovery
+- `skills/litestar/references/dtos.md`, `skills/litestar/references/openapi.md`, & `skills/msgspec/SKILL.md` — DTOs, OpenAPI config, and `msgspec.Struct` patterns
+- `skills/litestar/references/auth-and-guards.md` & `skills/litestar-security/SKILL.md` — native `Guard` functions and `SecurityPlugin` policies
+- `skills/litestar/references/di-and-dishka.md` — `Provide()`, `NamedDependency`, `SkipValidation`, and Dishka `FromDishka`
+- `skills/litestar/references/services-and-repos.md`, `skills/litestar/references/filters-and-pagination.md`, `skills/advanced-alchemy/SKILL.md`, & `skills/sqlspec/SKILL.md` — services, repositories, query runners, and pagination
+- `skills/litestar/references/settings.md`, `skills/litestar/references/exceptions.md`, `skills/litestar/references/middleware.md`, & `skills/litestar/references/plugins.md` — settings, exceptions, middleware, and plugin protocols
+- `skills/litestar/references/channels-and-sse.md` & `skills/litestar/references/websockets.md` — WebSockets, SSE, and `ChannelsPlugin` pub/sub fan-out
+- `skills/litestar-queues/SKILL.md` & `skills/litestar-saq/SKILL.md` — background task queues and workers
+- `skills/litestar-granian/SKILL.md`, `skills/litestar-email/SKILL.md`, `skills/litestar-mcp/SKILL.md`, & `skills/litestar-ai/SKILL.md` — ASGI runtime, email, MCP, and Google ADK
+- `skills/litestar-vite/SKILL.md`, `skills/litestar-vite/references/inertia.md`, & `skills/litestar-htmx/SKILL.md` — Vite, Inertia, and HTMX frontend integrations
+- `skills/litestar-testing/SKILL.md`, `skills/pytest-databases/SKILL.md`, `skills/polyfactory/SKILL.md`, `skills/litestar-build/SKILL.md`, & `skills/litestar-deployment/SKILL.md` — testing, database fixtures, factories, packaging, and deployment
 """

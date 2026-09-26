@@ -27,7 +27,9 @@ In Litestar projects, polyfactory's pytest plugin is the canonical way to feed `
 | `msgspec.Struct` | `MsgspecFactory` | `from polyfactory.factories.msgspec_factory import MsgspecFactory` |
 | `@attrs.define` / `attr.s` | `AttrsFactory` | `from polyfactory.factories.attrs_factory import AttrsFactory` |
 | `TypedDict` | `TypedDictFactory` | `from polyfactory.factories.typed_dict_factory import TypedDictFactory` |
-| Beanie / Odmantic / SQLA | dedicated bases | see [factories.md](references/factories.md) |
+| SQLAlchemy declarative | `SQLAlchemyFactory` | `from polyfactory.factories.sqlalchemy_factory import SQLAlchemyFactory` |
+| Beanie `Document` | `BeanieDocumentFactory` | `from polyfactory.factories.beanie_odm_factory import BeanieDocumentFactory` |
+| Odmantic `Model` / `EmbeddedModel` | `OdmanticModelFactory` | `from polyfactory.factories.odmantic_odm_factory import OdmanticModelFactory` |
 
 ### Defining a factory
 
@@ -58,7 +60,8 @@ The single concrete generic argument lets Polyfactory infer `__model__`. `build(
 ### Customizing fields
 
 ```python
-from polyfactory import Use
+from polyfactory import Ignore, Require, Use
+from polyfactory.decorators import post_generated
 from polyfactory.factories import DataclassFactory
 
 
@@ -71,11 +74,23 @@ class OrderFactory(DataclassFactory[Order]):
 
     # Random choice — re-evaluated per build
     total_cents = Use(DataclassFactory.__random__.randint, 100, 10_000)
+
+    # Skip generation so the model's default / default_factory runs
+    internal_note = Ignore()
+
+    # Force callers to supply this kwarg on build() / batch() / coverage()
+    tenant_id = Require()
+
+    # Derive a field from already-generated fields on the same instance
+    @post_generated
+    @classmethod
+    def reference(cls, id: int) -> str:
+        return f"order-{id}"
 ```
 
-`Use(callable, *args, **kwargs)` is re-invoked on every `build()`, so each generated instance gets a fresh value.
+`Use(callable, *args, **kwargs)` is re-invoked on every `build()`, so each generated instance gets a fresh value. `Ignore()` and `Require()` must be instantiated; omitting a `Require()` field at build time raises `MissingBuildKwargException`.
 
-Use `PostGenerated` when a field depends on values generated for the same instance:
+For standalone post-generation callbacks, use `PostGenerated(fn, *args, **kwargs)` where `fn` has signature `(field_name, generated_values, *args, **kwargs)`:
 
 ```python
 from typing import Any
@@ -90,8 +105,6 @@ def order_reference(name: str, values: dict[str, Any], prefix: str) -> str:
 class OrderFactory(DataclassFactory[Order]):
     reference = PostGenerated(order_reference, "order")
 ```
-
-The callback signature is `(field_name, generated_values, *args, **kwargs)`. `generated_values` contains the non-post-generated fields.
 
 ### Determinism
 
@@ -200,6 +213,7 @@ Tests that assert on specific generated values need `__random_seed__`. Tests tha
 - **Factories belong under `tests/`.** Importing them from production modules ties test data to runtime code and is a refactor hazard.
 - **`coverage()` is not a Cartesian-product generator.** It emits a minimal representative set and reuses exhausted field variants; use Hypothesis for exhaustive input-space exploration.
 - **`__allow_none_optionals__` is boolean.** `True` allows random `None` values during `build()`; `False` always generates the wrapped type. It is not a probability.
+- **Instantiate `Ignore()` and `Require()`, and place `@post_generated` above `@classmethod`.** Assigning `field = Ignore` (the class) or stacking `@classmethod` above `@post_generated` fails at build or decoration time.
 - **Async methods persist data.** `create_async()` and `create_batch_async()` require `__async_persistence__` or a backend factory that supplies it. Polyfactory has no `build_async()`.
 
 </guardrails>

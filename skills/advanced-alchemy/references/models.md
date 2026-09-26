@@ -157,20 +157,27 @@ or a secrets manager.
 
 ```python
 from advanced_alchemy.base import UUIDAuditBase
-from advanced_alchemy.types.file_object import FileObject, StoredObject
+from advanced_alchemy.types import FileObject, StoredObject
+from advanced_alchemy.utils.sync_tools import await_
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column
 
 
-class Document(UUIDAuditBase):
-    """Document model with stored file attachment."""
+class ProjectAttachment(UUIDAuditBase):
+    """Project attachment model with stored file and signed URL property."""
 
-    __tablename__ = "document"
+    __tablename__ = "project_attachment"
 
-    title: Mapped[str] = mapped_column()
-    file: Mapped[FileObject | None] = mapped_column(StoredObject, default=None)
+    name: Mapped[str] = mapped_column(nullable=False)
+    file: Mapped[FileObject] = mapped_column(StoredObject(backend="private"))
+
+    @hybrid_property
+    def url(self) -> str:
+        """Generate a signed URL synchronously from an async storage backend."""
+        return await_(self.file.sign_async)()
 ```
 
-Register storage backends during app boot. Supports `FSSpecBackend` (local, S3) and `ObstoreBackend`.
+Register storage backends during app boot. Supports `FSSpecBackend` (local, S3, GCS) and `ObstoreBackend`.
 
 ## Deferred Loading Groups
 
@@ -268,6 +275,145 @@ class Role(UUIDAuditBase):
         back_populates="roles",
         lazy="selectin",
     )
+```
+
+### Read-Only Subquery Projections (`SQLQuery`) & `AssociationProxy`
+
+Use `SQLQuery` to map read-only aggregate or window-function subqueries as `viewonly=True` ORM relationships, and flatten scalar fields with `AssociationProxy`:
+
+```python
+from uuid import UUID
+
+from advanced_alchemy.base import SQLQuery, UUIDAuditBase
+from sqlalchemy import ForeignKey, and_, func, select
+from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+
+class Project(UUIDAuditBase):
+    """Project model with read-only aggregate and window relationships."""
+
+    __tablename__ = "project"
+
+    name: Mapped[str] = mapped_column(index=True)
+    active_member_count: AssociationProxy[int] = association_proxy(
+        "member_stats",
+        "active_members",
+    )
+
+
+class ProjectMember(UUIDAuditBase):
+    """Project membership link."""
+
+    __tablename__ = "project_member"
+
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("project.id", ondelete="cascade"))
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("user_account.id", ondelete="cascade"))
+
+
+class ProjectReport(UUIDAuditBase):
+    """Periodic report generated for a project."""
+
+    __tablename__ = "project_report"
+
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("project.id", ondelete="cascade"))
+    status: Mapped[str] = mapped_column()
+
+
+class LatestProjectReport(SQLQuery):
+    """Window-function subquery selecting the most recent report per project."""
+
+    __table__ = select(
+        ProjectReport,
+        func.row_number()
+        .over(order_by=ProjectReport.created_at.desc(), partition_by=ProjectReport.project_id)
+        .label("report_index"),
+    ).alias("latest_project_reports")
+
+
+Project.latest_report = relationship(
+    LatestProjectReport,
+    primaryjoin=and_(
+        LatestProjectReport.project_id == Project.id,
+        LatestProjectReport.report_index == 1,
+    ),
+    viewonly=True,
+    lazy="joined",
+    uselist=False,
+)
+
+
+class ProjectMemberCount(SQLQuery):
+    """Aggregate subquery counting members per project."""
+
+    __table__ = (
+        select(
+            Project.id.label("project_id"),
+            func.count(ProjectMember.id).label("active_members"),
+        )
+        .join_from(Project, ProjectMember, onclause=Project.id == ProjectMember.project_id, isouter=True)
+        .group_by(Project.id)
+    ).alias("project_member_count")
+    project_id: UUID
+    active_members: int
+
+
+Project.member_stats = relationship(
+    ProjectMemberCount,
+    primaryjoin=ProjectMemberCount.project_id == Project.id,
+    foreign_keys=ProjectMemberCount.project_id,
+    viewonly=True,
+    lazy="joined",
+    innerjoin=True,
+    uselist=False,
+)
+```
+
+For multi-column grouping queries on `SQLQuery`, declare composite primary keys via `__mapper_args__ = {"primary_key": [__table__.c.project_id, __table__.c.category]}`.
+
+### Joined-Table Polymorphic Inheritance & `AssociationProxy` Flattening
+
+Combine SQLAlchemy joined-table polymorphism (`polymorphic_on` / `polymorphic_identity`) with `AssociationProxy` to expose parent relationship attributes directly on child models for `service.to_schema()` serialization:
+
+```python
+from uuid import UUID
+
+from advanced_alchemy.base import UUIDAuditBase
+from sqlalchemy import ForeignKey
+from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+
+class EvaluationRule(UUIDAuditBase):
+    """Base polymorphic rule model."""
+
+    __tablename__ = "evaluation_rule"
+    __mapper_args__ = {
+        "polymorphic_identity": "evaluation_rule",
+        "polymorphic_on": "rule_type",
+    }
+
+    strategy_id: Mapped[UUID] = mapped_column(ForeignKey("strategy.id", ondelete="cascade"))
+    strategy_name: AssociationProxy[str] = association_proxy("strategy", "name")
+    rule_type: Mapped[str]
+    name: Mapped[str]
+
+    strategy: Mapped[Strategy] = relationship(
+        lazy="joined",
+        innerjoin=True,
+        viewonly=True,
+        uselist=False,
+    )
+
+
+class EffortRule(EvaluationRule):
+    """Joined-table polymorphic child model for effort scoring."""
+
+    __tablename__ = "effort_rule"
+    __mapper_args__ = {"polymorphic_identity": "effort_rule"}
+
+    id: Mapped[UUID] = mapped_column(ForeignKey("evaluation_rule.id"), primary_key=True)
+    hours_per_unit: Mapped[float] = mapped_column(default=1.0)
 ```
 
 ## Password Hashing Types

@@ -12,64 +12,113 @@ target_metadata = metadata_registry.get()
 
 ## Alembic env.py Configuration
 
-Typical `env.py` setup with Advanced Alchemy:
+When running migrations through `litestar database` or `alchemy`, `context.config` is an `AlembicCommandConfig` populated from `AlembicAsyncConfig` / `AlembicSyncConfig`. If your database also hosts tables managed by another subsystem (such as `litestar-saq` or `litestar-queues`), pass an `include_object` filter to `context.configure()` so autogenerate does not emit `DROP TABLE` statements for them:
 
 ```python
 """Alembic environment configuration."""
 
-from alembic import context
-from app.db import models
-from sqlalchemy import engine_from_config, pool
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from __future__ import annotations
+
+import asyncio
+from typing import TYPE_CHECKING, Literal, cast
 
 from advanced_alchemy.base import metadata_registry
+from alembic import context
+from alembic.autogenerate import rewriter
+from sqlalchemy import pool
+from sqlalchemy.ext.asyncio import AsyncEngine, async_engine_from_config
+from sqlalchemy.sql.schema import SchemaItem
+from app.db import models
+
+if TYPE_CHECKING:
+    from advanced_alchemy.alembic.commands import AlembicCommandConfig
+    from sqlalchemy.engine import Connection
 
 _ = models
-target_metadata = metadata_registry.get()
+config = cast("AlembicCommandConfig", context.config)
+writer = rewriter.Rewriter()
+
+
+def include_object(
+    obj: SchemaItem,
+    name: str | None,
+    type_: Literal[
+        "schema",
+        "table",
+        "column",
+        "index",
+        "unique_constraint",
+        "foreign_key_constraint",
+    ],
+    reflected: bool,
+    compare_to: SchemaItem | None,
+) -> bool:
+    """Exclude external worker queue tables from Alembic autogeneration."""
+    return not (
+        (name is not None and name.startswith("saq_"))
+        or (type_ == "table" and name in {"task_queue", "task_queue_stats", "task_queue_ddl_version"})
+    )
 
 
 def run_migrations_offline() -> None:
     """Run migrations in offline mode."""
-    url = context.config.get_main_option("sqlalchemy.url")
     context.configure(
-        url=url,
-        target_metadata=target_metadata,
+        url=config.db_url,
+        target_metadata=metadata_registry.get(config.bind_key),
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        compare_type=config.compare_type,
+        version_table=config.version_table_name,
+        version_table_pk=config.version_table_pk,
+        user_module_prefix=config.user_module_prefix,
+        render_as_batch=config.render_as_batch,
+        process_revision_directives=writer,
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
 
 
-def do_run_migrations(connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+def do_run_migrations(connection: Connection) -> None:
+    """Run migrations against an active connection."""
+    context.configure(
+        connection=connection,
+        target_metadata=metadata_registry.get(config.bind_key),
+        compare_type=config.compare_type,
+        version_table=config.version_table_name,
+        version_table_pk=config.version_table_pk,
+        user_module_prefix=config.user_module_prefix,
+        render_as_batch=config.render_as_batch,
+        process_revision_directives=writer,
+        include_object=include_object,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
 
-async def run_async_migrations() -> None:
+async def run_migrations_online() -> None:
     """Run migrations in async online mode."""
-    config_section = context.config.get_section(context.config.config_ini_section, {})
-    connectable = async_engine_from_config(
-        config_section,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
+    configuration = config.get_section(config.config_ini_section) or {}
+    configuration["sqlalchemy.url"] = config.db_url
+    connectable = cast(
+        "AsyncEngine",
+        config.engine
+        or async_engine_from_config(
+            configuration,
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
+            future=True,
+        ),
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await connectable.dispose()
 
 
-def run_migrations_online() -> None:
-    import asyncio
-
-    asyncio.run(run_async_migrations())
-
-
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run_migrations_online()
+    asyncio.run(run_migrations_online())
 ```
 
 ## CLI Commands

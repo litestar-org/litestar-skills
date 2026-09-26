@@ -102,17 +102,41 @@ The runner stores applied versions in a tracking table (default name `ddl_migrat
 
 `sqlspec.migrations.version.MigrationVersion` models both version formats (`VersionType.SEQUENTIAL` for legacy `0001`-style, `VersionType.TIMESTAMP` for UTC timestamps) and orders mixed sets correctly so legacy migrations always sort before timestamp ones.
 
-## Per-Adapter Migration Overlays
+## Per-Adapter & External Extension Migrations
 
 Some adapters ship dialect-specific migration helpers (e.g. Oracle needs different DDL for JSON columns depending on server version). `sqlspec/adapters/oracledb/migrations.py` is one such module — the runner automatically picks up adapter migration hooks when the config's module matches.
 
-Extensions that bundle their own migrations are opt-in via `migration_config["include_extensions"]`. Shipped extensions with migrations:
+Extensions that bundle their own migrations are opt-in via `migration_config["include_extensions"]`. Shipped first-party extensions with migrations:
 
 - **`litestar`** — `sqlspec/extensions/litestar/migrations/` (one migration, `0001_create_session_table.py`, which delegates to the adapter's `litestar/store.py` for dialect-specific DDL).
 - **`adk`** — creates the ADK session/event/memory/artifact tables. See [adk.md](adk.md).
 - **`events`** — creates the table-queue fallback used by non-PostgreSQL adapters.
 
-When `include_extensions` lists a name, `BaseMigrationCommands._discover_extension_migrations()` resolves the package path and includes its migration directory in the runner's search path.
+### External Package Extension Migrations (`migrations_path`)
+
+Third-party or ecosystem packages (such as `litestar-queues`) can register their own migration directory by setting `migrations_path` (a `Path`, filesystem path string, or `package.module:subdir` spec resolved via `resolve_extension_migrations_path`) inside `extension_config["<ext_name>"]` and listing `"<ext_name>"` in `migration_config["include_extensions"]`:
+
+```python
+from litestar_queues.backends.sqlspec.extension import queue_migration_directory
+from sqlspec.adapters.asyncpg import AsyncpgConfig
+
+config = AsyncpgConfig(
+    connection_config={"dsn": "postgresql://localhost/app"},
+    migration_config={
+        "script_location": "migrations",
+        "include_extensions": ["events", "litestar_queues"],
+    },
+    extension_config={
+        "events": {"backend": "notify"},
+        "litestar_queues": {
+            "migrations_path": queue_migration_directory(),
+            "queue_table_name": "litestar_queue_jobs",
+        },
+    },
+)
+```
+
+When an extension is removed from `include_extensions` (or its `migrations_path` is unconfigured), its `ext_<name>_*` migrations are unregistered from discovery and can be cleanly downgraded or excluded without breaking core application revisions.
 
 ## Litestar Plugin Integration
 

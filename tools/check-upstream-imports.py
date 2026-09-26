@@ -228,7 +228,11 @@ def verify_import(ref: ImportRef, _module_cache: dict[str, object | str] | None 
         return None
     if ref.name == "*":
         return None  # star imports — can't statically check
-    if not hasattr(mod, ref.name):
+    try:
+        has_attr = hasattr(mod, ref.name)
+    except ImportError as exc:
+        return f"library not importable ({type(exc).__name__}: {exc})"
+    if not has_attr:
         return f"module {ref.module!r} has no attribute {ref.name!r}"
     return None
 

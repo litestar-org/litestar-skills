@@ -1,6 +1,6 @@
 {
   "name": "litestar",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Opinionated first-party agent skills for the Litestar framework ecosystem",
   "author": {
     "name": "Cody Fincher",

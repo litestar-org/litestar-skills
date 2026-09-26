@@ -19,7 +19,7 @@ validation. This guidance targets the immutable `0.21.1` release.
 
 ## Quick Reference
 
-### Struct Definition
+### Struct Definition and Options
 
 ```python
 import msgspec
@@ -33,15 +33,15 @@ class User(msgspec.Struct):
 
 
 # Performance options
-class Event(msgspec.Struct, frozen=True, gc=False):
-    """frozen=True: immutable + hashable. gc=False: skip GC for short-lived objects."""
+class Event(msgspec.Struct, frozen=True, gc=False, cache_hash=True):
+    """frozen=True: immutable + hashable. gc=False: skip GC tracking."""
 
     event_type: str
     payload: dict[str, object]
 
 
-# Keyword-only (recommended for >2 fields)
-class Config(msgspec.Struct, kw_only=True):
+# Keyword-only + omit defaults on wire (recommended for >2 fields / compact payloads)
+class Config(msgspec.Struct, kw_only=True, omit_defaults=True, repr_omit_defaults=True):
     host: str
     port: int = 5432
     ssl: bool = False
@@ -53,21 +53,58 @@ class Point(msgspec.Struct, array_like=True):
     y: float
 
 
-# Rename fields for serialization
+# Rename fields for serialization ("lower", "upper", "camel", "pascal", "kebab", callable, or mapping)
 class ApiResponse(msgspec.Struct, rename="camel"):
     user_id: int  # serialized as "userId"
     created_at: str  # serialized as "createdAt"
 
 
-# Rename one field explicitly
+# Per-field wire alias and default_factory via msgspec.field()
 class Resource(msgspec.Struct):
     resource_id: int = msgspec.field(name="id")
+    tags: list[str] = msgspec.field(default_factory=list)
 
 
 # Reject unknown fields at API boundaries
 class StrictInput(msgspec.Struct, forbid_unknown_fields=True):
     name: str
     value: int
+```
+
+| `Struct` / `defstruct` Option | Default | Purpose |
+| --- | --- | --- |
+| `kw_only` | `False` | Make all fields keyword-only in `__init__` |
+| `frozen` | `False` | Immutable instances; adds `__hash__` |
+| `cache_hash` | `False` | Precompute and cache hash on `frozen=True` Structs |
+| `gc` | `True` | Set `False` to omit Cyclic GC header on short-lived, non-circular Structs |
+| `omit_defaults` | `False` | Omit fields equal to their default when encoding or calling `to_builtins()` |
+| `repr_omit_defaults` | `False` | Omit fields equal to their default in `repr()` |
+| `forbid_unknown_fields` | `False` | Raise `ValidationError` on unknown keys during decoding / `convert()` |
+| `rename` | `None` | `"lower"`, `"upper"`, `"camel"`, `"pascal"`, `"kebab"`, `Callable[[str], str \| None]`, or `Mapping[str, str]` (leading `_` is preserved for `"camel"`/`"pascal"`) |
+| `array_like` | `False` | Encode/decode Struct as a positional array (`[x, y]`) instead of an object |
+| `tag` / `tag_field` | `None` | Discriminated union tag (`True`, `False`, `str`, `int`, or `Callable[[str], str \| int]`) and discriminator key (defaults to `"type"` when `tag` is set) |
+| `eq` / `order` | `True` / `False` | Generate `==`/`!=` and `<`/`<=`/`>`/`>=` comparison methods |
+| `weakref` / `dict` | `False` / `False` | Add `__weakref__` slot or `__dict__` attribute storage (`dict=True` cannot be combined with `gc=False`) |
+
+### Partial Updates with `UNSET` and `UnsetType`
+
+Use `msgspec.UNSET` (`msgspec.UnsetType`) to distinguish omitted fields from explicit `null` (`None`).
+`bool(msgspec.UNSET)` is `False`. Fields set to `UNSET` are automatically omitted when encoding or
+calling `msgspec.to_builtins()`.
+
+```python
+import msgspec
+
+
+class UserPatch(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
+    name: str | msgspec.UnsetType = msgspec.UNSET
+    email: str | None | msgspec.UnsetType = msgspec.UNSET
+
+
+patch = msgspec.json.decode(b'{"email": null}', type=UserPatch)
+assert patch.name is msgspec.UNSET  # omitted by client
+assert patch.email is None  # explicitly cleared by client
+assert msgspec.json.encode(patch) == b'{"email":null}'
 ```
 
 ### Validation Constraints
@@ -101,30 +138,55 @@ class Order(msgspec.Struct):
     discount: Percentage = 0.0
 ```
 
-### Serialization
+### Serialization (`json`, `msgpack`, `yaml`, `toml`) and `Raw`
 
 ```python
 import msgspec
 
 # JSON -- singleton encoder/decoder (cache these!)
+# Encoder kwargs: enc_hook=None, decimal_format="string"|"number", uuid_format="canonical"|"hex", order=None|"deterministic"|"sorted"
+# Decoder kwargs: type=Any, *, strict=True, dec_hook=None, float_hook=None
 encoder = msgspec.json.Encoder()
 decoder = msgspec.json.Decoder(User)
 
 data = encoder.encode(user)  # bytes
 user = decoder.decode(b'{"id":1,"name":"Alice"}')
 
+# Newline-delimited JSON (NDJSON) and zero-allocation buffer writes
+ndjson = encoder.encode_lines([user])
+users = decoder.decode_lines(ndjson)
+buf = bytearray()
+encoder.encode_into(user, buf, 0)
+pretty = msgspec.json.format(data, indent=2)
+
 # Functional API (convenience, slightly slower)
-data = msgspec.json.encode(user)
-user = msgspec.json.decode(b"...", type=User)
+data = msgspec.json.encode(user, order="deterministic")
+user = msgspec.json.decode(data, type=User)
 
-# MessagePack (binary, more compact)
-data = msgspec.msgpack.encode(user)
-user = msgspec.msgpack.decode(data, type=User)
+# MessagePack (binary, more compact; uuid_format also accepts "bytes"; Decoder accepts ext_hook and msgspec.msgpack.Ext)
+mp_data = msgspec.msgpack.encode(user)
+user = msgspec.msgpack.decode(mp_data, type=User)
 
-# Hooks are only for unsupported custom types. datetime, UUID, Decimal, and
-# Enum are already supported.
+# YAML (requires msgspec[yaml] / PyYAML) and TOML (requires msgspec[toml] / tomli_w + tomllib/tomli)
+yaml_bytes = msgspec.yaml.encode(user)
+user_from_yaml = msgspec.yaml.decode(yaml_bytes, type=User)
+toml_bytes = msgspec.toml.encode(user)
+user_from_toml = msgspec.toml.decode(toml_bytes, type=User)
 
 
+# Deferred decoding / zero-copy payload slicing with msgspec.Raw
+class Envelope(msgspec.Struct):
+    kind: str
+    payload: msgspec.Raw
+
+
+env = msgspec.json.decode(b'{"kind":"user","payload":{"id":1,"name":"Alice"}}', type=Envelope)
+detached_raw = env.payload.copy()  # detach from input buffer if retaining long-term
+inner_user = msgspec.json.decode(detached_raw, type=User)
+
+
+# Hooks are only for unsupported custom types. datetime, date, time, timedelta,
+# UUID, Decimal, and Enum are already supported natively.
 def enc_hook(obj: object) -> object:
     if isinstance(obj, complex):
         return (obj.real, obj.imag)
@@ -138,13 +200,18 @@ def dec_hook(target_type: type, obj: object) -> object:
     raise NotImplementedError(f"Unsupported type: {target_type}")
 
 
-encoder = msgspec.json.Encoder(enc_hook=enc_hook)
-decoder = msgspec.json.Decoder(MyStruct, dec_hook=dec_hook)
+custom_encoder = msgspec.json.Encoder(enc_hook=enc_hook)
+custom_decoder = msgspec.json.Decoder(MyStruct, dec_hook=dec_hook)
 ```
 
 `dec_hook` runs only for unsupported custom annotations. `TypeError` and `ValueError` raised by
 the hook become path-aware `ValidationError`s. In 0.21.1, a `ValidationError` or `DecodeError`
 raised by the hook propagates directly and is not wrapped in another `ValidationError`.
+
+**Exception hierarchy:** `MsgspecError(Exception)` is the base class for `EncodeError` and
+`DecodeError`. `ValidationError` is a subclass of `DecodeError` (`ValidationError -> DecodeError -> MsgspecError`).
+Always catch `ValidationError` before `DecodeError` when distinguishing schema validation errors
+from malformed wire syntax.
 
 ### Canonical Litestar serializers (match-your-stack)
 
@@ -169,7 +236,7 @@ await backend.publish(payload, channels=[f"orders:{order.id}:events"])
 ```
 
 **Branch B — sqlspec is not in-stack.** Use a plain msgspec `Encoder`; the package natively
-handles UUID, datetime, date, time, Decimal, Enum, dataclasses, attrs classes, and Structs.
+handles UUID, datetime, date, time, timedelta, Decimal, Enum, dataclasses, attrs classes, and Structs.
 
 ```python
 # myapp/utils/serialization.py
@@ -187,7 +254,7 @@ def to_json(value: Any) -> bytes:
     return _encoder.encode(value)
 ```
 
-### Type Coercion with convert()
+### Type Coercion with `convert()` and `to_builtins()`
 
 ```python
 import msgspec
@@ -197,17 +264,17 @@ raw = {"id": "42", "name": "Alice"}  # id is a string
 # Strict mode (default): raises on type mismatch
 user = msgspec.convert(raw, User)  # ValidationError: id must be int
 
-# Lax mode: coerces compatible types
+# Lax mode: coerces compatible types (e.g. str -> int, 0/1 -> bool, epoch int/float -> datetime)
 user = msgspec.convert(raw, User, strict=False)  # id coerced to 42
 
-# str_keys: dict keys are strings (useful for JSON-loaded dicts)
+# str_keys: dict keys are strings (useful for JSON/TOML-loaded dicts)
 data = {"1": "Alice", "2": "Bob"}
 result = msgspec.convert(data, dict[int, str], str_keys=True)
 
-# Convert with dec_hook for an unsupported custom type
-measurement = msgspec.convert(raw_measurement, Measurement, dec_hook=dec_hook)
+# Convert with dec_hook or custom builtin_types passthrough
+measurement = msgspec.convert(raw_measurement, Measurement, dec_hook=dec_hook, builtin_types=(bytes,))
 
-# Convert a dataclass or arbitrary object to a Struct by reading attributes
+# Convert a dataclass, attrs instance, or ORM model to a Struct by reading attributes
 from dataclasses import dataclass
 
 
@@ -219,18 +286,49 @@ class LegacyUser:
 
 legacy = LegacyUser(id=1, name="Alice")
 user = msgspec.convert(legacy, User, from_attributes=True)
+
+# Convert a Struct or supported type graph back to Python builtin types
+builtins_dict = msgspec.to_builtins(user, str_keys=True, order="deterministic")
 ```
 
 `from_attributes=False` is the default. Plain mappings convert to object-like output types
 without this option; dataclass, attrs, ORM, and other objects require `from_attributes=True`.
-`msgspec.structs.asdict()` accepts a `msgspec.Struct`, not an arbitrary dataclass.
+`msgspec.Raw` instances pass through `convert()` when the target field/type is `msgspec.Raw`;
+to parse a `Raw` buffer into a `Struct`, use `msgspec.json.decode(raw, type=Struct)` (or `msgpack.decode`).
+
+### Struct Helpers (`msgspec.structs`) and Inspection (`msgspec.inspect`)
+
+```python
+import copy
+import msgspec
+
+# Shallow conversions (keyed by Python attribute names; preserves nested Structs and UNSET values)
+field_map = msgspec.structs.asdict(user)
+field_tuple = msgspec.structs.astuple(user)
+
+# Copy-and-replace (both call __post_init__ as of msgspec 0.21.0)
+updated = msgspec.structs.replace(user, name="Bob")
+updated_std = copy.replace(user, name="Bob")
+
+# Mutate a frozen=True Struct (e.g. inside __post_init__ to normalize a field)
+msgspec.structs.force_setattr(event, "event_type", event.event_type.lower())
+
+# Runtime field introspection (FieldInfo: name, encode_name, type, default, default_factory, required)
+for f in msgspec.structs.fields(User):
+    assert f.required is (f.default is msgspec.NODEFAULT and f.default_factory is msgspec.NODEFAULT)
+
+# TypeGuards for Struct instances and classes (added in msgspec 0.20.0; checks StructMeta)
+assert msgspec.inspect.is_struct(user)
+assert msgspec.inspect.is_struct_type(User)
+struct_info = msgspec.inspect.type_info(User)
+```
 
 ### Dynamic Struct Creation
 
 ```python
 import msgspec
 
-# Runtime struct from field definitions
+# Runtime struct from field definitions (accepts all Struct keyword options plus bases, module, namespace)
 fields = [
     ("id", int),
     ("name", str),
@@ -252,7 +350,7 @@ FlexModel = msgspec.defstruct("FlexModel", fields_with_defaults)
 import msgspec
 
 
-# Default tag field is "type", tag value is the class name
+# Default tag field is "type", tag value is the qualified class name
 class Dog(msgspec.Struct, tag=True):
     name: str
     breed: str
@@ -299,14 +397,18 @@ All Struct variants in a multi-Struct union must be tagged, use the same `tag_fi
 tag values, and use one tag type (`str` or `int`) consistently. A union may contain non-Struct
 types, but it may contain at most one untagged Struct.
 
-### Validation and 0.21 Behavior
+### Validation and 0.20 / 0.21 Behavior
 
 - Direct Struct construction trusts the caller and does not enforce field annotations.
   Typed `decode()` and `convert()` perform runtime type and `Meta` constraint validation.
+- `msgspec.StructMeta` is publicly exposed, and `msgspec.inspect.is_struct()` /
+  `msgspec.inspect.is_struct_type()` provide `TypeGuard` checks for Struct instances and classes (0.20.0+).
 - `msgspec.structs.replace()` and Python's `copy.replace()` call `__post_init__` as of 0.21.0.
 - `msgspec.json.schema()` and `schema_components()` accept
   `ref_template="#/$defs/{name}"`; 0.21.1 includes the parameter in the type stub.
-- JSON Schema output marks `set` and `frozenset` fields with `uniqueItems`.
+- JSON Schema output marks `set` and `frozenset` fields with `uniqueItems: True` (0.21.0+).
+- In 0.21.1, `ValidationError` and `DecodeError` raised inside `dec_hook` propagate directly without
+  being double-wrapped in another `ValidationError`.
 
 <workflow>
 

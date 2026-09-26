@@ -32,12 +32,17 @@ queue_config = QueueConfig(
         project_id="example-project",
         region="us-central1",
         job_name="worker-job",
+        profiles={
+            "default": "worker-job",
+            "heavy": "worker-job-heavy",
+            "light": "worker-job-light",
+        },
         timeout=900,
     ),
 )
 ```
 
-Each claimed record triggers an isolated Cloud Run Job execution. Use `profiles` for per-task resource shapes and `fallback_execution_backend` to degrade to local execution when the API is unavailable.
+Each claimed record triggers an isolated Cloud Run Job execution. Use `profiles` for per-task resource shapes (`@task(..., execution_profile="heavy")`) and `fallback_execution_backend` to degrade to local execution when the API is unavailable. Calling `await queue_service.cancel_task(task_id, include_running=True)` cancels the active Cloud Run Job execution first before writing durable cancellation state.
 
 ## Google Cloud Tasks
 
@@ -46,24 +51,55 @@ Installed with `pip install "litestar-queues[cloud-tasks]"`.
 A queue configured for Cloud Tasks keeps **no worker process anywhere**. Google holds each record's delivery and calls a private consumer route when it is due, so every process can scale to zero between deliveries. Only the record's id crosses the network; arguments, metadata, and results are re-read from the queue store by the consumer.
 
 ```python
-from litestar_queues import CloudTasksExecutionConfig, QueueConfig
+from typing import Any, Literal
 
-queue_config = QueueConfig(
-    queue_backend="sqlspec",
-    execution_backend=CloudTasksExecutionConfig(
-        project_id="example-project",
-        location="us-central1",
-        queue_id="default",
-        service_url="https://api.example.com",
-        service_account_email="queues@example-project.iam.gserviceaccount.com",
-        dispatch_deadline=600,
-        default_task_timeout=540.0,
-        trust_platform_auth=True,
-    ),
-)
+from litestar.connection import ASGIConnection
+from litestar.exceptions import PermissionDeniedException
+from litestar.handlers.base import BaseRouteHandler
+from litestar_queues import CloudTasksExecutionConfig, QueueConfig, WorkerConfig
+from litestar_queues.backends.sqlspec import SQLSpecBackendConfig
+
+
+def deny_cloud_tasks_delivery_guard(
+    connection: ASGIConnection[Any, Any, Any, Any],
+    _: BaseRouteHandler,
+) -> None:
+    raise PermissionDeniedException("Cloud Tasks delivery is disabled on this role")
+
+
+def build_cloud_tasks_queue_config(
+    sqlspec_config: Any,
+    *,
+    role: Literal["web", "consumer", "cli"] = "web",
+) -> QueueConfig:
+    is_consumer = role == "consumer"
+    guards = () if is_consumer else (deny_cloud_tasks_delivery_guard,)
+    return QueueConfig(
+        queue_backend=SQLSpecBackendConfig(
+            sqlspec_config=sqlspec_config,
+            worker_wakeups=None,
+        ),
+        execution_backend=CloudTasksExecutionConfig(
+            project_id="example-project",
+            location="us-central1",
+            queue_id="default",
+            service_url="https://consumer.example.com",
+            service_account_email="queues@example-project.iam.gserviceaccount.com",
+            audience="https://consumer.example.com",
+            dispatch_deadline=1800,
+            response_margin=60.0,
+            default_task_timeout=1680.0,
+            trust_platform_auth=is_consumer,
+            guards=guards,
+        ),
+        worker=WorkerConfig(placement="external"),
+        initialize_schedules=False,
+    )
 ```
 
-The delivery route is registered at `/_litestar-queues/cloud-tasks` (or custom `route_path`) when the execution backend is Cloud Tasks. It requires **either** Cloud Run's own IAM asserted explicitly (`trust_platform_auth=True`) **or** application `guards`. It never treats a delivery header as authentication.
+The delivery route is registered at `/_litestar-queues/cloud-tasks` (or custom `route_path`) when the execution backend is Cloud Tasks. It requires **either** Cloud Run's own IAM asserted explicitly (`trust_platform_auth=True`) **or** application `guards`. It never treats a delivery header as authentication. In role-split deployments (`web` vs `consumer`), set `trust_platform_auth=False` and attach a deny guard on `web` instances so only the private `consumer` service accepts Cloud Tasks deliveries, and set `worker_wakeups=None` on `SQLSpecBackendConfig`.
+
+When Cloud Tasks dispatch fails after the record was committed to SQL, `QueueService.enqueue()` raises `QueueDispatchError` with `exc.committed is True` and `exc.task_id` set so the caller can return a pending-dispatch status and let bounded maintenance repair delivery. Calling `await queue_service.cancel_task(task_id, include_running=True)` deletes the remote Cloud Task first before writing durable cancellation state.
 
 ## Apache Kafka
 
@@ -116,7 +152,7 @@ LITESTAR_APP=app:app litestar queues run-consumer --backend pubsub --max-concurr
 
 ## RabbitMQ
 
-Installed with `pip install "litestar-queues[rabbitmq]"`.
+Installed with `pip install "litestar-queues[rabbitmq]"` (requires Python 3.11+ and `aio-pika>=10.0.1`).
 
 Dispatch task deliveries to an AMQP queue and process them with continuous consumers.
 
@@ -172,7 +208,7 @@ Every broker delivery (SQS, Kafka, Pub/Sub, RabbitMQ) is fenced to the exact per
 
 ## Lost-Delivery Repair
 
-On a queue nobody polls, a delivery that disappears would otherwise leave its record waiting forever with no error raised. Bounded maintenance repairs deliveries a managed transport has lost, sharing the existing external phase's budget — so the number of records one pass touches is unchanged.
+On a queue nobody polls, a delivery that disappears would otherwise leave its record waiting forever with no error raised. Bounded maintenance (`QueueMaintenanceConfig(external_limit=100)`) repairs deliveries a managed transport has lost, sharing the external phase's budget. For Cloud Tasks, delivery repair selects unexpired pending and scheduled records (including records without delivery references), preserves task identity, and uses bounded fair selection tracked via `QueuedTaskRecord.dispatch_checked_at`.
 
 ```bash
 LITESTAR_APP=app:app litestar queues run-maintenance --json
@@ -193,6 +229,6 @@ Queue backends must implement `clear_execution_ref` and `replace_execution_ref`,
 
 ## Official References
 
-- <https://github.com/cofin/litestar-queues/blob/v0.9.0/docs/usage/deployment/sqs.rst>
-- <https://github.com/cofin/litestar-queues/blob/v0.9.0/docs/usage/deployment/cloud-tasks.rst>
-- <https://github.com/cofin/litestar-queues/tree/v0.9.0/src/litestar_queues/execution>
+- <https://github.com/cofin/litestar-queues/blob/v0.12.0/docs/usage/deployment/sqs.rst>
+- <https://github.com/cofin/litestar-queues/blob/v0.12.0/docs/usage/deployment/cloud-tasks.rst>
+- <https://github.com/cofin/litestar-queues/tree/v0.12.0/src/litestar_queues/execution>

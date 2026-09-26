@@ -98,7 +98,7 @@ The runtime maps security outcomes to standard and application close codes (`Web
 
 - **[Authentication](authentication.md)** — policy compilation for WebSocket handlers.
 - **[Authorization](authorization.md)** — snapshot refresh for long-lived connections.
-- **[litestar-realtime](../../litestar-realtime/SKILL.md)** — socket handlers, Channels backends, and SSE.
+- **[Litestar WebSockets](../../litestar/references/websockets.md)** — socket handlers, Channels backends, and SSE.
 
 ## Official References
 

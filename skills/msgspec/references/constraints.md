@@ -18,7 +18,8 @@ from msgspec import Meta
 
 ## Numeric Constraints
 
-Applies to `int` and `float`.
+Applies to `int` and `float` only (`decimal.Decimal` does not accept numeric `Meta` constraints
+and raises `TypeError`; validate `Decimal` bounds in `__post_init__`).
 
 | Parameter | Description | Example |
 | --- | --- | --- |
@@ -64,6 +65,8 @@ class Product(msgspec.Struct, kw_only=True):
 | `pattern` | Regex pattern | `Meta(pattern=r"^\d{4}$")` |
 
 Patterns use search semantics and are unanchored unless the expression includes `^` and `$`.
+String constraints on `dict` keys (for example `dict[Slug, int]`) are also enforced when decoding
+JSON or MessagePack and emitted under `propertyNames` in JSON Schema.
 
 ```python
 NonEmptyStr = Annotated[str, Meta(min_length=1)]
@@ -84,7 +87,11 @@ class Article(msgspec.Struct, kw_only=True):
 
 ---
 
-## Bytes Constraints
+## Binary Constraints (`bytes`, `bytearray`, `memoryview`)
+
+Applies to `bytes`, `bytearray`, and `memoryview`. In JSON Schema output, binary fields emit
+`"type": "string", "contentEncoding": "base64"` with `minLength`/`maxLength` scaled to base64
+character counts (`4 * ((n + 2) // 3)`).
 
 | Parameter | Description |
 | --- | --- |
@@ -94,6 +101,7 @@ class Article(msgspec.Struct, kw_only=True):
 ```python
 Token = Annotated[bytes, Meta(min_length=32, max_length=32)]
 Blob = Annotated[bytes, Meta(max_length=65536)]
+ZeroCopyChunk = Annotated[memoryview, Meta(min_length=1, max_length=4096)]
 
 
 class SecurePayload(msgspec.Struct):
@@ -127,7 +135,10 @@ class ScheduledTask(msgspec.Struct):
 
 ## Collection Constraints
 
-Applies to `list`, `tuple`, `set`, `frozenset`, `dict`.
+Applies to `list`, variadic `tuple` (`tuple[T, ...]` or bare `tuple`), `set`, `frozenset`, and
+`dict`. Fixed-length tuples (`tuple[int, str]`) do not accept `min_length` or `max_length` and
+raise `TypeError`. In JSON Schema output, `set` and `frozenset` emit `"uniqueItems": True`
+(0.21.0+).
 
 | Parameter | Description |
 | --- | --- |
@@ -136,7 +147,8 @@ Applies to `list`, `tuple`, `set`, `frozenset`, `dict`.
 
 ```python
 NonEmptyList = Annotated[list[str], Meta(min_length=1)]
-Tags = Annotated[list[str], Meta(min_length=0, max_length=20)]
+VariadicTuple = Annotated[tuple[int, ...], Meta(min_length=1, max_length=10)]
+UniqueTags = Annotated[set[str], Meta(min_length=1, max_length=20)]
 NonEmptyDict = Annotated[dict[str, int], Meta(min_length=1)]
 ```
 
@@ -150,7 +162,7 @@ NonEmptyDict = Annotated[dict[str, int], Meta(min_length=1)]
 | `description` | Field description for docs |
 | `examples` | Example values |
 | `extra_json_schema` | Raw dict merged into JSON Schema output |
-| `extra` | User-defined metadata retained for inspection |
+| `extra` | User-defined metadata retained for inspection (`msgspec.inspect.type_info`) |
 
 ```python
 UserId = Annotated[
@@ -160,6 +172,7 @@ UserId = Annotated[
         title="User ID",
         description="Unique identifier for the user",
         examples=[1, 42, 9999],
+        extra={"pii": False},
     ),
 ]
 
@@ -170,6 +183,16 @@ ISODate = Annotated[
         extra_json_schema={"format": "date"},
     ),
 ]
+
+# Generate JSON Schema with custom $ref template (0.21.0+, typed in 0.21.1)
+schema = msgspec.json.schema(
+    Article,
+    ref_template="#/components/schemas/{name}",
+)
+schemas, components = msgspec.json.schema_components(
+    [Article, Product],
+    ref_template="#/components/schemas/{name}",
+)
 ```
 
 ---

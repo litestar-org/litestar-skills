@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    SessionStart hook for litestar-skills (PowerShell parity of session-start.sh).
+    SessionStart / PreInvocation hook for litestar-skills (PowerShell parity of session-start.sh).
 
 .DESCRIPTION
     Detects the host via env vars and emits the host-correct JSON shape with
@@ -33,6 +33,7 @@ $context = if ($detector.context) { $detector.context } else { '' }
 $host_ = 'unknown'
 if ($env:CLAUDE_PLUGIN_ROOT)   { $host_ = 'claude'  }
 elseif ($env:CODEX_PLUGIN_ROOT) { $host_ = 'codex'   }
+elseif ($env:ANTIGRAVITY_PLUGIN_ROOT -or $env:AGY_PLUGIN_ROOT) { $host_ = 'antigravity' }
 elseif ($env:CURSOR_PLUGIN_ROOT){ $host_ = 'cursor'  }
 
 switch ($host_) {
@@ -42,6 +43,15 @@ switch ($host_) {
                 hookEventName     = 'SessionStart'
                 additionalContext = $context
             }
+        }
+    }
+    'antigravity' {
+        $out = [ordered]@{
+            injectSteps = @(
+                [ordered]@{
+                    ephemeralMessage = $context
+                }
+            )
         }
     }
     default {

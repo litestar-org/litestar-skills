@@ -87,7 +87,7 @@ store = AsyncpgStore(config)
 
 Configure expiry in Litestar's session middleware. SQLSpec's extension block controls the table name, additive schema lifecycle, and adapter-specific table options.
 
-### Correlation Header for Request Tracing
+### Correlation Header & Lifespan Control
 
 ```python
 config = AsyncpgConfig(
@@ -96,12 +96,16 @@ config = AsyncpgConfig(
         "litestar": {
             "commit_mode": "autocommit",
             "correlation_header": "x-request-id",
+            "enable_correlation_middleware": True,
+            "disable_di": False,
+            "manage_lifespan": True,
         }
     },
 )
 ```
 
-The correlation header value is extracted from each request and attached to all SQL log events emitted during that request lifecycle.
+- **Correlation extraction**: `CorrelationMiddleware` extracts the correlation ID from `correlation_header` / `correlation_headers` (plus W3C trace headers when `auto_trace_headers=True`) and attaches it to all SQL log events emitted during that request lifecycle. `SQLSpecPlugin` deduplicates `CorrelationMiddleware` across multiple registered configs.
+- **Dishka / Custom DI mode (`disable_di: True, manage_lifespan: True`)**: when `disable_di: True` is set so Dishka owns session/service injection, set `manage_lifespan: True` so `SQLSpecPlugin` still registers the Litestar lifespan handler that drains and closes connection pools on shutdown (`manage_lifespan` defaults to `not disable_di`).
 
 ---
 
@@ -173,15 +177,20 @@ explain = Explain("SELECT * FROM users", dialect="postgres").analyze().verbose()
 
 ## Error Handling
 
-### Custom Exception Classes
+### Custom Exception Classes & Default Litestar Exception Handlers
 
 All adapters wrap exceptions using `wrap_exceptions` referencing static mappings to the `SQLSpecError` base:
 
 - `AdapterError`: Generic connectivity or execution issues.
-- `IntegrityError`: Constraint and uniqueness violations.
+- `IntegrityError` (`UniqueViolationError`, `ForeignKeyViolationError`, `NotNullViolationError`, `CheckViolationError`): Constraint and uniqueness violations.
 - `NotFoundError`: `select_one()` or `select_value()` received no result.
 - `ValueError`: `select_one()` or `select_value()` received multiple results.
 - `MultipleResultsFoundError`: `select_one_or_none()` or `select_value_or_none()` received multiple results.
+
+In Litestar, `SQLSpecPlugin` registers default exception handlers (unless the application already defines a handler for that exception type):
+
+- `NotFoundError` → HTTP `404 Not Found` (`not_found_error_handler`)
+- `IntegrityError` → HTTP `409 Conflict` (`integrity_error_handler`, with sub-type detail for unique, foreign-key, not-null, and check violations)
 
 ### Two-Tier Event Reporting
 

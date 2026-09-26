@@ -189,24 +189,26 @@ class TimingMiddleware(ASGIMiddleware):
 
 ## DTOs
 
+Prefer `MsgspecDTO` with `msgspec.Struct` in new Litestar code; use `DataclassDTO`, `SQLAlchemyDTO`, or `PydanticDTO` to match the project's existing stack.
+
 ```python
-from litestar.dto import DataclassDTO, DTOConfig
-from dataclasses import dataclass
+import msgspec
+from litestar import get
+from litestar.dto import DTOConfig, MsgspecDTO
 
 
-@dataclass
-class User:
+class User(msgspec.Struct):
     id: int
     name: str
     email: str
     password_hash: str  # Sensitive!
 
 
-class UserReadDTO(DataclassDTO[User]):
+class UserReadDTO(MsgspecDTO[User]):
     config = DTOConfig(exclude={"password_hash"})
 
 
-class UserCreateDTO(DataclassDTO[User]):
+class UserCreateDTO(MsgspecDTO[User]):
     config = DTOConfig(exclude={"id", "password_hash"})
 
 
@@ -255,6 +257,8 @@ async def get_item(item_id: int) -> Item:
 ```
 
 ## Plugin Development
+
+Subclass `InitPlugin` (from `litestar.plugins`), `CLIPlugin` / `CLIPluginProtocol`, `SerializationPlugin`, `OpenAPISchemaPlugin`, `ReceiveRoutePlugin`, or `DIPlugin`. (`InitPluginProtocol` and `SerializationPluginProtocol` are deprecated since Litestar 2.15 in favor of `InitPlugin` and `SerializationPlugin`.)
 
 ```python
 from litestar.plugins import InitPlugin

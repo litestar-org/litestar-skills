@@ -27,25 +27,30 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 HOOKS_DIR = REPO_ROOT / "hooks"
 PACKAGE_HOOKS_DIR = REPO_ROOT / "plugins" / "litestar" / "hooks"
 
-# Manifest filename + the JSON event key per host.
 MANIFESTS = {
-    "antigravity": (REPO_ROOT / "hooks.json", "SessionStart"),
+    "antigravity": (REPO_ROOT / "hooks.json", "PreInvocation"),
+    "antigravity-mirror": (HOOKS_DIR / "hooks-agy.json", "PreInvocation"),
     "claude": (HOOKS_DIR / "hooks.json", "SessionStart"),
     "codex": (HOOKS_DIR / "hooks-codex.json", "SessionStart"),
+    "codex-mirror": (REPO_ROOT / ".codex" / "hooks.json", "SessionStart"),
     "cursor": (HOOKS_DIR / "hooks-cursor.json", "sessionStart"),
 }
 
 PACKAGE_MANIFESTS = {
-    "claude": (PACKAGE_HOOKS_DIR / "hooks.json", "SessionStart"),
+    "codex-auto": (PACKAGE_HOOKS_DIR / "hooks.json", "SessionStart"),
     "codex": (PACKAGE_HOOKS_DIR / "hooks-codex.json", "SessionStart"),
+    "codex-dot": (REPO_ROOT / "plugins" / "litestar" / ".codex" / "hooks.json", "SessionStart"),
     "cursor": (PACKAGE_HOOKS_DIR / "hooks-cursor.json", "sessionStart"),
 }
 
 
 def _command_from_manifest(path: Path, event: str) -> str:
     data = cast("dict[str, Any]", json.loads(path.read_text(encoding="utf-8")))
+    if event == "PreInvocation":
+        first_group = cast("dict[str, Any]", next(iter(data.values())))
+        entry = first_group[event][0]
+        return cast("str", entry["command"])
     matcher = data["hooks"][event][0]
-    # Claude/Codex nest a "hooks" array under the matcher; Cursor puts "command" on the matcher directly.
     entry = matcher["hooks"][0] if "hooks" in matcher else matcher
     return cast("str", entry["command"])
 
@@ -127,6 +132,15 @@ def test_codex_command_resolves_without_plugin_root(litestar_project: Path, fake
     assert "litestar:litestar" in out["hookSpecificOutput"]["additionalContext"]
 
 
+def test_codex_package_hooks_json_matches_hooks_codex_json() -> None:
+    """The packaged Codex hooks/hooks.json and .codex/hooks.json must match hooks/hooks-codex.json."""
+    expected = json.loads((HOOKS_DIR / "hooks-codex.json").read_text(encoding="utf-8"))
+    assert json.loads((PACKAGE_HOOKS_DIR / "hooks.json").read_text(encoding="utf-8")) == expected
+    assert json.loads((REPO_ROOT / "plugins" / "litestar" / ".codex" / "hooks.json").read_text(encoding="utf-8")) == (
+        expected
+    )
+
+
 @pytest.mark.parametrize(
     ("host", "path", "event"),
     [
@@ -168,8 +182,8 @@ def test_antigravity_command_prefers_plugin_root_when_set(litestar_project: Path
     )
     assert result.returncode == 0, f"antigravity command exited {result.returncode}: {result.stderr!r}"
     out = cast("dict[str, Any]", json.loads(result.stdout))
-    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
-    assert "litestar:litestar" in out["hookSpecificOutput"]["additionalContext"]
+    assert "injectSteps" in out
+    assert "litestar:litestar" in out["injectSteps"][0]["ephemeralMessage"]
 
 
 def test_antigravity_command_resolves_installed_plugin_root(
@@ -183,8 +197,8 @@ def test_antigravity_command_resolves_installed_plugin_root(
     )
     assert result.returncode == 0, f"antigravity command exited {result.returncode}: {result.stderr!r}"
     out = cast("dict[str, Any]", json.loads(result.stdout))
-    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
-    assert "litestar:litestar" in out["hookSpecificOutput"]["additionalContext"]
+    assert "injectSteps" in out
+    assert "litestar:litestar" in out["injectSteps"][0]["ephemeralMessage"]
 
 
 def test_antigravity_root_hook_command_is_posix_sh_safe(litestar_project: Path) -> None:
@@ -197,7 +211,7 @@ def test_antigravity_root_hook_command_is_posix_sh_safe(litestar_project: Path) 
     )
     assert result.returncode == 0, f"antigravity hook command exited {result.returncode}: {result.stderr!r}"
     out = cast("dict[str, Any]", json.loads(result.stdout))
-    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert "injectSteps" in out
 
 
 def test_codex_command_prefers_plugin_root_when_set(litestar_project: Path) -> None:

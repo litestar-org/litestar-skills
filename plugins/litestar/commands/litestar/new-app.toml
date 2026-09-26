@@ -11,35 +11,36 @@ Ask the user each of these, one at a time. Record the answers as variables to dr
 1. **Project name** — kebab-case slug (e.g., `my-api`). Stored as `{project_name}` / `{project_slug}`.
 
 2. **Data access layer** — one of:
-   - `advanced-alchemy` (default — opinionated ORM, repository services, audit bases, Alembic integration)
-   - `sqlspec` (direct SQL, 15+ driver adapters, Arrow support, multi-backend)
+   - `advanced-alchemy` (default — opinionated ORM, repository services, audit bases, Alembic integration — `skills/advanced-alchemy/SKILL.md`)
+   - `sqlspec` (direct SQL, 19 driver adapters, Arrow support, multi-backend — `skills/sqlspec/SKILL.md`)
    - `raw-sqlalchemy` (existing SA Core / ORM codebase, no repository abstraction)
    - `none` (no database — API-only scaffolds stop here for DB wiring)
    Store as `{data_access}`.
 
 3. **Dependency injection** — one of:
-   - `provide` (default — Litestar built-in `Provide()`, best for small/mid apps)
-   - `dishka` (request/session/app scope management, best for enterprise-scale)
+   - `provide` (default — Litestar built-in `Provide()` + `NamedDependency`, best for small/mid apps — `skills/litestar/references/di-and-dishka.md`)
+   - `dishka` (request/session/app scope management via `FromDishka`, best for enterprise-scale — `skills/litestar/references/di-and-dishka.md`)
    Store as `{di}`.
 
 4. **Settings pattern** — one of:
-   - `dataclass` (default — `@dataclass(frozen=True)` + `get_env()` + `@lru_cache`; no extra deps)
-   - `pydantic-settings` (pick when Pydantic is already a project dep)
+   - `dataclass` (default — `@dataclass(frozen=True)` + `get_env()` + `@lru_cache`; no extra deps — `skills/litestar/references/settings.md`)
+   - `pydantic-settings` (pick when Pydantic is already a project dep — `skills/litestar/references/settings.md`)
    Store as `{settings}`.
 
 5. **Serialization / DTO layer** — one of:
-   - `msgspec` (default — high-perf, canonical for Litestar)
+   - `msgspec` (default — high-perf `msgspec.Struct` with `rename="camel"`, canonical for Litestar — `skills/msgspec/SKILL.md`, `skills/litestar/references/dtos.md`, `skills/litestar/references/openapi.md`)
    - `pydantic` (pick when Pydantic is already a project dep or DTOs are shared with non-Litestar services)
    Store as `{serialization}`.
 
 6. **Database engine** — PostgreSQL (default), MySQL, SQLite, Oracle, DuckDB, or `none`. Store as `{db_engine}`.
 
-7. **Background tasks** — include `litestar-saq`? (default: yes). If yes, ask broker:
-   - `redis` (default when Redis is already in the stack — also required if the frontend needs sessions / cache via Redis)
-   - `postgresql` (PG-only deploy; use the same Postgres as the app DB)
-   Store as `{saq_broker}`.
+7. **Background tasks** — which first-party queue runner?
+   - `litestar-queues` (`QueuePlugin` + `QueueConfig` + `WorkerConfig`, with backend matching the stack: `sqlspec`, `advanced-alchemy`, `redis`, `valkey`, or `ephemeral` — `skills/litestar-queues/SKILL.md`)
+   - `litestar-saq` (`SAQPlugin` + `SAQConfig` + `QueueConfig`, broker: `redis` or `postgresql` — `skills/litestar-saq/SKILL.md`)
+   - `none` (no background task queue)
+   Store as `{background_tasks}` (and `{saq_broker}` / `{queue_backend}`).
 
-8. **Realtime / WebSockets — Channels backend** (skip if not needed):
+8. **Realtime / WebSockets — Channels backend** (skip if not needed — `skills/litestar/references/channels-and-sse.md`, `skills/litestar/references/websockets.md`):
    - `memory` (dev / single-process)
    - `redis` (Redis already in-stack)
    - `sqlspec-pg-listen` (sqlspec + PG stack, no Redis)
@@ -48,20 +49,26 @@ Ask the user each of these, one at a time. Record the answers as variables to dr
 
 9. **Frontend approach** — one of:
    - `none` (API-only)
-   - `template-jinja` (server-rendered Jinja + Vite-bundled assets)
-   - `htmx-jinja` (Jinja + `litestar-htmx` + Vite-bundled assets)
-   - `inertia-react`, `inertia-react-jinja`, `inertia-vue`, `inertia-vue-jinja`
-   - `spa-react`, `spa-vue`, `spa-svelte`, `spa-angular`
-   - `ssr-nuxt`, `ssr-sveltekit`, `ssg-astro`, `external-angular-cli`
+   - `template-jinja` (server-rendered Jinja + Vite-bundled assets — `skills/litestar-vite/SKILL.md`)
+   - `htmx-jinja` (Jinja + `litestar-htmx` + Vite-bundled assets — `skills/litestar-htmx/SKILL.md`, `skills/litestar-vite/SKILL.md`)
+   - `inertia-react`, `inertia-react-jinja`, `inertia-vue`, `inertia-vue-jinja` (`skills/litestar-vite/SKILL.md`, `skills/litestar-vite/references/inertia.md`)
+   - `spa-react`, `spa-vue`, `spa-svelte`, `spa-angular` (`skills/litestar-vite/SKILL.md`)
+   - `ssr-nuxt`, `ssr-sveltekit`, `ssg-astro`, `external-angular-cli` (`skills/litestar-vite/SKILL.md`)
    Store as `{frontend}`.
 
-10. **ASGI server** — `granian` (default) or `uvicorn`. Store as `{asgi_server}`.
+10. **Authentication & security** — one of:
+    - `litestar-security` (declarative session / OAuth / OIDC / passkeys / MFA + `AuthorizationSnapshot` + `requires_role` / `requires_scope` / `requires_tenant` — `skills/litestar-security/SKILL.md`)
+    - `guards` (native Litestar `JWTAuth` / `JWTCookieAuth` / `SessionAuth` + `Guard` functions — `skills/litestar/references/auth-and-guards.md`)
+    - `none` (public API or external gateway auth)
+    Store as `{auth_strategy}`.
 
-11. **Deployment target** — one of: `docker`, `railway`, `cloud-run`, `gke`, `systemd`, `pyapp` (single binary), `none`. Store as `{deploy}`.
+11. **ASGI server** — `granian` (default — `skills/litestar-granian/SKILL.md`) or `uvicorn`. Store as `{asgi_server}`.
 
-12. **Testing database fixtures** — `pytest-databases` (default — real containers) or `manual-fixtures` (mocks / SQLite in-memory). Store as `{testing}`.
+12. **Deployment target** — one of: `docker`, `railway`, `cloud-run`, `gke`, `systemd` (`skills/litestar-deployment/SKILL.md`), `pyapp` (single binary — `skills/litestar-build/SKILL.md`), `none`. Store as `{deploy}`.
 
-After collecting answers, confirm the full stack choice back to the user in a short summary (e.g., `advanced-alchemy + provide + dataclass + msgspec + postgres + saq-redis + granian + docker`) and ask for final confirmation before generating.
+13. **Testing database fixtures** — `pytest-databases` (default — real containers, `skills/pytest-databases/SKILL.md`, `skills/litestar-testing/SKILL.md`, `skills/polyfactory/SKILL.md`) or `manual-fixtures` (mocks / SQLite in-memory). Store as `{testing}`.
+
+After collecting answers, confirm the full stack choice back to the user in a short summary (e.g., `advanced-alchemy + provide + dataclass + msgspec + postgres + litestar-queues + granian + docker`) and ask for final confirmation before generating.
 
 ## Step 2 — Generate the project structure
 
@@ -73,12 +80,12 @@ Base layout (universal, independent of stack choices):
 │   ├── __init__.py
 │   ├── server/
 │   │   ├── app.py              # Litestar() with plugins
-│   │   ├── plugins.py          # {asgi_server} plugin, SAQ (if enabled), Vite (if frontend), etc.
+│   │   ├── plugins.py          # {asgi_server} plugin, queues/SAQ (if enabled), Vite (if frontend), etc.
 │   │   └── core.py             # AppSettings composition, exception handlers, ApplicationCore
 │   ├── lib/
 │   │   ├── exceptions.py       # ApplicationError hierarchy
 │   │   ├── schema.py           # CamelizedBaseStruct (msgspec) or BaseModel (pydantic)
-│   │   ├── settings.py         # @dataclass OR pydantic_settings.BaseSettings — per {settings}
+│   │   ├── settings.py         # @dataclass(frozen=True) OR pydantic_settings.BaseSettings — per {settings}
 │   │   └── deps.py             # Shared DI providers (Provide or Dishka per {di})
 │   ├── db/                     # Present only if {data_access} != "none"
 │   │   ├── models/__init__.py  # SA models (advanced-alchemy / raw-sa) OR schema pack (sqlspec)
@@ -107,74 +114,89 @@ Each branch below is driven by the answers from Step 1. Do NOT generate patterns
 
 ### Data access ({data_access})
 
-- `advanced-alchemy`: subclass `SQLAlchemyAsyncRepositoryService` for the example domain. Wire `SQLAlchemyPlugin` + `SQLAlchemyAsyncConfig` in `server/plugins.py`.
-- `sqlspec`: subclass `SQLSpecAsyncService` and use driver methods with explicit SQL. Wire the `sqlspec` config in `server/plugins.py`.
+- `advanced-alchemy`: subclass `SQLAlchemyAsyncRepositoryService` for the example domain. Wire `SQLAlchemyPlugin` + `SQLAlchemyAsyncConfig` in `server/plugins.py` (`skills/advanced-alchemy/SKILL.md`, `skills/litestar/references/services-and-repos.md`, `skills/litestar/references/filters-and-pagination.md`).
+- `sqlspec`: subclass `SQLSpecAsyncService` and use driver methods with explicit SQL. Wire `SQLSpecPlugin` and the driver config in `server/plugins.py` (`skills/sqlspec/SKILL.md`, `skills/litestar/references/services-and-repos.md`, `skills/litestar/references/filters-and-pagination.md`).
 - `raw-sqlalchemy`: thin service class taking `AsyncSession` via DI; use `async_sessionmaker` in `server/plugins.py`.
 - `none`: skip `db/`, skip example domain DB wiring.
 
 ### DI ({di})
 
-- `provide`: register providers in `server/app.py` `dependencies={...}`.
-- `dishka`: scaffold a `lib/di.py` with a `Provider` class + `setup_dishka(app, container)` call in `server/app.py`.
+- `provide`: register `Provide()` providers in `server/app.py` `dependencies={...}` and type handler params with `NamedDependency[...]` (`skills/litestar/references/di-and-dishka.md`).
+- `dishka`: scaffold `lib/di.py` with a `Provider` class + `setup_dishka(container, app)` call in `server/app.py` and type handler params with `FromDishka as Inject` (`skills/litestar/references/di-and-dishka.md`).
 
 ### Settings ({settings})
 
-- `dataclass`: `@dataclass(frozen=True)` hierarchies + `get_env()` + `@lru_cache` in `lib/settings.py`.
-- `pydantic-settings`: `BaseSettings` subclasses with `SettingsConfigDict(env_prefix=...)` + `@lru_cache`.
+- `dataclass`: `@dataclass(frozen=True)` hierarchies + `get_env()` + `@lru_cache` in `lib/settings.py` (`skills/litestar/references/settings.md`).
+- `pydantic-settings`: `BaseSettings` subclasses with `SettingsConfigDict(env_prefix=...)` + `@lru_cache` (`skills/litestar/references/settings.md`).
 
 ### Serialization ({serialization})
 
-- `msgspec`: `CamelizedBaseStruct` base declared with the class option `rename="camel"` in `lib/schema.py`; all DTOs extend it.
+- `msgspec`: `CamelizedBaseStruct` base declared with the class option `rename="camel"` in `lib/schema.py`; all DTOs extend it (`skills/msgspec/SKILL.md`, `skills/litestar/references/dtos.md`).
 - `pydantic`: `BaseModel` with `alias_generator=to_camel` + `ConfigDict(populate_by_name=True)` in `lib/schema.py`.
 
-### Background tasks ({saq_broker})
+### Background tasks ({background_tasks})
 
-- `redis`: `QueueConfig(dsn=settings.redis.url, ...)` — also adds `RedisSettings` to `lib/settings.py`.
-- `postgresql`: `QueueConfig(dsn=settings.database.url, ...)` — single Postgres covers app data + job queue.
-- Skip SAQ entirely if the user answered "no" to Q7.
+- `litestar-queues`: wire `QueuePlugin(config=QueueConfig(backend=..., workers=[WorkerConfig(...)]))` in `server/plugins.py` using `SQLSpecBackendConfig`, `SQLAlchemyBackendConfig`, `RedisBackendConfig`, or `ValkeyBackendConfig` matching the project stack (`skills/litestar-queues/SKILL.md`).
+- `litestar-saq` (`redis`): `SAQPlugin(config=SAQConfig(queue_configs=[QueueConfig(dsn=settings.redis.url, ...)]))` — also adds `RedisSettings` to `lib/settings.py` (`skills/litestar-saq/SKILL.md`).
+- `litestar-saq` (`postgresql`): `SAQPlugin(config=SAQConfig(queue_configs=[QueueConfig(dsn=settings.database.url, ...)]))` — single Postgres covers app data + job queue (`skills/litestar-saq/SKILL.md`).
+- `none`: skip queue plugins and worker wiring entirely.
 
 ### Channels backend ({channels_backend})
 
-Only wire a `ChannelsPlugin` if the user picked a backend. Import path is per-branch — see `skills/litestar-realtime/references/websockets.md` for exact symbols.
+Only wire a `ChannelsPlugin` if the user picked a backend. Import path is per-branch — see `skills/litestar/references/channels-and-sse.md` and `skills/litestar/references/websockets.md` for exact symbols.
 
 ### Frontend ({frontend})
 
 - `none`: no frontend source tree, no `package.json`, no Vite plugin.
-- `template-jinja`: add `TemplateConfig(directory=..., engine=JinjaTemplateEngine)` and one `VitePlugin(config=ViteConfig(mode="template", paths=PathConfig(resource_dir="resources"), ...))`. Use template helpers from `litestar-vite`; do not add `litestar-htmx`.
-- `htmx-jinja`: use the same Jinja `TemplateConfig` + `VitePlugin(mode="htmx")`, then register `HTMXPlugin()` and scaffold `hx-*` / `ls-*` templates. The canonical `litestar-vite/examples/jinja-htmx` app uses Litestar template configuration, not a template plugin object.
-- `inertia-*`: configure one `VitePlugin(config=ViteConfig(inertia=InertiaConfig(...), types=TypeGenConfig(output=...), paths=PathConfig(resource_dir="resources", ...)))`. Do not add a second Inertia integration plugin; `VitePlugin` configures the Inertia integration from `ViteConfig.inertia`. Add session middleware and use `@get(..., component="PageName")` / `@post(..., component="PageName")` for page routes. Use `mode="hybrid"` when the app needs an explicit mode; otherwise follow the reference app auto-detection.
-- `spa-react` / `spa-vue` / `spa-svelte` / `spa-angular`: add `VitePlugin(config=ViteConfig(mode="spa", ...))`, a framework-specific `vite.config.ts`, and a client app under `src/js/web` or the chosen frontend root. Keep `bundle_dir`, `hotFile`, `asset_url`, and TypeGen output aligned between Python and TypeScript.
-- `ssr-nuxt` / `ssr-sveltekit`: use `ViteConfig(mode="framework", ...)`; the JS framework owns rendering and Litestar serves/proxies the API.
-- `ssg-astro`: use `ViteConfig(mode="framework", ...)` plus `astro.config.mjs` with `litestar-vite-plugin/astro`; no root `vite.config.ts` is required.
-- `external-angular-cli`: use `ViteConfig(mode="external", ...)` and the Angular CLI project layout. Do not force the Analog Vite example when the user picked Angular CLI.
+- `template-jinja`: add `TemplateConfig(directory=..., engine=JinjaTemplateEngine)` and one `VitePlugin(config=ViteConfig(mode="template", paths=PathConfig(resource_dir="resources"), ...))`. Use template helpers from `litestar-vite`; do not add `litestar-htmx` (`skills/litestar-vite/SKILL.md`).
+- `htmx-jinja`: use the same Jinja `TemplateConfig` + `VitePlugin(config=ViteConfig(mode="template", paths=PathConfig(resource_dir="resources"), ...))` (note `mode="htmx"` is an alias that normalizes to `"template"`), register `HTMXPlugin()` from `litestar_htmx`, and scaffold `hx-*` templates (`skills/litestar-htmx/SKILL.md`, `skills/litestar-vite/SKILL.md`).
+- `inertia-*`: configure one `VitePlugin(config=ViteConfig(inertia=InertiaConfig(...), types=TypeGenConfig(output=...), paths=PathConfig(resource_dir="resources", ...)))`. Do not add a second Inertia integration plugin; `VitePlugin` configures the Inertia integration from `ViteConfig.inertia`. Add session middleware and use `@get(..., component="PageName")` / `@post(..., component="PageName")` for page routes. Use `mode="hybrid"` when the app needs an explicit mode; otherwise follow the reference app auto-detection (`skills/litestar-vite/SKILL.md`, `skills/litestar-vite/references/inertia.md`).
+- `spa-react` / `spa-vue` / `spa-svelte` / `spa-angular`: add `VitePlugin(config=ViteConfig(mode="spa", ...))`, a framework-specific `vite.config.ts`, and a client app under `src/js/web` or the chosen frontend root. Keep `bundle_dir`, `hotFile`, `asset_url`, and TypeGen output aligned between Python and TypeScript (`skills/litestar-vite/SKILL.md`).
+- `ssr-nuxt` / `ssr-sveltekit`: use `ViteConfig(mode="framework", ...)`; the JS framework owns rendering and Litestar serves/proxies the API (`skills/litestar-vite/SKILL.md`).
+- `ssg-astro`: use `ViteConfig(mode="framework", ...)` plus `astro.config.mjs` with `litestar-vite-plugin/astro`; no root `vite.config.ts` is required (`skills/litestar-vite/SKILL.md`).
+- `external-angular-cli`: use `ViteConfig(mode="external", ...)` and the Angular CLI project layout. Do not force the Analog Vite example when the user picked Angular CLI (`skills/litestar-vite/SKILL.md`).
+
+### Authentication & security ({auth_strategy})
+
+- `litestar-security`: register `SecurityPlugin(SecurityConfig(...))` in `server/plugins.py`, define `AuthorizationSnapshot` principal resolver, and subclass `SecureController` (`auth: ClassVar[AuthenticationPolicy] = required(...)` / `any_of(...)`) or `PublicController` on domain controllers plus `guards=[requires_role(...), requires_scope(...)]` (`skills/litestar-security/SKILL.md`).
+- `guards`: configure Litestar auth middleware (`JWTAuth`, `JWTCookieAuth`, or `SessionAuth`) and apply `Guard` functions at Controller class level (`skills/litestar/references/auth-and-guards.md`).
+- `none`: no auth plugin or guards in the initial scaffold.
 
 ### ASGI server ({asgi_server})
 
-- `granian`: `GranianPlugin()` in `server/plugins.py`; dev command `litestar run`.
+- `granian`: `GranianPlugin()` in `server/plugins.py`; dev command `litestar run` (`skills/litestar-granian/SKILL.md`).
 - `uvicorn`: no plugin; dev command `uvicorn app:app --reload`.
 
-### Deployment ({deploy})
+### Deployment & packaging ({deploy})
 
-- `docker`: Dockerfile with multi-stage build (uv → granian).
-- `railway`: `railway.toml` + Procfile-style start.
-- `cloud-run`: Dockerfile + `service.yaml` for Cloud Run.
-- `gke`: `k8s/` directory with Deployment + Service + HPA.
-- `systemd`: `deploy/systemd/{slug}.service` unit file.
-- `pyapp`: `pyapp.toml` config for single-binary packaging (see `skills/pyapp`).
+- `docker`: Dockerfile with multi-stage build (uv → granian — `skills/litestar-deployment/SKILL.md`).
+- `railway`: `railway.toml` + Procfile-style start (`skills/litestar-deployment/SKILL.md`).
+- `cloud-run`: Dockerfile + `service.yaml` for Cloud Run (`skills/litestar-deployment/SKILL.md`).
+- `gke`: `k8s/` directory with Deployment + Service + HPA (`skills/litestar-deployment/SKILL.md`).
+- `systemd`: `deploy/systemd/{slug}.service` unit file (`skills/litestar-deployment/SKILL.md`).
+- `pyapp`: `[tool.hatch.build.targets.binary]` in `pyproject.toml` + `PYAPP_*` build-time env vars or `tools/bundler.py` for single-binary packaging (see `skills/litestar-build/SKILL.md`).
 - `none`: no deployment artifacts.
 
 ### Testing ({testing})
 
-- `pytest-databases`: `conftest.py` with the `pytest-databases` fixtures matching `{db_engine}`.
-- `manual-fixtures`: lightweight in-memory SQLite or mock setup.
+- `pytest-databases`: `conftest.py` with the `pytest-databases` fixtures matching `{db_engine}` plus `AsyncTestClient` and `polyfactory` factories (`skills/pytest-databases/SKILL.md`, `skills/litestar-testing/SKILL.md`, `skills/polyfactory/SKILL.md`).
+- `manual-fixtures`: lightweight in-memory SQLite or mock setup (`skills/litestar-testing/SKILL.md`).
+
+### Additional ecosystem integrations (when requested)
+
+- **Domain discovery**: `AutowirePlugin(AutowireConfig(domain_packages=[...]))` (`skills/litestar-autowire/SKILL.md`) or explicit `Router` composition (`skills/litestar/references/handlers.md`, `skills/litestar/references/plugins.md`).
+- **Email**: `EmailPlugin(config=EmailConfig(backend=...))` (`skills/litestar-email/SKILL.md`).
+- **MCP**: `LitestarMCP(MCPConfig(...))` (`skills/litestar-mcp/SKILL.md`).
+- **AI / Agent serving**: Google ADK `Runner` + `SQLSpecSessionService` + SSE streaming (`skills/litestar-ai/SKILL.md`).
 
 ## Step 4 — Universal patterns (independent of stack)
 
-Apply these regardless of answers:
+Apply these regardless of answers (see `skills/litestar/SKILL.md` and `skills/litestar-styleguide/SKILL.md`):
 
-- **Guards at Controller class level** for auth.
-- **Domain-clustered Controllers** — `/api/{domain}/` — not HTTP-method clustering.
-- **`ApplicationError` hierarchy** in `lib/exceptions.py`; handlers registered on the app.
+- **Guards at Controller class level** for auth (`skills/litestar/references/auth-and-guards.md`, `skills/litestar-security/SKILL.md`).
+- **Domain-clustered Controllers** — `/api/{domain}/` — not HTTP-method clustering (`skills/litestar/references/handlers.md`, `skills/litestar/references/layout.md`).
+- **`ApplicationError` hierarchy** in `lib/exceptions.py`; handlers registered on the app (`skills/litestar/references/exceptions.md`).
+- **Middleware** — configure CORS, CSRF, AllowedHosts, Compression via Litestar's typed configs (`skills/litestar/references/middleware.md`).
 - **Canonical make targets** — `make install`, `make lint`, `make test`, `make check`.
 - **`from __future__ import annotations`** at the top of every application module (app code; NOT library code that exposes runtime-introspected types).
 
