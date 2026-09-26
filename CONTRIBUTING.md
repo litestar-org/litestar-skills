@@ -49,7 +49,7 @@ CI runs `make agents-check` (`tools/generate-agents.py --check`); it fails on an
 
 | Host | Path | Dialect shape |
 | --- | --- | --- |
-| Claude Code | `.claude-plugin/agents/<name>.md` | `tools` as comma-string of PascalCase names (`Read, Grep, Glob, Bash`) |
+| Claude Code | `agents/claude/<name>.md` | `tools` as comma-string of PascalCase names (`Read, Grep, Glob, Bash`) |
 | Codex CLI | `.codex/agents/<name>.toml` | Pure TOML; body in `developer_instructions = """..."""`; no `tools` field (inherited from session `config.toml`) |
 | Gemini CLI | `agents/<name>.md` | `tools` as YAML list of snake_case (`- read_file`) |
 | OpenCode | `.opencode/agents/<name>.md` | `tools` as dict (`read: true`) plus `mode: subagent` |
