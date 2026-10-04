@@ -287,7 +287,11 @@ WHERE /* include: active_predicate */
   AND /* slot: extra_where */
 ORDER BY /* slot: order_clause */
 """
-    sql_file = tmp_path / "queries.sql"
+    resolved_tmp = tmp_path.resolve()
+    registry_any: Any = storage_registry
+    instances: dict[Any, Any] = registry_any._instances
+    instances[resolved_tmp.as_uri()] = storage_registry.get(resolved_tmp, backend="local")
+    sql_file = resolved_tmp / "queries.sql"
     sql_file.write_text(sql_content, encoding="utf-8")
     loader.load_sql(sql_file)
     slots = loader.get_query_slots("list_users")
