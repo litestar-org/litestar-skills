@@ -543,6 +543,15 @@ def test_sqlspec_065_fixtures_roundtrip_and_upsert_contract(tmp_path: Path) -> N
     assert {"tables", "compress", "jsonl"}.issubset(export_params)
     assert "file_format" not in export_params
 
+    dd_sql_dir = (
+        Path(inspect.getfile(SqliteDriver)).resolve().parents[2] / "data_dictionary" / "dialects" / "sqlite" / "sql"
+    )
+    registry_any: Any = storage_registry
+    instances: dict[Any, Any] = registry_any._instances
+    for directory in (tmp_path.resolve(), dd_sql_dir):
+        uri = directory.as_uri()
+        instances[uri] = storage_registry.get(directory, backend="local")
+
     config = SQLSpec().add_config(SqliteConfig(connection_config={"database": ":memory:"}))
     with config.provide_session() as session:
         session.execute("CREATE TABLE roles (slug TEXT PRIMARY KEY, label TEXT, created_at TEXT)")
