@@ -126,6 +126,7 @@ from litestar import get
 from litestar.exceptions import NotAuthorizedException, NotFoundException
 from litestar.openapi import ResponseSpec
 from litestar.openapi.spec import Example
+from litestar.params import FromPath
 import msgspec
 
 
@@ -162,7 +163,7 @@ class InvoiceRead(msgspec.Struct):
         ),
     },
 )
-async def get_invoice(invoice_id: str) -> InvoiceRead:
+async def get_invoice(invoice_id: FromPath[str]) -> InvoiceRead:
     """Return a single invoice by identifier."""
     return InvoiceRead(id=invoice_id, total_cents=4500)
 ```
@@ -172,24 +173,24 @@ async def get_invoice(invoice_id: str) -> InvoiceRead:
 
 ---
 
-## Parameter & Body Schema Customization (`Parameter` / `Body`)
+## Parameter & Body Schema Customization (`*Parameter` / `Body`)
 
-Use `litestar.params.Parameter` (for query, path, header, or cookie parameters) and `litestar.params.Body` (for request payloads) to refine OpenAPI schemas without changing runtime types:
+Use `PathParameter`, `QueryParameter`, `HeaderParameter`, `CookieParameter` (for path, query, header, or cookie parameters) and `Body` (for request payloads) from `litestar.params` to refine OpenAPI schemas without changing runtime types:
 
 | Keyword | Applies To | Effect |
 | --- | --- | --- |
-| `title` / `description` | `Parameter`, `Body` | Override the schema title and description. |
-| `examples` | `Parameter`, `Body` | `list[Example]` (`from litestar.openapi.spec import Example`) attached to the parameter or request body. |
-| `schema_extra` | `Parameter`, `Body` | `dict[str, Any]` merged directly into the generated `Schema` object (supports OpenAPI keywords like `"format"`, `"pattern"`, and vendor extensions like `"x-enum-varnames"`). Keys that match `Schema` attributes update the attribute; unknown keys are stored in `Schema.extra`. |
-| `schema_component_key` | `Parameter`, `Body` | Override the component name under `#/components/schemas/<key>` when reusable schemas are registered. |
-| `include_in_schema` | `Parameter` | Set `False` to hide an internal query/header/cookie parameter from OpenAPI while still parsing it at runtime. |
+| `title` / `description` | `*Parameter`, `Body` | Override the schema title and description. |
+| `examples` | `*Parameter`, `Body` | `list[Example]` (`from litestar.openapi.spec import Example`) attached to the parameter or request body. |
+| `schema_extra` | `*Parameter`, `Body` | `dict[str, Any]` merged directly into the generated `Schema` object (supports OpenAPI keywords like `"format"`, `"pattern"`, and vendor extensions like `"x-enum-varnames"`). Keys that match `Schema` attributes update the attribute; unknown keys are stored in `Schema.extra`. |
+| `schema_component_key` | `*Parameter`, `Body` | Override the component name under `#/components/schemas/<key>` when reusable schemas are registered. |
+| `include_in_schema` | `*Parameter` | Set `False` to hide an internal query/header/cookie parameter from OpenAPI while still parsing it at runtime. |
 
 ```python
 from typing import Annotated
 
 from litestar import post
 from litestar.openapi.spec import Example
-from litestar.params import Body, Parameter
+from litestar.params import Body, HeaderParameter
 import msgspec
 
 
@@ -210,15 +211,15 @@ async def search_catalog(
     ],
     tenant_id: Annotated[
         str,
-        Parameter(
-            header="X-Tenant-ID",
+        HeaderParameter(
+            name="X-Tenant-ID",
             description="Tenant slug",
             schema_extra={"pattern": "^[a-z0-9-]+$"},
         ),
     ],
     internal_trace: Annotated[
         str | None,
-        Parameter(header="X-Internal-Trace", include_in_schema=False),
+        HeaderParameter(name="X-Internal-Trace", include_in_schema=False),
     ] = None,
 ) -> dict[str, str]:
     """Execute a tenant-scoped catalog search."""

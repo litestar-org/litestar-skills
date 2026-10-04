@@ -6,13 +6,13 @@ that install the ``validation`` extra (``make check`` and the upstream workflow)
 
 A module is ignored only when its base package is missing entirely — when the
 package is installed but an audited symbol has moved, the import still fails and
-the contract reports the drift, which is the whole point of the suite.
+the contract reports the drift, which is the whole point of the suite. Each
+contract module is mapped to the upstream package it imports at load time so
+collection can be skipped when that package is unavailable.
 """
 
 import importlib.util
 
-# Each contract module imports one upstream package at load time. Map the module
-# to that package so collection can be skipped when the package is unavailable.
 _MODULE_PACKAGES: dict[str, str] = {
     "test_advanced_alchemy": "advanced_alchemy",
     "test_litestar": "litestar",
@@ -23,6 +23,7 @@ _MODULE_PACKAGES: dict[str, str] = {
     "test_litestar_mcp": "litestar_mcp",
     "test_litestar_queues": "litestar_queues",
     "test_litestar_saq": "litestar_saq",
+    "test_litestar_security": "litestar_security",
     "test_litestar_vite": "litestar_vite",
     "test_msgspec": "msgspec",
     "test_polyfactory": "polyfactory",

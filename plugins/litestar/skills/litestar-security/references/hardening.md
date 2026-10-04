@@ -23,6 +23,8 @@ every directive.
 | Report-only (`CSPMode.REPORT_ONLY`) | Emits the standard `Content-Security-Policy-Report-Only` header |
 
 ```python
+from litestar import get
+from litestar_security import csp_nonce, public
 from litestar_security.headers import CSPMode, ContentSecurityPolicy, SecurityHeadersConfig
 
 headers_config = SecurityHeadersConfig(
@@ -32,12 +34,19 @@ headers_config = SecurityHeadersConfig(
             "script-src": ["'self'"],
         },
         mode=CSPMode.ENFORCE,
+        nonce_directives=("script-src",),
     ),
 )
+
+
+@get("/app", auth=public(), sync_to_thread=False)
+def render_page(csp_nonce: csp_nonce) -> dict[str, str]:
+    return {"nonce": csp_nonce}
 ```
 
-No CSP report collector is included. Retrieve nonces for script or style tags
-with `csp_nonce`.
+No CSP report collector is included. Retrieve per-request nonces for script or
+style tags with `csp_nonce` (a `NamedDependency[str]` alias registered when
+`ContentSecurityPolicy.nonce_directives` is non-empty).
 
 CSP `connect-src` is complementary browser hardening — it is not server-side
 authentication or Origin validation.

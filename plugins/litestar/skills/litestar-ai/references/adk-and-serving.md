@@ -15,7 +15,7 @@ from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 from hashlib import sha256
-from typing import cast
+from typing import TypeAlias
 
 from google.adk.agents import LlmAgent
 from google.adk.agents.base_agent import BaseAgent
@@ -33,8 +33,8 @@ from sqlspec.extensions.adk import SQLSpecMemoryService, SQLSpecSessionService
 DYNAMIC_INSTRUCTION_KEY = "temp:dynamic_instruction"
 MAX_CACHED_RUNNERS = 8
 
-type AgentToolEntry = Callable[..., object] | BaseTool | BaseToolset
-type CacheKey = tuple[
+AgentToolEntry: TypeAlias = Callable[..., object] | BaseTool | BaseToolset
+CacheKey: TypeAlias = tuple[
     str,
     float,
     int,
@@ -166,14 +166,14 @@ class AgentApplicationFactory:
 
 ---
 
-## 2. Request-Scoped DI Binding via `RunContextRegistry` & `_JSONSafeTool`
+## 2. Request-Scoped DI Binding via `RunContextRegistry` & `JSONSafeTool`
 
 ADK `FunctionTool` instances are registered on `LlmAgent` at `Scope.APP`, while Litestar domain services are typically `Scope.REQUEST`. Bridge the two scopes safely:
 
 1. Store the request-scoped `DomainToolContext` in an app-scoped `RunContextRegistry` keyed by a one-turn `uuid4().hex` token.
 2. Pass `{"temp:run_context_token": token}` in `runner.run_async(..., state_delta=...)`.
 3. Rewrite the tool function's signature to accept `tool_context: google.adk.tools.tool_context.ToolContext | None = None` so ADK injects its `ToolContext` without exposing internal services to the LLM schema.
-4. Wrap `FunctionTool` in a `_JSONSafeTool(BaseTool)` adapter so `UUID`, `datetime`, `Decimal`, `Enum`, and `msgspec.Struct` outputs are normalized before ADK writes `FunctionResponse` events to `JSONB`.
+4. Wrap `FunctionTool` in a `JSONSafeTool(BaseTool)` adapter so `UUID`, `datetime`, `Decimal`, `Enum`, and `msgspec.Struct` outputs are normalized before ADK writes `FunctionResponse` events to `JSONB`.
 
 ```python
 import inspect
@@ -333,7 +333,6 @@ from google.adk.tools.preload_memory_tool import PreloadMemoryTool
 from typing_extensions import override
 
 if TYPE_CHECKING:
-    from google.adk.agents.readonly_context import ReadonlyContext
     from google.adk.memory.memory_entry import MemoryEntry
     from google.adk.models import LlmRequest
     from google.adk.tools.tool_context import ToolContext
@@ -570,6 +569,7 @@ Separate singleton agent infrastructure (`Scope.APP`) from per-request domain se
 ```python
 from dishka import Provider, Scope, provide
 from sqlspec.adapters.asyncpg import AsyncpgConfig
+from sqlspec.adapters.asyncpg.adk import AsyncpgADKMemoryStore, AsyncpgADKStore
 from sqlspec.extensions.adk import SQLSpecMemoryService, SQLSpecSessionService
 
 
@@ -584,25 +584,29 @@ class AgentProvider(Provider):
     @provide(scope=Scope.APP)
     def provide_session_service(self, db_config: AsyncpgConfig) -> SQLSpecSessionService:
         """Provide the SQLSpec-backed ADK session store."""
-        return SQLSpecSessionService(db_config)
+        return SQLSpecSessionService(AsyncpgADKStore(db_config))
 
     @provide(scope=Scope.APP)
     def provide_memory_service(self, db_config: AsyncpgConfig) -> SQLSpecMemoryService:
         """Provide the SQLSpec-backed ADK memory store."""
-        return SQLSpecMemoryService(db_config)
+        return SQLSpecMemoryService(AsyncpgADKMemoryStore(db_config))
 ```
 
 ---
 
 ## 6. Session Windowing & Retention Pruning
 
-Bound history retrieval on long-running sessions with `GetSessionConfig(num_recent_events=...)` and schedule retention cleanup for stale sessions, events, and memories.
+Bound history retrieval on long-running sessions with `GetSessionConfig(num_recent_events=...)` and schedule retention cleanup for stale sessions, events, and memories using SQLSpec's built-in `prune_sessions`, `prune_events`, and `prune_memory` maintenance helpers.
 
 ```python
-from datetime import datetime, timedelta, timezone
-
 from google.adk.sessions.base_session_service import GetSessionConfig
-from sqlspec.extensions.adk import SQLSpecMemoryService, SQLSpecSessionService
+from sqlspec.extensions.adk import (
+    SQLSpecMemoryService,
+    SQLSpecSessionService,
+    prune_events,
+    prune_memory,
+    prune_sessions,
+)
 
 
 async def load_recent_session_window(
@@ -626,36 +630,29 @@ async def prune_expired_agent_records(
     session_service: SQLSpecSessionService,
     memory_service: SQLSpecMemoryService,
     *,
+    app_name: str | None = None,
     retention_days: int = 30,
 ) -> dict[str, int]:
-    """Delete sessions and memory entries older than the configured retention window."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
-    async with session_service.config.provide_session() as driver:
-        deleted_sessions = await driver.select_value(
-            """
-            WITH deleted AS (
-                DELETE FROM adk_sessions
-                WHERE update_time < :cutoff
-                RETURNING id
-            )
-            SELECT count(*) FROM deleted
-            """,
-            cutoff=cutoff,
-        )
-    async with memory_service.config.provide_session() as driver:
-        deleted_memories = await driver.select_value(
-            """
-            WITH deleted AS (
-                DELETE FROM adk_memory_entries
-                WHERE timestamp < :cutoff AND author != 'knowledge_catalog'
-                RETURNING id
-            )
-            SELECT count(*) FROM deleted
-            """,
-            cutoff=cutoff,
-        )
+    """Delete idle sessions, expired events, and user memory entries older than the retention window."""
+    sessions_report = await prune_sessions(
+        session_service.store,
+        idle_days=retention_days,
+        app_name=app_name,
+    )
+    events_report = await prune_events(
+        session_service.store,
+        older_than_days=retention_days,
+        app_name=app_name,
+    )
+    memories_report = await prune_memory(
+        memory_service.store,
+        older_than_days=retention_days,
+        app_name=app_name,
+        scope="user",
+    )
     return {
-        "deleted_sessions": int(deleted_sessions or 0),
-        "deleted_memories": int(deleted_memories or 0),
+        "deleted_sessions": sessions_report.deleted_count,
+        "deleted_events": events_report.deleted_count,
+        "deleted_memories": memories_report.deleted_count,
     }
 ```

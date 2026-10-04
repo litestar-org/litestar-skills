@@ -16,9 +16,9 @@ imports = ["advanced_alchemy"]
 
 [[package]]
 pypi = "sqlspec"
-version = "0.64.0"
-date = "2026-09-21"
-tag = "v0.64.0"
+version = "0.65.0"
+date = "2026-09-29"
+tag = "v0.65.0"
 skills = ["skills/sqlspec"]
 imports = ["sqlspec"]
 
@@ -32,17 +32,17 @@ imports = ["litestar_queues"]
 
 [[package]]
 pypi = "litestar-vite"
-version = "0.31.0"
-date = "2026-08-18"
-tag = "v0.31.0"
+version = "0.32.0"
+date = "2026-09-28"
+tag = "v0.32.0"
 skills = ["skills/litestar-vite"]
 imports = ["litestar_vite"]
 
 [[package]]
 pypi = "litestar-mcp"
-version = "0.13.2"
-date = "2026-08-26"
-tag = "v0.13.2"
+version = "0.14.0"
+date = "2026-09-28"
+tag = "v0.14.0"
 skills = ["skills/litestar-mcp"]
 imports = ["litestar_mcp"]
 
@@ -96,9 +96,9 @@ imports = ["polyfactory"]
 
 [[package]]
 pypi = "msgspec"
-version = "0.21.1"
-date = "2026-04-12"
-tag = "0.21.1"
+version = "0.22.0"
+date = "2026-09-29"
+tag = "0.22.0"
 skills = ["skills/msgspec"]
 imports = ["msgspec"]
 

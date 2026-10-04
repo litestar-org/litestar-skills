@@ -12,7 +12,7 @@ Ask the user each of these, one at a time. Record the answers as variables to dr
 
 2. **Data access layer** — one of:
    - `advanced-alchemy` (default — opinionated ORM, repository services, audit bases, Alembic integration — `skills/advanced-alchemy/SKILL.md`)
-   - `sqlspec` (direct SQL, 19 driver adapters, Arrow support, multi-backend — `skills/sqlspec/SKILL.md`)
+   - `sqlspec` (direct SQL, 20 driver adapters, Arrow support, multi-backend — `skills/sqlspec/SKILL.md`)
    - `raw-sqlalchemy` (existing SA Core / ORM codebase, no repository abstraction)
    - `none` (no database — API-only scaffolds stop here for DB wiring)
    Store as `{data_access}`.

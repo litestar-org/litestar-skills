@@ -5,7 +5,7 @@ Polyfactory exposes `register_fixture`, which injects a pytest fixture into the 
 ## `@register_fixture` — the canonical decorator
 
 ```python
-from polyfactory.factories import DataclassFactory
+from polyfactory.factories.dataclass_factory import DataclassFactory
 from polyfactory.pytest_plugin import register_fixture
 
 
@@ -58,7 +58,7 @@ When one factory's field should use another factory, prefer default factory regi
 
 ```python
 from polyfactory import Use
-from polyfactory.factories import DataclassFactory
+from polyfactory.factories.dataclass_factory import DataclassFactory
 from polyfactory.pytest_plugin import register_fixture
 
 

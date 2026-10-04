@@ -165,7 +165,7 @@ spec:
           emptyDir: {}
 ```
 
-No HTTP probes for the worker. Kubernetes restarts the pod if the process exits. Set `terminationGracePeriodSeconds: 120` to allow in-flight tasks to finish before `SIGKILL`. When using `litestar-queues`, add a Kubernetes `CronJob` that invokes `litestar queues run-maintenance` periodically to recover expired leases and prune old task history.
+No HTTP probes for the worker. Kubernetes restarts the pod if the process exits. Set `terminationGracePeriodSeconds: 120` to allow in-flight tasks to finish before `SIGKILL`. When using `litestar-queues`, configure `QueueConfig(maintenance=QueueMaintenanceConfig(...))` and add a Kubernetes `CronJob` that invokes `litestar queues run-maintenance` periodically to reconcile external executions, recover stale tasks, and prune terminal task/event history.
 
 ## HorizontalPodAutoscaler
 

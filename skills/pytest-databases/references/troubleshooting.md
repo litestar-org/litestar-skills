@@ -12,7 +12,7 @@ Then check the exhaustive matrix in [reference.md](reference.md). Do not infer
 fixture names. In particular:
 
 - Service-only plugins do not create a `*_connection` fixture.
-- Azure uses `azure_blob_*`, and SQLite has no 0.19.0 plugin.
+- AlloyDB Omni, pgvector, and ParadeDB live in `pytest_databases.docker.postgres` (not `alloydb`); Azure/Azurite uses `pytest_databases.docker.azure_blob` and `azure_blob_*` (not `azurite`); Elasticsearch uses `pytest_databases.docker.elastic_search` (not `elasticsearch` or `ElasticSearch`); Dragonfly and KeyDB live in `pytest_databases.docker.redis`; SQLite has no 0.19.0 plugin.
 - `elasticsearch_service` fails with `fixture 'elasticsearch8_service' not found` in 0.19.0; request `elasticsearch_8_service` or `elasticsearch_7_service` instead.
 - `oracle_startup_connection` fails with `fixture 'oracle_23ai_startup_connection' not found` in 0.19.0; request `oracle_23ai_connection` or `oracle_18c_connection` instead.
 

@@ -134,3 +134,4 @@ When `GranianPlugin` is registered, Litestar's `run` command provides the follow
 - **Retired Upstream (Do Not Use):**
   - Retired Granian flags: `--threads`, `--threading-mode`, `--log-access`, `--log-access-format`, `--log-access-fmt`.
   - Use `--runtime-threads`, `--runtime-mode`, `--granian-access-log`, and `--granian-access-log-fmt` instead.
+  - Non-existent Uvicorn proxy flags (`--proxy-headers`, `--forwarded-allow-ips`): use `granian.utils.proxies.wrap_asgi_with_proxy_headers` in `Litestar(middleware=[...])`.

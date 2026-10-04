@@ -338,7 +338,7 @@ Store the `Settings` instance on `app.state` at application creation time and re
 ```python
 from litestar import Controller, Litestar, Request, get
 from litestar.datastructures import State
-from litestar.di import Provide
+from litestar.di import NamedDependency, Provide
 
 from app.lib.settings import Settings, get_settings
 
@@ -349,7 +349,11 @@ class SystemController(Controller):
     path = "/api/system"
 
     @get("/info")
-    async def app_info(self, settings: Settings, request: Request) -> dict[str, str | bool]:
+    async def app_info(
+        self,
+        settings: NamedDependency[Settings],
+        request: Request,
+    ) -> dict[str, str | bool]:
         """Read settings via DI or from request.app.state."""
         state_settings: Settings = request.app.state.settings
         return {
@@ -410,6 +414,7 @@ def _initialize() -> None:
 
     from litestar.channels import ChannelsPlugin
     from litestar.channels.backends.redis import RedisChannelsPubSubBackend
+    from redis.asyncio import Redis
     from sqlspec import SQLSpec
     from sqlspec.observability import ObservabilityConfig
 
@@ -418,7 +423,7 @@ def _initialize() -> None:
     settings = get_settings()
 
     channels = ChannelsPlugin(
-        backend=RedisChannelsPubSubBackend(redis=settings.redis.URL),
+        backend=RedisChannelsPubSubBackend(redis=Redis.from_url(settings.redis.URL)),
         arbitrary_channels_allowed=True,
     )
     observability = ObservabilityConfig(print_sql=settings.db.ECHO)

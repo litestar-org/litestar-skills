@@ -395,12 +395,12 @@ queue_config = QueueConfig(
 )
 ```
 
-Use the application's Advanced Alchemy metadata and migration lifecycle. Compose the package mixins into adopter-owned models when custom bases, table names, or binds are required, then pass all matching model classes:
+Use the application's Advanced Alchemy metadata and migration lifecycle. Compose the package mixins from `litestar_queues.backends.advanced_alchemy` into adopter-owned models when custom bases, table names, or binds are required, then pass all matching model classes:
 
-- `model_class`
-- `event_history_model_class`
-- `maintenance_model_class`
-- `task_reservation_model_class`
+- `model_class` (`QueueTaskModelMixin`, default `QueueTaskModel`)
+- `event_history_model_class` (`QueueEventHistoryModelMixin`, default `QueueEventHistoryModel`)
+- `maintenance_model_class` (`QueueMaintenanceModelMixin`, default `QueueMaintenanceModel`)
+- `task_reservation_model_class` (`QueueTaskReservationModelMixin`, default `QueueTaskReservationModel`)
 
 Set `worker_wakeups=True` only for a supported PostgreSQL dialect.
 
@@ -491,13 +491,15 @@ async def emit_progress(
 ) -> None:
     context = get_current_task_context()
     if context is not None:
+        event_payload = dict(payload or {})
+        if stage is not None:
+            event_payload["stage"] = stage
         await context.progress(
-            current,
-            total,
+            current=current,
+            total=total,
             message=message,
-            stage=stage,
             entity=entity,
-            payload=payload,
+            payload=event_payload,
         )
 
 
@@ -511,12 +513,14 @@ async def emit_log(
 ) -> None:
     context = get_current_task_context()
     if context is not None:
+        event_payload = dict(payload or {})
+        if stage is not None:
+            event_payload["stage"] = stage
         await context.log(
             message,
             level=level,
-            stage=stage,
             entity=entity,
-            payload=payload,
+            payload=event_payload,
         )
 
 
@@ -539,9 +543,10 @@ async def process_import(path: str, tenant_id: str) -> None:
 
 `QueueEventsConfig` groups live `delivery`, application `stream`, and durable `history`. It must enable at least one capability. Task events are separate from worker wakeups.
 
-- **Context-safe emission (`get_current_task_context()`):** Wrap `await context.progress(...)` and `await context.log(...)` in helpers that check `if context is not None:` so `@task` functions execute identically inside queue workers and when called directly in unit tests or CLI commands.
+- **Context-safe emission (`get_current_task_context()`):** Wrap `await context.progress(current=..., total=..., ...)` and `await context.log(...)` in helpers that check `if context is not None:` so `@task` functions execute identically inside queue workers and when called directly in unit tests or CLI commands. Pass `stage` (and optional `duration_ms`) inside `payload` so durable event history populates `QueueEventLogRecord.stage` and `duration_ms`.
 - **Attribution & entities:** Set attempt-scoped default attribution via `@task(..., actor=...)` (`QueueEventActor` or callable) or `TaskExecutionContext.actor`, and override `actor=`, `entity=` (`QueueEventEntityRef`), or `scope_key=` per `publish_task_event`, `publish_task_log`, or `publish_task_progress` call.
 - **Durable history queries & stage summaries:** Retrieve the active event log with `event_log = queue_service.get_event_log()`, query persisted events through `await event_log.query_events(QueueEventQuery(task_id=str(record.id), event_type="task.log", order="desc", limit=50), extra={"tenant_id": tenant_id})` (`OffsetPagination[QueueEventLogRecord]`), and aggregate stage durations with `await event_log.summarize_stages(QueueEventQuery(task_id=str(record.id)))` (`list[QueueEventStageSummary]`). Custom `QueueEventLog` implementations must define `publish_event_after_commit()` and `aclose()`.
+- **Browser SSE / WebSocket streams:** Consume `EventStreamConfig` endpoints from the browser with `createQueueEventStream` from `litestar-vite-plugin/helpers` (set `replay_limit > 0` on `EventStreamConfig` when reconnect replay is required; see [litestar-vite streams](../litestar-vite/references/streams.md)).
 - **Standalone event producer:** Use `async with create_event_producer(queue_config) as producer:` (alongside `bind_task_context` and `bind_beat_sink`) to emit task events from external processes without starting a full worker or Litestar app.
 
 ### Observability and Telemetry
@@ -654,7 +659,8 @@ async def create_import() -> Response[dict[str, str]]:
 
 ## Guardrails
 
-- **Use `SQLAlchemyBackendConfig` for Advanced Alchemy persistence.** Import it from `litestar_queues.backends.advanced_alchemy`.
+- **Use `SQLAlchemyBackendConfig` for Advanced Alchemy persistence.** Import it from `litestar_queues.backends.advanced_alchemy` (do not look for `AdvancedAlchemyAsyncBackendConfig` or `AdvancedAlchemySyncBackendConfig`).
+- **Use current 0.12.0 config and status types.** Use `CloudRunExecutionConfig` (not `CloudRunExecutorConfig`), `TaskStatus` (not `JobStatus`), `RetryBackoff` (not `BackoffStrategy`), `ScheduleConfig` (not `Schedule`), and integer `priority` (not `TaskPriority`); do not look for removed `ConcurrencyLock` or `RateLimit` classes.
 - **Use `queue_table_name` on `SQLSpecBackendConfig`.** Do not pass the removed `table_name` parameter.
 - **Configure events with `QueueEventsConfig`.** Add `EventDeliveryConfig`, `EventStreamConfig`, and/or `EventHistoryConfig` for the required capabilities.
 - **Do not pass flat worker fields to `QueueConfig`.** Use `QueueConfig(worker=WorkerConfig(...))`.

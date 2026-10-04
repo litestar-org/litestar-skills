@@ -14,7 +14,7 @@ End-to-end type generation from the Litestar backend to TypeScript.
 | `inertia-pages.json` | Inertia handler metadata | JSON consumed by `litestar-vite-plugin` |
 | `page-props.ts` | Inertia page-prop types | Typed props for Inertia page components |
 | `static-props.ts` | `.litestar.json` `staticProps` | Typed default and named exports for static bridge values (`virtual:litestar-static-props`) |
-| `asyncapi.json` | Channels / WebSocket / SSE routes (`0.32.0+`) | AsyncAPI 3.0.0 specification when `generate_channels=True` |
+| `asyncapi.json` | `AsyncAPIPlugin` (`litestar-asyncapi`) + Channels / WebSocket / SSE routes (`0.32.0+`) | AsyncAPI 3.0.0 specification when `AsyncAPIPlugin` is registered and `generate_channels=True` |
 | `channels.ts` | `asyncapi.json` (`0.32.0+`) | Typed `ChannelMap` consumed by `createTypedChannels()` |
 
 ## Configuration
@@ -28,15 +28,16 @@ TypeGenConfig(
     generate_routes=True,
     generate_schemas=True,
     generate_page_props=True,
+    generate_channels=True,
     global_route=False,
     fail_on_error=None,
     output="src/generated",
 )
 ```
 
-In `0.32.0+`, enable AsyncAPI 3.0 and typed realtime channel generation with `generate_channels=True`:
+In `0.32.0+`, `generate_channels=True` is enabled by default and exports `asyncapi.json` and `channels.ts` whenever `AsyncAPIPlugin` (`from litestar_asyncapi import AsyncAPIPlugin`, install via `litestar-vite[asyncapi]`) is registered on the `Litestar` app (removing stale outputs when the plugin is absent):
 
-```python # pragma: legacy-example
+```python
 from litestar_vite import TypeGenConfig
 
 TypeGenConfig(

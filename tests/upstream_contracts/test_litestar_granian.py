@@ -1,4 +1,6 @@
 import logging
+from collections.abc import Callable
+from functools import partial
 from importlib.metadata import version
 from typing import Any, cast, get_args
 
@@ -8,9 +10,11 @@ from granian.constants import HTTPModes, Interfaces, Loops, RuntimeModes, SSLPro
 from granian.http import HTTP1Settings, HTTP2Settings
 from granian.log import LogLevels
 from granian.server.embed import Server as EmbeddedServer
-from litestar import Litestar
+from granian.utils import proxies
+from litestar import Litestar, Request, get
 from litestar.logging import LoggingConfig
 from litestar.plugins import CLIPluginProtocol, InitPlugin
+from litestar.testing import TestClient
 from litestar_granian import GranianPlugin, __project__, __version__
 from litestar_granian._runner import main as runner_main
 from litestar_granian.cli import run_command
@@ -23,7 +27,7 @@ def test_litestar_granian_and_granian_versions() -> None:
     assert version("litestar-granian") == "0.16.0"
     assert __version__ == "0.16.0"
     assert __project__ == "litestar-granian"
-    assert version("granian") == "2.8.3"
+    assert version("granian") == "2.8.4"
 
 
 def test_granian_plugin_contract() -> None:
@@ -178,6 +182,8 @@ def test_litestar_granian_016_cli_contract() -> None:
         "--log-access",
         "--log-access-format",
         "--log-access-fmt",
+        "--proxy-headers",
+        "--forwarded-allow-ips",
     }
     assert retired_flags.isdisjoint(options)
 
@@ -192,15 +198,37 @@ def test_granian_embedded_server_contract() -> None:
     assert Interfaces.RSGI.value == "rsgi"
     assert Interfaces.WSGI.value == "wsgi"
     assert Loops.auto.value == "auto"
+    assert Loops.asyncio.value == "asyncio"
+    assert Loops.rloop.value == "rloop"
+    assert Loops.uvloop.value == "uvloop"
+    assert Loops.winloop.value == "winloop"
     assert RuntimeModes.auto.value == "auto"
+    assert RuntimeModes.mt.value == "mt"
+    assert RuntimeModes.st.value == "st"
     assert TaskImpl.asyncio.value == "asyncio"
     assert TaskImpl.rust.value == "rust"
     assert SSLProtocols.tls12.value == "tls1.2"
     assert SSLProtocols.tls13.value == "tls1.3"
-    assert LogLevels.info.value == "info"
+    assert LogLevels.critical.value == "critical"
+    assert LogLevels.error.value == "error"
+    assert LogLevels.warning.value == "warning"
     assert LogLevels.warn.value == "warn"
+    assert LogLevels.info.value == "info"
+    assert LogLevels.debug.value == "debug"
+    assert LogLevels.notset.value == "notset"
     assert HTTP1Settings.max_buffer_size == 417792
+    assert HTTP1Settings.header_read_timeout == 30000
+    assert HTTP1Settings.keep_alive is True
+    assert HTTP1Settings.pipeline_flush is False
+    assert HTTP2Settings.adaptive_window is False
+    assert HTTP2Settings.initial_connection_window_size == 1048576
+    assert HTTP2Settings.initial_stream_window_size == 1048576
+    assert HTTP2Settings.keep_alive_interval is None
+    assert HTTP2Settings.keep_alive_timeout == 20
     assert HTTP2Settings.max_concurrent_streams == 200
+    assert HTTP2Settings.max_frame_size == 16384
+    assert HTTP2Settings.max_headers_size == 16777216
+    assert HTTP2Settings.max_send_buffer_size == 409600
 
     server = Granian(
         target="dummy.app:app",
@@ -232,6 +260,37 @@ def test_granian_embedded_server_contract() -> None:
     assert embedded.bind_addr == "127.0.0.1"
     assert embedded.bind_port == 8000
     assert embedded.interface == Interfaces.ASGI
+
+
+def test_granian_proxy_headers_contract() -> None:
+    """Verify granian.utils.proxies wrappers rewrite client host and scheme for trusted proxies."""
+    proxies_mod: Any = proxies
+    asgi_wrapper = cast("Callable[..., Any]", proxies_mod.wrap_asgi_with_proxy_headers)
+    wsgi_wrapper = cast("Callable[..., Any]", proxies_mod.wrap_wsgi_with_proxy_headers)
+    assert callable(asgi_wrapper)
+    assert callable(wsgi_wrapper)
+
+    @get("/proxy-info")
+    async def proxy_info(request: Request[Any, Any, Any]) -> dict[str, str | None]:
+        return {
+            "client": request.client.host if request.client else None,
+            "scheme": request.scope["scheme"],
+        }
+
+    app = Litestar(
+        route_handlers=[proxy_info],
+        middleware=[partial(asgi_wrapper, trusted_hosts=["*"])],
+    )
+    with TestClient(app=app) as client:
+        response = client.get(
+            "/proxy-info",
+            headers={
+                "x-forwarded-for": "198.51.100.7",
+                "x-forwarded-proto": "https",
+            },
+        )
+        assert response.status_code == 200
+        assert response.json() == {"client": "198.51.100.7", "scheme": "https"}
 
 
 def test_logging_bridge_builds_config() -> None:

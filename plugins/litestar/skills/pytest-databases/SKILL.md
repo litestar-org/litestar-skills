@@ -93,20 +93,28 @@ ready-client matrix. Do not infer a `*_connection` fixture from a
   `elasticsearch_7_service` directly. `oracle_startup_connection` requests an
   undefined `oracle_23ai_startup_connection` fixture — request
   `oracle_23ai_connection` or `oracle_18c_connection` instead.
-- **Use `azure_blob_*` names.** The module is
-  `pytest_databases.docker.azure_blob`, the service is `AzureBlobService`, and
-  the ready clients are `azure_blob_container_client` and
-  `azure_blob_async_container_client`.
+- **Use exact `pytest_databases.docker.*` module names.** AlloyDB Omni,
+  pgvector, and ParadeDB live in `pytest_databases.docker.postgres` (not
+  `alloydb`); Azurite / Azure Blob lives in `pytest_databases.docker.azure_blob`
+  (not `azurite`, with `AzureBlobService`, `azure_blob_container_client`, and
+  `azure_blob_async_container_client`); Elasticsearch lives in
+  `pytest_databases.docker.elastic_search` (not `elasticsearch` or
+  `ElasticSearch`); Dragonfly and KeyDB live in `pytest_databases.docker.redis`.
 - **Keep synchronous fixtures synchronous.** `postgres_connection` is a
   `psycopg.Connection`; call `execute()` directly.
 - **Do not assume every backend uses the same xdist fixture name.** Azure Blob
   uses `azure_blob_xdist_isolation_level`; most others use
   `xdist_<backend>_isolation_level`.
+- **Do not pass custom `pytest` CLI flags.** Version `0.19.0` registers no
+  `pytest_addoption` flags; configure services via session-scoped fixture
+  overrides or the environment variables in [config.md](references/config.md).
 - **Do not hand-roll container teardown.** The package owns labelled container
   lifecycle through `docker_service`.
 - **Do not pin a host port without a reason.** Dynamic ports avoid conflicts.
-  Use the 0.19.0 `*_port` fixture or matching PostgreSQL-family environment
-  variable only when a rootless/container-network constraint requires it.
+  Use the 0.19.0 PostgreSQL-family `*_port` fixture or matching environment
+  variable only when a rootless/container-network constraint requires it
+  (`redis_port`, `dragonfly_port`, `keydb_port`, and `valkey_port` only read
+  `*_service.port`).
 
 </guardrails>
 

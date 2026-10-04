@@ -23,7 +23,43 @@ from sqlspec import (
     uuid6,
     uuid7,
 )
-from sqlspec.adapters.sqlite import SqliteConfig, SqliteDriver
+from sqlspec.adapters.aiosqlite import (
+    AiosqliteConfig,
+    AiosqliteDriver,
+    AiosqliteDriverFeatures,
+)
+from sqlspec.adapters.db2 import (
+    Db2AsyncConfig,
+    Db2AsyncDataDictionary,
+    Db2AsyncDriver,
+    Db2AsyncPoolParams,
+    Db2ConnectionParams,
+    Db2DriverFeatures,
+    Db2PoolParams,
+    Db2SyncConfig,
+    Db2SyncDataDictionary,
+    Db2SyncDriver,
+    Db2VersionInfo,
+    build_connection_config,
+)
+from sqlspec.adapters.db2.adk import (
+    Db2AsyncADKMemoryStore,
+    Db2AsyncADKStore,
+    Db2SyncADKMemoryStore,
+    Db2SyncADKStore,
+)
+from sqlspec.adapters.db2.events import (
+    Db2AsyncEventQueueStore,
+    Db2EventsConfig,
+    Db2SyncEventQueueStore,
+)
+from sqlspec.adapters.db2.litestar import (
+    Db2AsyncStore,
+    Db2LitestarConfig,
+    Db2SyncStore,
+)
+from sqlspec.adapters.sqlite import SqliteConfig, SqliteDriver, SqliteDriverFeatures
+from sqlspec.builder import Merge
 from sqlspec.cli import add_migration_commands, get_sqlspec_group
 from sqlspec.core import CursorPagination, OffsetPagination, Pagination, StatementConfig
 from sqlspec.core.config_runtime import (
@@ -46,6 +82,8 @@ from sqlspec.core.filters import (
     normalize_cursor_keys,
 )
 from sqlspec.core.result import SQLResult
+from sqlspec.dialects import DB2
+from sqlspec.dialects.db2 import DB2Tokenizer
 from sqlspec.dialects.postgres import ParadeDB, PGTextSearch, PGVector
 from sqlspec.extensions.adk import (
     PruneReport,
@@ -74,6 +112,7 @@ from sqlspec.extensions.litestar.providers import (
     create_filter_dependencies,
 )
 from sqlspec.loader import SlotDeclaration
+from sqlspec.migrations.tracker import AsyncMigrationTracker, SyncMigrationTracker
 from sqlspec.service import SQLSpecAsyncService, SQLSpecSyncService
 from sqlspec.storage import (
     AsyncStoragePipeline,
@@ -108,9 +147,9 @@ class UserRow:
     name: str
 
 
-def test_sqlspec_064_contract() -> None:
-    """Validate sqlspec 0.64.0 core contracts and exported API surface."""
-    assert version("sqlspec") == "0.64.0"
+def test_sqlspec_065_contract() -> None:
+    """Validate sqlspec 0.65.0 core contracts and exported API surface."""
+    assert version("sqlspec") == "0.65.0"
 
     assert "sqlspec" in inspect.signature(SQLSpecPlugin).parameters
     spec = SQLSpec()
@@ -226,8 +265,8 @@ def test_sqlspec_064_contract() -> None:
     assert callable(resolve_storage_path)
 
 
-def test_sqlspec_064_loader_fragments_includes_and_slots_contract(tmp_path: Path) -> None:
-    """Verify SQLFileLoader fragments, includes, and dynamic slots in 0.64.0."""
+def test_sqlspec_065_loader_fragments_includes_and_slots_contract(tmp_path: Path) -> None:
+    """Verify SQLFileLoader fragments, includes, and dynamic slots in 0.65.0."""
     loader = SQLFileLoader()
     loader.add_fragment("active_predicate", "is_active = TRUE")
     assert loader.has_fragment("active_predicate")
@@ -248,7 +287,11 @@ WHERE /* include: active_predicate */
   AND /* slot: extra_where */
 ORDER BY /* slot: order_clause */
 """
-    sql_file = tmp_path / "queries.sql"
+    resolved_tmp = tmp_path.resolve()
+    registry_any: Any = storage_registry
+    instances: dict[Any, Any] = registry_any._instances
+    instances[resolved_tmp.as_uri()] = storage_registry.get(resolved_tmp, backend="local")
+    sql_file = resolved_tmp / "queries.sql"
     sql_file.write_text(sql_content, encoding="utf-8")
     loader.load_sql(sql_file)
     slots = loader.get_query_slots("list_users")
@@ -269,7 +312,7 @@ ORDER BY /* slot: order_clause */
     assert "email ASC" in overridden_stmt.sql
 
 
-def test_sqlspec_064_config_backed_service_and_cursor_pagination_contract() -> None:
+def test_sqlspec_065_config_backed_service_and_cursor_pagination_contract() -> None:
     """Verify config-backed SQLSpecSyncService, savepoints, and cursor pagination."""
 
     class UserService(SQLSpecSyncService[SqliteDriver]):
@@ -313,7 +356,7 @@ def test_sqlspec_064_config_backed_service_and_cursor_pagination_contract() -> N
     assert page2.has_next is False
 
 
-def test_sqlspec_064_filter_dependencies_contract() -> None:
+def test_sqlspec_065_filter_dependencies_contract() -> None:
     """Verify Litestar filter dependencies support cursor pagination and extended filters."""
     offset_config: FilterConfig = {
         "id_filter": int,
@@ -348,8 +391,8 @@ def test_sqlspec_064_filter_dependencies_contract() -> None:
     assert "filters" in cursor_deps
 
 
-def test_sqlspec_064_query_builder_and_dialect_contract() -> None:
-    """Verify UPDATE FROM, DML CTE preservation, MySQL upsert, DDL, and NULLS ordering."""
+def test_sqlspec_065_query_builder_and_dialect_contract() -> None:
+    """Verify UPDATE FROM, DML CTE preservation, MySQL/Db2 upsert, DDL, and NULLS ordering."""
     cte_update = (
         sql.update("accounts")
         .with_cte("stale_ids", sql.select("id").from_("accounts").where_eq("active", False))
@@ -378,6 +421,13 @@ def test_sqlspec_064_query_builder_and_dialect_contract() -> None:
     )
     assert "CREATE TABLE IF NOT EXISTS" in ddl.build().sql
 
+    quoted_ddl = (
+        sql.create_table('"app_schema"."AuditEvents"', dialect="postgres")
+        .if_not_exists()
+        .column('"EventId"', "UUID", primary_key=True)
+    )
+    assert '"app_schema"."AuditEvents"' in quoted_ddl.build(dialect="postgres").sql
+
     ordered = sql.select("id").from_("users").order_by(sql.column("last_login_at").desc(nulls="last"))
     assert "NULLS LAST" in ordered.build(dialect="postgres").sql
 
@@ -387,7 +437,169 @@ def test_sqlspec_064_query_builder_and_dialect_contract() -> None:
     assert "NULLS LAST" in filtered.compile()[0]
 
 
-def test_sqlspec_064_postgres_extensions_and_utilities_contract() -> None:
+def test_sqlspec_065_db2_adapter_and_dialect_contract() -> None:
+    """Verify IBM Db2 sync/async adapters, extension stores, and DB2 SQLGlot dialect."""
+    assert issubclass(Db2SyncConfig, object)
+    assert issubclass(Db2SyncDriver, object)
+    assert issubclass(Db2AsyncConfig, object)
+    assert issubclass(Db2AsyncDriver, object)
+    assert issubclass(Db2SyncDataDictionary, object)
+    assert issubclass(Db2AsyncDataDictionary, object)
+    assert issubclass(Db2VersionInfo, object)
+    assert issubclass(Db2SyncStore, object)
+    assert issubclass(Db2AsyncStore, object)
+    assert issubclass(Db2SyncEventQueueStore, object)
+    assert issubclass(Db2AsyncEventQueueStore, object)
+    assert issubclass(Db2SyncADKStore, object)
+    assert issubclass(Db2AsyncADKStore, object)
+    assert issubclass(Db2SyncADKMemoryStore, object)
+    assert issubclass(Db2AsyncADKMemoryStore, object)
+    assert issubclass(DB2, object)
+    assert issubclass(DB2Tokenizer, object)
+    assert Db2ConnectionParams is not None
+    assert Db2PoolParams is not None
+    assert Db2AsyncPoolParams is not None
+    assert Db2DriverFeatures is not None
+    assert Db2LitestarConfig is not None
+    assert Db2EventsConfig is not None
+    assert callable(build_connection_config)
+
+    sync_cfg = Db2SyncConfig(
+        connection_config={
+            "database": "testdb",
+            "hostname": "localhost",
+            "port": 50000,
+            "user": "db2inst1",
+            "password": "secret",
+        }
+    )
+    assert sync_cfg.driver_type is Db2SyncDriver
+    assert sync_cfg.supports_transactional_ddl is True
+    assert sync_cfg.supports_native_arrow_export is False
+    assert sync_cfg.supports_native_arrow_import is False
+    assert hasattr(Db2SyncDriver, "select_to_arrow")
+    assert hasattr(Db2SyncDriver, "load_from_arrow")
+
+    async_cfg = Db2AsyncConfig(connection_config={"dsn": "DATABASE=testdb;HOSTNAME=localhost;PORT=50000;"})
+    assert async_cfg.driver_type is Db2AsyncDriver
+
+    db2_upsert = sql.upsert("products", dialect="db2")
+    assert isinstance(db2_upsert, Merge)
+    db2_merge = (
+        db2_upsert.using([{"id": 1, "name": "Widget"}], alias="src")
+        .on("products.id = src.id")
+        .when_matched_then_update(name="src.name")
+        .when_not_matched_then_insert(id="src.id", name="src.name")
+    )
+    rendered_upsert = db2_merge.build(dialect="db2").sql
+    assert "MERGE INTO" in rendered_upsert
+    assert "SYSIBM.SYSDUMMY1" in rendered_upsert
+
+    db2_lock_select = sql.select("id", dialect="db2").from_("jobs").limit(5).for_update(skip_locked=True)
+    rendered_lock = db2_lock_select.build(dialect="db2").sql
+    assert "FETCH FIRST 5 ROWS ONLY" in rendered_lock
+    assert "WITH RS USE AND KEEP UPDATE LOCKS SKIP LOCKED DATA" in rendered_lock
+
+
+def test_sqlspec_065_sqlite_and_migration_tracker_contract() -> None:
+    """Verify SQLite/AioSQLite driver surface and quoted migration tracker identifiers."""
+    assert not hasattr(SqliteDriver, "backup")
+    assert not hasattr(SqliteDriver, "run_in_transaction")
+    assert not hasattr(SqliteConfig, "backup")
+    assert not hasattr(SqliteConfig, "run_in_transaction")
+    assert not hasattr(AiosqliteDriver, "backup")
+    assert not hasattr(AiosqliteDriver, "run_in_transaction")
+    assert not hasattr(AiosqliteConfig, "backup")
+    assert not hasattr(AiosqliteConfig, "run_in_transaction")
+
+    assert "batch_size" in inspect.signature(SqliteDriver.load_from_arrow).parameters
+    assert "batch_size" in inspect.signature(AiosqliteDriver.load_from_arrow).parameters
+    assert {"enable_custom_adapters", "custom_window_functions", "default_transaction_mode"}.issubset(
+        SqliteDriverFeatures.__annotations__
+    )
+    assert {"enable_custom_adapters", "custom_window_functions", "default_transaction_mode"}.issubset(
+        AiosqliteDriverFeatures.__annotations__
+    )
+
+    sync_tracker = SyncMigrationTracker(version_table_name='"app_schema"."DdlMigrations"')
+    assert sync_tracker.version_table_schema == "app_schema"
+    assert sync_tracker.version_table_name == "DdlMigrations"
+    assert sync_tracker.version_table == '"app_schema"."DdlMigrations"'
+
+    async_tracker = AsyncMigrationTracker(version_table_name="app_schema.ddl_migrations")
+    assert async_tracker.version_table_schema == "app_schema"
+    assert async_tracker.version_table_name == "ddl_migrations"
+
+
+def test_sqlspec_065_fixtures_roundtrip_and_upsert_contract(tmp_path: Path) -> None:
+    """Verify 0.65.0 fixture loader options, bare-string conflict_keys, and JSON string preservation."""
+    load_params = inspect.signature(load_table_fixtures_sync).parameters
+    export_params = inspect.signature(export_table_fixtures_sync).parameters
+    assert {
+        "tables",
+        "table_order",
+        "conflict_keys",
+        "batch_size",
+        "resync_sequences",
+        "ignore_unknown_columns",
+        "exclude_update_columns",
+    }.issubset(load_params)
+    assert {"tables", "compress", "jsonl"}.issubset(export_params)
+    assert "file_format" not in export_params
+
+    dd_sql_dir = (
+        Path(inspect.getfile(SqliteDriver)).resolve().parents[2] / "data_dictionary" / "dialects" / "sqlite" / "sql"
+    )
+    registry_any: Any = storage_registry
+    instances: dict[Any, Any] = registry_any._instances
+    for directory in (tmp_path.resolve(), dd_sql_dir):
+        uri = directory.as_uri()
+        instances[uri] = storage_registry.get(directory, backend="local")
+
+    config = SQLSpec().add_config(SqliteConfig(connection_config={"database": ":memory:"}))
+    with config.provide_session() as session:
+        session.execute("CREATE TABLE roles (slug TEXT PRIMARY KEY, label TEXT, created_at TEXT)")
+        session.execute(
+            "INSERT INTO roles (slug, label, created_at) VALUES (?, ?, ?), (?, ?, ?)",
+            ("admin", "true", "2026-01-01", "viewer", "[1]", "2026-01-01"),
+        )
+
+        exported = export_table_fixtures_sync(
+            session,
+            tmp_path,
+            tables=["roles"],
+            compress=False,
+            jsonl=True,
+        )
+        assert "roles" in exported
+
+        fixture_file = tmp_path / "roles.jsonl"
+        fixture_file.write_text(
+            '{"slug": "admin", "label": "true", "created_at": "2099-01-01", "retired_col": "ignored"}\n'
+            '{"slug": "editor", "label": "[1]"}\n',
+            encoding="utf-8",
+        )
+
+        counts = load_table_fixtures_sync(
+            session,
+            tmp_path,
+            tables=["roles"],
+            table_order=["nonexistent_table", "roles"],
+            conflict_keys={"roles": "slug"},
+            ignore_unknown_columns=True,
+            exclude_update_columns=["created_at"],
+        )
+        assert counts == {"roles": 2}
+
+        rows = session.select("SELECT slug, label, created_at FROM roles ORDER BY slug")
+        assert rows == [
+            {"slug": "admin", "label": "true", "created_at": "2026-01-01"},
+            {"slug": "editor", "label": "[1]", "created_at": None},
+            {"slug": "viewer", "label": "[1]", "created_at": "2026-01-01"},
+        ]
+
+
+def test_sqlspec_065_postgres_extensions_and_utilities_contract() -> None:
     """Verify Postgres extension probing, dialects, config normalization, events, and fixtures."""
     assert issubclass(PGVector, object)
     assert issubclass(ParadeDB, object)
@@ -441,7 +653,7 @@ def test_sqlspec_064_postgres_extensions_and_utilities_contract() -> None:
     assert hasattr(SqliteDriver, "transaction")
 
 
-def test_sqlspec_064_statement_stack_execution_contract() -> None:
+def test_sqlspec_065_statement_stack_execution_contract() -> None:
     """Verify immutable stack construction and ordered SQLite execution."""
     config = SQLSpec().add_config(SqliteConfig(connection_config={"database": ":memory:"}))
     initial_stack = StatementStack()
@@ -465,7 +677,7 @@ def test_sqlspec_064_statement_stack_execution_contract() -> None:
     assert query_result.all() == [{"name": "Ada"}, {"name": "Lin"}]
 
 
-def test_sqlspec_064_vector_expression_contract() -> None:
+def test_sqlspec_065_vector_expression_contract() -> None:
     """Verify vector distance is a column expression that can order a query."""
     distance = sql.column("embedding").vector_distance([0.1, 0.2, 0.3], metric="cosine")
     query = sql.select("id").from_("documents").where(distance < 0.3).order_by(distance.asc()).limit(10)
@@ -473,7 +685,7 @@ def test_sqlspec_064_vector_expression_contract() -> None:
     assert "<=>" in query.build(dialect="postgres").sql
 
 
-def test_sqlspec_064_adk_retention_contract() -> None:
+def test_sqlspec_065_adk_retention_contract() -> None:
     """Verify the public retention helpers and their distinct day parameters."""
     assert set(PruneReport.__annotations__) == {"deleted_count", "elapsed_ms", "table"}
     assert {"target", "idle_days", "app_name"}.issubset(inspect.signature(prune_sessions).parameters)
@@ -483,7 +695,7 @@ def test_sqlspec_064_adk_retention_contract() -> None:
     assert {"target", "idle_days", "app_name"}.issubset(inspect.signature(prune_user_state).parameters)
 
 
-def test_sqlspec_064_adk_bounded_session_contract() -> None:
+def test_sqlspec_065_adk_bounded_session_contract() -> None:
     """Verify bounded event reads and ordered session-list parameters."""
     config = GetSessionConfig(num_recent_events=200, after_timestamp=1_725_000_000.0)
     get_session_params = inspect.signature(SQLSpecSessionService.get_session).parameters

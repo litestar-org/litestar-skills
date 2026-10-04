@@ -1,6 +1,6 @@
 ---
 name: litestar-vite
-description: "Auto-activate for litestar_vite, VitePlugin, ViteConfig, PathConfig, TypeGenConfig, vite.config.ts, litestar_vite.inertia, InertiaConfig, component=, or @inertiajs/*. Not for plain Vite or server-only HTMX."
+description: "Auto-activate for litestar_vite, VitePlugin, ViteConfig, PathConfig, TypeGenConfig, vite.config.ts, InertiaConfig, component=, or @inertiajs/*. Not for plain Vite or server-only HTMX."
 ---
 
 # litestar-vite
@@ -13,7 +13,7 @@ The runtime has four canonical modes: `spa`, `template`, `hybrid`, and `framewor
 
 The plugin pairs with the npm package [`litestar-vite-plugin`](https://www.npmjs.com/package/litestar-vite-plugin) on the JS side. Python `ViteConfig` is the source of truth; the generated `.litestar.json` bridge lets JS config normally keep only `litestar({ input: [...] })`.
 
-This guidance targets the published `v0.31.0` tag (and documents `0.32.0` additions on `feat/ssr-fragments`). Releases `0.26.0` through `0.31.0` hardened Inertia protocol behavior, `msgspec.Struct` field-rename preservation, secondary HTML entry resolution (`resolve_html_entry`), handler-level static auth exclusion (`exclude_static_from_auth`), CSRF constant emission in `routes.ts`, Precognition validation, scaffolds, type generation, single-port HMR routing, manifest fallback, deployment, plugin activation, and lifecycle logging. `0.32.0` adds server-rendered UI component fragments (`ComponentResponse`, `vite_fragment`, `<litestar-island>`), persistent IPC SSR transports with circuit-breaker fallback, AsyncAPI 3.0 typed channel generation (`createTypedChannels`), and an `httpx`-free AnyIO byte-streaming reverse proxy. See [Release Updates](references/release-updates.md).
+This guidance targets `litestar-vite` `0.32.0`. Releases `0.26.0` through `0.31.0` hardened Inertia protocol behavior, `msgspec.Struct` field-rename preservation, secondary HTML entry resolution (`resolve_html_entry`), handler-level static auth exclusion (`exclude_static_from_auth`), CSRF constant emission in `routes.ts`, Precognition validation, scaffolds, type generation, single-port HMR routing, manifest fallback, deployment, plugin activation, and lifecycle logging. `0.32.0` adds server-rendered UI component fragments (`ComponentResponse`, `FragmentEngine`, `vite_fragment`, `render_fragment`, `<litestar-island>`), persistent IPC SSR transports (`TCPStreamIPCTransport` to `/__litestar_ssr__` in dev, `StdioIPCTransport` over stdin/stdout in prod) with circuit-breaker fallback (`SSRCircuitBreaker`), AsyncAPI 3.0 typed channel generation (`AsyncAPIPlugin` + `TypeGenConfig(generate_channels=True)` + `createTypedChannels`), a Vite `>=7.0.0` peer dependency floor, and the single-port AnyIO streaming proxy (`ViteProxyMiddleware` + `/static/vite-hmr`). See [Release Updates](references/release-updates.md).
 
 ## Code Style Rules
 
@@ -150,8 +150,8 @@ TypeGenConfig(
 | `inertia-pages.json` | `output/inertia-pages.json` | Inertia handlers added/changed | Page-prop metadata consumed by the JS plugin |
 | `page-props.ts` | `output/page-props.ts` | Inertia handlers added/changed | Typed props for Inertia page components |
 | `static-props.ts` | `output/static-props.ts` | `ViteConfig.static_props` changes | Typed static bridge values (`virtual:litestar-static-props`) |
-| `asyncapi.json` | `output/asyncapi.json` | Channels / WebSocket / SSE route changes (`0.32.0+`) | AsyncAPI 3.0 document when `generate_channels=True` |
-| `channels.ts` | `output/channels.ts` | Channels / WebSocket / SSE route changes (`0.32.0+`) | `ChannelMap` consumed by `createTypedChannels()` |
+| `asyncapi.json` | `output/asyncapi.json` | `AsyncAPIPlugin` + Channels / WebSocket / SSE route changes (`0.32.0+`) | AsyncAPI 3.0 document when `AsyncAPIPlugin` is registered and `generate_channels=True` |
+| `channels.ts` | `output/channels.ts` | `AsyncAPIPlugin` + Channels / WebSocket / SSE route changes (`0.32.0+`) | `ChannelMap` consumed by `createTypedChannels()` |
 
 CLI:
 
@@ -237,7 +237,7 @@ async def embed() -> Response[str]:
 
 For server-rendered UI component fragments and interactive `<litestar-island>` hydration (`0.32.0+`):
 
-```python # pragma: legacy-example
+```python
 from litestar import get
 from litestar_vite import ComponentResponse
 
@@ -441,9 +441,8 @@ Current Inertia behavior:
 
 - Initial non-Inertia visits return an HTML bootstrap (`<script type="application/json" id="app_page" data-page="app">` when `use_script_element=True`). Inertia visits (`X-Inertia: true`) return JSON with top-level `flash: {}`.
 - Handler returns shaped like prop bags (`dict`, `msgspec.Struct`, dataclass instance, Pydantic model, or pagination container) become top-level page props. Direct `msgspec.Struct` returns preserve serialized field renames (`rename=` and `msgspec.field(name=...)` aliases, `0.30.0+`). They are not nested under `content`.
-- Direct `InertiaResponse` renders stage `share()`, `flash()`, `error()`, and `clear_history()` in request-local `InertiaTransientState`; session middleware is required only for `extra_session_page_props` or persisting state across `InertiaRedirect` / `InertiaBack` / `InertiaExternalRedirect`.
-- Initial responses advertise deferred props. Partial responses omit
-  `deferredProps`, including unrequested groups.
+- Direct `InertiaResponse` renders stage `share()`, `flash()`, `error()`, and `clear_history()` in request-local `InertiaTransientState` (with global or per-response `encrypt_history` support); session middleware is required only for `extra_session_page_props` or persisting state across `InertiaRedirect` / `InertiaBack` / `InertiaExternalRedirect`.
+- Special prop wrappers (`always`, `once`, `defer`, `optional`, `lazy`, `merge` with `strategy="append" | "prepend" | "deep"`, and `scroll_props`) are evaluated inside Litestar's DI lifespan frame. Initial responses advertise deferred props; partial responses omit `deferredProps`, including unrequested groups.
 - `X-Inertia-Partial-Data` includes requested keys; `X-Inertia-Partial-Except`
   excludes keys and wins on overlap.
 - Asset-version mismatch returns `409` plus `X-Inertia-Location` for stale
@@ -661,7 +660,7 @@ For deep-dives on specific surfaces, see:
 - **[Streams](references/streams.md)** — WebSocket/SSE helpers, `createTypedChannels`, `<litestar-stream>`, React/Vue/Svelte adapters, stream auth.
 - **[Deployment](references/deployment.md)** — Production build, Granian native static serving, static hosting, CDN patterns, cache strategy.
 - **[Troubleshooting](references/troubleshooting.md)** — Common errors and fixes.
-- **[Release Updates](references/release-updates.md)** — Audited `0.26.0` through `0.31.0` tags and `0.32.0` branch behavior changes.
+- **[Release Updates](references/release-updates.md)** — Audited `0.26.0` through `0.32.0` release behavior changes.
 
 ## Cross-References
 

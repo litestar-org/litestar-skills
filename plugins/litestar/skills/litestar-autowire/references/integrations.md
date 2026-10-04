@@ -7,12 +7,14 @@ before those components are registered on `AppConfig`.
 
 `AutowireConfig.integrations` accepts:
 
-- `"dishka"` or `"queues"`;
+- `"dishka"` (`DishkaIntegration`) or `"queues"` (`QueuesIntegration`);
 - one `AutowireIntegration` object;
 - an iterable mixing built-in names and integration objects.
 
-Inputs normalize to a tuple of integration objects. The legacy
-`extensions=...` argument always raises:
+Inputs normalize to a tuple of integration objects. There is no
+`LitestarQueuesIntegration` or `SAQIntegration` class; use `QueuesIntegration`
+for `litestar-queues` and `AutowireLoader` for SAQ or custom module registries.
+The legacy `extensions=...` argument always raises:
 
 ```text
 TypeError: AutowireConfig.extensions was renamed to integrations. Use integrations=[...].
@@ -95,8 +97,8 @@ Precise loader failures:
 
 ## Router classes and Dishka
 
-Set `router_class=Router` for standard Litestar router wrapping. Autowire
-constructs the selected class with:
+Set `router_class=Router` for standard Litestar router wrapping. When at least
+one controller is discovered, Autowire constructs the selected class with:
 
 ```python
 router_class(
@@ -106,6 +108,9 @@ router_class(
     after_response=config.after_response,
 )
 ```
+
+If no controllers are discovered, `AutowirePlugin` logs a warning and skips
+router instantiation.
 
 Use the Dishka integration only when the project already uses Dishka:
 
@@ -122,6 +127,24 @@ Install `litestar-autowire[dishka]`. The integration selects
 `dishka.integrations.litestar.DishkaRouter` only when `router_class` is unset.
 It does not create a Dishka container or call `setup_dishka()`. A missing
 Dishka extra raises `RuntimeError`; dependency failures within Dishka propagate.
+
+### Dishka controller gotchas
+
+- **Runtime type hint resolution with `from __future__ import annotations`**:
+  `DishkaRouter.register` wraps each controller route handler using
+  `typing.get_type_hints(func)` at router registration time. When a controller
+  module enables `from __future__ import annotations`, every type referenced in
+  a route handler signature (including `FromDishka[ServiceType]` and
+  `ServiceType`) must exist in the module's runtime globals (`func.__globals__`).
+  Hiding `ServiceType` or `FromDishka` inside `if TYPE_CHECKING:`, or defining
+  them in a local function scope under `from __future__ import annotations`,
+  raises `NameError` during `AutowirePlugin.on_app_init`.
+- **In-place `Controller.get_route_handlers` mutation**:
+  `DishkaRouter.register` mutates each `Controller` subclass in-place by
+  assigning `ControllerSubclass.get_route_handlers = _inject_route_handlers(ControllerSubclass.get_route_handlers)`
+  directly on the class object. Reusing the same `Controller` class across unit
+  tests without restoring `get_route_handlers` leaks Dishka wrapping into later
+  tests. See [Testing](testing.md) for isolation patterns.
 
 ## Litestar Queues
 

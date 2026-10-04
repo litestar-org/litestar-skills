@@ -138,7 +138,7 @@ rows = await db_session.select(stmt, schema_type=DeptSummary)
 
 ### High Performance Upsert
 
-Use `sql.merge(dialect=...)` only for dialects that implement `MERGE`, including PostgreSQL 15+, Oracle, and BigQuery. Use `INSERT ... ON CONFLICT` or the dialect-specific duplicate-key API for SQLite, DuckDB, and MySQL.
+Use `sql.merge(dialect=...)` only for dialects that implement `MERGE`, including PostgreSQL 15+, Oracle, BigQuery, SQL Server (T-SQL), and IBM Db2. Use `INSERT ... ON CONFLICT` or the dialect-specific duplicate-key API for SQLite, DuckDB, and MySQL, or `sql.upsert(table, dialect=...)` to select the dialect-appropriate form automatically.
 
 ```python
 from sqlspec import sql
@@ -224,7 +224,7 @@ def build_projection(columns: list[str], table: str) -> str:
 
 ## Table Fixtures (`sqlspec.utils.fixtures`)
 
-Load and export per-table `.json` or `.jsonl` (including `.gz`) fixtures with automatic schema-driven type coercion, topological `table_order`, `conflict_keys` upserts, `batch_size`, and identity sequence resynchronization (`resync_sequences=True`):
+Load and export per-table `.json` or `.jsonl` (including `.gz`) fixtures with automatic schema-driven type coercion, sparse row normalization, topological `table_order`, `conflict_keys` upserts (accepting a bare column name string or sequence of column names per table), `ignore_unknown_columns=True` for evolved schemas, `exclude_update_columns` to preserve immutable columns (such as `["created_at"]`) on conflict updates, `batch_size`, and identity sequence resynchronization (`resync_sequences=True`). Exported JSON strings that look like JSON literals (such as `"true"` or `"[1]"`) round-trip as strings rather than being coerced to booleans or arrays:
 
 ```python
 from pathlib import Path
@@ -234,7 +234,9 @@ loaded_counts = await load_table_fixtures_async(
     db_session,
     Path("db/fixtures"),
     table_order=["roles", "users"],
-    conflict_keys={"roles": ["slug"], "users": ["email"]},
+    conflict_keys={"roles": "slug", "users": ["email"]},
+    ignore_unknown_columns=True,
+    exclude_update_columns=["created_at"],
     resync_sequences=True,
 )
 
@@ -242,7 +244,7 @@ exported_paths = await export_table_fixtures_async(
     db_session,
     Path("db/fixtures/snapshots"),
     tables=["roles", "users"],
-    file_format="jsonl",
+    jsonl=True,
     compress=True,
 )
 ```

@@ -336,7 +336,7 @@ With `litestar-saq`, the plugin manages startup/shutdown via the Litestar app li
 
 ### OpenTelemetry and Structlog Integration
 
-- **OpenTelemetry (`litestar-saq[otel]`)**: Set `SAQConfig(enable_otel=True, otel_tracer_name="litestar_saq")` to create `CONSUMER` spans around job processing. To create `PRODUCER` spans on `enqueue()` / `apply()` and propagate W3C trace context (`job.meta["_otel_context"]`), wrap the queue with `InstrumentedQueue` from `litestar_saq.instrumentation` or call `inject_trace_context(job)` in a `queue.register_before_enqueue` hook.
+- **OpenTelemetry (`litestar-saq[otel]`)**: Set `SAQConfig(enable_otel=True, otel_tracer_name="litestar_saq")` explicitly to create `CONSUMER` spans around job processing (`SAQPlugin.get_workers()` evaluates `should_enable_otel()` without the `Litestar` app instance, so `enable_otel=None` resolves to `False`). To create `PRODUCER` spans on `enqueue()` / `apply()` and propagate W3C trace context (`job.meta["_otel_context"]`), wrap the queue with `InstrumentedQueue` from `litestar_saq.instrumentation` or call `inject_trace_context(job)` in a `queue.register_before_enqueue` hook.
 - **Structlog and `LoggingConfig`**: When `structlog` is installed, `Worker` automatically binds `worker_id`, `queue_name`, `concurrency`, `separate_process`, and any `QueueConfig.metadata` keys (prefixed as `worker_meta_<key>`) into `structlog.contextvars`. Route `litestar_saq` and `saq` loggers through Litestar's `queue_listener` handler in `LoggingConfig`:
 
 ```python
@@ -359,22 +359,22 @@ Use Postgres when:
 - SQL-backed queue storage is preferred
 
 ```python
-from litestar_saq import QueueConfig
+from litestar_saq import PostgresQueueOptions, QueueConfig
 
 queue_config = QueueConfig(
     name="default",
     dsn="postgresql://user:pass@localhost/mydb",
-    broker_options={
-        "jobs_table": "saq_jobs",
-        "stats_table": "saq_stats",
-        "versions_table": "saq_versions",
-        "manage_pool_lifecycle": True,
-        "min_size": 2,
-        "max_size": 10,
-        "saq_lock_keyspace": 1,
-        "priorities": (0, 32767),
-        "swept_error_message": "swept",
-    },
+    broker_options=PostgresQueueOptions(
+        jobs_table="saq_jobs",
+        stats_table="saq_stats",
+        versions_table="saq_versions",
+        manage_pool_lifecycle=True,
+        min_size=2,
+        max_size=10,
+        saq_lock_keyspace=1,
+        priorities=(0, 32767),
+        swept_error_message="swept",
+    ),
     broker_instance_options={
         "max_idle": 300.0,
     },
@@ -384,7 +384,7 @@ queue_config = QueueConfig(
 Note:
 
 - `QueueConfig.dsn` for PostgreSQL must begin with `postgresql://` (`postgres://` raises `ImproperlyConfiguredException`). When deriving `dsn` from an SQLAlchemy URL (`postgresql+psycopg://` or `postgresql+asyncpg://`), strip the `+driver` suffix first.
-- On `saq>=0.24`, `saq.queue.postgres.PostgresQueue.__init__` accepts `jobs_table`, `stats_table`, and `versions_table` (not the legacy `table`, `stats`, and `versions` keys still listed on `litestar_saq.PostgresQueueOptions`).
+- On `saq>=0.24` and `litestar-saq>=0.8.0`, `PostgresQueueOptions` and `saq.queue.postgres.PostgresQueue.__init__` accept `jobs_table`, `stats_table`, and `versions_table` (never the legacy `table`, `stats`, and `versions` keys from `saq<0.24`).
 - `QueueConfig` automatically defaults `manage_pool_lifecycle=True` on PostgreSQL queues and ensures `autocommit=True` on the `psycopg_pool.AsyncConnectionPool`.
 
 ### Redis Backend (`RedisQueueOptions`)

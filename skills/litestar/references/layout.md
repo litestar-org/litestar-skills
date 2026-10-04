@@ -287,7 +287,6 @@ settings = get_settings()
 
 channels = ChannelsPlugin(
     backend=RedisChannelsPubSubBackend(redis=Redis.from_url(settings.redis.url)),
-    channels=["user:*"],
     arbitrary_channels_allowed=True,
     create_ws_route_handlers=True,
     ws_handler_base_path="/ws",

@@ -5,7 +5,7 @@ description: "Auto-activate for sqlspec, SQLSpec, SQLFileLoader, drivers, query 
 
 # SQLSpec Skill
 
-SQLSpec is a **type-safe SQL query mapper for Python** -- NOT an ORM. It provides flexible connectivity with consistent interfaces across 19 database adapter packages. Write raw SQL, use the builder API, or load SQL from files. Statements pass through a sqlglot-powered AST pipeline for validation, parameter handling, and dialect conversion.
+SQLSpec is a **type-safe SQL query mapper for Python** -- NOT an ORM. It provides flexible connectivity with consistent interfaces across 20 database adapter packages. Write raw SQL, use the builder API, or load SQL from files. Statements pass through a sqlglot-powered AST pipeline for validation, parameter handling, and dialect conversion.
 
 ## Match-Your-Framework — read first
 
@@ -131,6 +131,7 @@ await db.load_from_records("users", [{"id": 1, "name": "Ada"}])
 | Arrow / multi-engine ETL | `adbc` | Arrow-native ingest/export across DuckDB, PostgreSQL, BigQuery, Flight SQL |
 | MySQL async | `asyncmy` | PYFORMAT params |
 | Oracle | `oracledb` | NAMED_COLON params, sync+async |
+| IBM Db2 | `db2` | QMARK params, sync+async via `ibm_db`, `SYSCAT` catalog reflection |
 | BigQuery / Spanner | `bigquery`, `spanner` | NAMED_AT params, cloud job/session controls |
 | Raw SQL strings | Driver methods | `select()`, `execute()` |
 | Dynamic queries | Query builder | `sql.select()...to_statement()`, `sql.update()...from_()`, `sql.upsert()` |
@@ -167,7 +168,7 @@ Run through the validation checkpoint below before considering the work complete
 - **Pass regular query bind values as positional arguments** -- `await db.select("... WHERE id = $1", user_id, schema_type=User)`, not `await db.select(..., [user_id], ...)`
 - **Never concatenate SQL strings** -- use parameterized queries, query builder expressions, or declared `/* slot: <name> */` fragments
 - **Never hold connections outside context managers** -- connection leaks exhaust the pool; prefer config-backed services (`SQLSpecAsyncService(config=...)`) when operations should hold a connection only for the duration of a single query or `begin_transaction()` block
-- **Match parameter style to adapter**: `$1` for asyncpg, `%s` for psycopg, `?` for sqlite/duckdb, `:name` for oracledb
+- **Match parameter style to adapter**: `$1` for asyncpg, `%s` for psycopg, `?` for sqlite/duckdb/db2, `:name` for oracledb
 - **Cloud adapter controls** -- BigQuery job controls live in `driver_features`; Spanner request controls live in `driver_features` or `provide_session()` kwargs
 - **Adapter config / driver modules avoid `from __future__ import annotations`**. Consumer app modules MAY use it.
 
@@ -188,7 +189,7 @@ Before delivering SQLSpec code, verify:
 - [ ] Dishka-first Litestar apps that disable SQLSpec DI set `extension_config={"litestar": {"disable_di": True, "manage_lifespan": True}}` when `SQLSpecPlugin` should still manage pool lifespan
 - [ ] Streaming code uses context managers and sets `native_only=True` when eager fallback would be a bug
 - [ ] Bulk ingest/export code checks the adapter matrix before using `load_from_arrow()`, `load_from_storage()`, `load_from_records()`, or `select_to_storage()`
-- [ ] ADK stores are selected from supported adapter `adk` packages; BigQuery is not an ADK backend
+- [ ] ADK stores are selected from supported adapter `adk` packages; BigQuery is not an OLTP live-agent ADK backend
 
 </validation>
 
@@ -250,7 +251,7 @@ async def get_user_count() -> int:
 
 ## References Index
 
-> **Choosing between `sqlspec` and `advanced-alchemy`:** `advanced-alchemy` gives you an opinionated ORM service layer with `UUIDAuditBase`, lifecycle hooks, repository / service / Alembic integration, and `OffsetPagination[T]` out of the box — pick it when you want a complete CRUD surface with attribute-style row access and you're happy inside the SQLAlchemy ecosystem. `sqlspec` gives you direct SQL control, 19 adapter packages (asyncpg, oracledb, DuckDB, BigQuery, SQLite, and more), Arrow result paths for analytics, and a builder API when you need it — pick it when you want explicit SQL, heterogeneous database backends, or Arrow integration. Both skills integrate with Litestar via first-party plugins; see [`../advanced-alchemy/SKILL.md`](../advanced-alchemy/SKILL.md) for the ORM path.
+> **Choosing between `sqlspec` and `advanced-alchemy`:** `advanced-alchemy` gives you an opinionated ORM service layer with `UUIDAuditBase`, lifecycle hooks, repository / service / Alembic integration, and `OffsetPagination[T]` out of the box — pick it when you want a complete CRUD surface with attribute-style row access and you're happy inside the SQLAlchemy ecosystem. `sqlspec` gives you direct SQL control, 20 adapter packages (asyncpg, oracledb, Db2, DuckDB, BigQuery, SQLite, and more), Arrow result paths for analytics, and a builder API when you need it — pick it when you want explicit SQL, heterogeneous database backends, or Arrow integration. Both skills integrate with Litestar via first-party plugins; see [`../advanced-alchemy/SKILL.md`](../advanced-alchemy/SKILL.md) for the ORM path.
 
 For detailed instructions, patterns, and API guides, refer to the following documents:
 
@@ -282,7 +283,7 @@ For detailed instructions, patterns, and API guides, refer to the following docu
 
 ### Adapters & Drivers
 
-- **[Adapter & Driver Registry](references/adapters.md)** -- Full 19-adapter registry with dialects and parameter styles.
+- **[Adapter & Driver Registry](references/adapters.md)** -- Full 20-adapter registry with dialects and parameter styles.
 
 ### Framework & Storage Integrations
 

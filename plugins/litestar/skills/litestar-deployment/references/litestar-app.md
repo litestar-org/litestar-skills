@@ -96,6 +96,11 @@ Client -> Cloud IAP -> Load Balancer -> Litestar App
 The middleware verifies IAP JWTs using Google's public JWKS endpoint:
 
 ```python
+import asyncio
+from collections.abc import Sequence
+
+import jwt
+
 IAP_AUTH_HEADER_KEY = "X-Goog-IAP-JWT-Assertion"
 IAP_ISSUER = "https://cloud.google.com/iap"
 
@@ -104,7 +109,8 @@ async def verify_iap_token(raw_token: str, audience: str | Sequence[str]) -> IAP
     """Verify IAP JWT using ES256 algorithm against Google JWKS."""
     jwks_client = await get_jwks_client()
     signing_key = await jwks_client.get_signing_key(raw_token)
-    token_data = await async_(jwt.decode)(
+    token_data = await asyncio.to_thread(
+        jwt.decode,
         raw_token,
         key=signing_key.key,
         algorithms=["ES256"],

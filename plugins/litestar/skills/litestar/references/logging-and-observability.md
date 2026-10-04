@@ -9,6 +9,7 @@ from litestar import Litestar, Request, get
 from litestar.datastructures import State
 from litestar.exceptions import NotFoundException
 from litestar.logging import LoggingConfig
+from litestar.params import FromPath
 
 
 logging_config = LoggingConfig(
@@ -25,10 +26,11 @@ logging_config = LoggingConfig(
 
 @get("/items/{item_id:int}")
 async def get_item(
+    item_id: FromPath[int],
     request: Request[object, object, State],
 ) -> dict[str, str]:
     """Access the configured logger from the request instance."""
-    request.logger.info("Fetching item")
+    request.logger.info("Fetching item %d", item_id)
     return {"status": "ok"}
 
 

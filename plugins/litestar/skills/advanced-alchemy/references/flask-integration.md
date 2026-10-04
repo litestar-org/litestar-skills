@@ -198,7 +198,7 @@ alchemy = AdvancedAlchemy(
 @app.route("/orders", methods=["POST"])
 def create_order():
     orders_service = OrderService(session=alchemy.get_sync_session())
-    obj = orders_service.create(**request.get_json())
+    obj = orders_service.create(request.get_json())
     return orders_service.jsonify(orders_service.to_schema(obj, schema_type=OrderSchema))
 ```
 
@@ -361,7 +361,7 @@ def list_orders():
 @app.route("/orders", methods=["POST"])
 def create_order():
     orders_service = OrderService(session=alchemy.get_sync_session())
-    obj = orders_service.create(**request.get_json())
+    obj = orders_service.create(request.get_json())
     return orders_service.jsonify(orders_service.to_schema(obj, schema_type=OrderSchema))
 
 
@@ -375,7 +375,7 @@ def get_order(order_id: UUID):
 @app.route("/orders/<uuid:order_id>", methods=["PATCH"])
 def update_order(order_id: UUID):
     orders_service = OrderService(session=alchemy.get_sync_session())
-    obj = orders_service.update(**request.get_json(), item_id=order_id)
+    obj = orders_service.update(request.get_json(), item_id=order_id)
     return orders_service.jsonify(orders_service.to_schema(obj, schema_type=OrderSchema))
 
 

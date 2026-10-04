@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | `@websocket` (`WebsocketRouteHandler`) | `async def`, returns `None`, requires `socket: WebSocket`; forbids `request`, `body`, `data` | Manual `await socket.accept()`, receive/send loop, and `WebSocketDisconnect` handling | Bidirectional streams, custom `ChannelsPlugin` subscriptions, multiplexed protocols |
 | `@websocket_listener` (`WebsocketListenerRouteHandler`) / `WebsocketListener` | Sync or async, requires `data` parameter (`socket: WebSocket` optional); forbids `request`, `body` | Auto-accepts, catches `WebSocketDisconnect`, decodes `data` (via `dto` / `msgspec`), serializes return value (if non-`None` via `return_dto` / `msgspec`), runs `on_accept` / `on_disconnect` or `connection_lifespan` | Request/response RPC or chat message loops over WebSocket |
-| `@websocket_stream` (`WebSocketStreamHandler`) / `send_websocket_stream` | Async generator returning `AsyncGenerator[T, None]` (`socket: WebSocket` optional) | Auto-accepts, iterates generator, sends yielded items (`str`/`bytes` raw or JSON via `return_dto` / `msgspec`), cancels on client disconnect when `listen_for_disconnect=True` | Unidirectional server-to-client WebSocket push streams (ticks, telemetry, logs) |
+| `@websocket_stream` (`WebsocketRouteHandler` via `WebSocketStreamHandler`) / `send_websocket_stream` | Async generator returning `AsyncGenerator[T, None]` (`socket: WebSocket` optional) | Auto-accepts, iterates generator, sends yielded items (`str`/`bytes` raw or JSON via `return_dto` / `msgspec`), cancels on client disconnect when `listen_for_disconnect=True` | Unidirectional server-to-client WebSocket push streams (ticks, telemetry, logs) |
 
 ### The `@websocket()` Decorator
 
@@ -16,6 +16,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from litestar import Controller, WebSocket, websocket
+from litestar.params import FromPath
 
 
 class StreamController(Controller):
@@ -28,7 +29,7 @@ class StreamController(Controller):
         name="workspaces:events-stream",
         opt={"exclude_from_csrf": True, "exclude_from_auth": True},
     )
-    async def stream_events(self, socket: WebSocket, workspace_id: UUID) -> None:
+    async def stream_events(self, socket: WebSocket, workspace_id: FromPath[UUID]) -> None:
         await socket.accept()
         await stream_pubsub(socket, [Channels.events(workspace_id)], history=10)
 ```
@@ -36,7 +37,7 @@ class StreamController(Controller):
 Key points:
 
 - WebSocket handlers use `opt={"exclude_from_csrf": True, "exclude_from_auth": True}` to bypass HTTP-oriented middleware. Authentication is handled by WebSocket-specific guards instead.
-- Path parameters (e.g., `workspace_id: UUID`) and DI dependencies work the same as HTTP route handlers.
+- Path parameters (e.g., `workspace_id: FromPath[UUID]`) and DI dependencies (`NamedDependency[T]`) work the same as HTTP route handlers.
 - The handler must be `async`, return `None`, and accept `socket: WebSocket` (never `request`, `body`, or `data`).
 - Pass `websocket_class=` on `@websocket`, `Controller`, `Router`, or `Litestar` to use a custom `WebSocket` subclass.
 
@@ -212,6 +213,7 @@ from uuid import UUID
 
 from dishka import AsyncContainer
 from litestar import WebSocket, websocket
+from litestar.params import FromPath
 
 
 @asynccontextmanager
@@ -223,7 +225,7 @@ async def enter_request_scope(socket: WebSocket) -> AsyncIterator[AsyncContainer
 
 
 @websocket("/ws/workspace/{workspace_id:uuid}/stream")
-async def workspace_stream(socket: WebSocket, workspace_id: UUID) -> None:
+async def workspace_stream(socket: WebSocket, workspace_id: FromPath[UUID]) -> None:
     await socket.accept()
     async for message in socket.iter_json():
         async with enter_request_scope(socket) as container:
@@ -236,11 +238,18 @@ in the handler signature. The REQUEST-scope child container pattern is Dishka-sp
 `Provide`-only stacks, inject services directly at the handler signature as usual:
 
 ```python
+from uuid import UUID
+
+from litestar import WebSocket, websocket
+from litestar.di import NamedDependency
+from litestar.params import FromPath
+
+
 @websocket("/ws/workspace/{workspace_id:uuid}/stream")
 async def workspace_stream(
     socket: WebSocket,
-    workspace_id: UUID,
-    order_service: OrderService,
+    workspace_id: FromPath[UUID],
+    order_service: NamedDependency[OrderService],
 ) -> None:
     """Handle workspace stream with Litestar Provide-injected service."""
     await socket.accept()
@@ -340,6 +349,7 @@ Apply guards at controller level for shared auth, and per-handler for route-spec
 from uuid import UUID
 
 from litestar import Controller, WebSocket, websocket
+from litestar.params import FromPath
 
 
 class WorkspaceStreamController(Controller):
@@ -353,7 +363,7 @@ class RealtimeStreamController(Controller):
         path="/users/{user_id:uuid}/stream",
         guards=[requires_websocket_subject],
     )
-    async def stream_user_events(self, socket: WebSocket, user_id: UUID) -> None: ...
+    async def stream_user_events(self, socket: WebSocket, user_id: FromPath[UUID]) -> None: ...
 
     @websocket(
         path="/global/stream",
@@ -479,7 +489,7 @@ Usage in a handler:
 
 ```python
 @websocket(path="/{workspace_id:uuid}/stream")
-async def stream_workspace_events(self, socket: WebSocket, workspace_id: UUID) -> None:
+async def stream_workspace_events(self, socket: WebSocket, workspace_id: FromPath[UUID]) -> None:
     await socket.accept()
     await stream_pubsub(
         socket,
@@ -499,14 +509,16 @@ from uuid import UUID
 
 from litestar import WebSocket, websocket
 from litestar.channels import ChannelsPlugin
+from litestar.di import NamedDependency
 from litestar.exceptions import WebSocketDisconnect
+from litestar.params import FromPath
 
 
 @websocket("/ws/workspace/{workspace_id:uuid}")
 async def workspace_stream(
     socket: WebSocket,
-    workspace_id: UUID,
-    channels: ChannelsPlugin,
+    workspace_id: FromPath[UUID],
+    channels: NamedDependency[ChannelsPlugin],
 ) -> None:
     """Authenticate during handshake and stream workspace events."""
     await socket.accept()

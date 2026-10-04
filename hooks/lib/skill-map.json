@@ -147,9 +147,9 @@
       "signals": [
         { "type": "pyproject_dep", "name": "litestar-mcp" },
         { "type": "python_import", "module": "litestar_mcp" },
-        { "type": "python_regex", "pattern": "\\b(?:LitestarMCP|MCPConfig|MCPAuthConfig|MCPAuthBackend|mcp_tool|mcp_resource|mcp_prompt)\\b" }
+        { "type": "python_regex", "pattern": "\\b(?:LitestarMCP|MCPConfig|MCPSkillsConfig|MCPTaskConfig|LitestarA2A|A2AConfig|mcp_tool|mcp_resource|mcp_prompt)\\b" }
       ],
-      "reminder": "Use `litestar:litestar-mcp` for LitestarMCP, MCPConfig, `@mcp.tool`/`@mcp.resource`/`@mcp.prompt` or route kwargs, MCPAuthConfig, and Streamable HTTP or stdio endpoints."
+      "reminder": "Use `litestar:litestar-mcp` for LitestarMCP, MCPConfig, MCPSkillsConfig, LitestarA2A, `@mcp.tool`/`@mcp.resource`/`@mcp.prompt` or route kwargs, and Streamable HTTP or stdio endpoints."
     },
     {
       "skill": "litestar-email",

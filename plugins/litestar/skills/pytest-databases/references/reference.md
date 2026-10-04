@@ -37,7 +37,13 @@ test suite to construct its own client from the service fixture.
 - `oracle_startup_connection` depends on `oracle_23ai_startup_connection`, which 0.19.0 does not define. Request `oracle_23ai_connection` or `oracle_18c_connection` instead.
 - `elasticsearch_service` depends on `elasticsearch8_service` (missing underscore), which 0.19.0 does not define. Request `elasticsearch_8_service` or `elasticsearch_7_service` directly (or define an `elasticsearch8_service` bridge fixture in `conftest.py`). Also note that `pytest_databases.docker.elastic_search` imports `elasticsearch7` at module load time for both v7 and v8.
 
-There is no built-in plugin module in 0.19.0 for SQLite, standalone DuckDB (DuckDB/SQLite over Arrow Flight SQL is served by `gizmosql`), ClickHouse, OpenSearch, Neo4j/Memgraph, ScyllaDB/Cassandra, Google Cloud Storage, Kafka/Redpanda, RabbitMQ, or Db2. For custom containers, use the core `docker_service.run(...)` fixture.
+### Module path notes
+
+- AlloyDB Omni, pgvector, and ParadeDB live in `pytest_databases.docker.postgres` (there is no `pytest_databases.docker.alloydb` module).
+- Azurite / Azure Blob lives in `pytest_databases.docker.azure_blob` (there is no `pytest_databases.docker.azurite` module).
+- Elasticsearch lives in `pytest_databases.docker.elastic_search` (there is no `pytest_databases.docker.elasticsearch` or `pytest_databases.docker.ElasticSearch` module).
+- Dragonfly and KeyDB live in `pytest_databases.docker.redis`.
+- There is no built-in plugin module in 0.19.0 for SQLite, standalone DuckDB (DuckDB/SQLite over Arrow Flight SQL is served by `gizmosql`), TimescaleDB, ClickHouse, Cassandra, ScyllaDB, Couchbase, DynamoDB, Neo4j/Memgraph, Meilisearch, Typesense, OpenSearch, Qdrant, Weaviate, Vespa, SurrealDB, Google Cloud Storage, Kafka/Redpanda, RabbitMQ, or Db2. For custom containers, use the core `docker_service.run(...)` fixture.
 
 ## Service dataclass attributes and properties
 
@@ -46,14 +52,14 @@ Every service class inherits `host: str`, `port: int`, and `container: Container
 | Service class | Extra fields and properties |
 | --- | --- |
 | `PostgresService` | `database: str`, `user: str`, `password: str` |
-| `CockroachDBService` | `database: str`, `driver_opts: dict[str, Any]` |
+| `CockroachDBService` | `database: str`, `driver_opts: dict[str, str]` |
 | `MySQLService`, `MariaDBService`, `DoltService` | `db: str`, `user: str`, `password: str` |
 | `OracleService` | `user: str`, `password: str`, `system_password: str`, `service_name: str` |
 | `MSSQLService` | `user: str`, `password: str`, `database: str`, `.connection_string: str` |
 | `YugabyteService` | `database: str`, `user: str`, `password: str` |
 | `MongoDBService` | `username: str`, `password: str`, `database: str` |
 | `RedisService`, `ValkeyService` | `db: int` |
-| `ElasticsearchService` | `scheme: str`, `user: str`, `password: str`, `database: int` |
+| `ElasticsearchService` | `scheme: str`, `user: str`, `password: str`, `database: str` |
 | `BigQueryService` | `project: str`, `dataset: str`, `credentials: Credentials`, `.endpoint: str`, `.client_options: ClientOptions` |
 | `SpannerService` | `credentials: Credentials`, `project: str`, `database_name: str`, `instance_name: str`, `.endpoint: str`, `.client_options: ClientOptions` |
 | `GizmoSQLService` | `username: str`, `password: str`, `.uri: str` (`grpc+tls://{host}:{port}`) |
@@ -73,7 +79,9 @@ Version 0.19.0 adds optional host-port fixtures:
 
 When unset, Docker chooses a free host port. Each fixture reads the uppercase
 equivalent environment variable, such as `POSTGRES_18_PORT` or
-`ALLOYDB_OMNI_17_PORT`.
+`ALLOYDB_OMNI_17_PORT`. By contrast, `redis_port`, `dragonfly_port`,
+`keydb_port`, and `valkey_port` are read-only helper fixtures that return the
+running service's bound `.port`.
 
 ## Installation extras
 
@@ -85,7 +93,7 @@ equivalent environment variable, such as `POSTGRES_18_PORT` or
 | `mongodb` | `pymongo` |
 | `redis`, `dragonfly`, `keydb` | `redis` (imported by `pytest_databases.docker.redis`) |
 | `valkey` | `valkey` (imported by `pytest_databases.docker.valkey`) |
-| `elasticsearch7`, `elasticsearch8` | `elasticsearch7` / `elasticsearch` (`elastic_search.py` imports `elasticsearch7` at load time) |
+| `elasticsearch7`, `elasticsearch8` | `elasticsearch7` / `elasticsearch8` (`elastic_search.py` unconditionally imports `elasticsearch7` at load time, even for v8) |
 | `bigquery` | `google-cloud-bigquery` |
 | `spanner` | `google-cloud-spanner` |
 | `gizmosql` | `adbc-driver-flightsql`, `pyarrow` |

@@ -8,6 +8,8 @@ from typing import Any, TypedDict, cast
 
 import attrs
 import msgspec
+import polyfactory
+import polyfactory.factories
 import pydantic
 import pytest
 from polyfactory import (
@@ -22,9 +24,9 @@ from polyfactory import (
 )
 from polyfactory.decorators import post_generated
 from polyfactory.exceptions import MissingBuildKwargException, ParameterException
-from polyfactory.factories import DataclassFactory
 from polyfactory.factories.attrs_factory import AttrsFactory
 from polyfactory.factories.beanie_odm_factory import BeanieDocumentFactory
+from polyfactory.factories.dataclass_factory import DataclassFactory
 from polyfactory.factories.msgspec_factory import MsgspecFactory
 from polyfactory.factories.pydantic_factory import ModelFactory
 from polyfactory.factories.sqlalchemy_factory import (
@@ -39,18 +41,31 @@ from typing_extensions import NotRequired, Required
 
 
 def test_polyfactory_330_public_exports_and_factory_bases() -> None:
-    """Verify polyfactory 3.3.0 version, top-level exports, and all 8 factory bases."""
+    """Verify polyfactory 3.3.0 version, top-level exports, submodule export boundaries, and all 8 factory bases."""
     assert version("polyfactory") == "3.3.0"
+    assert polyfactory.factories.__all__ == ("BaseFactory", "DataclassFactory", "TypedDictFactory")
+    assert not hasattr(polyfactory.factories, "ModelFactory")
+    assert not hasattr(polyfactory.factories, "MsgspecFactory")
+    assert not hasattr(polyfactory.factories, "SQLAlchemyFactory")
+    assert not hasattr(polyfactory, "register_fixture")
+    assert not hasattr(polyfactory, "post_generated")
     assert BaseFactory.__allow_none_optionals__ is True
     assert BaseFactory.__check_model__ is True
     assert BaseFactory.__use_defaults__ is False
+    assert BaseFactory.__set_as_default_factory_for_type__ is False
     assert BaseFactory.__randomize_collection_length__ is False
     assert BaseFactory.__min_collection_length__ == 0
     assert BaseFactory.__max_collection_length__ == 5
+    assert BaseFactory.__faker__ is not None
+    assert BaseFactory.__random__ is not None
+    assert hasattr(BaseFactory, "build")
+    assert hasattr(BaseFactory, "batch")
+    assert hasattr(BaseFactory, "coverage")
     assert hasattr(BaseFactory, "create_async")
     assert hasattr(BaseFactory, "create_batch_async")
     assert hasattr(BaseFactory, "create_sync")
     assert hasattr(BaseFactory, "create_batch_sync")
+    assert hasattr(BaseFactory, "seed_random")
     assert hasattr(BaseFactory, "add_provider")
     assert not hasattr(BaseFactory, "build_async")
     assert issubclass(ModelFactory, BaseFactory)
@@ -71,8 +86,13 @@ def test_polyfactory_330_public_exports_and_factory_bases() -> None:
 
 
 def test_polyfactory_330_fields_and_post_generated_contract() -> None:
-    """Verify Use, Ignore(), Require(), PostGenerated, and @post_generated behavior."""
+    """Verify Use, Ignore(), Require(), PostGenerated, @post_generated, seed_random, and add_provider behavior."""
     assert list(inspect.signature(PostGenerated).parameters)[:2] == ["fn", "args"]
+
+    class CustomToken(str):
+        pass
+
+    BaseFactory.add_provider(CustomToken, lambda: CustomToken("tok_fixed"))
 
     @dataclass
     class Order:
@@ -80,6 +100,7 @@ def test_polyfactory_330_fields_and_post_generated_contract() -> None:
         total_cents: int
         status: str
         tenant_id: str
+        token: CustomToken
         reference: str
         summary: str
         internal_note: str = field(default="default-note")
@@ -100,16 +121,28 @@ def test_polyfactory_330_fields_and_post_generated_contract() -> None:
         def summary(cls, order_id: int, status: str) -> str:
             return f"{status}:{order_id}"
 
+    assert vars(OrderFactory)["__model__"] is Order
+
     with pytest.raises(MissingBuildKwargException):
         OrderFactory.build()
 
+    OrderFactory.seed_random(42)
     built = OrderFactory.build(tenant_id="acme")
+    OrderFactory.seed_random(42)
+    rebuilt = OrderFactory.build(tenant_id="acme")
+    assert built == rebuilt
     assert built.status == "pending"
     assert built.total_cents == 500
     assert built.tenant_id == "acme"
+    assert built.token == CustomToken("tok_fixed")
     assert built.internal_note == "default-note"
     assert built.reference == f"ord-{built.order_id}"
     assert built.summary == f"pending:{built.order_id}"
+    assert len(OrderFactory.batch(2, tenant_id="acme")) == 2
+    assert len(list(OrderFactory.coverage(tenant_id="acme"))) >= 1
+
+    with pytest.raises(TypeError, match="post_generated decorator can only be used on classmethods"):
+        post_generated(build_reference)
 
 
 def test_polyfactory_330_pydantic_msgspec_attrs_typeddict_contract() -> None:

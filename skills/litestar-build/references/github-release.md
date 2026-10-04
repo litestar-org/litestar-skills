@@ -98,7 +98,7 @@ jobs:
       - run: uv sync --all-extras --dev
       - run: uv run app assets install
       - run: uv run app assets build
-      - run: uv build --wheel
+      - run: uv build --wheel --clear
       - name: Verify wheel contents
         run: |
           unzip -l dist/*.whl | grep -qE '\.(js|css|html)$' || (echo "Missing frontend" && exit 1)
@@ -274,7 +274,7 @@ build-onefiles:
           -v $PWD/dist/${{ matrix.job.artifact }}:/app:ro \
           gcr.io/distroless/cc-debian12:nonroot /app --help
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v6
       with:
         name: ${{ matrix.job.artifact }}
         path: dist/${{ matrix.job.artifact }}
@@ -289,7 +289,7 @@ build-images:
   runs-on: self-hosted
   steps:
     - uses: actions/checkout@v6
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v7
       with:
         path: artifacts
 
@@ -329,7 +329,7 @@ build-images:
         outputs: type=docker,dest=dist/app-image-arm64.tar
         tags: app:latest-arm64
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v6
       with:
         name: container-images
         path: dist/app-image-*.tar
@@ -348,7 +348,7 @@ publish:
       with:
         fetch-depth: 0      # required for `git log <prev-tag>..<tag>`
 
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v7
       with:
         path: dist
 

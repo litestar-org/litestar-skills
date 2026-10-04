@@ -247,7 +247,7 @@ Everything the advanced build sets:
 | `PYAPP_PYTHON_VERSION` | `3.13` | cargo build | Which PBS archive to match |
 | `PYAPP_PROJECT_FEATURES` | `cloudrun` | cargo build | Pass extras to `uv pip install` at first run (ignored when `PYAPP_SKIP_INSTALL=true`) |
 | `PYAPP_DISTRIBUTION_VARIANT_CPU` | `v1` | cargo build | CPU baseline (x86-64-v1/v2/v3) |
-| `PYAPP_DISTRIBUTION_VARIANT_GIL` | *(optional)* | cargo build | On Python 3.13+, select GIL vs free-threaded (`nogil`) distribution variant |
+| `PYAPP_DISTRIBUTION_VARIANT_GIL` | `freethreaded` *(optional)* | cargo build | On Python 3.13+, select the free-threaded (no-GIL) distribution variant |
 | `PYAPP_DISTRIBUTION_PATH` | `dist/python-dist.tar.gz` | cargo build | Use pre-built tarball instead of downloading PBS |
 | `PYAPP_DISTRIBUTION_EMBED` | `true` | cargo build | Embed the tarball *in* the binary |
 | `PYAPP_DISTRIBUTION_PYTHON_PATH` | `python/bin/python3` | cargo build | Path to Python *inside* the tarball |

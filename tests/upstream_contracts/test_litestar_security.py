@@ -4,7 +4,10 @@ import dataclasses
 import inspect
 from importlib.metadata import version
 
+import pytest
 from litestar import Litestar, Router, get
+from litestar.exceptions import ImproperlyConfiguredException, LitestarWarning
+from litestar.testing import TestClient
 from litestar_security import (
     AssuranceRequirement,
     AssuranceTrait,
@@ -280,7 +283,9 @@ def test_litestar_security_060_config_and_snapshot_contract() -> None:
         "require_scope",
         "require_team_role",
         "require_tenant",
+        "requires_not",
         "requires_team_role",
+        "not_guard",
     )
     for legacy_name in forbidden_legacy_names:
         assert not hasattr(accounts, legacy_name)
@@ -306,6 +311,10 @@ def test_litestar_security_060_config_and_snapshot_contract() -> None:
 
     headers_hardened = SecurityHeadersConfig.hardened()
     assert isinstance(headers_hardened, SecurityHeadersConfig)
+    headers_fields = {f.name for f in dataclasses.fields(SecurityHeadersConfig)}
+    assert headers_fields == {"static", "csp"}
+    csp_fields = {f.name for f in dataclasses.fields(ContentSecurityPolicy)}
+    assert {"directives", "mode", "nonce_directives"} <= csp_fields
     assert CSPMode.ENFORCE.value == "enforce"
     assert CSPMode.REPORT_ONLY.value == "report-only"
     assert ContentSecurityPolicy is not None
@@ -337,7 +346,7 @@ class _User:
 
 
 def test_litestar_security_060_reserved_dependency_keys_and_layer_exclusions() -> None:
-    """Verify standard dependency keys and layer-level exclude_from_auth support."""
+    """Verify standard dependency keys, csp_nonce registration, and layer-level exclude_from_auth support."""
 
     @get("/ping")
     async def ping() -> dict[str, str]:
@@ -353,6 +362,76 @@ def test_litestar_security_060_reserved_dependency_keys_and_layer_exclusions() -
         "current_user",
         "websocket_connect_tokens",
     }
+
+    nonce_headers = SecurityHeadersConfig(
+        csp=ContentSecurityPolicy(
+            directives={"default-src": ["'self'"], "script-src": ["'self'"]},
+            mode=CSPMode.ENFORCE,
+            nonce_directives=("script-src",),
+        ),
+    )
+    nonce_config: SecurityConfig[_User] = SecurityConfig(headers=nonce_headers)
+    nonce_plugin: SecurityPlugin[_User] = SecurityPlugin(config=nonce_config)
+    nonce_app = Litestar(
+        route_handlers=[excluded_router],
+        plugins=[nonce_plugin],
+    )
+    assert "csp_nonce" in nonce_app.dependencies
+
+
+def test_litestar_security_060_well_known_routes_and_protected_resource() -> None:
+    """Verify ProtectedResourceConfig, public .well-known router registration, and exclusion conflicts."""
+
+    @get("/openid-configuration")
+    async def openid_configuration() -> dict[str, str]:
+        return {"issuer": "https://auth.example.com"}
+
+    well_known_router = Router(
+        path="/.well-known",
+        route_handlers=[openid_configuration],
+        opt={"auth": public()},
+    )
+    protected_resource = ProtectedResourceConfig(
+        resource="https://api.example.com",
+        authorization_servers=("https://auth.example.com",),
+        scopes_supported=("read:orders",),
+        register_route=True,
+    )
+    config: SecurityConfig[_User] = SecurityConfig(protected_resource=protected_resource)
+    plugin: SecurityPlugin[_User] = SecurityPlugin(config=config)
+    app = Litestar(
+        route_handlers=[well_known_router],
+        plugins=[plugin],
+    )
+    registered_paths = {route.path for route in app.routes}
+    assert "/.well-known/oauth-protected-resource" in registered_paths
+    assert "/.well-known/openid-configuration" in registered_paths
+
+    conflict_config: SecurityConfig[_User] = SecurityConfig(
+        protected_resource=protected_resource,
+        exclude=[r"^/\.well-known"],
+    )
+    conflict_plugin: SecurityPlugin[_User] = SecurityPlugin(config=conflict_config)
+    with pytest.raises(ImproperlyConfiguredException, match="matches a security exclusion pattern"):
+        Litestar(route_handlers=[well_known_router], plugins=[conflict_plugin])
+
+    delegated_resource = ProtectedResourceConfig(
+        resource="https://api.example.com",
+        authorization_servers=("https://auth.example.com",),
+        scopes_supported=("read:orders",),
+        register_route=False,
+    )
+    unmatched_config: SecurityConfig[_User] = SecurityConfig(
+        protected_resource=delegated_resource,
+        exclude=[r"^/\.well-known"],
+    )
+    unmatched_plugin: SecurityPlugin[_User] = SecurityPlugin(config=unmatched_config)
+    unmatched_app = Litestar(route_handlers=[], plugins=[unmatched_plugin])
+    with (
+        pytest.warns(LitestarWarning, match="match no registered route"),
+        TestClient(app=unmatched_app),
+    ):
+        pass
 
 
 def test_litestar_security_060_websocket_and_cli_contract() -> None:

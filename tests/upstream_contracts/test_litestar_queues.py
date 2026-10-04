@@ -1,6 +1,7 @@
 import dataclasses
 from importlib.metadata import version
 
+import litestar_queues
 from litestar_queues import (
     CloudRunExecutionConfig,
     CloudTasksExecutionConfig,
@@ -51,7 +52,17 @@ from litestar_queues import (
     task,
 )
 from litestar_queues._cli import queues_group
-from litestar_queues.backends.advanced_alchemy.config import SQLAlchemyBackendConfig
+from litestar_queues.backends.advanced_alchemy import (
+    QueueEventHistoryModel,
+    QueueEventHistoryModelMixin,
+    QueueMaintenanceModel,
+    QueueMaintenanceModelMixin,
+    QueueTaskModel,
+    QueueTaskModelMixin,
+    QueueTaskReservationModel,
+    QueueTaskReservationModelMixin,
+    SQLAlchemyBackendConfig,
+)
 from litestar_queues.backends.redis.config import RedisBackendConfig
 from litestar_queues.backends.sqlspec.config import SQLSpecBackendConfig, SQLSpecWorkerWakeupConfig
 from litestar_queues.backends.sqlspec.extension import (
@@ -61,6 +72,7 @@ from litestar_queues.backends.sqlspec.extension import (
 from litestar_queues.backends.valkey.config import ValkeyBackendConfig
 from litestar_queues.events import (
     EventHistoryExtraColumn,
+    QueueEvent,
     QueueEventProducer,
     QueueEventQuery,
     QueueEventRetentionRule,
@@ -68,6 +80,7 @@ from litestar_queues.events import (
     bind_task_context,
     create_event_producer,
 )
+from litestar_queues.events._log_records import event_log_record_from_event
 from litestar_queues.observability import ObservabilityConfig
 
 
@@ -90,6 +103,14 @@ def test_litestar_queues_0120_contract() -> None:
     } <= {field.name for field in dataclasses.fields(QueueConfig)}
 
     assert SQLAlchemyBackendConfig().worker_wakeups is False
+    assert QueueTaskModel is not None
+    assert QueueTaskModelMixin is not None
+    assert QueueEventHistoryModel is not None
+    assert QueueEventHistoryModelMixin is not None
+    assert QueueMaintenanceModel is not None
+    assert QueueMaintenanceModelMixin is not None
+    assert QueueTaskReservationModel is not None
+    assert QueueTaskReservationModelMixin is not None
     sqlspec_backend = SQLSpecBackendConfig()
     assert sqlspec_backend.manage_schema is True
     assert sqlspec_backend.queue_table_name is None
@@ -139,6 +160,20 @@ def test_litestar_queues_0120_contract() -> None:
     assert callable(publish_task_log)
     assert callable(publish_task_progress)
 
+    sample_event = QueueEvent(
+        type="task.progress",
+        scope="task",
+        task_id="task-1",
+        task_name="imports.process",
+        progress_current=50,
+        progress_total=100,
+        progress_percent=50.0,
+        payload={"stage": "importing", "duration_ms": 120.0},
+    )
+    history_record = event_log_record_from_event(sample_event)
+    assert history_record.stage == "importing"
+    assert history_record.duration_ms == 120.0
+
     record_fields = {field.name for field in dataclasses.fields(QueuedTaskRecord)}
     assert "dispatch_checked_at" in record_fields
 
@@ -175,6 +210,20 @@ def test_litestar_queues_0120_contract() -> None:
     assert SqsExecutionConfig is not None
     assert CloudRunExecutionConfig is not None
     assert CloudTasksExecutionConfig is not None
+
+    for non_existent_symbol in (
+        "AdvancedAlchemyAsyncBackendConfig",
+        "AdvancedAlchemySyncBackendConfig",
+        "MemoryBackendConfig",
+        "CloudRunExecutorConfig",
+        "JobStatus",
+        "TaskPriority",
+        "BackoffStrategy",
+        "ConcurrencyLock",
+        "RateLimit",
+        "Schedule",
+    ):
+        assert not hasattr(litestar_queues, non_existent_symbol)
 
     assert issubclass(NonRetryableError, Exception)
     assert issubclass(JobCancelledError, Exception)

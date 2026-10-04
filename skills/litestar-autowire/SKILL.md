@@ -157,12 +157,30 @@ project already uses Dishka and needs `DishkaRouter`. See
   contain importable leaf modules.
 - **Do not claim arbitrary route-handler discovery.** Autowire registers
   `Controller` subclasses and `EventListener` objects.
+- **Do not invent registry or discovered-item wrapper types.** Autowire 0.2.0
+  exports `AutowirePlugin`, `AutowireConfig`, `AutowireContext`,
+  `AutowireIntegration`, `AutowireLoader`, `DishkaIntegration`,
+  `QueuesIntegration`, `clear_autowire_cache`, `discover_controllers`,
+  `discover_feature_packages`, `discover_listeners`, `discover_queue_tasks`,
+  `find_controllers_in_module`, and `find_listeners_in_module`. There is no
+  `AutowireRegistry`, `DomainMetadata`, `DiscoveredCLI`, `DiscoveredController`,
+  `DiscoveredJob`, `DiscoveredProvider`, `DiscoveredSchema`, `DiscoveredSignal`,
+  `LitestarQueuesIntegration`, or `SAQIntegration` (use `AutowireLoader` for
+  SAQ or custom module registries).
 - **Do not imply queue tasks are enabled by default.** The `queues` integration
   must be selected and its optional dependency installed.
 - **Do not suppress dependency import failures.** Only an absent configured
   package or absent target component module is skipped.
 - **Do not use both a custom `router_class` and expect Dishka to replace it.**
   `DishkaIntegration` preserves an already selected router class.
+- **Do not hide `FromDishka[...]` types under `if TYPE_CHECKING:` when
+  `from __future__ import annotations` is enabled in controller modules.**
+  `DishkaRouter.register` calls `typing.get_type_hints()` on each controller
+  handler at registration time, which raises `NameError` if injected types are
+  absent from runtime module globals or defined only in a function scope.
+- **Do not reuse a `Controller` class across unit tests after `DishkaRouter`
+  registration without restoring `get_route_handlers`.** `DishkaRouter.register`
+  monkey-patches `ControllerSubclass.get_route_handlers` in-place on the class.
 - **Do not give custom integrations the names `dishka` or `queues`.** Built-in
   name collisions fail during configuration.
 - **Do not reuse stale discovery state in tests or reload tooling.** Clear the
@@ -180,9 +198,13 @@ project already uses Dishka and needs `DishkaRouter`. See
   re-exported into it.
 - [ ] Queue task discovery is enabled only with the Queues extra and integration.
 - [ ] Dishka and Litestar Queues retain their own application configuration.
+- [ ] Controller modules wired with Dishka keep `FromDishka[...]` dependency
+  types importable at runtime rather than inside `if TYPE_CHECKING:` under
+  `from __future__ import annotations`.
 - [ ] Custom integrations satisfy `AutowireIntegration` and use unique names.
 - [ ] Router hooks are paired with a compatible `router_class`.
-- [ ] Tests call `clear_autowire_cache()` around dynamic module changes.
+- [ ] Tests call `clear_autowire_cache()` around dynamic module changes and
+  restore `Controller.get_route_handlers` when reusing controllers with Dishka.
 - [ ] Missing dependency imports still fail instead of silently dropping a
   domain.
 

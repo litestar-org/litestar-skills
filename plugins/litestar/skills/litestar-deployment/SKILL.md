@@ -80,7 +80,7 @@ Copy Bun lockfiles first (layer caching), install JS deps, then `bun run build` 
 Background workers use the same build stages as the web image but a different `CMD`, no exposed HTTP port, and a longer termination grace period (`120s`):
 
 - **`litestar-saq`**: run `litestar workers run` (or `app workers run`) with `SAQ_USE_SERVER_LIFESPAN=false`.
-- **`litestar-queues`**: run `litestar queues run --max-concurrency 10 --drain-timeout 30.0` for SQLSpec/SQLAlchemy task queues, `litestar queues run-consumer --backend <kafka|pubsub|rabbitmq|sqs>` for stream consumers, or `litestar queues run-task` inside serverless Cloud Run Jobs.
+- **`litestar-queues`**: run `litestar queues run --max-concurrency 10 --drain-timeout 30.0` for persistent task queues (SQLSpec, Advanced Alchemy, Redis/Valkey), `litestar queues run-consumer --backend <kafka|pubsub|rabbitmq|sqs>` for stream consumers, or `litestar queues run-task` inside serverless Cloud Run Jobs.
 
 ### Step 5: Set up CI/CD
 
@@ -102,7 +102,7 @@ Expose `/health` on the API container. K8s uses startupProbe + livenessProbe + r
 - **UV_COMPILE_BYTECODE=1.** Pre-compile .pyc in the builder — saves 200-500ms cold-start in containers.
 - **UV_LINK_MODE=copy.** Hardlinks break on overlay filesystems. Always copy.
 - **Tini as PID 1.** Containers need an init process for signal forwarding and zombie reaping. `ENTRYPOINT ["tini", "--"]`.
-- **Granian signal supervision (`STOPSIGNAL SIGINT`).** `litestar-granian` v0.16+ runs Granian in a supervised process group that forwards `SIGINT`, `SIGTERM`, and `SIGHUP` and enforces `--workers-kill-timeout` (default 30s, plus a 5s parent deadline). Keeping `STOPSIGNAL SIGINT` ensures clean shutdown across both standalone Granian and `litestar run`.
+- **Granian signal supervision (`STOPSIGNAL SIGINT`).** `litestar-granian` v0.16+ runs Granian in a supervised process group that forwards `SIGINT`, `SIGTERM`, and `SIGHUP` and enforces `--workers-kill-timeout` (default 5s, plus a 5s parent deadline; pass `--workers-kill-timeout 30` in production). Keeping `STOPSIGNAL SIGINT` ensures clean shutdown across both standalone Granian and `litestar run`.
 - **Multi-architecture support.** Use `docker buildx` with `--platform linux/amd64,linux/arm64`. Distroless Dockerfile handles arch-specific lib paths via `TARGETARCH`.
 - **Asset build inside Docker.** Vite/Bun builds run in the builder stage. Never mount host `node_modules` into production images.
 - **Health check endpoints.** Every API container must expose `/health`. K8s probes hit this path. Cloud Run and Railway use it for readiness.

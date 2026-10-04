@@ -31,7 +31,7 @@ This guidance targets the released Litestar 2.24.0 contract. Do not copy unrelea
 | Route Handlers & Controllers | `@get`/`@post`/`@put`/`@patch`/`@delete`, `Controller`, `Router`, layered config inheritance | [handlers.md](references/handlers.md) |
 | Parameters & Request Bodies | `FromPath`, `FromQuery`, `FromHeader`, `FromCookie`, `JSONBody`, `MsgPackBody`, `MultipartBody`, `URLEncodedBody`, `UploadFile` | [parameters.md](references/parameters.md) |
 | Domain Package Layout | `domains/<name>/` structure, sub-controllers, full-stack domain wiring | [layout.md](references/layout.md) |
-| DTOs & Boundary Contracts | `MsgspecDTO`, `SQLAlchemyDTO`, `DataclassDTO`, `DTOConfig`, `DTOData[T]`, `PatchDTO`, `SimpleDTO` | [dtos.md](references/dtos.md) |
+| DTOs & Boundary Contracts | `MsgspecDTO`, `SQLAlchemyDTO`, `DataclassDTO`, `PydanticDTO`, `DTOConfig`, `DTOData[T]`, `DTOField`, `Mark` | [dtos.md](references/dtos.md) |
 | OpenAPI & Schema UI | `OpenAPIConfig`, Scalar/Swagger/Redoc/Stoplight/RapiDoc plugins, `ResponseSpec`, `Operation`, security schemes | [openapi.md](references/openapi.md) |
 | Dependency Injection & Dishka | `Provide`, `NamedDependency[T]`, `SkipValidation[T]`, generator cleanup, `FromDishka[T]`, `setup_dishka` | [di-and-dishka.md](references/di-and-dishka.md) |
 | Authentication & Guards | `Guard` callables, `ASGIConnection`, `JWTAuth`, `JWTCookieAuth`, `SessionAuth`, OAuth2, RBAC & tenant guards | [auth-and-guards.md](references/auth-and-guards.md) |

@@ -22,6 +22,11 @@ RETIRED_TOKENS = (
     "team_parameter=",
     "TemplatesPlugin",
     "InertiaPlugin(",
+    "MCPAuthConfig",
+    "MCPAuthBackend",
+    "OIDCProviderConfig",
+    "DefaultJWKSCache",
+    "from litestar_mcp.auth",
 )
 RETIRED_GRANIAN_FLAGS = (
     "--threads",

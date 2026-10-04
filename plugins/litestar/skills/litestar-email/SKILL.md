@@ -1,6 +1,6 @@
 ---
 name: litestar-email
-description: "Auto-activate for litestar_email, EmailPlugin, EmailConfig, EmailService, EmailMessage, InMemoryBackend, SMTPConfig, ResendConfig, SendGridConfig, MailgunConfig, or SESConfig. Not for marketing APIs — use vendor SDKs."
+description: "Auto-activate for litestar_email, EmailPlugin, EmailConfig, EmailService, EmailMessage, SMTPConfig, ResendConfig, SendGridConfig, MailgunConfig, SESConfig. Not for marketing APIs — use vendor SDKs."
 ---
 
 # litestar-email
@@ -12,8 +12,9 @@ from the transport.
 
 ## Code Style Rules
 
-- Use `NamedDependency[EmailService]` for handler injection. The plugin
-  registers a named Litestar dependency, not a global service singleton.
+- Use `NamedDependency[EmailService]` with `Provide(email_config.provide_service().__aiter__)`
+  (or `FromDishka[EmailService]` when the project uses Dishka) for direct
+  `EmailService` handler injection.
 - Pass recipient collections as `list[str]`. `to`, `cc`, `bcc`, and `reply_to`
   are list fields.
 - Pass attachment content as `bytes`. Do file I/O before constructing the
@@ -85,15 +86,35 @@ email_config = EmailConfig(
 
 ### Inject `EmailService`
 
-The handler parameter name must match `email_service_dependency_key`:
+`EmailPlugin.on_app_init()` registers:
+
+- `Provide(config.provide_service, sync_to_thread=False)` under `email_service_dependency_key`;
+- `config.signature_namespace` (`BaseEmailBackend`, `EmailConfig`, `EmailMessage`,
+  `EmailMultiAlternatives`, `EmailService`, `MailgunConfig`, `ResendConfig`,
+  `SESConfig`, `SMTPConfig`, `SendGridConfig`) in Litestar's signature namespace;
+- the `EmailConfig` instance under `email_service_state_key` in app state.
+
+Because `EmailConfig.provide_service()` is a synchronous method returning an
+`AsyncServiceProvider` instance rather than an `async def` generator function,
+Litestar's default `Provide(config.provide_service, sync_to_thread=False)`
+injects `AsyncServiceProvider` rather than `EmailService`.
+
+To inject an open `EmailService` with request-scoped connection cleanup, bind
+`Provide(email_config.provide_service().__aiter__)` on the router, controller,
+or handler (or use Dishka's `FromDishka[EmailService]`):
 
 ```python
 from litestar import post
-from litestar.di import NamedDependency
-from litestar_email import EmailMessage, EmailService
+from litestar.di import NamedDependency, Provide
+from litestar_email import EmailConfig, EmailMessage, EmailService
+
+email_config = EmailConfig(backend="memory", from_email="noreply@example.com")
 
 
-@post("/notifications")
+@post(
+    "/notifications",
+    dependencies={"mailer": Provide(email_config.provide_service().__aiter__)},
+)
 async def send_notification(
     mailer: NamedDependency[EmailService],
 ) -> dict[str, int]:
@@ -107,11 +128,43 @@ async def send_notification(
     return {"sent": sent}
 ```
 
-`EmailPlugin.on_app_init()` registers:
+If using the plugin's default dependency directly without overriding
+`dependencies`, register `signature_types=[AsyncServiceProvider]`, annotate the
+parameter as `mailer: NamedDependency[AsyncServiceProvider]`, and enter
+`async with mailer as service:` inside the handler.
 
-- `config.provide_service` under `email_service_dependency_key`;
-- the public email types in Litestar's signature namespace;
-- the `EmailConfig` instance under `email_service_state_key` in app state.
+If the project uses Dishka, yield `EmailService` from a `Scope.REQUEST` provider
+and inject `FromDishka[EmailService]`:
+
+```python
+from collections.abc import AsyncIterator
+
+from dishka import Provider, Scope
+from dishka.integrations.litestar import FromDishka, inject
+from litestar import post
+from litestar_email import EmailConfig, EmailMessage, EmailService
+
+
+def build_email_provider(config: EmailConfig) -> Provider:
+    async def provide_mailer() -> AsyncIterator[EmailService]:
+        async with config.provide_service() as mailer:
+            yield mailer
+
+    provider = Provider(scope=Scope.REQUEST)
+    provider.provide(provide_mailer)
+    return provider
+
+
+@post("/welcome")
+@inject
+async def send_welcome(
+    email_service: FromDishka[EmailService],
+) -> dict[str, int]:
+    sent = await email_service.send_message(
+        EmailMessage(subject="Welcome", body="Hello!", to=["user@example.com"]),
+    )
+    return {"sent": sent}
+```
 
 App state does not contain a permanently open `EmailService`. Use
 `plugin.get_service(app.state)` or `config.get_service(app.state)` when code
@@ -251,8 +304,8 @@ async with config.provide_service() as mailer:
 Outside a service context, each `send_message()` or `send_messages()` call
 creates, opens, and closes a backend. Inside `config.provide_service()` or
 `async with EmailService(config)`, calls reuse one open backend until context
-exit. Litestar DI consumes the provider as an async iterator and performs the
-same cleanup.
+exit. When bound via `Provide(config.provide_service().__aiter__)` (or a Dishka
+request-scoped async generator), DI enters and closes that context per request.
 
 `send_messages([])` returns `0`. `send_message(message)` delegates to
 `send_messages([message])` and returns `0` or `1`.
@@ -341,13 +394,14 @@ For direct backend tests, use `backend = config.get_backend()` and await
 1. Inspect the project's existing provider, network policy, and dependency
    extras. Keep its backend unless the user asks to migrate.
 2. Build one `EmailConfig` with the selected backend config and default sender.
-3. Register `EmailPlugin(config=...)` and inject the configured dependency key
-   with `NamedDependency[EmailService]`.
+3. Register `EmailPlugin(config=...)` and wire handler DI with
+   `Provide(email_config.provide_service().__aiter__)` +
+   `NamedDependency[EmailService]` (or Dishka `FromDishka[EmailService]`).
 4. Construct `EmailMessage` with plain text. Add HTML through
    `attach_alternative()` or `EmailMultiAlternatives`.
 5. Load attachment bytes asynchronously, then call `attach()`.
-6. Reuse a service context for batches. Let Litestar DI manage request-scoped
-   service cleanup in handlers.
+6. Reuse a service context for batches. Let request-scoped DI manage service
+   cleanup in handlers.
 7. Use `backend="memory"` in tests and clear `InMemoryBackend.outbox` between
    tests.
 8. For slow or retryable delivery, use the queue system already present in the
@@ -362,9 +416,17 @@ For direct backend tests, use `backend = config.get_backend()` and await
 
 - Do not pass `html_body` to `EmailMessage`; only
   `EmailMultiAlternatives` defines that field.
+- Do not import nonexistent symbols such as `EmailAttachment`,
+  `FallbackConfig`, `RateLimitConfig`, or `RetryConfig`. Attachments are
+  `(filename, content_bytes, mimetype)` tuples added via `attach()` or
+  `attachments=[...]`.
 - Do not pass file paths as attachments. Pass
   `(filename, content_bytes, mimetype)` or call `attach()`.
 - Do not pass a string to `reply_to`; pass `list[str]`.
+- Do not annotate a route handler with `mailer: NamedDependency[EmailService]`
+  without binding `Provide(email_config.provide_service().__aiter__)` (or a
+  Dishka provider); `EmailPlugin`'s default `Provide(config.provide_service, sync_to_thread=False)`
+  returns `AsyncServiceProvider`.
 - Do not read app state as an open service by default. The plugin stores its
   `EmailConfig` there and derives services from it.
 - Do not configure a named API backend separately from its settings. Use
@@ -387,7 +449,7 @@ For direct backend tests, use `backend = config.get_backend()` and await
 - [ ] `litestar-email>=0.4.0` and the selected backend extra are installed.
 - [ ] `EmailPlugin(config=...)` is registered.
 - [ ] The handler name matches `email_service_dependency_key`.
-- [ ] Handler injection uses `NamedDependency[EmailService]`.
+- [ ] Handler injection binds `Provide(email_config.provide_service().__aiter__)` with `NamedDependency[EmailService]` (or uses Dishka `FromDishka[EmailService]`).
 - [ ] `EmailMessage` supplies `subject`, `body`, and a delivery recipient.
 - [ ] Attachments are byte triples and the selected backend supports them.
 - [ ] HTML content is stored in `alternatives`, not passed to `EmailMessage`.
@@ -409,13 +471,19 @@ from dataclasses import dataclass
 from html import escape
 
 from litestar import Litestar, post
-from litestar.di import NamedDependency
+from litestar.di import NamedDependency, Provide
 from litestar.params import JSONBody
 from litestar_email import (
     EmailConfig,
     EmailMessage,
     EmailPlugin,
     EmailService,
+)
+
+email_config = EmailConfig(
+    backend="memory",
+    from_email="notifications@example.com",
+    from_name="Example App",
 )
 
 
@@ -426,7 +494,10 @@ class Notification:
     text: str
 
 
-@post("/notifications")
+@post(
+    "/notifications",
+    dependencies={"mailer": Provide(email_config.provide_service().__aiter__)},
+)
 async def create_notification(
     data: JSONBody[Notification],
     mailer: NamedDependency[EmailService],
@@ -442,12 +513,6 @@ async def create_notification(
     )
     return {"sent": await mailer.send_message(message)}
 
-
-email_config = EmailConfig(
-    backend="memory",
-    from_email="notifications@example.com",
-    from_name="Example App",
-)
 
 app = Litestar(
     route_handlers=[create_notification],

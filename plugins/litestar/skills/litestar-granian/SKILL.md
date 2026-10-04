@@ -8,7 +8,7 @@ description: "Auto-activate for litestar_granian, GranianPlugin, litestar run Gr
 `litestar-granian` 0.16.0 replaces Litestar's `run` command with a
 supervised Granian command and bridges Litestar's active log formatter into
 Granian worker processes. It requires Granian 2.7.9 or later (the current
-lock uses 2.8.3).
+lock uses 2.8.4).
 
 ## Code Style Rules
 
@@ -50,7 +50,7 @@ JSON `dictConfig` (`--log-config`), and reconstructs matching `generic`
 (`_granian`) and `access` (`granian.access`) formatters inside Granian worker
 processes.
 
-### Defaults in 0.16.0 / Granian 2.8.3
+### Defaults in 0.16.0 / Granian 2.8.4
 
 | Concern | Default |
 | --- | --- |
@@ -135,6 +135,25 @@ app = Litestar(route_handlers=[health], plugins=[GranianPlugin(static="auto")])
 ### Metrics and Observability
 
 Metrics are off by default and are controlled only by `--metrics` / `--no-metrics`. `--metrics` exposes Granian server and worker metrics only at `http://<metrics-address>:<metrics-port>/metrics`. When no Litestar Prometheus middleware is detected, the command warns that application-level request metrics are not being exported — register Litestar's `PrometheusPlugin` alongside it when request metrics are desired.
+
+### Proxy Headers (`granian.utils.proxies`)
+
+Granian does not expose `--proxy-headers` or `--forwarded-allow-ips` CLI flags. When running behind a reverse proxy that sets `X-Forwarded-For` and `X-Forwarded-Proto`, register `granian.utils.proxies.wrap_asgi_with_proxy_headers` on `Litestar(middleware=[...])`:
+
+```python
+from functools import partial
+from granian.utils.proxies import wrap_asgi_with_proxy_headers
+from litestar import Litestar
+from litestar_granian import GranianPlugin
+
+app = Litestar(
+    route_handlers=[health],
+    plugins=[GranianPlugin()],
+    middleware=[
+        partial(wrap_asgi_with_proxy_headers, trusted_hosts=["127.0.0.1", "10.0.0.0/8"]),
+    ],
+)
+```
 
 ### Programmatic / Embedded Runtime
 
@@ -273,7 +292,8 @@ WebSocket endpoints, and load-test production capacity settings.
   `blocking_threads` to `1` on ASGI/RSGI and rejects `--blocking-threads > 1` with `ConfigurationError`.
 - **Do not attempt `--reload` or `--workers-max-rss` on free-threaded Python.**
   Free-threaded Python builds (GIL disabled) reject these flags with `UsageError`.
-- **Do not expect HTTP/3 support.** Granian 2.8.3 supports HTTP/1.1 and HTTP/2; terminate HTTP/3 at an external proxy.
+- **Do not expect HTTP/3 support.** Granian 2.8.4 supports HTTP/1.1 and HTTP/2; terminate HTTP/3 at an external proxy.
+- **Do not pass Uvicorn proxy flags.** Use `granian.utils.proxies.wrap_asgi_with_proxy_headers` instead of `--proxy-headers` or `--forwarded-allow-ips`.
 
 </guardrails>
 
@@ -359,7 +379,7 @@ application-level request metrics.
 - [v0.16.0 plugin implementation](https://github.com/cofin/litestar-granian/blob/v0.16.0/litestar_granian/plugin.py)
 - [v0.16.0 changelog](https://github.com/cofin/litestar-granian/blob/v0.16.0/docs/changelog.rst)
 - [litestar-granian 0.16.0 on PyPI](https://pypi.org/project/litestar-granian/0.16.0/)
-- [granian v2.8.3 repository](https://github.com/emmett-framework/granian/tree/v2.8.3)
+- [granian v2.8.4 repository](https://github.com/emmett-framework/granian/tree/v2.8.4)
 - [granian documentation](https://granian.readthedocs.io/)
 
 ## Shared Styleguide Baseline

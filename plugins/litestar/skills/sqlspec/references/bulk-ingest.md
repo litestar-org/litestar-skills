@@ -2,7 +2,7 @@
 
 ## Overview
 
-SQLSpec `v0.64.0` exposes adapter-gated bulk ingest and export through four storage bridge methods:
+SQLSpec `v0.65.0` exposes adapter-gated bulk ingest and export through four storage bridge methods:
 
 - `load_from_arrow(table, source, *, overwrite=False)` -- load an Arrow table or coercible Arrow source.
 - `load_from_storage(table, source, *, file_format, overwrite=False)` -- load a local path, registered alias, or cloud URI.
@@ -44,12 +44,12 @@ Records normalize to Arrow and route through the adapter's `load_from_arrow()` p
 | `psqlpy` | Binary `COPY` with `INSERT` fallback | Always on |
 | `adbc` | `adbc_ingest` | Driver-dependent; Flight SQL may fall back per row |
 | `duckdb` | Register Arrow table (`INSERT ... SELECT`); direct `COPY` / `read_parquet` / `read_csv` / `read_json_auto` for `s3://`, `gs://`, `gcs://`, `r2://` when native secrets are configured | Falls back to `SyncStoragePipeline` when DuckDB native object-store secrets are not configured |
-| `sqlite` / `aiosqlite` | `executemany` in one `BEGIN IMMEDIATE` | Atomic when the driver owns the transaction |
+| `sqlite` / `aiosqlite` | Chunked `executemany` (`batch_size=10000` default) in one `BEGIN IMMEDIATE` | Atomic when the driver owns the transaction; rolls back writes on failure or cancellation |
 | `oracledb` | Direct path load in Thin mode; `executemany` fallback | Set `enable_direct_path_load=False` to force fallback |
 | `pymysql`, `asyncmy`, `aiomysql`, `mysqlconnector` | `executemany`; opt-in `LOAD DATA LOCAL INFILE` | Requires feature and connection local-infile gate |
-| `bigquery` | Parquet load job; optional Storage Write API for appends; `select_to_storage` via `EXPORT DATA` to `gs://` | `enable_storage_write_api`; `overwrite=True` uses Parquet `WRITE_TRUNCATE`; `select_to_storage` requires `gs://` destination |
-| `spanner` | `insert_or_update` mutations; optional Batch Write API | `enable_batch_write_api`; Batch Write commits groups independently |
-| `mssql_python` | `cursor.bulkcopy()` | Driver-managed |
+| `bigquery` | Parquet load job; optional Storage Write API (`storage_write_stream_type="PENDING" \| "COMMITTED"`, default `"PENDING"`); `select_to_storage` via `EXPORT DATA` | `enable_storage_write_api`; `overwrite=True` uses Parquet `WRITE_TRUNCATE`; `enable_native_storage=True` (with `native_export_connection` for S3/Azure exports) |
+| `spanner` | `insert_or_update` mutations; optional Batch Write API (including from read sessions) | `enable_batch_write_api`; Batch Write commits groups independently |
+| `mssql_python` | `cursor.bulkcopy()` for Arrow tables and streams | Supports `batch_size`, `timeout`, `table_lock`, `check_constraints`, `fire_triggers`, `keep_identity`, `keep_nulls`, `use_internal_transaction`, `column_mappings` |
 | `arrow_odbc` | `bulk_insert_arrow` | Driver-managed |
 
 ---
@@ -64,7 +64,7 @@ MySQL `LOAD DATA LOCAL INFILE` reads client-side files. Enable it only when the 
 
 Oracle direct path load is the default in Thin mode when the connection exposes the Direct Path Load API. Thick-mode or unsupported connections fall back to `executemany()`.
 
-BigQuery Storage Write API is append-only in this surface. `overwrite=True` uses a Parquet load job instead.
+BigQuery Storage Write API is append-only in this surface (`storage_write_stream_type="PENDING"` commits atomically; `"COMMITTED"` streams immediately). `overwrite=True` uses a Parquet load job instead.
 
 Spanner Batch Write API uses independently committed mutation groups. Treat it as high-throughput idempotent upsert behavior, not as a single transaction.
 

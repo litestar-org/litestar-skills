@@ -63,12 +63,25 @@ If you mix backends (Pydantic for HTTP boundaries, msgspec for internal events),
 
 ## Parametrizing handler tests via `coverage()`
 
-For handlers that accept tagged unions or polymorphic DTOs, `coverage()` produces a minimal set that covers the supported forms. Drive `parametrize` with it to exercise each dispatch path:
+For handlers that accept DTOs containing union or tagged-union fields, `coverage()` produces a minimal set of DTO instances that covers the supported field variants. Drive `parametrize` with it to exercise each dispatch path:
 
 ```python
+import msgspec
 import pytest
+from litestar.testing import AsyncTestClient
+from polyfactory.factories.msgspec_factory import MsgspecFactory
 
-# myapp/dtos.py exports CreateOrderDTO = CreateRetailOrder | CreateWholesaleOrder
+
+class RetailOrderLine(msgspec.Struct, tag="retail"):
+    sku: str
+
+
+class WholesaleOrderLine(msgspec.Struct, tag="wholesale"):
+    bulk_sku: str
+
+
+class CreateOrderDTO(msgspec.Struct):
+    line: RetailOrderLine | WholesaleOrderLine
 
 
 class CreateOrderDTOFactory(MsgspecFactory[CreateOrderDTO]):
@@ -77,8 +90,11 @@ class CreateOrderDTOFactory(MsgspecFactory[CreateOrderDTO]):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("payload", list(CreateOrderDTOFactory.coverage()))
-async def test_create_order_all_variants(client: AsyncTestClient, payload) -> None:
-    response = await client.post("/orders", json=payload)
+async def test_create_order_all_variants(
+    client: AsyncTestClient,
+    payload: CreateOrderDTO,
+) -> None:
+    response = await client.post("/orders", json=msgspec.to_builtins(payload))
     assert response.status_code in (201, 202)
 ```
 

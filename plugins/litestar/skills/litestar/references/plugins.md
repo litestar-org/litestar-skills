@@ -123,11 +123,15 @@ class FeaturePlugin(InitPlugin, CLIPlugin):
 Handlers can then inject `FeaturePlugin` directly as a typed dependency or look it up via `request.app.plugins.get(FeaturePlugin)`:
 
 ```python
+from litestar import Controller, get
+from litestar.di import NamedDependency
+
+
 class FeatureController(Controller):
     """Controller consuming FeaturePlugin via DI."""
 
     @get("/feature")
-    async def status(self, feature_plugin: FeaturePlugin) -> dict[str, bool]:
+    async def status(self, feature_plugin: NamedDependency[FeaturePlugin]) -> dict[str, bool]:
         return {"key_set": feature_plugin.config.api_key is not None}
 ```
 
@@ -272,7 +276,7 @@ app = Litestar(plugins=[structlog_plugin])
 Converts `ProblemDetailsException` (and optionally all `HTTPException` subclasses or mapped custom exceptions) into RFC 9457 `application/problem+json` responses:
 
 ```python
-from litestar import Litestar, Request
+from litestar import Litestar
 from litestar.plugins.problem_details import (
     ProblemDetailsConfig,
     ProblemDetailsException,
@@ -281,7 +285,6 @@ from litestar.plugins.problem_details import (
 
 
 def domain_error_to_problem_details(
-    request: Request,
     exc: ValueError,
 ) -> ProblemDetailsException:
     """Map a ValueError into an RFC 9457 ProblemDetailsException."""
@@ -290,7 +293,6 @@ def domain_error_to_problem_details(
         title="Invalid domain value",
         detail=str(exc),
         type_="https://example.com/probs/invalid-value",
-        instance=request.url.path,
     )
 
 
@@ -318,9 +320,9 @@ Provides session-backed flash messaging for server-rendered templates (`JinjaTem
 from pathlib import Path
 
 from litestar import Litestar, Request, post
-from litestar.contrib.jinja import JinjaTemplateEngine
 from litestar.middleware.session.server_side import ServerSideSessionConfig
 from litestar.plugins.flash import FlashConfig, FlashPlugin, flash, get_flashes
+from litestar.plugins.jinja import JinjaTemplateEngine
 from litestar.response import Redirect
 from litestar.template import TemplateConfig
 

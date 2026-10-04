@@ -238,7 +238,7 @@ async def test_inline_async_app() -> None:
         assert resp.status_code == 200
 ```
 
-Both helpers accept a single handler, `Controller` subclass, `Router`, or sequence of them as `route_handlers` (default `None`), plus keyword-only arguments matching `Litestar(...)` (`dependencies`, `guards`, `middleware`, `plugins`, `stores`, `state`, `on_startup`, `on_shutdown`, `lifespan`, `exception_handlers`, `dto`, `return_dto`, `template_config`, `static_files_config`, `cors_config`, `csrf_config`, `compression_config`, `allowed_hosts`, `response_cache_config`, `logging_config`, `openapi_config`, `opt`, `parameters`, `path`, `security`, `tags`, `signature_namespace`, `signature_types`, `type_encoders`, `request_class`, `response_class`, `websocket_class`, `response_cookies`, `response_headers`, `before_request`, `after_request`, `after_response`, `before_send`, `after_exception`, `on_app_init`, `listeners`, `cache_control`, `etag`, `include_in_schema`, `multipart_form_part_limit=1000`, `pdb_on_exception`, `experimental_features`, `debug=True`) and test-client options (`backend="asyncio"`, `backend_options=None`, `base_url="http://testserver.local"`, `raise_server_exceptions=True`, `root_path=""`, `session_config=None`, `timeout=None`).
+Both helpers accept a single handler, `Controller` subclass, `Router`, or sequence of them as `route_handlers` (default `None`), plus keyword-only arguments matching `Litestar(...)` (`dependencies`, `guards`, `middleware`, `plugins`, `stores`, `state`, `on_startup`, `on_shutdown`, `lifespan`, `exception_handlers`, `dto`, `return_dto`, `template_config`, `static_files_config`, `cors_config`, `csrf_config`, `compression_config`, `allowed_hosts`, `response_cache_config`, `logging_config`, `openapi_config`, `opt`, `parameters`, `path`, `security`, `tags`, `signature_namespace`, `signature_types`, `type_encoders`, `request_class`, `response_class`, `websocket_class`, `response_cookies`, `response_headers`, `before_request`, `after_request`, `after_response`, `before_send`, `after_exception`, `on_app_init`, `listeners`, `event_emitter_backend`, `cache_control`, `etag`, `include_in_schema`, `multipart_form_part_limit=1000`, `pdb_on_exception`, `experimental_features`, `debug=True`) and test-client options (`backend="asyncio"`, `backend_options=None`, `base_url="http://testserver.local"`, `raise_server_exceptions=True`, `root_path=""`, `session_config=None`, `timeout=None`).
 
 ### Dependency Replacements (Native `Provide` and Dishka)
 
@@ -272,11 +272,11 @@ async def test_with_fake_service() -> None:
         assert response.status_code == 200
 ```
 
-When using Dishka, pass a test `Provider` subclass after the production providers in `make_async_container(AppProvider(), TestProvider())` before calling `setup_dishka(container=container, app=app)`. For full-application tests, make the application factory accept a dependency map or extra Dishka providers and return a new `Litestar` instance. Never mutate a shared app between tests.
+When using Dishka, decorate route handlers with `@inject` (or `@inject_websocket` / register on a `DishkaRouter` from `dishka.integrations.litestar`) and pass a test `Provider` subclass after `LitestarProvider()` and the production providers in `make_async_container(LitestarProvider(), AppProvider(), TestProvider())` before calling `setup_dishka(container=container, app=app)`. For full-application tests, make the application factory accept a dependency map or extra Dishka providers and return a new `Litestar` instance. Never mutate a shared app between tests.
 
 ### Session Helpers (`set_session_data` / `get_session_data`)
 
-Pass `session_config` (`ServerSideSessionConfig` or `CookieBackendConfig`) to both `middleware=[session_config.middleware]` and the test client's `session_config=session_config` parameter:
+Pass `session_config` (`ServerSideSessionConfig` from `litestar.middleware.session.server_side` or `CookieBackendConfig` from `litestar.middleware.session.client_side`) to both `middleware=[session_config.middleware]` and the test client's `session_config=session_config` parameter:
 
 ```python
 import pytest
@@ -305,7 +305,7 @@ async def test_session_helpers() -> None:
         assert await client.get_session_data() == {"user": "alice"}
 ```
 
-### WebSocket Sessions (`websocket_connect` / `WebSocketTestSession`)
+### WebSocket, SSE, and `ChannelsPlugin` Sessions
 
 On `AsyncTestClient`, `websocket_connect` is `async def`, returning a `WebSocketTestSession` that is a **synchronous** context manager (`with await client.websocket_connect(...) as ws:`). On `TestClient`, `websocket_connect` is synchronous (`with client.websocket_connect(...) as ws:`).
 
@@ -331,13 +331,16 @@ async def test_websocket_session() -> None:
 
 Available `WebSocketTestSession` methods:
 
-- `send(data, mode="text", encoding="utf-8")`, `send_text(data)`, `send_bytes(data)`, `send_json(data, mode="text")`, `send_msgpack(data)`
+- `send(data, mode="text", encoding="utf-8")`, `send_text(data, encoding="utf-8")`, `send_bytes(data, encoding="utf-8")`, `send_json(data, mode="text")`, `send_msgpack(data)`
 - `receive(block=True, timeout=None)`, `receive_text(block=True, timeout=None)`, `receive_bytes(block=True, timeout=None)`, `receive_json(mode="text", block=True, timeout=None)`, `receive_msgpack(block=True, timeout=None)`
 - `close(code=WS_1000_NORMAL_CLOSURE)` — if the server closes the connection, `receive*()` raises `WebSocketDisconnect`.
+- For `ServerSentEvent` endpoints, stream lines via `async with client.stream("GET", "/sse") as resp:` and `[line async for line in resp.aiter_lines() if line]`.
+- For `ChannelsPlugin` (`from litestar.channels import ChannelsPlugin`, `from litestar.channels.backends.memory import MemoryChannelsBackend`), enter `async with AsyncTestClient(app=app) as client:` so the plugin lifespan starts the backend, then publish via `channels_plugin.publish(data, channels=[...])` (or `await channels_plugin.wait_published(...)`) and consume via `websocket_connect` or `async with channels_plugin.start_subscription([...]) as subscriber:`.
 
 ### `RequestFactory` and Subprocess Clients
 
 - Use `RequestFactory` (`from litestar.testing import RequestFactory`) to build `Request` objects (`.get()`, `.post()`, `.put()`, `.patch()`, `.delete()`) with `user`, `auth`, `session`, `state`, `headers`, `cookies`, `query_params`, `path_params`, and `data` for unit-testing Guards or dependencies directly without ASGI transport overhead.
+- `ASGIConnection.app` / `request.app` reads `request.scope["litestar_app"]` (not `request.scope["app"]`). `RequestFactory(app=app)` populates `scope["litestar_app"] = app` automatically; if constructing a synthetic `Request(scope={...})` directly without `RequestFactory`, always set `"litestar_app": app` in `scope`.
 - Use `subprocess_async_client(workdir, app, capture_output=True)` or `subprocess_sync_client(workdir, app, capture_output=True)` (`from litestar.testing import subprocess_async_client, subprocess_sync_client`) to boot `litestar --app <app> run` in a background subprocess and yield a live `httpx.AsyncClient` / `httpx.Client`.
 
 ## Tagged source

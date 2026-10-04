@@ -96,7 +96,7 @@ Native paths:
 - `asyncpg` / `cockroach_asyncpg`: cursors inside a stream-owned transaction.
 - `pymysql`, `aiomysql`, `asyncmy`: `SSCursor`.
 - `mysqlconnector`: unbuffered cursors.
-- `sqlite`, `aiosqlite`, `oracledb`: chunked `fetchmany()`.
+- `sqlite`, `aiosqlite`, `oracledb`, `db2`: chunked `fetchmany()`.
 - `psqlpy`: server-side cursor with `array_size`.
 - `bigquery`: page-wise result iteration.
 - `adbc`: partitioned Arrow readers.

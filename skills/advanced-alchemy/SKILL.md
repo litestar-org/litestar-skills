@@ -1,6 +1,6 @@
 ---
 name: advanced-alchemy
-description: "Auto-activate for advanced_alchemy, alembic/, SQLAlchemyAsyncRepositoryService, SQLAlchemyAsyncConfig, repository_type, service_class, filters, or storage. Not for raw SQLAlchemy without Advanced Alchemy."
+description: "Auto-activate for advanced_alchemy, alembic/, SQLAlchemyAsyncRepositoryService, SQLAlchemyAsyncConfig, repository_type, service_class, filters, or storage. Not for raw SQLAlchemy — use sqlspec."
 ---
 
 # Advanced Alchemy
@@ -117,7 +117,11 @@ Use `SQLAlchemyPlugin` (composite of `SQLAlchemyInitPlugin` + `SQLAlchemySeriali
 - **`SQLAlchemyDTO`**: generates Litestar DTOs directly from ORM models with `include`/`exclude` field control
 - **Type encoders**: automatic serialization of `datetime`, `UUID`, `Decimal`, `Enum`, and custom column types
 - **Exception handling**: `set_default_exception_handler=True` (the default)
-  registers `RepositoryError` handling through the plugin
+  registers `RepositoryError: exception_to_http_response` on the app — unless
+  `Litestar(exception_handlers={...})` contains any integer status-code key
+  (`500`, `404`, etc.), in which case `SQLAlchemyInitPlugin` skips default
+  registration and you must register `RepositoryError: exception_to_http_response`
+  explicitly
 
 <workflow>
 
@@ -164,6 +168,7 @@ config option before the command:
   a process restart.
 - **Use `get_many()` and `get_many_and_count()`.** `list()` and
   `list_and_count()` are deprecated until 2.0.
+- **Explicitly register `RepositoryError: exception_to_http_response` when using integer status-code `exception_handlers` in Litestar.** `SQLAlchemyInitPlugin` skips its default `RepositoryError` handler whenever any `int` key (`500`, `404`, etc.) is present in `Litestar(exception_handlers={...})`.
 
 </guardrails>
 
