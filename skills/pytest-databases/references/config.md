@@ -1,7 +1,8 @@
 # Configuration
 
 Configuration is fixture-first. Override the package's session-scoped fixture
-with the same name in `conftest.py`.
+with the same name in `conftest.py`. Version 0.19.0 registers no custom
+`pytest` CLI flags (`pytest_addoption`).
 
 ## Override fixtures
 
@@ -45,8 +46,8 @@ Other configuration values are fixture overrides. For example, override
 
 ## Host-port pinning
 
-Leave port fixtures as `None` to use dynamic host ports. Pin a port only for a
-runtime constraint:
+Leave PostgreSQL-family port fixtures as `None` to use dynamic host ports. Pin
+a port only for a runtime constraint:
 
 ```python
 import pytest
@@ -58,6 +59,11 @@ def pgvector_18_port() -> int:
 ```
 
 The environment equivalent is `PGVECTOR_18_PORT=55432`.
+
+Only the PostgreSQL-family `*_port` fixtures pass `host_port` into
+`DockerService.run(...)`. By contrast, `redis_port`, `dragonfly_port`,
+`keydb_port`, and `valkey_port` are read-only helper fixtures that return
+`*_service.port` after the container starts.
 
 If a container with the generated name is already running, its existing
 mapping wins. Start a clean test session when verifying a new pin.

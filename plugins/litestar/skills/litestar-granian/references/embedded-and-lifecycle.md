@@ -189,3 +189,27 @@ litestar --app app:app run \
 - **Exposed Data:** Rust runtime performance, TCP connection counts, in-flight backpressure queues, HTTP/1 & HTTP/2 stream counts, and worker memory metrics.
 - **Endpoint:** Serves Prometheus metrics on `http://<metrics-address>:<metrics-port>/metrics`.
 - **Application Request Metrics:** `--metrics` exports server-level metrics only. When enabled without Litestar's `PrometheusPlugin` or `PrometheusMiddleware`, `litestar run` prints a warning that application-level request metrics are not being exported. Register Litestar's `PrometheusPlugin` on the `Litestar` application to export route-level request metrics.
+
+---
+
+## Reverse Proxy Headers (`granian.utils.proxies`)
+
+Granian does not expose `--proxy-headers` or `--forwarded-allow-ips` CLI options. Instead, `granian.utils.proxies` provides `wrap_asgi_with_proxy_headers` (and `wrap_wsgi_with_proxy_headers` for WSGI):
+
+```python
+from functools import partial
+from granian.utils.proxies import wrap_asgi_with_proxy_headers
+from litestar import Litestar
+from litestar_granian import GranianPlugin
+
+app = Litestar(
+    route_handlers=[],
+    plugins=[GranianPlugin()],
+    middleware=[
+        partial(wrap_asgi_with_proxy_headers, trusted_hosts=["127.0.0.1", "10.0.0.0/8"]),
+    ],
+)
+```
+
+- `trusted_hosts: list[str] | str = "127.0.0.1"` accepts individual IPs, CIDR networks (`"10.0.0.0/8"`), literal hostnames, comma-separated strings, or `"*"` / `["*"]`.
+- When the immediate peer IP (`scope["client"][0]`) matches `trusted_hosts`, the wrapper extracts the client IP from `X-Forwarded-For` (`scope["client"] = (host, 0)`) and updates `scope["scheme"]` from `X-Forwarded-Proto` (`http`, `https`, `ws`, `wss`, normalizing `http`/`https` to `ws`/`wss` on `websocket` scopes).

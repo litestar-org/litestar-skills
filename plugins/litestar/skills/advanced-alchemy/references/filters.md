@@ -380,42 +380,36 @@ filter_deps = create_filter_dependencies(
         "id_field": "id",
         "search": {"name", "email"},
         "search_ignore_case": True,
-        "search_escape_wildcards": True,
         "created_at": True,
         "updated_at": True,
         "pagination_type": "limit_offset",
         "pagination_size": 20,
         "sort_field": "created_at",
         "sort_order": "desc",
-        "sort_nulls": "last",
         "in_fields": {FieldNameType(name="team_id", type_hint=UUID)},
         "not_in_fields": {"role"},
         "boolean_fields": {"is_active", "is_verified"},
         "choice_fields": [ChoiceField(name="status", choices=("active", "pending", "suspended"))],
-        "alias_generator": "camel_case",
     }
 )
 ```
 
-| `FilterConfig` Key | Type | Generated Query Parameter(s) (default / `camel_case`) |
+| `FilterConfig` Key | Type | Generated Query Parameter(s) |
 | --- | --- | --- |
 | `id_filter` | `type[UUID \| int \| str]` | `ids` |
 | `id_field` | `str` (default `"id"`) | Target model column for `id_filter` |
 | `search` | `str \| set[str] \| list[str]` | `searchString` |
 | `search_ignore_case` | `bool` | `searchIgnoreCase` |
-| `search_escape_wildcards` | `bool` | Escapes `%` and `_` in `SearchFilter` (unreleased `main` after 1.11.0) |
 | `created_at` | `bool` | `createdBefore`, `createdAfter` |
 | `updated_at` | `bool` | `updatedBefore`, `updatedAfter` |
 | `pagination_type` | `Literal["limit_offset"]` | `currentPage`, `pageSize` |
 | `pagination_size` | `int` (default `20`) | Default `pageSize` value |
 | `sort_field` | `str \| set[str] \| list[str]` | `orderBy` |
 | `sort_order` | `Literal["asc", "desc"]` | `sortOrder` |
-| `sort_nulls` | `Literal["first", "last"] \| None` | Pins `NULL` sort placement on `OrderBy` (unreleased `main` after 1.11.0) |
-| `in_fields` | `FieldNameConfig` | `<field>In` (or `<field>_in` with `snake_case`) |
-| `not_in_fields` | `FieldNameConfig` | `<field>NotIn` (or `<field>_not_in` with `snake_case`) |
-| `boolean_fields` | `FieldNameConfig` | `<field>` boolean query param |
+| `in_fields` | `FieldNameConfig` | `<field>In` (camelCase, e.g. `teamIdIn`) |
+| `not_in_fields` | `FieldNameConfig` | `<field>NotIn` (camelCase, e.g. `roleNotIn`) |
+| `boolean_fields` | `FieldNameConfig` | `<field>` boolean query param (camelCase, e.g. `isActive`) |
 | `choice_fields` | `ChoiceFieldConfig` | `<field>` literal choice query param (`ChoiceField(name, choices)` or `(name, choices)`) |
-| `alias_generator` | `"snake_case" \| "camel_case" \| Callable[[str], str]` | Transforms generated query parameter names (`page_size` vs `pageSize`) (unreleased `main` after 1.11.0) |
 
 ### Using in Litestar Routes
 

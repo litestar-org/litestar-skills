@@ -4,8 +4,11 @@ import sys
 from importlib.metadata import version
 from pathlib import Path
 
+import litestar_autowire
 import pytest
-from litestar import Litestar
+from dishka import Provider, Scope, make_async_container
+from dishka.integrations.litestar import setup_dishka
+from litestar import Litestar, Router
 from litestar.testing import TestClient
 from litestar_autowire import (
     AutowireConfig,
@@ -25,9 +28,55 @@ from litestar_autowire import (
 )
 
 
+class _ContractGreetingService:
+    """Simple runtime service used to verify Dishka controller wiring."""
+
+    def greet(self) -> str:
+        """Return a static greeting payload."""
+        return "hello"
+
+
+def _make_contract_greeting_provider() -> Provider:
+    """Build a request-scoped Dishka provider for _ContractGreetingService."""
+    provider = Provider(scope=Scope.REQUEST)
+    provider.provide(_ContractGreetingService)
+    return provider
+
+
 def test_litestar_autowire_020_version_and_exports() -> None:
-    """Verify installed version and public symbol exports for litestar-autowire 0.2.0."""
+    """Verify installed version and exact public symbol exports for litestar-autowire 0.2.0."""
     assert version("litestar-autowire") == "0.2.0"
+    assert set(litestar_autowire.__all__) == {
+        "AutowireConfig",
+        "AutowireContext",
+        "AutowireIntegration",
+        "AutowireLoader",
+        "AutowirePlugin",
+        "DishkaIntegration",
+        "QueuesIntegration",
+        "__project__",
+        "__version__",
+        "clear_autowire_cache",
+        "discover_controllers",
+        "discover_feature_packages",
+        "discover_listeners",
+        "discover_queue_tasks",
+        "find_controllers_in_module",
+        "find_listeners_in_module",
+    }
+    for absent_symbol in (
+        "AutowireRegistry",
+        "DomainMetadata",
+        "DiscoveredCLI",
+        "DiscoveredController",
+        "DiscoveredJob",
+        "DiscoveredProvider",
+        "DiscoveredSchema",
+        "DiscoveredSignal",
+        "LitestarQueuesIntegration",
+        "SAQIntegration",
+    ):
+        assert not hasattr(litestar_autowire, absent_symbol)
     assert all(
         symbol is not None
         for symbol in (
@@ -153,5 +202,113 @@ async def on_account_created() -> None:
         assert response.status_code == 200
         assert response.json() == {"domain": "accounts"}
         assert loaded_modules == ["autowire_contract_app.domains.accounts.handlers"]
+    finally:
+        clear_autowire_cache()
+
+
+def test_litestar_autowire_020_dishka_router_mutation_and_future_annotations_gotchas(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify DishkaIntegration router selection, get_route_handlers mutation, and future annotations behavior."""
+    clear_autowire_cache()
+    domain_dir = tmp_path / "autowire_dishka_app" / "domains" / "greetings"
+    domain_dir.mkdir(parents=True)
+
+    (domain_dir / "controllers.py").write_text(
+        f"""
+from __future__ import annotations
+
+from dishka import FromDishka
+from litestar import Controller, get
+from {__name__} import _ContractGreetingService
+
+
+class GreetingController(Controller):
+    path = "/greetings"
+
+    @get()
+    async def greet(self, service: FromDishka[_ContractGreetingService]) -> dict[str, str]:
+        return {{"greeting": service.greet()}}
+
+
+class PlainController(Controller):
+    path = "/plain"
+
+    @get()
+    async def index(self) -> dict[str, str]:
+        return {{"plain": "ok"}}
+""",
+        encoding="utf-8",
+    )
+
+    broken_dir = tmp_path / "autowire_broken_dishka_app" / "domains" / "broken"
+    broken_dir.mkdir(parents=True)
+    (broken_dir / "controllers.py").write_text(
+        """
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+from dishka import FromDishka
+from litestar import Controller, get
+
+if TYPE_CHECKING:
+    class TypeCheckingOnlyService:
+        pass
+
+
+class BrokenController(Controller):
+    path = "/broken"
+
+    @get()
+    async def broken(self, service: FromDishka[TypeCheckingOnlyService]) -> dict[str, str]:
+        return {"broken": "never"}
+""",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
+
+    try:
+        discovered = discover_controllers(["autowire_dishka_app.domains"])
+        plain_cls = next(cls for cls in discovered if cls.__name__ == "PlainController")
+        assert "get_route_handlers" not in plain_cls.__dict__
+
+        with pytest.MonkeyPatch.context() as inner_mp:
+            inner_mp.setattr(plain_cls, "get_route_handlers", plain_cls.get_route_handlers)
+            dishka_app = Litestar(
+                plugins=[
+                    AutowirePlugin(
+                        AutowireConfig(
+                            domain_packages=["autowire_dishka_app.domains"],
+                            integrations=["dishka"],
+                        )
+                    )
+                ]
+            )
+            setup_dishka(make_async_container(_make_contract_greeting_provider()), dishka_app)
+            assert "get_route_handlers" in plain_cls.__dict__
+            with TestClient(app=dishka_app) as client:
+                assert client.get("/greetings").json() == {"greeting": "hello"}
+                assert client.get("/plain").json() == {"plain": "ok"}
+
+        assert "get_route_handlers" not in plain_cls.__dict__
+        plain_app = Litestar(
+            route_handlers=[Router(path="/", route_handlers=[plain_cls])],
+        )
+        with TestClient(app=plain_app) as client:
+            assert client.get("/plain").json() == {"plain": "ok"}
+
+        with pytest.raises(NameError, match="TypeCheckingOnlyService"):
+            Litestar(
+                plugins=[
+                    AutowirePlugin(
+                        AutowireConfig(
+                            domain_packages=["autowire_broken_dishka_app.domains"],
+                            integrations=["dishka"],
+                        )
+                    )
+                ]
+            )
     finally:
         clear_autowire_cache()

@@ -4,7 +4,7 @@ SQLSpec ships a native database migration runner that reuses the `SQLFileLoader`
 
 ## Concept: sqlspec vs Alembic
 
-Alembic targets SQLAlchemy metadata diffs and drives autogeneration off ORM models. SQLSpec's runner is adapter-agnostic and knows nothing about ORMs: each migration is raw SQL (or Python returning SQL strings) and the runner executes it through your configured driver. That means you get multi-dialect execution (PostgreSQL, Oracle, SQLite, DuckDB, BigQuery, Spanner, MySQL) from the same codebase, and you can ship extension-provided migrations alongside your own.
+Alembic targets SQLAlchemy metadata diffs and drives autogeneration off ORM models. SQLSpec's runner is adapter-agnostic and knows nothing about ORMs: each migration is raw SQL (or Python returning SQL strings) and the runner executes it through your configured driver. That means you get multi-dialect execution (PostgreSQL, Oracle, SQLite, DuckDB, BigQuery, Spanner, MySQL, SQL Server, IBM Db2) from the same codebase, and you can ship extension-provided migrations alongside your own.
 
 ## CLI Surface
 
@@ -93,7 +93,7 @@ Python migrations receive a `MigrationContext` that exposes `context.config` (th
 
 ## Version Tracking
 
-The runner stores applied versions in a tracking table (default name `ddl_migrations`, overridable via `migration_config["version_table_name"]`). `sqlspec.migrations.tracker.AsyncMigrationTracker` / `SyncMigrationTracker` own the schema and expose:
+The runner stores applied versions in a tracking table (default name `ddl_migrations`, overridable via `migration_config["version_table_name"]`, including schema-qualified and quoted identifiers such as `"app_schema"."DdlMigrations"`). `sqlspec.migrations.tracker.AsyncMigrationTracker` / `SyncMigrationTracker` own the schema and expose:
 
 - `ensure_tracking_table(driver)` — create the table if missing; auto-migrate the schema if columns have been added upstream.
 - `record_migration(driver, version, description, duration_ms, applied_by)` — insert a row when an upgrade succeeds.

@@ -67,16 +67,18 @@ CMD ["litestar", "workers", "run"]
 
 Set `SAQ_USE_SERVER_LIFESPAN=false` in both web and worker containers when running dedicated worker processes. This tells SAQ to manage its own lifecycle (Redis connections, signal handling) rather than piggybacking on the Litestar HTTP server lifespan. See [`../../litestar-saq/SKILL.md`](../../litestar-saq/SKILL.md).
 
-### Option B: `litestar-queues` (SQLSpec / SQLAlchemy / Event Streams)
+### Option B: `litestar-queues` (SQLSpec / Advanced Alchemy / Redis / Valkey / Event Streams)
 
-`litestar-queues` exposes four CLI entry points under `litestar queues`:
+`litestar-queues` exposes six CLI entry points under `litestar queues` (persistent queue backends only — `memory` and `ephemeral` backends are rejected by standalone CLI commands):
 
 | Command | Deployment Role | Key Flags |
 | --- | --- | --- |
-| `litestar queues run` | Long-running queue worker polling SQLSpec / SQLAlchemy / Memory backends | `-q/--queues`, `--max-concurrency`, `--poll-interval`, `--lease-duration`, `--drain-timeout` |
-| `litestar queues run-consumer` | Long-running event-stream consumer (`kafka`, `pubsub`, `rabbitmq`, `sqs`) | `-t/--topics`, `-g/--group`, `--backend`, `--max-concurrency`, `--drain-timeout` |
-| `litestar queues run-task` | Serverless one-shot task execution (Cloud Run Jobs) | `--task-name`, `--task-id`, `--payload`, `--payload-base64`, `--attempt` |
-| `litestar queues run-maintenance` | Scheduled maintenance (`CronJob` / K8s `CronJob`) for lease recovery and pruning | `--no-recover-leases`, `--no-prune-history`, `--no-prune-dlq` |
+| `litestar queues run` | Long-running queue worker polling persistent backends (SQLSpec, Advanced Alchemy, Redis/Valkey) | `--queue` (repeatable), `--max-concurrency`, `--drain-timeout` |
+| `litestar queues run-consumer` | Long-running event-stream consumer (`kafka`, `pubsub`, `rabbitmq`, `sqs`) | `--backend` (required), `--max-concurrency`, `--drain-timeout` |
+| `litestar queues run-task` | Serverless one-shot task execution (Cloud Run Jobs); reads `QUEUES_TASK_ID` and `QUEUES_CONFIG_FACTORY` from env by default | `--task-id`, `--config-factory`, `--task-modules` |
+| `litestar queues run-maintenance` | Bounded maintenance pass (`CronJob` / K8s `CronJob`) for external reconciliation, stale recovery, and retention pruning (requires `QueueConfig.maintenance`) | `--phase <external\|stale\|terminal\|events>` (repeatable), `--json` |
+| `litestar queues status` | Inspect queue status counts across statuses | `--queue`, `--json` |
+| `litestar queues scheduler-health` | Exit non-zero if `QueueConfig.scheduler_canary_task` has not completed within the window | `--minutes` |
 
 See [`../../litestar-queues/SKILL.md`](../../litestar-queues/SKILL.md) for backend and configuration details.
 
@@ -126,4 +128,4 @@ spec:
   terminationGracePeriodSeconds: 120  # Allow in-flight tasks to complete
 ```
 
-Set `terminationGracePeriodSeconds` higher for workers (`120`s) than for web containers (`60`s) to allow in-flight tasks to complete before `SIGKILL` (exceeding `--drain-timeout`). When using `litestar-queues`, pair the worker Deployment with a Kubernetes `CronJob` running `litestar queues run-maintenance` to recover expired leases and prune completed task history.
+Set `terminationGracePeriodSeconds` higher for workers (`120`s) than for web containers (`60`s) to allow in-flight tasks to complete before `SIGKILL` (exceeding `--drain-timeout`). When using `litestar-queues`, configure `QueueConfig(maintenance=QueueMaintenanceConfig(...))` and pair the worker Deployment with a Kubernetes `CronJob` running `litestar queues run-maintenance` to reconcile external executions, recover stale tasks, and prune terminal task/event history.

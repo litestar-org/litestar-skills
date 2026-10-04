@@ -30,9 +30,9 @@ isolation or when tests mutate server-wide state.
 | Valkey | `xdist_valkey_isolation_level` |
 | YugabyteDB | `xdist_yugabyte_isolation_level` |
 
-Oracle and Spanner select worker-specific service/database names (`test_{worker_num}` or `test-db-{worker_num}`) internally. Elasticsearch does not expose an isolation fixture in 0.19.0 (though it assigns `database = worker_num or 0` on `ElasticsearchService`).
+Oracle and Spanner do not expose an isolation fixture in 0.19.0: `oracle` appends `_{worker_num}` to the container name (`oracle23ai_{worker_num}`, `oracle18c_{worker_num}`) under xdist while keeping `service_name` (`"FREEPDB1"` or `"xepdb1"`), and `spanner` names its transient container `pytest_databases_spanner_{worker_num or 0}` while keeping `database_name="emulator-test-database"` and `instance_name="emulator-test-instance"`. Elasticsearch (`elastic_search`) neither exposes an isolation fixture nor inspects `get_xdist_worker_num()` in 0.19.0 (it uses fixed `"elasticsearch-7"` / `"elasticsearch-8"` container names and `database="db"`).
 
-GizmoSQL and BigQuery always append `_{worker_num}` to their container names under xdist because their emulators do not provide multi-database logical isolation; overriding `xdist_gizmosql_isolation_level` or `xdist_bigquery_isolation_level` to `"server"` marks those worker containers transient (`transient=True`).
+GizmoSQL and BigQuery always append `_{worker_num}` to their container names under xdist because their emulators do not provide multi-database logical isolation; overriding `xdist_gizmosql_isolation_level` or `xdist_bigquery_isolation_level` to `"server"` marks those worker containers transient (`transient=True`). Valkey sets `db = worker_num` under `"database"` isolation and suffixes the container name with `_{worker_num + 1}` under both modes (`transient=True` only when `xdist_valkey_isolation_level == "server"`).
 
 MinIO and RustFS suffix their default bucket names (`pytest-databases-{worker_num}`) and container names only when `xdist_minio_isolation_level` or `xdist_rustfs_isolation_level` is set to `"server"`.
 

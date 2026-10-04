@@ -195,12 +195,42 @@ in those paths a `ValueError` or `TypeError` becomes a path-aware `msgspec.Valid
 To normalize a field inside `__post_init__` on a `frozen=True` Struct, call
 `msgspec.structs.force_setattr(self, "field_name", normalized_value)`.
 
-## DTO vs response schema
+## DTO vs response schema (`MsgspecDTO`)
 
 Choose the right layer for the job:
 
-- **`msgspec.Struct`** for wire shapes and internal messaging — lowest overhead, fastest
-  encode/decode, sufficient for the vast majority of Litestar response bodies.
+- **Direct `msgspec.Struct` (`CamelizedBaseStruct`)** for wire shapes and internal messaging —
+  lowest overhead, fastest encode/decode, sufficient for the vast majority of Litestar request and
+  response bodies.
+- **`MsgspecDTO[StructType]` (`from litestar.dto import DTOConfig, MsgspecDTO`)** when a single
+  Struct backs multiple route projections (for example, excluding read-only or sensitive fields on
+  `dto=` / `return_dto=` without defining separate Struct classes):
+
+```python
+import msgspec
+from litestar import post
+from litestar.dto import DTOConfig, MsgspecDTO
+
+
+class User(msgspec.Struct, kw_only=True):
+    id: int = 1
+    name: str
+    internal_note: str = ""
+
+
+class UserCreateDTO(MsgspecDTO[User]):
+    config = DTOConfig(exclude={"id", "internal_note"})
+
+
+class UserReadDTO(MsgspecDTO[User]):
+    config = DTOConfig(exclude={"internal_note"})
+
+
+@post("/users", dto=UserCreateDTO, return_dto=UserReadDTO)
+async def create_user(data: User) -> User:
+    return data
+```
+
 - **Pydantic (`BaseModel` / `CamelizedBaseSchema`)** when Litestar-Pydantic DTO paths are
   required, or when Pydantic validators (`@field_validator`, `@model_validator`) are essential
   for the request body.

@@ -1,6 +1,6 @@
 ---
 name: litestar-saq
-description: "Auto-activate for litestar_saq, SAQPlugin, SAQConfig, QueueConfig, TaskQueues, CronJob, litestar workers run, background jobs, schedules, or SAQ web UI. Not for litestar-queues, Celery, RQ, or Dramatiq."
+description: "Auto-activate for litestar_saq, SAQPlugin, SAQConfig, QueueConfig, TaskQueues, CronJob, litestar workers run, background jobs, schedules, or SAQ UI. Not for litestar-queues, Celery, RQ, or Dramatiq."
 ---
 
 # litestar-saq
@@ -17,7 +17,7 @@ description: "Auto-activate for litestar_saq, SAQPlugin, SAQConfig, QueueConfig,
 
 - Use PEP 604 unions: `T | None`, never `Optional[T]`
 - Async all I/O — task bodies and enqueue calls are `async def`.
-- First positional arg of every task is `ctx: Context` (from `saq.types`) or `ctx: dict[str, Any]`.
+- First positional arg of every task is `ctx: Context` (from `saq.types`, not `litestar_saq.typing.Context` which is the OpenTelemetry context) or `ctx: dict[str, Any]`.
 - Pass job payload as keyword arguments so task signatures and enqueue calls stay explicit.
 - Use `NamedDependency[TaskQueues]` for handler injection. `TaskQueues` is registered under the `task_queues` dependency key, and Litestar 2.24 deprecates implicit DI.
 
@@ -68,6 +68,7 @@ saq_plugin = create_saq_plugin()
 ```python
 from litestar_saq import (
     CronJob,
+    PostgresQueueOptions,
     QueueConfig,
     SAQConfig,
     SAQPlugin,
@@ -91,17 +92,18 @@ def create_saq_plugin_pg() -> SAQPlugin:
             use_server_lifespan=settings.saq.use_server_lifespan,
             worker_processes=settings.saq.processes,
             web_enabled=settings.saq.web_enabled,
+            enable_otel=settings.saq.otel_enabled,
             queue_configs=[
                 QueueConfig(
                     name="background-tasks",
                     dsn=dsn,
                     concurrency=settings.saq.concurrency,
-                    broker_options={
-                        "jobs_table": "task_queue",
-                        "stats_table": "task_queue_stats",
-                        "versions_table": "task_queue_ddl_version",
-                        "manage_pool_lifecycle": True,
-                    },
+                    broker_options=PostgresQueueOptions(
+                        jobs_table="task_queue",
+                        stats_table="task_queue_stats",
+                        versions_table="task_queue_ddl_version",
+                        manage_pool_lifecycle=True,
+                    ),
                     tasks=[
                         "app.domain.reports.tasks.generate_report",
                         "app.domain.reports.tasks.reap_abandoned_reports",
@@ -275,7 +277,7 @@ pip install "litestar-saq[otel]"     # OpenTelemetry spans
 
 ### Step 2: Define Queues
 
-Build `QueueConfig` instances for each logical queue (`"default"`, `"emails"`, `"reports"`). Put exactly one of `dsn` or `broker_instance` on each `QueueConfig`. Reference task functions by dotted path or callable; the plugin imports dotted paths at startup.
+Build `QueueConfig` instances for each logical queue (`"default"`, `"emails"`, `"reports"`). Put exactly one of `dsn` or `broker_instance` on each `QueueConfig`. Reference task functions by dotted path or callable; the plugin imports dotted paths at startup. When passing lifecycle hooks (`startup`, `shutdown`, `before_process`, `after_process`) as dotted strings, always wrap them in a list (`startup=["app.domain.system.tasks.worker_startup"]`) because `str` is a `Collection`.
 
 ### Step 3: Configure Plugin
 
@@ -326,7 +328,8 @@ For portable multi-process workers, configure each queue with `dsn`. Under `spaw
 - **`use_server_lifespan=True`** for dev and small-to-mid apps that should start worker child processes with the web server. For high-throughput production, run `litestar workers run --workers N` as a separate service.
 - **Use `dsn` for portable multi-process workers** — forkserver/spawn workers rebuild brokers from `QueueConfig.dsn`. A `broker_instance`-only queue works in the parent and under `fork`, but spawn preparation rejects it.
 - **Use `postgresql://` (not `postgres://`) for PostgreSQL DSNs** — `QueueConfig.get_broker()` checks `dsn.startswith("postgresql")` and raises `ImproperlyConfiguredException` for `postgres://`. When sharing an SQLAlchemy URL (`postgresql+psycopg://` or `postgresql+asyncpg://`), strip the driver dialect suffix first.
-- **Use `jobs_table`, `stats_table`, and `versions_table` in PostgreSQL `broker_options`** — `saq.queue.postgres.PostgresQueue.__init__` expects `jobs_table`, `stats_table`, and `versions_table` (not the legacy `table`/`stats`/`versions` keys in `PostgresQueueOptions`'s TypedDict annotations).
+- **Use `jobs_table`, `stats_table`, and `versions_table` in PostgreSQL `broker_options`** — on `saq>=0.24` and `litestar-saq>=0.8.0`, `PostgresQueueOptions` and `saq.queue.postgres.PostgresQueue.__init__` expect `jobs_table`, `stats_table`, and `versions_table` (never the legacy `table`/`stats`/`versions` keys from `saq<0.24`).
+- **Set `SAQConfig(enable_otel=True)` explicitly when using OpenTelemetry** — `SAQPlugin.get_workers()` calls `SAQConfig.should_enable_otel()` without passing the `Litestar` app instance, so the default `enable_otel=None` always resolves to `False`.
 - **Commit DB transactions before or immediately upon enqueueing** — SAQ workers use a separate connection pool and can dequeue a job before Litestar's `before_send` autocommit hook runs. Explicitly commit the database session when `queue.enqueue()` returns a `Job` (or roll back when a duplicate `key` returns `None`).
 - **Pass dotted-path lifecycle hooks as a list** — `QueueConfig.__post_init__` checks `isinstance(hook, Collection)`, which matches `str` and iterates character-by-character if a bare string is passed to `startup`, `shutdown`, `before_process`, or `after_process`. Always use `startup=["app.domain.system.tasks.worker_startup"]` (or pass the callable directly).
 - **Set graceful shutdown controls for long jobs** — use `shutdown_grace_period_s` and, when needed, `cancellation_hard_deadline_s` on `QueueConfig`.
@@ -344,6 +347,7 @@ Before delivering Litestar + SAQ code, verify:
 - [ ] `SAQPlugin` is in `app.plugins`
 - [ ] `SAQConfig.use_server_lifespan` is set explicitly
 - [ ] `SAQConfig.worker_processes` or CLI `--workers` is set intentionally
+- [ ] `SAQConfig(enable_otel=True)` is set explicitly when `litestar-saq[otel]` is installed (`enable_otel=None` resolves to `False`)
 - [ ] Each `QueueConfig` has exactly one of `dsn` or `broker_instance`
 - [ ] PostgreSQL DSNs use the `postgresql://` scheme (never `postgres://` or `postgresql+psycopg://`)
 - [ ] Custom PostgreSQL table names in `broker_options` use `jobs_table`, `stats_table`, and `versions_table`

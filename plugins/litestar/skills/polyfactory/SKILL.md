@@ -23,7 +23,7 @@ In Litestar projects, polyfactory's pytest plugin is the canonical way to feed `
 | Model kind | Factory base | Import |
 | --- | --- | --- |
 | `pydantic.BaseModel` | `ModelFactory` | `from polyfactory.factories.pydantic_factory import ModelFactory` |
-| `@dataclass` | `DataclassFactory` | `from polyfactory.factories import DataclassFactory` |
+| `@dataclass` | `DataclassFactory` | `from polyfactory.factories.dataclass_factory import DataclassFactory` |
 | `msgspec.Struct` | `MsgspecFactory` | `from polyfactory.factories.msgspec_factory import MsgspecFactory` |
 | `@attrs.define` / `attr.s` | `AttrsFactory` | `from polyfactory.factories.attrs_factory import AttrsFactory` |
 | `TypedDict` | `TypedDictFactory` | `from polyfactory.factories.typed_dict_factory import TypedDictFactory` |
@@ -31,11 +31,13 @@ In Litestar projects, polyfactory's pytest plugin is the canonical way to feed `
 | Beanie `Document` | `BeanieDocumentFactory` | `from polyfactory.factories.beanie_odm_factory import BeanieDocumentFactory` |
 | Odmantic `Model` / `EmbeddedModel` | `OdmanticModelFactory` | `from polyfactory.factories.odmantic_odm_factory import OdmanticModelFactory` |
 
+`polyfactory.factories.__all__` only exports `BaseFactory`, `DataclassFactory`, and `TypedDictFactory`. Always import backend-specific factories (`ModelFactory`, `MsgspecFactory`, `AttrsFactory`, `SQLAlchemyFactory`, `BeanieDocumentFactory`, `OdmanticModelFactory`) from their concrete submodules (`polyfactory.factories.pydantic_factory`, `polyfactory.factories.msgspec_factory`, `polyfactory.factories.sqlalchemy_factory`, etc.), `register_fixture` from `polyfactory.pytest_plugin`, and `post_generated` from `polyfactory.decorators` so runtime imports and `mypy`/`pyright` checks succeed.
+
 ### Defining a factory
 
 ```python
 from dataclasses import dataclass
-from polyfactory.factories import DataclassFactory
+from polyfactory.factories.dataclass_factory import DataclassFactory
 
 
 @dataclass
@@ -55,7 +57,7 @@ one = OrderFactory.build()
 many = OrderFactory.batch(10)
 ```
 
-The single concrete generic argument lets Polyfactory infer `__model__`. `build()` returns one instance, `batch(n)` returns `list[T]`, and `coverage()` yields the smallest set of instances that covers the model's supported variants.
+The single concrete generic argument lets Polyfactory infer `__model__`. `build()` returns one instance, `batch(n)` returns `list[T]`, `coverage()` yields the smallest set of instances that covers the model's supported variants, `create_sync()` / `create_batch_sync(n)` and `create_async()` / `create_batch_async(n)` build and persist instances, `seed_random(seed)` re-seeds the factory PRNG and Faker instance, and `add_provider(type_, fn)` registers a custom type generator.
 
 ### Customizing fields
 
@@ -106,14 +108,27 @@ class OrderFactory(DataclassFactory[Order]):
     reference = PostGenerated(order_reference, "order")
 ```
 
-### Determinism
+### Determinism and configuration
 
 ```python
 class OrderFactory(DataclassFactory[Order]):
-    __random_seed__ = 42  # same seed → same output across runs
+    __random_seed__ = 42  # seeds cls.__random__ and cls.__faker__ at class creation
+
+
+OrderFactory.seed_random(42)  # re-seed at runtime before a test or build
 ```
 
-Set `__random_seed__` (or `__faker__ = Faker(seed=...)` for finer Faker control) when test assertions depend on the exact generated values.
+Set `__random_seed__` (or call `Factory.seed_random(seed)` / `__faker__.seed_instance(seed)` on a custom `__faker__ = Faker(locale="en_US")`) when test assertions depend on the exact generated values. Never pass `Faker(seed=...)` — `Faker.__init__` ignores a `seed` keyword argument without seeding.
+
+Core `BaseFactory` configuration attributes:
+
+- `__model__`: target model class (inferred from a single concrete generic argument when omitted).
+- `__check_model__ = True`: validates that `Use`, `PostGenerated`, `Ignore`, and `Require` attribute names exist on `__model__`.
+- `__random_seed__`: integer seed passed to `cls.seed_random(...)` during class creation.
+- `__use_defaults__ = False`: when `True`, prefers model field defaults / `default_factory` over generated values.
+- `__allow_none_optionals__ = True`: when `True`, optional fields (`T | None`) randomly produce `None`; set `False` to always populate `T`.
+- `__set_as_default_factory_for_type__ = False`: when `True`, registers the factory globally for nested fields of type `__model__`.
+- `__faker__` and `__random__`: the factory's `Faker` and `random.Random` instances.
 
 ### Default factory registration
 
@@ -138,7 +153,7 @@ When `__set_as_default_factory_for_type__ = True`, polyfactory uses that factory
 
 ```python
 from polyfactory.pytest_plugin import register_fixture
-from polyfactory.factories import DataclassFactory
+from polyfactory.factories.dataclass_factory import DataclassFactory
 
 
 @register_fixture
@@ -198,7 +213,7 @@ Set `__set_as_default_factory_for_type__ = True` on a base factory and let neste
 
 ### Step 6: Pin determinism only when needed
 
-Tests that assert on specific generated values need `__random_seed__`. Tests that assert on shape or invariants (e.g., `total >= 0`) should not — leaving randomization on widens coverage across runs.
+Tests that assert on specific generated values need `__random_seed__` (or `Factory.seed_random(seed)` per test). Tests that assert on shape or invariants (e.g., `total >= 0`) should not — leaving randomization on widens coverage across runs.
 
 </workflow>
 
@@ -206,14 +221,15 @@ Tests that assert on specific generated values need `__random_seed__`. Tests tha
 
 ## Guardrails
 
+- **Import from concrete submodules for `mypy`/`pyright` and runtime safety.** `polyfactory.factories.__all__` only exports `BaseFactory`, `DataclassFactory`, and `TypedDictFactory`. Import `ModelFactory` from `polyfactory.factories.pydantic_factory`, `MsgspecFactory` from `polyfactory.factories.msgspec_factory`, `SQLAlchemyFactory` from `polyfactory.factories.sqlalchemy_factory`, `register_fixture` from `polyfactory.pytest_plugin`, and `post_generated` from `polyfactory.decorators`.
 - **Use one concrete generic argument or set `__model__`.** Polyfactory infers `__model__` from `DataclassFactory[Order]`; an unparameterized concrete factory without `__model__` raises `ConfigurationException` during class creation.
 - **Don't override fields you're about to assert on with random values.** Either pin the value (`status = "pending"`) or assert on shape, not both.
-- **Don't reuse `__random_seed__` across factories that share a Faker instance.** They will collide and produce unexpected duplicates. Use a different seed per factory or a single shared seeded `__faker__`.
+- **Don't reuse `__random_seed__` across factories that share a Faker instance.** They will collide and produce unexpected duplicates. Use a different seed per factory or a single shared seeded `__faker__` (via `__faker__.seed_instance(seed)`).
 - **Use the right base for the backend.** `ModelFactory` on a `msgspec.Struct` raises `ConfigurationException`; use `MsgspecFactory`.
 - **Factories belong under `tests/`.** Importing them from production modules ties test data to runtime code and is a refactor hazard.
 - **`coverage()` is not a Cartesian-product generator.** It emits a minimal representative set and reuses exhausted field variants; use Hypothesis for exhaustive input-space exploration.
 - **`__allow_none_optionals__` is boolean.** `True` allows random `None` values during `build()`; `False` always generates the wrapped type. It is not a probability.
-- **Instantiate `Ignore()` and `Require()`, and place `@post_generated` above `@classmethod`.** Assigning `field = Ignore` (the class) or stacking `@classmethod` above `@post_generated` fails at build or decoration time.
+- **Instantiate `Ignore()` and `Require()`, and place `@post_generated` above `@classmethod`.** Because `Ignore` and `Require` are classes, assigning `field = Ignore` causes `build()` to invoke `Ignore()` as a callable and assign the marker object as the field value; stacking `@classmethod` above `@post_generated` raises `TypeError` at decoration time.
 - **Async methods persist data.** `create_async()` and `create_batch_async()` require `__async_persistence__` or a backend factory that supplies it. Polyfactory has no `build_async()`.
 
 </guardrails>

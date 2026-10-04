@@ -189,6 +189,7 @@ Native `HTTPException` responses are **not** RFC 9457 Problem Details. When your
 
 ```python
 from litestar import Litestar, get
+from litestar.params import FromPath
 from litestar.plugins.problem_details import (
     ProblemDetailsConfig,
     ProblemDetailsException,
@@ -218,7 +219,7 @@ def insufficient_funds_to_problem(
 
 
 @get("/orders/{order_id:int}")
-async def get_order(order_id: int) -> dict[str, int]:
+async def get_order(order_id: FromPath[int]) -> dict[str, int]:
     """Raise a ProblemDetailsException directly or let mapped domain errors bubble."""
     if order_id < 0:
         raise ProblemDetailsException(
@@ -249,7 +250,7 @@ app = Litestar(
 ### `ProblemDetailsPlugin` Behavior
 
 - `ProblemDetailsException` subclasses `HTTPException` and adds `type_: str | None = None`, `title: str | None = None`, and `instance: str | None = None`.
-- When serialized by the default handler, the response media type is `application/problem+json` (`MediaType.PROBLEM_DETAILS_JSON = "application/problem+json"`):
+- When serialized by the default handler, the response media type is `application/problem+json` (`ProblemDetailsException._PROBLEM_DETAILS_MEDIA_TYPE = "application/problem+json"`):
   - If `extra` is a `Mapping`, its keys are merged into the top-level Problem Details JSON object as RFC 9457 extension members.
   - If `extra` is a `list`, it is emitted under the `"extra"` key.
 - `enable_for_all_http_exceptions=True` registers a conversion map for `HTTPException` so built-in `ValidationException`, `NotFoundException`, `PermissionDeniedException`, etc., are also returned as `application/problem+json`.

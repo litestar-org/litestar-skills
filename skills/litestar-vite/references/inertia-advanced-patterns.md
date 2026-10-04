@@ -87,7 +87,7 @@ async def login_page() -> InertiaResponse:
 
 Configure `InertiaSSRConfig` to manage SSR process lifecycle, timeouts, and automatic CSR fallback when the Node SSR worker is unavailable:
 
-```python # pragma: legacy-example
+```python
 from litestar_vite import InertiaConfig, InertiaSSRConfig
 
 inertia = InertiaConfig(
@@ -104,7 +104,7 @@ inertia = InertiaConfig(
 ```
 
 - In development, `TCPStreamIPCTransport` connects to `/__litestar_ssr__` (`litestarViteSsrPlugin` from `litestar-vite-plugin/dev-ssr` using Vite 7+ `ModuleRunner`).
-- In production, `StdioIPCTransport` spawns `litestar-vite-ssr-worker`.
+- In production, `StdioIPCTransport` spawns `litestar-vite-ssr-worker` over stdin/stdout JSON-RPC.
 - `<!--inertia-head-->` and `<!--inertia-body-->` slot tokens in `root_template` are replaced with SSR head/body output, falling back to `#app`.
 
 ## End-to-End Authenticated Controller & Page Example

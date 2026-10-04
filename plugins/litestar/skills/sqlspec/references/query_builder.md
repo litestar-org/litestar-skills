@@ -181,13 +181,13 @@ query = (
 )
 ```
 
-`sql.upsert(table, dialect=...)` automatically generates `MERGE` (PostgreSQL 15+, Oracle, BigQuery, T-SQL), `INSERT ... ON CONFLICT` (SQLite, DuckDB), or `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL/MariaDB) depending on dialect capabilities.
+`sql.upsert(table, dialect=...)` automatically generates `MERGE` (PostgreSQL 15+, Oracle, BigQuery, T-SQL, IBM Db2 via `SYSIBM.SYSDUMMY1`), `INSERT ... ON CONFLICT` (SQLite, DuckDB), or `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL/MariaDB) depending on dialect capabilities.
 
 ---
 
 ## Dialect-Aware DDL Builders
 
-`sql.create_table(table, dialect=...)` and `sql.alter_table(table, dialect=...)` parse column data types against the configured target dialect and preserve dialect overrides on `.build(dialect=...)` and `.to_statement()`:
+`sql.create_table(table, dialect=...)`, `sql.alter_table(table, dialect=...)`, and `sql.drop_table(table, dialect=...)` parse column data types against the configured target dialect and preserve dialect overrides as well as quoted and schema-qualified table/column identifiers (such as `"app_schema"."Users"`) on `.build(dialect=...)` and `.to_statement()`:
 
 ```python
 create_users = (

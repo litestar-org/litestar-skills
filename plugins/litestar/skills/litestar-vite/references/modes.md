@@ -317,7 +317,9 @@ For JS-side frameworks that own rendering or build orchestration:
 Litestar defers rendering to the JS tool and proxies or serves the API:
 
 ```python
-ViteConfig(mode="framework", ...)
+from litestar_vite import ViteConfig
+
+vite_config = ViteConfig(mode="framework")
 ```
 
 For Angular CLI or another non-Vite server:
@@ -421,14 +423,14 @@ async def widget() -> Response[str]:
 
 ## UI Component Fragments & `<litestar-island>` (`0.32.0+`)
 
-On `0.32.0` (`feat/ssr-fragments`), template and HTMX applications can server-render individual React (`.tsx`/`.jsx`), Vue (`.vue`), Svelte (`.svelte`), or Astro (`.astro`) components without converting the entire route to Inertia or a SPA:
+In `0.32.0+`, template and HTMX applications can server-render individual React (`.tsx`/`.jsx`), Vue (`.vue`), Svelte (`.svelte`), or Astro (`.astro`) components without converting the entire route to Inertia or a SPA:
 
 - **Static fragments (`mode="static"`)**: Zero client-side JS hydration; returns pure HTML prepended with scoped `<link rel="stylesheet">` tags extracted from `manifest.json` (including transitive `imports` CSS chunks).
 - **Interactive islands (`mode="island"`)**: Wraps rendered markup in `<litestar-island data-island-component="..." data-island-props="..." id="island-...">` so `getIslandClientScript()` (`litestar-vite-plugin/fragments`) hydrates only the interactive island on the client.
 
 ### Returning a fragment from a Litestar handler
 
-```python # pragma: legacy-example
+```python
 from litestar import get
 from litestar_vite import ComponentResponse
 

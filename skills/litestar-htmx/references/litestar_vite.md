@@ -17,7 +17,9 @@ not part of `litestar-htmx` and is not enabled by `HTMXPlugin()`.
 
 ## Server Setup
 
-Use Litestar Vite's canonical `template` mode for Jinja-rendered HTMX pages:
+Use Litestar Vite's canonical `template` mode (`mode="htmx"` is accepted as an
+alias and normalizes to `"template"` at `ViteConfig` construction) for
+Jinja-rendered HTMX pages:
 
 ```python
 from pathlib import Path
@@ -48,8 +50,10 @@ app = Litestar(
 )
 ```
 
-`VitePlugin` owns assets and template helpers. `HTMXPlugin` owns the HTMX
-request class and response signature types.
+`VitePlugin` owns assets and auto-registers the Jinja template callables
+(`vite_hmr`, `vite`, `vite_static`, `vite_routes`, and `vite_fragment`) when
+`mode="template"` is paired with `JinjaTemplateEngine`. `HTMXPlugin` owns the
+HTMX request class and response signature types.
 
 ## Browser Extension
 
@@ -78,7 +82,7 @@ Activate that extension in the page:
 </body>
 ```
 
-`registerHtmxExtension()` takes no arguments in Litestar Vite 0.31.0. It
+`registerHtmxExtension()` takes no arguments in Litestar Vite 0.32.0. It
 registers the extension named `litestar`, injects the CSRF token from the meta
 tag into HTMX requests, and enables `hx-swap="json"` templating.
 
@@ -86,9 +90,10 @@ tag into HTMX requests, and enables `hx-swap="json"` templating.
 
 | Requirement | Use |
 | --- | --- |
-| Server-rendered fragment | `HTMXTemplate` from `litestar_htmx` |
+| Server-rendered template fragment | `HTMXTemplate` from `litestar_htmx` |
 | `HX-*` response behavior | A `litestar_htmx` response helper |
-| Bundled CSS/JavaScript or HMR | `VitePlugin(mode="template")` |
+| Bundled CSS/JavaScript or HMR | `VitePlugin(config=ViteConfig(mode="template"))` |
+| Server-rendered UI component fragment | `ComponentResponse` or `vite_fragment` from `litestar_vite` |
 | JSON response rendered through `ls-*` templates | `hx-ext="litestar"` from `litestar-vite-plugin/helpers` |
 
 Do not require the Litestar Vite browser extension for ordinary HTML fragment
@@ -97,6 +102,6 @@ swaps. Do not describe its `ls-*` directives as features of `litestar-htmx`.
 ## Official References
 
 - <https://github.com/litestar-org/litestar-htmx/tree/v0.5.0>
-- <https://github.com/litestar-org/litestar-vite/blob/v0.31.0/docs/frameworks/htmx.rst>
-- <https://github.com/litestar-org/litestar-vite/blob/v0.31.0/src/js/src/helpers/htmx.ts>
-- <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/jinja-htmx>
+- <https://github.com/litestar-org/litestar-vite/blob/v0.32.0/docs/frameworks/htmx.rst>
+- <https://github.com/litestar-org/litestar-vite/blob/v0.32.0/src/js/src/helpers/htmx.ts>
+- <https://github.com/litestar-org/litestar-vite/tree/v0.32.0/examples/jinja-htmx>

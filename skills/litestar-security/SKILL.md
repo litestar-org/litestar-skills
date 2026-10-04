@@ -132,7 +132,7 @@ The plugin registers these; do not shadow them.
 | `principal` | `NamedDependency[Principal[User]]` | Stable envelope identity plus the active user model |
 | `security_context` | `NamedDependency[SecurityContext]` | Active session, evidence, snapshot, and restrictions |
 | `current_user` | `CurrentUser[User]` | Narrowing shortcut (`NamedDependency[User]`); rejects anonymous and service principals |
-| `csp_nonce` | `NamedDependency[str]` | Per-request CSP nonce when `SecurityHeadersConfig.use_csp_nonce=True` |
+| `csp_nonce` | `csp_nonce` (`NamedDependency[str]`) | Per-request CSP nonce when `ContentSecurityPolicy.nonce_directives` is non-empty |
 | `websocket_connect_tokens` | `NamedDependency[WebSocketConnectTokenIssuer]` | Route-aware WebSocket connect-token issuer |
 
 ### Status Code Contract

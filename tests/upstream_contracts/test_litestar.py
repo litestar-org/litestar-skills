@@ -1,27 +1,126 @@
 import ast
 import dataclasses
 import inspect
+from collections.abc import AsyncGenerator
 from importlib.metadata import version
 from pathlib import Path
-from typing import cast, get_args
+from typing import Any, cast, get_args
 
 import click
+import dishka
 import litestar
-from litestar import Litestar, static_files
+import litestar.dto as litestar_dto
+import litestar.exceptions.responses as litestar_exc_responses
+import litestar.handlers as litestar_handlers
+import msgspec
+from advanced_alchemy.extensions.litestar import SQLAlchemyDTO, SQLAlchemyDTOConfig
+from dishka import Provider, Scope, make_async_container
+from dishka.integrations.litestar import (
+    DishkaRouter,
+    FromDishka,
+    LitestarProvider,
+    inject,
+    inject_websocket,
+    setup_dishka,
+)
+from litestar import (
+    Controller,
+    Litestar,
+    MediaType,
+    Request,
+    Response,
+    Router,
+    WebSocket,
+    delete,
+    get,
+    patch,
+    post,
+    put,
+    route,
+    static_files,
+    websocket,
+    websocket_listener,
+)
+from litestar.channels import ChannelsPlugin
+from litestar.channels.backends.memory import MemoryChannelsBackend
 from litestar.cli._utils import AUTODISCOVERY_FILE_NAMES, LitestarEnv
 from litestar.cli.main import litestar_group
+from litestar.config.allowed_hosts import AllowedHostsConfig
 from litestar.config.app import AppConfig
+from litestar.config.compression import CompressionConfig
+from litestar.config.cors import CORSConfig
+from litestar.config.csrf import CSRFConfig
 from litestar.config.response_cache import (
     CACHE_FOREVER,
     ResponseCacheConfig,
     default_cache_key_builder,
 )
-from litestar.datastructures import ImmutableState, State
+from litestar.connection import ASGIConnection
+from litestar.datastructures import CacheControlHeader, Cookie, ETag, ImmutableState, State, UploadFile
 from litestar.di import Dependency as DIDependency
-from litestar.di import NamedDependency
-from litestar.enums import RequestEncodingType
+from litestar.di import NamedDependency, Provide
+from litestar.dto import (
+    AbstractDTO,
+    DataclassDTO,
+    DTOConfig,
+    DTOData,
+    DTOField,
+    Mark,
+    MsgspecDTO,
+    dto_field,
+)
+from litestar.enums import OpenAPIMediaType, RequestEncodingType, ScopeType
 from litestar.events import SimpleEventEmitter, listener
+from litestar.exceptions import (
+    ClientException,
+    HTTPException,
+    ImproperlyConfiguredException,
+    InternalServerException,
+    MethodNotAllowedException,
+    MissingDependencyException,
+    NoRouteMatchFoundException,
+    NotAuthorizedException,
+    NotFoundException,
+    PermissionDeniedException,
+    SerializationException,
+    ServiceUnavailableException,
+    TemplateNotFoundException,
+    TooManyRequestsException,
+    ValidationException,
+    WebSocketDisconnect,
+    WebSocketException,
+)
+from litestar.exceptions.responses import ExceptionResponseContent
+from litestar.handlers import BaseRouteHandler, WebsocketListener, WebsocketRouteHandler
 from litestar.logging import LoggingConfig, StructLoggingConfig
+from litestar.middleware import (
+    AbstractAuthenticationMiddleware,
+    ASGIMiddleware,
+    AuthenticationResult,
+    DefineMiddleware,
+)
+from litestar.middleware.logging import LoggingMiddlewareConfig
+from litestar.middleware.rate_limit import RateLimitConfig
+from litestar.middleware.session.client_side import CookieBackendConfig
+from litestar.middleware.session.server_side import ServerSideSessionConfig
+from litestar.openapi import OpenAPIConfig, ResponseSpec
+from litestar.openapi.plugins import (
+    JsonRenderPlugin,
+    RapidocRenderPlugin,
+    RedocRenderPlugin,
+    ScalarRenderPlugin,
+    StoplightRenderPlugin,
+    SwaggerRenderPlugin,
+    YamlRenderPlugin,
+)
+from litestar.pagination import (
+    AbstractAsyncClassicPaginator,
+    AbstractAsyncCursorPaginator,
+    AbstractAsyncOffsetPaginator,
+    ClassicPagination,
+    CursorPagination,
+    OffsetPagination,
+)
 from litestar.params import (
     BodyKwarg,
     CookieParameter,
@@ -39,11 +138,44 @@ from litestar.params import (
     SkipValidationMarker,
     URLEncodedBody,
 )
-from litestar.plugins import CLIPlugin, CLIPluginProtocol, InitPlugin, InitPluginProtocol
+from litestar.plugins import (
+    CLIPlugin,
+    CLIPluginProtocol,
+    DIPlugin,
+    InitPlugin,
+    InitPluginProtocol,
+    OpenAPISchemaPlugin,
+    OpenAPISchemaPluginProtocol,
+    PluginProtocol,
+    PluginRegistry,
+    ReceiveRoutePlugin,
+    SerializationPlugin,
+    SerializationPluginProtocol,
+)
+from litestar.plugins.flash import FlashConfig, FlashPlugin, flash, get_flashes
+from litestar.plugins.jinja import JinjaTemplateEngine
+from litestar.plugins.problem_details import (
+    ProblemDetailsConfig,
+    ProblemDetailsException,
+    ProblemDetailsPlugin,
+)
+from litestar.plugins.pydantic import (
+    PydanticDIPlugin,
+    PydanticDTO,
+    PydanticInitPlugin,
+    PydanticPlugin,
+    PydanticSchemaPlugin,
+)
 from litestar.plugins.structlog import StructlogConfig, StructlogPlugin
+from litestar.response import File, Redirect, ServerSentEvent, ServerSentEventMessage, Stream, Template
+from litestar.security.jwt import JWTAuth, JWTCookieAuth, OAuth2PasswordBearerAuth, Token
+from litestar.security.session_auth import SessionAuth
 from litestar.stores.file import FileStore
 from litestar.stores.memory import MemoryStore
 from litestar.stores.registry import StoreRegistry
+from litestar.testing import TestClient
+from litestar.types import ASGIApp, Receive, Send
+from litestar.types import Scope as ASGIScope
 
 
 def _load_litestar_ast(relative_path: str) -> ast.Module:
@@ -299,3 +431,335 @@ def test_litestar_cli_contract() -> None:
     assert "app" in AUTODISCOVERY_FILE_NAMES
     assert "application" in AUTODISCOVERY_FILE_NAMES
     assert callable(LitestarEnv.from_env)
+
+
+def test_litestar_routing_and_datastructures_contract() -> None:
+    """Verify routing decorators, Controller, Router, pagination types, and response/datastructure exports."""
+    for handler_decorator in (get, post, put, patch, delete, route):
+        assert callable(handler_decorator)
+
+    assert issubclass(Controller, object)
+    assert issubclass(Router, object)
+    assert all(
+        cls is not None
+        for cls in (
+            Request,
+            Response,
+            File,
+            Redirect,
+            Template,
+            Cookie,
+            ETag,
+            CacheControlHeader,
+            UploadFile,
+            MediaType,
+            ClassicPagination,
+            OffsetPagination,
+            CursorPagination,
+            AbstractAsyncClassicPaginator,
+            AbstractAsyncOffsetPaginator,
+            AbstractAsyncCursorPaginator,
+        )
+    )
+
+
+def test_litestar_dtos_contract() -> None:
+    """Verify DTO classes, DTOConfig fields, DTOData methods, and DTOField/Mark exports."""
+    assert issubclass(MsgspecDTO, AbstractDTO)
+    assert issubclass(DataclassDTO, AbstractDTO)
+    assert issubclass(PydanticDTO, AbstractDTO)
+    assert issubclass(SQLAlchemyDTO, AbstractDTO)
+    assert issubclass(SQLAlchemyDTOConfig, DTOConfig)
+    assert not hasattr(litestar_dto, "PatchDTO")
+    assert not hasattr(litestar_dto, "SimpleDTO")
+
+    dto_config_fields = {field.name for field in dataclasses.fields(DTOConfig)}
+    assert {
+        "exclude",
+        "include",
+        "rename_fields",
+        "rename_strategy",
+        "max_nested_depth",
+        "partial",
+        "underscore_fields_private",
+        "experimental_codegen_backend",
+        "forbid_unknown_fields",
+    } <= dto_config_fields
+
+    assert {"READ_ONLY", "WRITE_ONLY", "PRIVATE"} <= {member.name for member in Mark}
+    assert isinstance(dto_field(mark="read-only"), dict)
+    assert DTOField(mark=Mark.READ_ONLY).mark == Mark.READ_ONLY
+    assert {"create_instance", "update_instance", "as_builtins"} <= {
+        name for name, _ in inspect.getmembers(DTOData, predicate=inspect.isfunction)
+    }
+
+    class ItemStruct(msgspec.Struct):
+        name: str
+        internal_note: str = "hidden"
+
+    class ItemReadDTO(MsgspecDTO[ItemStruct]):
+        config = DTOConfig(exclude={"internal_note"}, rename_strategy="camel")
+
+    assert ItemReadDTO.config.partial is False
+    assert ItemReadDTO.config.rename_strategy == "camel"
+
+
+def test_litestar_openapi_contract() -> None:
+    """Verify OpenAPIConfig, ResponseSpec, OpenAPIMediaType, and all 7 OpenAPI render plugins."""
+    render_plugins = [
+        ScalarRenderPlugin(),
+        SwaggerRenderPlugin(),
+        RedocRenderPlugin(),
+        RapidocRenderPlugin(),
+        StoplightRenderPlugin(),
+        JsonRenderPlugin(),
+        YamlRenderPlugin(),
+    ]
+    openapi_config = OpenAPIConfig(
+        title="Contract Service",
+        version="2.24.0",
+        path="/schema",
+        render_plugins=render_plugins,
+        use_handler_docstrings=True,
+    )
+    assert openapi_config.title == "Contract Service"
+    assert openapi_config.path == "/schema"
+    assert len(openapi_config.render_plugins) == 7
+    assert OpenAPIMediaType.OPENAPI_JSON is not None
+    assert OpenAPIMediaType.OPENAPI_YAML is not None
+
+    spec = ResponseSpec(data_container=dict[str, str], description="Contract response")
+    assert spec.description == "Contract response"
+
+
+def test_litestar_di_and_dishka_contract() -> None:
+    """Verify Provide, NamedDependency, SkipValidation, and Dishka Litestar integration."""
+    assert version("dishka") == "1.10.1"
+    assert hasattr(dishka, "provide")
+
+    provider_def = Provide(lambda: "ok", sync_to_thread=False, use_cache=True)
+    assert provider_def.use_cache is True
+    assert provider_def.sync_to_thread is False
+
+    class GreeterService:
+        def greet(self) -> str:
+            return "hello-dishka"
+
+    async def build_greeter() -> AsyncGenerator[GreeterService, None]:
+        yield GreeterService()
+
+    service_provider = Provider(scope=Scope.REQUEST)
+    service_provider.provide(build_greeter, provides=GreeterService)
+
+    @get("/greet")
+    async def greet_endpoint(service: FromDishka[GreeterService]) -> dict[str, str]:
+        return {"greeting": service.greet()}
+
+    router = DishkaRouter(path="/v1", route_handlers=[greet_endpoint])
+    container = make_async_container(LitestarProvider(), service_provider)
+    app = Litestar(route_handlers=[router])
+    setup_dishka(container, app)
+
+    assert app.state.dishka_container is container
+    assert callable(inject)
+    assert callable(inject_websocket)
+
+    with TestClient(app=app) as client:
+        response = client.get("/v1/greet")
+        assert response.status_code == 200
+        assert response.json() == {"greeting": "hello-dishka"}
+
+
+def test_litestar_guards_auth_and_middleware_contract() -> None:
+    """Verify ASGIMiddleware, authentication middleware, security backends, and guard execution on exclude_from_auth."""
+    middleware_fields = {name for name, _ in inspect.getmembers(ASGIMiddleware)}
+    assert {
+        "scopes",
+        "exclude_path_pattern",
+        "exclude_opt_key",
+        "should_bypass_for_scope",
+        "handle",
+    } <= middleware_fields
+    assert DefineMiddleware is not None
+    assert all(
+        cls is not None
+        for cls in (
+            JWTAuth,
+            JWTCookieAuth,
+            OAuth2PasswordBearerAuth,
+            Token,
+            SessionAuth,
+            CORSConfig,
+            CSRFConfig,
+            AllowedHostsConfig,
+            CompressionConfig,
+            RateLimitConfig,
+            LoggingMiddlewareConfig,
+            ServerSideSessionConfig,
+            CookieBackendConfig,
+        )
+    )
+
+    class HeaderTraceMiddleware(ASGIMiddleware):
+        scopes = (ScopeType.HTTP,)
+        exclude_path_pattern = r"^/health$"
+        exclude_opt_key = "skip_trace"
+
+        async def handle(self, scope: ASGIScope, receive: Receive, send: Send, next_app: ASGIApp) -> None:
+            await next_app(scope, receive, send)
+
+    class DummyAuthMiddleware(AbstractAuthenticationMiddleware):
+        async def authenticate_request(
+            self,
+            connection: ASGIConnection[Any, Any, Any, Any],
+        ) -> AuthenticationResult:
+            _ = connection
+            raise NotAuthorizedException("Missing auth")
+
+    def require_admin_guard(
+        connection: ASGIConnection[Any, Any, Any, Any],
+        _: BaseRouteHandler,
+    ) -> None:
+        if connection.headers.get("x-admin") != "1":
+            raise PermissionDeniedException("Admin guard rejected")
+
+    @get("/protected-by-guard", exclude_from_auth=True, guards=[require_admin_guard])
+    async def guarded_route() -> dict[str, bool]:
+        return {"ok": True}
+
+    app = Litestar(
+        route_handlers=[guarded_route],
+        middleware=[HeaderTraceMiddleware(), DefineMiddleware(DummyAuthMiddleware)],
+    )
+
+    with TestClient(app=app) as client:
+        denied = client.get("/protected-by-guard")
+        assert denied.status_code == 403
+
+        allowed = client.get("/protected-by-guard", headers={"x-admin": "1"})
+        assert allowed.status_code == 200
+        assert allowed.json() == {"ok": True}
+
+
+def test_litestar_channels_sse_and_websockets_contract() -> None:
+    """Verify ChannelsPlugin backends, SSE responses, Stream, and WebSocket handlers."""
+    channels_plugin = ChannelsPlugin(
+        backend=MemoryChannelsBackend(history=10),
+        channels=["alerts"],
+        arbitrary_channels_allowed=True,
+        create_ws_route_handlers=True,
+        ws_handler_send_history=5,
+    )
+    assert isinstance(channels_plugin, ChannelsPlugin)
+
+    for relative_path, class_name in (
+        ("channels/backends/redis.py", "RedisChannelsPubSubBackend"),
+        ("channels/backends/redis.py", "RedisChannelsStreamBackend"),
+        ("channels/backends/asyncpg.py", "AsyncPgChannelsBackend"),
+        ("channels/backends/psycopg.py", "PsycoPgChannelsBackend"),
+    ):
+        tree = _load_litestar_ast(relative_path)
+        class_names = {node.name for node in tree.body if isinstance(node, ast.ClassDef)}
+        assert class_name in class_names
+
+    sse_msg = ServerSentEventMessage(data="ping", event="heartbeat", id="1", retry=1000)
+    sse_response = ServerSentEvent(iter([sse_msg]), event_type="heartbeat")
+    stream_response = Stream(iter([b"{}\n"]), media_type="application/x-ndjson")
+    assert sse_response is not None
+    assert stream_response.media_type == "application/x-ndjson"
+
+    assert WebSocket is not None
+    assert issubclass(WebsocketListener, object)
+    assert issubclass(WebsocketRouteHandler, BaseRouteHandler)
+    assert callable(websocket)
+    assert callable(websocket_listener)
+    assert hasattr(litestar_handlers, "websocket_stream")
+    assert hasattr(litestar_handlers, "send_websocket_stream")
+
+
+def test_litestar_exceptions_and_problem_details_contract() -> None:
+    """Verify HTTPException hierarchy, ExceptionResponseContent, and ProblemDetailsPlugin."""
+    for exc_cls in (
+        ClientException,
+        ValidationException,
+        ImproperlyConfiguredException,
+        NotAuthorizedException,
+        PermissionDeniedException,
+        NotFoundException,
+        MethodNotAllowedException,
+        TooManyRequestsException,
+        InternalServerException,
+        ServiceUnavailableException,
+        NoRouteMatchFoundException,
+        TemplateNotFoundException,
+    ):
+        assert issubclass(exc_cls, HTTPException)
+
+    assert issubclass(MissingDependencyException, Exception)
+    assert issubclass(SerializationException, Exception)
+    assert issubclass(WebSocketDisconnect, WebSocketException)
+    assert hasattr(litestar_exc_responses, "create_exception_response")
+    assert ExceptionResponseContent is not None
+    assert getattr(ProblemDetailsException, "_PROBLEM_DETAILS_MEDIA_TYPE", None) == "application/problem+json"
+
+    def value_error_to_problem(exc: ValueError) -> ProblemDetailsException:
+        return ProblemDetailsException(
+            status_code=422,
+            title="Invalid domain value",
+            detail=str(exc),
+        )
+
+    problem_config = ProblemDetailsConfig(
+        enable_for_all_http_exceptions=True,
+        exception_to_problem_detail_map={ValueError: value_error_to_problem},
+    )
+    problem_plugin = ProblemDetailsPlugin(config=problem_config)
+
+    @get("/fail")
+    async def fail_route() -> None:
+        raise ValueError("bad input")
+
+    app = Litestar(route_handlers=[fail_route], plugins=[problem_plugin])
+    with TestClient(app=app) as client:
+        response = client.get("/fail")
+        assert response.status_code == 422
+        assert response.headers["content-type"].startswith("application/problem+json")
+        assert response.json()["title"] == "Invalid domain value"
+
+
+def test_litestar_plugins_contract() -> None:
+    """Verify plugin protocols, FlashPlugin, PydanticPlugin, and JinjaTemplateEngine."""
+    assert all(
+        proto is not None
+        for proto in (
+            InitPlugin,
+            InitPluginProtocol,
+            CLIPlugin,
+            CLIPluginProtocol,
+            SerializationPlugin,
+            SerializationPluginProtocol,
+            OpenAPISchemaPlugin,
+            OpenAPISchemaPluginProtocol,
+            PluginProtocol,
+            PluginRegistry,
+            ReceiveRoutePlugin,
+            DIPlugin,
+        )
+    )
+    assert all(
+        item is not None
+        for item in (
+            FlashPlugin,
+            FlashConfig,
+            flash,
+            get_flashes,
+            PydanticPlugin,
+            PydanticInitPlugin,
+            PydanticSchemaPlugin,
+            PydanticDIPlugin,
+            JinjaTemplateEngine,
+        )
+    )
+    pydantic_plugin = PydanticPlugin(prefer_alias=True, validate_strict=False)
+    assert pydantic_plugin.prefer_alias is True
+    assert pydantic_plugin.validate_strict is False

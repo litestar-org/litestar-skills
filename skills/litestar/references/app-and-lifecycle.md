@@ -200,7 +200,7 @@ class ItemController(Controller):
         page_size: Annotated[int, QueryParameter(gt=0, le=100)] = 25,
         region: Annotated[str | None, HeaderParameter(name="X-Region")] = None,
         theme: Annotated[str | None, CookieParameter(name="ui_theme")] = None,
-        raw_ctx: SkipValidation[dict[str, object] | None] = None,
+        raw_ctx: NamedDependency[SkipValidation[dict[str, object] | None]] = None,
     ) -> dict[str, object]:
         """Use explicit parameter, dependency, and skip-validation type markers."""
         _ = (trace_id, session_id, page_size, region, theme, raw_ctx)

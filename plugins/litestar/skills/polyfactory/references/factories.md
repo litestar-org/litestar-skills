@@ -7,7 +7,7 @@ Reference for picking and configuring factory bases. The factory base owns *how*
 | Model kind | Factory base | Module |
 | --- | --- | --- |
 | `pydantic.BaseModel` (v1 or v2) | `ModelFactory[T]` | `polyfactory.factories.pydantic_factory` |
-| `@dataclass` (stdlib) | `DataclassFactory[T]` | `polyfactory.factories` |
+| `@dataclass` (stdlib) | `DataclassFactory[T]` | `polyfactory.factories.dataclass_factory` |
 | `msgspec.Struct` | `MsgspecFactory[T]` | `polyfactory.factories.msgspec_factory` |
 | `@attrs.define` / `attr.s` | `AttrsFactory[T]` | `polyfactory.factories.attrs_factory` |
 | `TypedDict` | `TypedDictFactory[T]` | `polyfactory.factories.typed_dict_factory` |
@@ -15,14 +15,14 @@ Reference for picking and configuring factory bases. The factory base owns *how*
 | Odmantic `Model` | `OdmanticModelFactory[T]` | `polyfactory.factories.odmantic_odm_factory` |
 | SQLAlchemy declarative | `SQLAlchemyFactory[T]` | `polyfactory.factories.sqlalchemy_factory` |
 
-A mismatched base raises `ConfigurationException` during factory class creation. Always match the backend.
+A mismatched base raises `ConfigurationException` during factory class creation. Always match the backend, and import from the concrete submodule (`polyfactory.factories.__all__` only exports `BaseFactory`, `DataclassFactory`, and `TypedDictFactory`, so importing `ModelFactory`, `MsgspecFactory`, or `SQLAlchemyFactory` from `polyfactory.factories` fails at runtime and under `mypy`/`pyright`).
 
 ## The basic pattern
 
 ```python
 from dataclasses import dataclass
 
-from polyfactory.factories import DataclassFactory
+from polyfactory.factories.dataclass_factory import DataclassFactory
 
 
 @dataclass
@@ -47,6 +47,8 @@ Polyfactory infers `__model__` when the factory has exactly one concrete generic
 | `Factory.create_batch_sync(n, **overrides)` | persisted `list[T]` | requires `__sync_persistence__` |
 | `Factory.create_async(**overrides)` | persisted `T` | requires `__async_persistence__` |
 | `Factory.create_batch_async(n, **overrides)` | persisted `list[T]` | requires `__async_persistence__` |
+| `Factory.seed_random(seed)` | `None` | re-seeds `cls.__random__` and `cls.__faker__` at runtime |
+| `BaseFactory.add_provider(type_, fn)` | `None` | registers a global value generator for `type_` |
 
 `build()` accepts keyword overrides (`OrderFactory.build(status="paid")`) — useful for one-off variations without subclassing.
 There is no `build_async()`: the async methods build synchronously, then await a configured persistence handler.
@@ -132,7 +134,7 @@ class OrderFactory(DataclassFactory[Order]):
 
 Without the default flag, polyfactory introspects the nested type generically — fine for simple types, but loses any field overrides defined on `CustomerFactory`.
 
-Note: Polyfactory pre-registers `ModelFactory`, `DataclassFactory`, `TypedDictFactory`, `MsgspecFactory`, `BeanieDocumentFactory`, and `OdmanticModelFactory` on startup. To resolve nested `@attrs.define` or SQLAlchemy models automatically, import `polyfactory.factories.attrs_factory` or `polyfactory.factories.sqlalchemy_factory` so the base factory registers in `BaseFactory.__base_factories__`.
+Note: Polyfactory pre-registers `ModelFactory`, `DataclassFactory`, `TypedDictFactory`, `MsgspecFactory`, `BeanieDocumentFactory`, and `OdmanticModelFactory` on startup. To resolve nested `@attrs.define` or SQLAlchemy models automatically, import `polyfactory.factories.attrs_factory` or `polyfactory.factories.sqlalchemy_factory` so the base factory registers in `BaseFactory._base_factories`.
 
 ## Determinism and collection sizing
 
@@ -141,9 +143,12 @@ Note: Polyfactory pre-registers `ModelFactory`, `DataclassFactory`, `TypedDictFa
 ```python
 class OrderFactory(DataclassFactory[Order]):
     __random_seed__ = 42
+
+
+OrderFactory.seed_random(42)
 ```
 
-Re-running the test with the same seed produces identical instances — set this when assertions check exact generated values.
+Setting `__random_seed__ = 42` calls `cls.seed_random(42)` once during class creation (`__init_subclass__`), seeding both `cls.__random__` and `cls.__faker__`. Call `OrderFactory.seed_random(42)` at runtime (for example, inside a fixture or test) to reset the PRNG and Faker state before building.
 
 ### Per-factory Faker
 
@@ -156,7 +161,7 @@ class OrderFactory(DataclassFactory[Order]):
     __faker__.seed_instance(42)
 ```
 
-Use a custom `Faker` to control locale (regional names, addresses) or to share a single seeded Faker across multiple factories.
+Use a custom `Faker` to control locale (regional names, addresses) or to share a single seeded Faker across multiple factories. Always seed via `__faker__.seed_instance(seed)` or `Factory.seed_random(seed)` — never `Faker(seed=...)`, which `Faker.__init__` ignores.
 
 ### Optional and default values
 

@@ -157,7 +157,7 @@ Import `SPAConfig` from `litestar_vite.config`.
 | `generate_routes` | `True` | `routes.ts` typed URL builder |
 | `generate_schemas` | `True` | `schemas.ts` from OpenAPI |
 | `generate_page_props` | `True` | Inertia-only — `page-props.ts` generated from `inertia-pages.json`; requires `ViteConfig.inertia` |
-| `generate_channels` | `False` | Generate `asyncapi.json` and `channels.ts` from Channels / WebSocket / SSE routes (`0.32.0+`) |
+| `generate_channels` | `True` | Generate `asyncapi.json` and `channels.ts` when `AsyncAPIPlugin` (`litestar-asyncapi`) is registered on the Litestar app (`0.32.0+`) |
 | `global_route` | `False` | Register `window.route` global in generated `routes.ts` |
 | `fail_on_error` | `None` | Fail builds (`True`) and warn during dev (`False`) by default; explicit bool overrides both |
 | `fallback_type` | `"unknown"` | Fallback (`"unknown"` or `"any"`) for untyped containers in Inertia props |
@@ -165,7 +165,7 @@ Import `SPAConfig` from `litestar_vite.config`.
 | `extra_commands` | `[]` | Additional codegen commands (e.g. `[["tsr", "generate"]]`) run after metadata export and before `litestar-vite-typegen` |
 
 The JS generator writes hey-api output under `output/api/`, plus
-`page-props.ts`, `schemas.ts`, `static-props.ts`, and `channels.ts` (`0.32.0+`) when enabled.
+`page-props.ts`, `schemas.ts`, `static-props.ts`, and `channels.ts` (`0.32.0+`, when `AsyncAPIPlugin` is registered) when enabled.
 
 ## InertiaConfig & InertiaSSRConfig
 
@@ -188,25 +188,21 @@ Import `InertiaConfig` and `InertiaSSRConfig` from `litestar_vite` or
 | `use_script_element` | `True` | Embed page JSON inside `<script type="application/json">` tag |
 | `precognition` | `False` | Enable Laravel Precognition compatible real-time validation exception handler |
 
-`InertiaSSRConfig` options:
+`InertiaSSRConfig` options (`0.32.0+` IPC SSR; replaces `0.31.0` HTTP `url`, `auto_start`, `health_check`, and `health_check_timeout` fields):
 
 | Option | Default | Description |
 | --- | --- | --- |
 | `enabled` | `True` | Enable SSR rendering |
-| `url` | `"http://127.0.0.1:13714/render"` | Local SSR renderer endpoint |
 | `timeout` | `2.0` | Timeout in seconds for SSR render requests |
 | `target_selector` | `"#app"` | Container selector to replace with SSR output |
-| `command` | `None` | Command to spawn SSR node process (e.g. `["node", "resources/ssr.js"]`) |
-| `cwd` | `None` | Working directory for the SSR process |
-| `auto_start` | `True` | Automatically start and stop the SSR process with the Litestar lifespan |
-| `health_check` | `False` | Check SSR server availability on startup |
-| `health_check_timeout` | `10.0` | Maximum wait time in seconds for SSR server health check |
+| `command` | `None` | Command to spawn production SSR worker process (defaults to `["node", "<ssr_bundle_path>"]`) |
+| `cwd` | `None` | Working directory for the production SSR process |
 | `fallback_to_client` | `True` | Fall back to client-side CSR bootstrap if SSR rendering fails (`0.32.0+`) |
 | `circuit_breaker_enabled` | `True` | Enable `SSRCircuitBreaker` to short-circuit repeated SSR failures (`0.32.0+`) |
 | `circuit_breaker_failure_threshold` | `3` | Consecutive failures before opening the SSR circuit (`0.32.0+`) |
 | `circuit_breaker_reset_timeout` | `30.0` | Seconds before transitioning an open circuit to `HALF_OPEN` (`0.32.0+`) |
 
-In `0.32.0+`, `litestar_vite.ipc` exports `BaseIPCTransport`, `StdioIPCTransport`, `TCPStreamIPCTransport`, `SSRCircuitBreaker`, and `CircuitState`.
+In `0.32.0+`, `litestar_vite.ipc` exports `BaseIPCTransport`, `StdioIPCTransport`, `TCPStreamIPCTransport`, `SSRCircuitBreaker`, `CircuitState`, `IPCError`, `IPCRequest`, `IPCResponse`, `IPCTimeoutError`, `IPCWorkerCrashError`, and `CircuitBreakerOpenError`.
 
 ## LoggingConfig
 

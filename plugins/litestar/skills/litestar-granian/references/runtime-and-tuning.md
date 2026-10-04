@@ -1,6 +1,6 @@
 # Granian Runtime Architecture and Tuning Guide
 
-Deep-dive into concurrency models, thread architectures, HTTP protocol tuning, memory recycling, and runtime optimization with `litestar-granian` 0.16.0 and `granian` 2.8.3.
+Deep-dive into concurrency models, thread architectures, HTTP protocol tuning, memory recycling, and runtime optimization with `litestar-granian` 0.16.0 and `granian` 2.8.4.
 
 ## Concurrency and Process Model
 
@@ -101,7 +101,7 @@ This prevents memory exhaustion and event loop starvation under sudden traffic s
 - `--http auto` (default): Negotiates HTTP/1.1 and HTTP/2 via ALPN during TLS handshake; accepts HTTP/1.1 on cleartext TCP.
 - `--http 1`: Forces HTTP/1.1 only.
 - `--http 2`: Forces HTTP/2 only. **Note:** WebSockets are automatically disabled in HTTP/2-only mode.
-- *Note on HTTP/3:* Granian 2.8.3 does not support HTTP/3 / QUIC. Deploy an edge reverse proxy (such as Cloudflare, NGINX, or Envoy) in front of Granian for HTTP/3 termination.
+- *Note on HTTP/3:* Granian 2.8.4 does not support HTTP/3 / QUIC. Deploy an edge reverse proxy (such as Cloudflare, NGINX, or Envoy) in front of Granian for HTTP/3 termination.
 
 ### HTTP/1 Performance Knobs
 

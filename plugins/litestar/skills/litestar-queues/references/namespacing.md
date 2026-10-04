@@ -53,7 +53,7 @@ The deadline is enforced **atomically by every backend**. `expired` is reported 
 
 `stream_queue_events_hardened`, `stream_queue_events_sse`, and `build_stream_router` are private with no aliases. Configure streaming through `EventStreamConfig`, which owns the path, transports, guards, channel authorizer, scopes, heartbeat interval, and replay limit.
 
-Set `replay_limit > 0` (the default is `0`) when browser clients must recover missed events across a reconnect; the browser side is covered in [litestar-vite streams](../../litestar-vite/references/streams.md).
+Set `replay_limit > 0` (the default is `0`) when browser clients must recover missed events across a reconnect; on the browser side, consume the stream with `createQueueEventStream` from `litestar-vite-plugin/helpers` (covered in [litestar-vite streams](../../litestar-vite/references/streams.md)).
 
 ## Cross-References
 

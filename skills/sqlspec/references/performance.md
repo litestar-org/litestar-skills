@@ -70,6 +70,9 @@ Configure BigQuery job behavior through `BigQueryConfig.driver_features`.
 | `query_page_size` | Passed to `QueryJob.result()` for SELECT result fetching |
 | `query_max_results` | Total row cap passed to `QueryJob.result()` for SELECT result fetching |
 | `enable_storage_write_api` | Uses Storage Write API for `load_from_arrow(..., overwrite=False)` appends when available |
+| `storage_write_stream_type` | Selects Storage Write stream mode: `"COMMITTED"` (default streaming append) or `"PENDING"` (buffered two-phase finalize + batch commit) |
+| `enable_native_storage` | Enables native BigQuery server-side `LOAD DATA` / `EXPORT DATA` jobs for `gs://` URIs before falling back to `StorageBridgeJob` |
+| `native_export_connection` | Optional BigQuery connection resource name forwarded to `EXPORT DATA WITH CONNECTION` |
 
 Use the normal SQLSpec calls: `execute()`, `select()`, `select_to_arrow()`, `select_to_storage()`, `load_from_arrow()`, and `load_from_storage()`. SQLSpec does not expose `execute_with_job()` or `export_table_to_storage()`.
 
@@ -81,17 +84,19 @@ Use `job_retry_deadline=0` for emulators or endpoints where retrying unsupported
 
 Configure defaults through `SpannerSyncConfig.driver_features`:
 
+- `query_options` -- optimizer version / statistics package options forwarded to `execute_sql()` and `execute_update()`.
 - `request_options` -- forwarded to `execute_sql()`, `execute_update()`, and `batch_update()`.
 - `directed_read_options` -- forwarded only to read calls using `execute_sql()`.
 - `retry` and `timeout` -- forwarded to statement execution calls.
 - `enable_batch_write_api` -- routes `load_from_arrow()` through Spanner Batch Write API for high-throughput mutation groups when `overwrite=False`.
 
-Per-call overrides use the existing driver methods:
+Per-call overrides use the existing driver methods (including `last_statement=True` for final DML statements in a read-write transaction):
 
 ```python
 result = driver.execute(
     "SELECT id FROM users WHERE id = @id",
     {"id": "u-1"},
+    query_options={"optimizer_version": "latest"},
     request_options={"request_tag": "users.lookup"},
     directed_read_options=directed_read_options,
     timeout=10.0,
@@ -106,7 +111,11 @@ with config.provide_session(
     retry=retry,
     timeout=20.0,
 ) as driver:
-    driver.execute("UPDATE orders SET status = @status WHERE id = @id", params)
+    driver.execute(
+        "UPDATE orders SET status = @status WHERE id = @id",
+        params,
+        last_statement=True,
+    )
 ```
 
 Use `provide_read_session()` for single-use snapshot reads. Use `provide_session()` or `provide_write_session()` for DDL, DML, and write-capable transactions.

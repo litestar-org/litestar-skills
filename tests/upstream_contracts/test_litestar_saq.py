@@ -1,3 +1,5 @@
+import dataclasses
+import inspect
 from importlib.metadata import version
 
 import litestar_saq
@@ -25,8 +27,12 @@ from litestar_saq import (
 )
 from litestar_saq import cli as saq_cli
 from litestar_saq import controllers as saq_controllers
+from litestar_saq import instrumentation as saq_instrumentation
+from litestar_saq import typing as saq_typing
 from litestar_saq.exceptions import ImproperConfigurationError
-from saq.job import TERMINAL_STATUSES, UNSUCCESSFUL_TERMINAL_STATUSES, Status
+from saq.job import ACTIVE_STATUSES, TERMINAL_STATUSES, UNSUCCESSFUL_TERMINAL_STATUSES, Status
+from saq.queue.postgres import PostgresQueue
+from saq.types import Context, PartialTimersDict, TimersDict
 
 
 def test_litestar_saq_080_contract() -> None:
@@ -56,9 +62,43 @@ def test_litestar_saq_080_contract() -> None:
     }
     assert set(litestar_saq.__all__) == expected_exports
     assert isinstance(OPENTELEMETRY_INSTALLED, bool)
-    assert PostgresQueueOptions is not None
-    assert RedisQueueOptions is not None
+    assert set(PostgresQueueOptions.__annotations__) == {
+        "versions_table",
+        "jobs_table",
+        "stats_table",
+        "min_size",
+        "max_size",
+        "saq_lock_keyspace",
+        "priorities",
+        "swept_error_message",
+        "manage_pool_lifecycle",
+    }
+    assert set(RedisQueueOptions.__annotations__) == {
+        "max_concurrent_ops",
+        "swept_error_message",
+    }
+    pg_init_params = set(inspect.signature(PostgresQueue.__init__).parameters)
+    assert {
+        "pool",
+        "url",
+        "name",
+        "versions_table",
+        "jobs_table",
+        "stats_table",
+        "min_size",
+        "max_size",
+        "saq_lock_keyspace",
+        "priorities",
+        "swept_error_message",
+        "manage_pool_lifecycle",
+    } <= pg_init_params
     assert HeartbeatManager is not None
+    assert callable(saq_instrumentation.InstrumentedQueue)
+    assert callable(saq_instrumentation.inject_trace_context)
+    assert saq_typing.Context is not Context
+    assert set(Context.__annotations__) == {"worker", "job", "queue", "exception"}
+    assert set(TimersDict.__annotations__) == {"schedule", "worker_info", "sweep", "abort"}
+    assert issubclass(PartialTimersDict, dict)
     assert all(
         callable(hook)
         for hook in (
@@ -80,13 +120,38 @@ def test_litestar_saq_080_contract() -> None:
     with pytest.raises(ImproperlyConfiguredException, match="Invalid broker type"):
         invalid_pg_config.get_broker()
 
+    valid_pg_config = QueueConfig(
+        dsn="postgresql://localhost/db",
+        broker_options=PostgresQueueOptions(
+            jobs_table="custom_jobs",
+            stats_table="custom_stats",
+            versions_table="custom_versions",
+        ),
+    )
+    pg_broker = valid_pg_config.get_broker()
+    pg_queue = SAQConfig(queue_configs=[valid_pg_config]).get_queues().get("default")
+    assert valid_pg_config.broker_type == "postgres"
+    assert valid_pg_config.queue_class is PostgresQueue
+    assert isinstance(pg_queue, PostgresQueue)
+    assert pg_broker.kwargs.get("autocommit") is True
+    assert valid_pg_config.broker_options.get("manage_pool_lifecycle") is True
+    assert valid_pg_config.broker_options.get("jobs_table") == "custom_jobs"
+
     with pytest.raises(ImportError):
         QueueConfig(dsn="redis://localhost", startup="litestar_saq.hooks.startup_logger")
+    with pytest.raises(ImportError):
+        QueueConfig(dsn="redis://localhost", shutdown="litestar_saq.hooks.shutdown_logger")
+    with pytest.raises(ImportError):
+        QueueConfig(dsn="redis://localhost", before_process="litestar_saq.hooks.before_process_logger")
+    with pytest.raises(ImportError):
+        QueueConfig(dsn="redis://localhost", after_process="litestar_saq.hooks.after_process_logger")
 
     queue_config = QueueConfig(
         dsn="redis://localhost",
         startup=["litestar_saq.hooks.startup_logger"],
         shutdown=shutdown_logger,
+        before_process=["litestar_saq.hooks.before_process_logger"],
+        after_process=["litestar_saq.hooks.after_process_logger"],
     )
     assert queue_config.name == "default"
     assert queue_config.concurrency == 10
@@ -96,6 +161,8 @@ def test_litestar_saq_080_contract() -> None:
     assert queue_config.broker_instance_options == {}
     assert queue_config.startup == [startup_logger]
     assert queue_config.shutdown == [shutdown_logger]
+    assert queue_config.before_process == [before_process_logger]
+    assert queue_config.after_process == [after_process_logger]
 
     cron_job = CronJob(
         function="litestar_saq.hooks.startup_logger",
@@ -104,6 +171,17 @@ def test_litestar_saq_080_contract() -> None:
     )
     assert cron_job.function is startup_logger
     assert cron_job.meta == {}
+
+    job_fields = {f.name: f.default for f in dataclasses.fields(Job)}
+    assert job_fields["timeout"] == 10
+    assert job_fields["heartbeat"] == 0
+    assert job_fields["retries"] == 1
+    assert job_fields["ttl"] == 600
+    assert job_fields["retry_delay"] == 0.0
+    assert job_fields["retry_backoff"] is False
+    assert job_fields["scheduled"] == 0
+    assert job_fields["priority"] == 0
+    assert job_fields["group_key"] is None
 
     saq_config = SAQConfig(queue_configs=[queue_config])
     assert saq_config.queues_dependency_key == "task_queues"
@@ -159,5 +237,6 @@ def test_litestar_saq_080_contract() -> None:
     with pytest.raises(ValueError, match="Heartbeat interval must be positive"):
         monitored_job(interval=-1.0)
 
+    assert {Status.NEW, Status.QUEUED, Status.ACTIVE} == set(ACTIVE_STATUSES)
     assert {Status.COMPLETE, Status.FAILED, Status.ABORTED} == set(TERMINAL_STATUSES)
     assert {Status.FAILED, Status.ABORTED} == set(UNSUCCESSFUL_TERMINAL_STATUSES)

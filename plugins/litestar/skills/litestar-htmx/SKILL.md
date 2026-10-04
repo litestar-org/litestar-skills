@@ -1,6 +1,6 @@
 ---
 name: litestar-htmx
-description: "Auto-activate for litestar_htmx, HTMXPlugin, HTMXConfig, HTMXRequest, HTMXTemplate, HXLocation, ReplaceUrl, TriggerEvent, HX-* headers, or Litestar partial HTML. Not for client-only HTMX or Litestar Vite JSON."
+description: "Auto-activate for litestar_htmx, HTMXPlugin, HTMXConfig, HTMXRequest, HTMXTemplate, HXLocation, ReplaceUrl, TriggerEvent, or HX-* headers. Not for client-only HTMX — use litestar-vite."
 ---
 
 # litestar-htmx
@@ -136,12 +136,13 @@ All helpers are exported from `litestar_htmx` and
 | `HXStopPolling` | `HXStopPolling()` | Returns status `286` (`HTMX_STOP_POLLING`) |
 | `ClientRedirect` | `ClientRedirect(redirect_to)` | Status `200`; sets URL-quoted `HX-Redirect` and deletes `Location` |
 | `ClientRefresh` | `ClientRefresh()` | Status `200`; sets `HX-Refresh: true` |
-| `PushUrl` | `PushUrl(content, push_url, **response_kwargs)` | Status `200`; sets `HX-Push-Url` |
-| `ReplaceUrl` | `ReplaceUrl(content, replace_url, **response_kwargs)` | Status `200`; sets `HX-Replace-Url` |
-| `Reswap` | `Reswap(content, method, **response_kwargs)` | Sets `HX-Reswap` |
-| `Retarget` | `Retarget(content, target, **response_kwargs)` | Sets `HX-Retarget` |
-| `TriggerEvent` | `TriggerEvent(content, name, after, params=None, **response_kwargs)` | Sets `HX-Trigger`, `HX-Trigger-After-Settle`, or `HX-Trigger-After-Swap` |
-| `HXLocation` | `HXLocation(redirect_to, source=None, event=None, target=None, select=None, swap=None, hx_headers=None, values=None, **response_kwargs)` | Status `200`; sets JSON in `HX-Location` and deletes `Location` |
+| `PushUrl` | `PushUrl(content, push_url, **kwargs)` | Status `200`; sets `HX-Push-Url` |
+| `ReplaceUrl` | `ReplaceUrl(content, replace_url, **kwargs)` | Status `200`; sets `HX-Replace-Url` |
+| `Reswap` | `Reswap(content, method, **kwargs)` | Sets `HX-Reswap` |
+| `Retarget` | `Retarget(content, target, **kwargs)` | Sets `HX-Retarget` |
+| `TriggerEvent` | `TriggerEvent(content, name, after, params=None, **kwargs)` | Sets `HX-Trigger`, `HX-Trigger-After-Settle`, or `HX-Trigger-After-Swap` |
+| `HXLocation` | `HXLocation(redirect_to, source=None, event=None, target=None, select=None, swap=None, hx_headers=None, values=None, **kwargs)` | Status `200`; sets JSON in `HX-Location` and deletes `Location` |
+| `HTMXTemplate` | `HTMXTemplate(push_url=None, re_swap=None, re_target=None, trigger_event=None, params=None, after=None, **kwargs)` | `Template` subclass combining `HX-Push-Url`, `HX-Reswap`, `HX-Retarget`, and trigger headers |
 
 Pass a URL `str` to `push_url` or `replace_url` to update history, or `False`
 (or `"False"`) to emit `"false"` and prevent the history update. Do not pass
@@ -149,8 +150,9 @@ Pass a URL `str` to `push_url` or `replace_url` to update history, or `False`
 
 ### Exported types and header enum
 
-`litestar_htmx` (and `litestar_htmx.types`) exports the typing definitions and
-header enum used across request and response helpers:
+`litestar_htmx` exports the typing definitions (from `litestar_htmx.types`) and
+the `HTMXHeaders` enum (from `litestar_htmx.request` and `litestar_htmx._utils`)
+used across request and response helpers:
 
 | Export | Kind | Definition / Values |
 | --- | --- | --- |

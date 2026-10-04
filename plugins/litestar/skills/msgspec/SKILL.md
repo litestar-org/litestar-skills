@@ -6,7 +6,7 @@ description: "Auto-activate for msgspec, Struct, Meta, msgspec.json, msgspec.msg
 # msgspec Skill
 
 msgspec is a high-performance Python library for serialization, deserialization, and typed
-validation. This guidance targets the immutable `0.21.1` release.
+validation. This guidance targets the `0.22.0` release.
 
 ## Code Style Rules
 
@@ -77,14 +77,14 @@ class StrictInput(msgspec.Struct, forbid_unknown_fields=True):
 | `frozen` | `False` | Immutable instances; adds `__hash__` |
 | `cache_hash` | `False` | Precompute and cache hash on `frozen=True` Structs |
 | `gc` | `True` | Set `False` to omit Cyclic GC header on short-lived, non-circular Structs |
-| `omit_defaults` | `False` | Omit fields equal to their default when encoding or calling `to_builtins()` |
+| `omit_defaults` | `False` | Omit fields equal to their default (or empty built-in `list`/`dict`/`set`/`bytearray` `default_factory`; custom `default_factory` callables are never omitted) when encoding or calling `to_builtins()` |
 | `repr_omit_defaults` | `False` | Omit fields equal to their default in `repr()` |
 | `forbid_unknown_fields` | `False` | Raise `ValidationError` on unknown keys during decoding / `convert()` |
 | `rename` | `None` | `"lower"`, `"upper"`, `"camel"`, `"pascal"`, `"kebab"`, `Callable[[str], str \| None]`, or `Mapping[str, str]` (leading `_` is preserved for `"camel"`/`"pascal"`) |
 | `array_like` | `False` | Encode/decode Struct as a positional array (`[x, y]`) instead of an object |
 | `tag` / `tag_field` | `None` | Discriminated union tag (`True`, `False`, `str`, `int`, or `Callable[[str], str \| int]`) and discriminator key (defaults to `"type"` when `tag` is set) |
 | `eq` / `order` | `True` / `False` | Generate `==`/`!=` and `<`/`<=`/`>`/`>=` comparison methods |
-| `weakref` / `dict` | `False` / `False` | Add `__weakref__` slot or `__dict__` attribute storage (`dict=True` cannot be combined with `gc=False`) |
+| `weakref` / `dict` | `False` / `False` | Add `__weakref__` slot or `__dict__` attribute storage (neither `dict=True` nor `weakref=True`/inherited `__weakref__` can be combined with `gc=False` in 0.22.0+) |
 
 ### Partial Updates with `UNSET` and `UnsetType`
 
@@ -144,7 +144,7 @@ class Order(msgspec.Struct):
 import msgspec
 
 # JSON -- singleton encoder/decoder (cache these!)
-# Encoder kwargs: enc_hook=None, decimal_format="string"|"number", uuid_format="canonical"|"hex", order=None|"deterministic"|"sorted"
+# Encoder kwargs: enc_hook=None, decimal_format="string"|"number"|Callable[[Decimal], Any], uuid_format="canonical"|"hex", order=None|"deterministic"|"sorted"
 # Decoder kwargs: type=Any, *, strict=True, dec_hook=None, float_hook=None
 encoder = msgspec.json.Encoder()
 decoder = msgspec.json.Decoder(User)
@@ -205,8 +205,8 @@ custom_decoder = msgspec.json.Decoder(MyStruct, dec_hook=dec_hook)
 ```
 
 `dec_hook` runs only for unsupported custom annotations. `TypeError` and `ValueError` raised by
-the hook become path-aware `ValidationError`s. In 0.21.1, a `ValidationError` or `DecodeError`
-raised by the hook propagates directly and is not wrapped in another `ValidationError`.
+the hook become path-aware `ValidationError`s. `ValidationError` and `DecodeError` raised by the
+hook propagate directly without being wrapped in another `ValidationError` (0.21.1+).
 
 **Exception hierarchy:** `MsgspecError(Exception)` is the base class for `EncodeError` and
 `DecodeError`. `ValidationError` is a subclass of `DecodeError` (`ValidationError -> DecodeError -> MsgspecError`).
@@ -397,18 +397,27 @@ All Struct variants in a multi-Struct union must be tagged, use the same `tag_fi
 tag values, and use one tag type (`str` or `int`) consistently. A union may contain non-Struct
 types, but it may contain at most one untagged Struct.
 
-### Validation and 0.20 / 0.21 Behavior
+### Validation and 0.20–0.22 Behavior
 
 - Direct Struct construction trusts the caller and does not enforce field annotations.
   Typed `decode()` and `convert()` perform runtime type and `Meta` constraint validation.
 - `msgspec.StructMeta` is publicly exposed, and `msgspec.inspect.is_struct()` /
   `msgspec.inspect.is_struct_type()` provide `TypeGuard` checks for Struct instances and classes (0.20.0+).
-- `msgspec.structs.replace()` and Python's `copy.replace()` call `__post_init__` as of 0.21.0.
-- `msgspec.json.schema()` and `schema_components()` accept
-  `ref_template="#/$defs/{name}"`; 0.21.1 includes the parameter in the type stub.
-- JSON Schema output marks `set` and `frozenset` fields with `uniqueItems: True` (0.21.0+).
-- In 0.21.1, `ValidationError` and `DecodeError` raised inside `dec_hook` propagate directly without
-  being double-wrapped in another `ValidationError`.
+- `msgspec.structs.replace()` and Python's `copy.replace()` call `__post_init__` (0.21.0+).
+- `ValidationError` and `DecodeError` raised inside `dec_hook` propagate directly without
+  being double-wrapped in another `ValidationError` (0.21.1+).
+- In 0.22.0, setting `gc=False` on a Struct with `weakref=True` (or an inherited `__weakref__` slot)
+  raises `ValueError` (matching `gc=False` + `dict=True`).
+- In 0.22.0, `msgspec.json.Encoder` and `msgspec.msgpack.Encoder` accept a callable for
+  `decimal_format` (`Callable[[Decimal], Any]`) in addition to `"string"` and `"number"`.
+- In 0.22.0, `Literal[True]`/`Literal[False]`, mixed-type `Literal`s (such as `Literal[1, None]`),
+  PEP 695 generic classes (`class Box[T](msgspec.Struct): ...`), `dict` keys using plain
+  `str`-valued `Enum`s in JSON, overriding an inherited field alias back to its own name, and
+  Python 3.15+ `frozendict` (`msgspec.inspect.FrozenDictType`) are supported.
+- `msgspec.json.schema()` and `schema_components()` accept `ref_template="#/$defs/{name}"`, mark
+  `set` and `frozenset` fields with `uniqueItems: True`, emit JSON-compatible `[]`/`""` defaults
+  for `default_factory=set`/`bytearray`, place `{"type": "null"}` last in optional union `anyOf`,
+  and preserve `Meta` constraints/metadata in `propertyNames` for annotated `dict` keys (0.21–0.22).
 
 <workflow>
 
@@ -567,16 +576,17 @@ For detailed guides and reference tables, refer to the following documents in `r
 
 ## Official References
 
-- <https://pypi.org/project/msgspec/0.21.1/>
-- <https://github.com/jcrist/msgspec/tree/0.21.1>
-- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/structs.rst>
-- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/constraints.rst>
-- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/supported-types.rst>
-- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/jsonschema.rst>
-- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/converters.rst>
-- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/extending.rst>
-- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/api.rst>
-- <https://github.com/jcrist/msgspec/blob/0.21.1/docs/changelog.md>
+- <https://msgspec.dev>
+- <https://pypi.org/project/msgspec/0.22.0/>
+- <https://github.com/msgspec/msgspec/tree/0.22.0>
+- <https://github.com/msgspec/msgspec/blob/0.22.0/docs/structs.rst>
+- <https://github.com/msgspec/msgspec/blob/0.22.0/docs/constraints.rst>
+- <https://github.com/msgspec/msgspec/blob/0.22.0/docs/supported-types.rst>
+- <https://github.com/msgspec/msgspec/blob/0.22.0/docs/jsonschema.rst>
+- <https://github.com/msgspec/msgspec/blob/0.22.0/docs/converters.rst>
+- <https://github.com/msgspec/msgspec/blob/0.22.0/docs/extending.rst>
+- <https://github.com/msgspec/msgspec/blob/0.22.0/docs/api.rst>
+- <https://github.com/msgspec/msgspec/blob/0.22.0/docs/changelog.md>
 
 ## Shared Styleguide Baseline
 

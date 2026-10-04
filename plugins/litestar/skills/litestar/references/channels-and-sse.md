@@ -17,13 +17,15 @@ from uuid import UUID
 import msgspec
 from litestar import get
 from litestar.channels import ChannelsPlugin
+from litestar.di import NamedDependency
+from litestar.params import FromPath
 from litestar.response import ServerSentEvent, ServerSentEventMessage, Stream
 
 
 @get("/api/workspaces/{workspace_id:uuid}/events/sse", sync_to_thread=False)
 def sse_workspace_events(
-    workspace_id: UUID,
-    channels: ChannelsPlugin,
+    workspace_id: FromPath[UUID],
+    channels: NamedDependency[ChannelsPlugin],
 ) -> ServerSentEvent:
     """Stream a ChannelsPlugin subscription over Server-Sent Events."""
 
@@ -46,7 +48,7 @@ def sse_workspace_events(
 
 
 @get("/api/exports/{export_id:uuid}/download", sync_to_thread=False)
-def stream_export_ndjson(export_id: UUID) -> Stream:
+def stream_export_ndjson(export_id: FromPath[UUID]) -> Stream:
     """Stream raw NDJSON chunks over HTTP using Stream."""
 
     async def chunk_generator() -> AsyncGenerator[bytes, None]:
@@ -418,7 +420,7 @@ Litestar applications with multi-scope pub/sub.
 
 ```python
 import msgspec
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 from uuid import UUID
 
@@ -434,7 +436,7 @@ class RealtimeEvent(CamelizedBaseStruct, kw_only=True):
     schema_version: str = REALTIME_SCHEMA_VERSION
     event_type: RealtimeEventType | str
     scope: RealtimeScope
-    published_at: datetime = msgspec.field(default_factory=lambda: datetime.now(UTC))
+    published_at: datetime = msgspec.field(default_factory=lambda: datetime.now(timezone.utc))
     workspace_id: UUID | None = None
     user_id: UUID | None = None
     actor: RealtimeActor | None = None

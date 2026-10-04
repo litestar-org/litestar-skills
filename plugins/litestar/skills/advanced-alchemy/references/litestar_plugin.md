@@ -296,6 +296,91 @@ Do not close request sessions manually. Commit explicitly when using the
 default close-only handler; let an autocommit handler own the transaction when
 one is configured.
 
+## Exception Handling & Status-Code Key Gotcha
+
+By default (`set_default_exception_handler=True`), `SQLAlchemyInitPlugin` maps `RepositoryError` to `exception_to_http_response` (`NotFoundError` → `404 NotFoundException`, `DuplicateKeyError` / `IntegrityError` / `ForeignKeyError` → `409 ConflictError`, other `RepositoryError` subclasses → `500 InternalServerException`).
+
+**Gotcha:** `SQLAlchemyInitPlugin.on_app_init` checks:
+
+```python
+if configure_exception_handler and not any(
+    isinstance(exc, int) or issubclass(exc, RepositoryError) for exc in app_config.exception_handlers
+):
+    app_config.exception_handlers.update({RepositoryError: exception_to_http_response})
+```
+
+If `Litestar(exception_handlers={...})` contains **any integer status-code key** (such as `500`, `404`, or `HTTP_500_INTERNAL_SERVER_ERROR`), `isinstance(exc, int)` evaluates to `True` and `SQLAlchemyInitPlugin` **skips** registering `RepositoryError: exception_to_http_response`. Unhandled `NotFoundError` and `DuplicateKeyError` exceptions then surface as `500 Internal Server Error` instead of `404` / `409`.
+
+Whenever your Litestar application registers integer status-code exception handlers, explicitly include `RepositoryError: exception_to_http_response`:
+
+```python
+from advanced_alchemy.exceptions import RepositoryError
+from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+from advanced_alchemy.extensions.litestar.exception_handler import exception_to_http_response
+from litestar import Litestar
+from litestar.status_codes import HTTP_500_INTERNAL_SERVER_ERROR
+
+
+app = Litestar(
+    route_handlers=[...],
+    plugins=[SQLAlchemyPlugin(config=db_config)],
+    exception_handlers={
+        HTTP_500_INTERNAL_SERVER_ERROR: custom_500_handler,
+        RepositoryError: exception_to_http_response,
+    },
+)
+```
+
+## Dishka Integration
+
+When a Litestar project uses Dishka (`dishka.integrations.litestar`) for dependency injection instead of Litestar's built-in `Provide`, keep `SQLAlchemyPlugin(config=db_config)` registered for engine/session lifecycle (`before_send_handler`), type encoders, and CLI commands, and resolve the plugin-managed request session inside a `Scope.REQUEST` Dishka `Provider` via `db_config.provide_session(request.app.state, request.scope)`:
+
+```python
+from dishka import Provider, Scope, from_context, make_async_container, provide
+from dishka.integrations.litestar import FromDishka, inject, setup_dishka
+from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+from litestar import Litestar, Request, get
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.services import UserService
+
+db_config = SQLAlchemyAsyncConfig(
+    connection_string="postgresql+asyncpg://user:pass@localhost:5432/mydb",
+    before_send_handler="autocommit",
+)
+
+
+class DatabaseProvider(Provider):
+    """Dishka provider bridging Litestar's plugin-managed request session."""
+
+    scope = Scope.REQUEST
+    request = from_context(provides=Request, scope=Scope.REQUEST)
+
+    @provide
+    def provide_session(self, request: Request) -> AsyncSession:
+        return db_config.provide_session(request.app.state, request.scope)
+
+    @provide
+    def provide_user_service(self, session: AsyncSession) -> UserService:
+        return UserService(session=session)
+
+
+@get("/users")
+@inject
+async def list_users(user_service: FromDishka[UserService]) -> list[dict[str, str]]:
+    users = await user_service.get_many()
+    return [{"id": str(u.id), "email": u.email} for u in users]
+
+
+container = make_async_container(DatabaseProvider())
+app = Litestar(
+    route_handlers=[list_users],
+    plugins=[SQLAlchemyPlugin(config=db_config)],
+)
+setup_dishka(container, app)
+```
+
+Using `db_config.provide_session(request.app.state, request.scope)` ensures Dishka services share the exact request-scoped `AsyncSession` inspected by `before_send_handler`.
+
 ## Multiple Database Support
 
 ```python

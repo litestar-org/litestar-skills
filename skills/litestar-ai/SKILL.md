@@ -145,6 +145,7 @@ from litestar.response.sse import ServerSentEventMessage
 from litestar.status_codes import HTTP_200_OK
 from sqlspec import SQLSpec
 from sqlspec.adapters.asyncpg import AsyncpgConfig, AsyncpgPoolConfig
+from sqlspec.adapters.asyncpg.adk import AsyncpgADKMemoryStore, AsyncpgADKStore
 from sqlspec.extensions.adk import SQLSpecMemoryService, SQLSpecSessionService
 from sqlspec.extensions.litestar import SQLSpecPlugin
 
@@ -386,14 +387,14 @@ class AgentChatController(Controller):
 
 sql_runtime = SQLSpec()
 db_config = AsyncpgConfig(
-    pool_config=AsyncpgPoolConfig(dsn="postgresql://app:app@localhost:5432/app"),
+    connection_config=AsyncpgPoolConfig(dsn="postgresql://app:app@localhost:5432/app"),
     extension_config={"adk": {"session_table": "adk_sessions", "events_table": "adk_events"}},
 )
 sql_runtime.add_config(db_config)
 
 run_context_registry = RunContextRegistry()
-session_store = SQLSpecSessionService(db_config)
-memory_store = SQLSpecMemoryService(db_config)
+session_store = SQLSpecSessionService(AsyncpgADKStore(db_config))
+memory_store = SQLSpecMemoryService(AsyncpgADKMemoryStore(db_config))
 
 specialist_agent = LlmAgent(
     name="metrics_specialist",
@@ -447,7 +448,7 @@ app = Litestar(
 
 ## References Index
 
-- **[adk-and-serving.md](references/adk-and-serving.md)** — Google ADK `LlmAgent` + `App` + `Runner` architecture, bounded LRU `ApplicationFactory`, `SQLSpecSessionService` / `SQLSpecMemoryService` / `SQLSpecArtifactService`, sanitized `PreloadMemoryTool`, `SQLSpecSkillRegistry` + `SkillToolset`, `BasePlugin` guardrails, Dishka & native DI wiring, and retention pruning.
+- **[adk-and-serving.md](references/adk-and-serving.md)** — Google ADK `LlmAgent` + `App` + `Runner` architecture, bounded LRU `AgentApplicationFactory`, `SQLSpecSessionService` / `SQLSpecMemoryService` / `SQLSpecArtifactService` store wiring, `RunContextRegistry` + `JSONSafeTool`, sanitized `PreloadMemoryTool`, `BasePlugin` guardrails, Dishka & native DI wiring, and `prune_sessions` / `prune_memory` retention pruning.
 - **[custom-agents-and-tools.md](references/custom-agents-and-tools.md)** — Native `google-genai` + `msgspec` agent runtime (`AgentRuntime`, `AgentSpec`, `SpecTree` with `transfer_to_agent`), `GeminiModelClient` turn normalization, `declare()` + `msgspec.json.schema` to Gemini schema translation, `execute_parallel` tool runner, multi-step `DynamicWorkflow` / `WorkflowEngine` / `BaseSpecialistNode`, and standalone structured-output LLM classifiers.
 - **[streaming-and-queues.md](references/streaming-and-queues.md)** — Terminal-aware SSE `StreamService.adapt()`, `TranscriptReconstructor` session history endpoints, static-prefix `CacheRegistry`, rolling `CompactionPolicy` + `Summarizer` with `find_safe_cut`, `litestar-queues` background compaction and embedding jobs, and OpenTelemetry tracing spans.
 

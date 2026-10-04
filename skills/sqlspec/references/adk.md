@@ -69,7 +69,7 @@ Memory and artifact modules ship their own converter helpers (`sqlspec.extension
 
 ## Per-Adapter Store Implementations
 
-Production adapters ship concrete session/event and memory stores from their `sqlspec.adapters.<adapter>.adk` package: `asyncpg`, `psycopg`, `psqlpy`, `cockroach_asyncpg`, `cockroach_psycopg`, `oracledb`, `sqlite`, `aiosqlite`, `duckdb`, `aiomysql`, `asyncmy`, `pymysql`, `mysqlconnector`, `spanner`, and `adbc`. Each contains both `<Adapter>ADKStore` (session/event) and `<Adapter>ADKMemoryStore` (memory).
+Production adapters ship concrete session/event and memory stores from their `sqlspec.adapters.<adapter>.adk` package: `asyncpg`, `psycopg`, `psqlpy`, `cockroach_asyncpg`, `cockroach_psycopg`, `oracledb`, `db2`, `sqlite`, `aiosqlite`, `duckdb`, `aiomysql`, `asyncmy`, `pymysql`, `mysqlconnector`, `mssql_python`, `pymssql`, `spanner`, `adbc`, and `arrow_odbc`. Each contains both `<Adapter>ADKStore` (session/event) and `<Adapter>ADKMemoryStore` (memory) (with sync/async pairs such as `Db2SyncADKStore` / `Db2AsyncADKStore` and `Db2SyncADKMemoryStore` / `Db2AsyncADKMemoryStore` for dual-mode adapters).
 
 Representative storage strategies:
 
@@ -78,12 +78,13 @@ Representative storage strategies:
 | `asyncpg` / `psycopg` | `JSONB` | GIN index on state, `FILLFACTOR 80` for HOT updates, FK cascade delete |
 | `cockroach_asyncpg` / `cockroach_psycopg` | `JSONB` | Same surface as Postgres; tuned for Cockroach's MVCC |
 | `oracledb` | `JSON` native (21c+), `BLOB` + `IS JSON` check (12c–20c), raw `BLOB` otherwise | Version-aware; `JSONStorageType` enum in the Oracle ADK package |
+| `db2` | `CLOB` (`IS JSON`) | Sync (`Db2SyncADKStore`, `Db2SyncADKMemoryStore`) and async (`Db2AsyncADKStore`, `Db2AsyncADKMemoryStore`) stores with UTC timestamps |
 | `spanner` | JSON (`param_types.JSON`) or STRING fallback | Uses Spanner transactions; `param_types.JSON` when available |
 | `duckdb` | `JSON` | Single-file analytics; syncs via sync driver |
 | `sqlite` / `aiosqlite` | `TEXT` with JSON1 functions | Local dev; small footprint |
 | `asyncmy` / `pymysql` / `mysqlconnector` | `JSON` | Uses MySQL's native JSON type |
 
-BigQuery and the `mock` adapter do **not** ship an ADK store. BigQuery was removed from the ADK backend surface because the batch-oriented job model does not fit ADK's low-latency transactional session/event writes. Use Spanner for a Google-managed operational backend or an OLTP backend such as PostgreSQL, MySQL, Oracle, SQLite, or CockroachDB.
+BigQuery ships `BigQueryADKStore` only as an analytics-replica/telemetry replay path (not for low-latency transactional live agent state or memory stores), because its batch-oriented job model does not provide cross-statement OLTP transactions. Use Spanner for a Google-managed operational backend or an OLTP backend such as PostgreSQL, MySQL, Oracle, IBM Db2, SQLite, or CockroachDB.
 
 ## Schema Expectations
 

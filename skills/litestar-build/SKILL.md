@@ -63,6 +63,10 @@ export default defineConfig({
 **litestar-fullstack-inertia** — in `litestar-vite` v0.30+, Python `ViteConfig(paths=PathConfig(bundle_dir=...))` is the single source of truth and writes `.litestar.json` on startup/CLI invocation so `litestar({ input: [...] })` in `vite.config.ts` inherits `bundleDir` and `hotFile` automatically:
 
 ```python
+from pathlib import Path
+from litestar_vite.config import PathConfig, ViteConfig
+
+
 def get_vite_config() -> ViteConfig:
     """Configure litestar-vite to emit assets inside the app/ Python package."""
     return ViteConfig(
@@ -148,7 +152,7 @@ Configure `ViteConfig(paths=PathConfig(bundle_dir=Path("app/domain/web/public"))
 
 - **`force-include`** (inertia): List the built-asset directory explicitly under `[tool.hatch.build.targets.wheel.force-include]`. Built assets stay `.gitignore`d. Explicit, auditable.
 - **`ignore-vcs = true`** (SPA): Tell Hatchling to ignore `.gitignore`. All package files ship. Simpler; requires discipline to keep dev junk out of package dirs.
-- **Optional custom Hatchling hook**: If you add a `BuildHookInterface` subclass to run `bun run build` during `uv build`, guard `initialize(version, build_data)` with `if version == "editable": return` so `uv sync` does not trigger a frontend build during editable installs.
+- **Optional custom Hatchling hook**: If you add a `BuildHookInterface` subclass (e.g., `tools/build/hatch_build.py`) to run `bun run build` during `uv build`, guard `initialize(version, build_data)` with `if version == "editable": return` so `uv sync` does not trigger a frontend build during editable installs, and exclude `tools/build` from `mypy` and `pyright`.
 
 See [references/wheel-assets.md](references/wheel-assets.md) for full config.
 
@@ -182,7 +186,7 @@ Trigger on `v*` tags. Run the test matrix first. Then build the wheel once. Then
 - **Vite/bun output must land inside a Python package directory.** Otherwise Hatchling drops it. Set `PathConfig.bundle_dir` (and any explicit Vite `build.outDir`) to a path under `src/py/<pkg>/` or `<pkg>/`.
 - **`uv build` runs last.** Assets, licenses, templates, OpenAPI TypeGen all run **before** `uv build --wheel --clear`.
 - **Pick one bundling strategy.** `force-include` or `ignore-vcs = true`, not both. Mixing them causes duplicate-file warnings and unpredictable wheel contents.
-- **Skip editable installs in custom Hatchling hooks.** If a custom `BuildHookInterface` runs in `pyproject.toml`, short-circuit when `version == "editable"` and exclude the hook directory from `mypy`/`pyright` unless `hatchling` is in the typecheck environment.
+- **Skip editable installs in custom Hatchling hooks.** If a custom `BuildHookInterface` runs in `pyproject.toml` (e.g., `path = "tools/build/hatch_build.py"`), short-circuit when `version == "editable"` and exclude `tools/build` from `mypy`/`pyright` unless `hatchling` is in the typecheck environment.
 - **PyApp `PYAPP_*` config vars are build-time, not runtime.** `PYAPP_PROJECT_NAME`, `PYAPP_PYTHON_VERSION`, `PYAPP_DISTRIBUTION_EMBED`, `PYAPP_DISTRIBUTION_VARIANT_GIL` are consumed when `cargo build` compiles PyApp — not when the resulting binary runs. At runtime, PyApp sets `PYAPP=1` (or the executable path when `PYAPP_PASS_LOCATION=1`) inside the spawned Python process.
 - **PyApp version upgrades touch multiple files.** `pyproject.toml`, `build-onefile-package.sh`, `.github/workflows/release.yml`, `tools/bundler.py`. See [upgrading.md](references/upgrading.md).
 - **`cargo-zigbuild` for portable glibc.** Plain `cargo build` on a modern Linux runner produces binaries that fail on older distros (glibc too new). Use `cargo zigbuild --target x86_64-unknown-linux-gnu.2.17` to link against glibc 2.17 (CentOS 7-era). Required for broad compatibility.

@@ -156,6 +156,10 @@ export default defineConfig({
 For `litestar-fullstack-inertia`, `litestar-vite` v0.30+ makes Python `ViteConfig(paths=PathConfig(bundle_dir=...))` the single source of truth. When `litestar assets build` runs, `litestar-vite` writes `.litestar.json` so `litestar({ input: [...] })` in `vite.config.ts` inherits `bundleDir` and `hotFile` automatically:
 
 ```python
+from pathlib import Path
+from litestar_vite.config import PathConfig, RuntimeConfig, ViteConfig
+
+
 def get_vite_config(self) -> ViteConfig:
     """Configure litestar-vite to emit compiled assets inside app/domain/web/public."""
     return ViteConfig(
@@ -176,7 +180,7 @@ def get_vite_config(self) -> ViteConfig:
 If you want `uv build --wheel` to invoke `bun run build` automatically via a custom Hatchling build hook (`[tool.hatch.build.targets.wheel.hooks.custom]`), follow two mandatory guardrails:
 
 1. **Short-circuit editable installs (`if version == "editable": return`)** — `uv sync` installs the project in editable mode (`version == "editable"`). Without this guard, `uv sync` fails in fresh checkouts or CI lint jobs before Node/Bun dependencies exist.
-2. **Exclude the build-hook directory from `mypy` and `pyright`** — `hatchling` lives in `[build-system].requires`, not in project runtime/dev dependencies, so typecheckers will report `Cannot find implementation or library stub for module named "hatchling.builders.hooks.plugin.interface"` unless excluded.
+2. **Exclude the build-hook directory (`tools/build`) from `mypy` and `pyright`** — `hatchling` lives in `[build-system].requires`, not in project runtime/dev dependencies, so typecheckers will report `Cannot find implementation or library stub for module named "hatchling.builders.hooks.plugin.interface"` unless excluded.
 
 ```python
 import subprocess
@@ -194,10 +198,23 @@ class AssetBuildHook(BuildHookInterface):
         subprocess.run(["bun", "run", "build"], check=True)
 ```
 
- When testing wheel builds offline or inside containers with pre-populated virtual environments, pass `--no-build-isolation` (or set `UV_NO_BUILD_ISOLATION=1`) and `--clear` to `uv build`:
+Wire the hook in `pyproject.toml` (`tools/build/hatch_build.py`) and exclude `tools/build` from `mypy` and `pyright`:
+
+```toml
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "tools/build/hatch_build.py"
+
+[tool.mypy]
+exclude = ["tools/build"]
+
+[tool.pyright]
+exclude = ["tools/build"]
+```
+
+When testing wheel builds offline or inside containers with pre-populated virtual environments, pass `--no-build-isolation` (or set `UV_NO_BUILD_ISOLATION=1`) and `--clear` to `uv build`:
 
 ```bash
-uv build --wheel --clear
+uv build --wheel --no-build-isolation --clear
 ```
 
 ## The Makefile chain
@@ -258,7 +275,7 @@ generate-licenses:
 
 .PHONY: build-wheel
 build-wheel: generate-licenses build-templates js-build-all
-	@uv build --wheel
+	@uv build --wheel --clear
 ```
 
 Every prerequisite writes files **into the Python package directory**. `uv build --wheel` then captures them all in one pass.

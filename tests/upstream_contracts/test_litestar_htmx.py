@@ -3,14 +3,20 @@
 import inspect
 import json
 from importlib.metadata import version
+from pathlib import Path
 from typing import Any, cast, get_args
 
 import litestar.plugins.htmx as litestar_plugins_htmx
 import litestar_htmx
+import litestar_htmx.request as htmx_request
+import litestar_htmx.response as htmx_response
+import litestar_htmx.types as htmx_types
 import pytest
 from litestar import Litestar, Request, get
 from litestar.config.app import AppConfig
 from litestar.exceptions import ImproperlyConfiguredException
+from litestar.plugins.jinja import JinjaTemplateEngine
+from litestar.template.config import TemplateConfig
 from litestar.testing import TestClient
 from litestar_htmx import (
     ClientRedirect,
@@ -35,6 +41,8 @@ from litestar_htmx import (
     TriggerEvent,
     TriggerEventType,
 )
+from litestar_vite import ComponentResponse, PathConfig, ViteConfig, VitePlugin, render_fragment
+from litestar_vite.fragments import vite_fragment
 
 
 def test_litestar_htmx_050_exports_and_plugin_reexports() -> None:
@@ -357,3 +365,65 @@ def test_litestar_htmx_050_types_and_headers_enum_contract() -> None:
     assert HTMXHeaders.TRIGGER_EVENT.value == "HX-Trigger"
     assert HTMXHeaders.TRIGGER_AFTER_SETTLE.value == "HX-Trigger-After-Settle"
     assert HTMXHeaders.TRIGGER_AFTER_SWAP.value == "HX-Trigger-After-Swap"
+
+    assert set(htmx_request.__all__) == {"HTMXDetails", "HTMXHeaders", "HTMXRequest"}
+    assert set(htmx_types.__all__) == {
+        "EventAfterType",
+        "HtmxHeaderType",
+        "LocationType",
+        "PushUrlType",
+        "ReSwapMethod",
+        "TriggerEventType",
+    }
+    assert set(htmx_response.__all__) == {
+        "ClientRedirect",
+        "ClientRefresh",
+        "HTMXTemplate",
+        "HXLocation",
+        "HXStopPolling",
+        "PushUrl",
+        "ReplaceUrl",
+        "Reswap",
+        "Retarget",
+        "TriggerEvent",
+    }
+
+
+def test_litestar_htmx_and_litestar_vite_0320_template_integration(tmp_path: Any) -> None:
+    """Verify litestar-vite 0.32.0 template/htmx mode and Jinja integration alongside HTMXPlugin."""
+    assert version("litestar-vite") == "0.32.0"
+    assert render_fragment is vite_fragment
+
+    htmx_alias_config = ViteConfig(mode="htmx")
+    assert htmx_alias_config.mode == "template"
+    assert htmx_alias_config.serves_own_html is True
+
+    template_dir = Path(tmp_path) / "templates"
+    template_dir.mkdir(parents=True, exist_ok=True)
+    resource_dir = Path(tmp_path) / "resources"
+    resource_dir.mkdir(parents=True, exist_ok=True)
+
+    vite = VitePlugin(
+        config=ViteConfig(
+            mode="template",
+            paths=PathConfig(root=Path(tmp_path), resource_dir="resources"),
+        )
+    )
+    templates = TemplateConfig(
+        directory=template_dir,
+        engine=JinjaTemplateEngine,
+    )
+    app = Litestar(
+        route_handlers=[],
+        plugins=[vite, HTMXPlugin()],
+        template_config=templates,
+    )
+    assert cast("Any", app).request_class is HTMXRequest
+    jinja_globals = templates.engine_instance.engine.globals
+    for callable_name in ("vite_hmr", "vite", "vite_static", "vite_routes", "vite_fragment"):
+        assert callable_name in jinja_globals
+
+    comp_resp = ComponentResponse("components/Card.tsx", props={"id": 1}, mode="static")
+    assert comp_resp.component == "components/Card.tsx"
+    assert comp_resp.props == {"id": 1}
+    assert comp_resp.mode == "static"

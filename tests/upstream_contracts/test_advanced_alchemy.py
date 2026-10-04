@@ -19,12 +19,14 @@ from advanced_alchemy import (
 from advanced_alchemy.alembic import commands as alembic_commands
 from advanced_alchemy.config import routing as routing_config
 from advanced_alchemy.extensions import fastapi, flask, litestar, sanic, starlette
+from advanced_alchemy.extensions.litestar import exception_handler as litestar_exc_handler
 from advanced_alchemy.extensions.litestar.cli import database_group
 from advanced_alchemy.repository import memory as repo_memory
 from advanced_alchemy.types import encrypted_string
 from advanced_alchemy.types.password_hash import base as password_hash_base
 from advanced_alchemy.utils import dependencies as dep_utils
 from advanced_alchemy.utils import serialization as ser_utils
+from litestar import Litestar
 
 
 def test_advanced_alchemy_111_public_api_contract() -> None:
@@ -239,9 +241,11 @@ def test_advanced_alchemy_111_public_api_contract() -> None:
 
 
 def test_advanced_alchemy_filter_and_service_behavioral_contracts() -> None:
-    """Verify filter defaults, operators, FilterConfig keys, and service lock signatures."""
+    """Verify filter defaults, operators, FilterConfig keys, and service signatures."""
     search_filter = filters.SearchFilter(field_name="name", value="alice")
     assert search_filter.ignore_case is False
+    assert set(filters.SearchFilter.__dataclass_fields__) == {"field_name", "value", "ignore_case"}
+    assert set(filters.OrderBy.__dataclass_fields__) == {"field_name", "sort_order"}
 
     assert {
         "eq",
@@ -277,7 +281,7 @@ def test_advanced_alchemy_filter_and_service_behavioral_contracts() -> None:
         "in_fields",
         "boolean_fields",
         "choice_fields",
-    } <= set(dep_utils.FilterConfig.__annotations__)
+    } == set(dep_utils.FilterConfig.__annotations__)
 
     service_get_params = inspect.signature(service.SQLAlchemyAsyncRepositoryReadService[Any, Any].get).parameters
     assert "with_for_update" not in service_get_params
@@ -292,3 +296,50 @@ def test_advanced_alchemy_filter_and_service_behavioral_contracts() -> None:
 
     repo_get_params = inspect.signature(repository.SQLAlchemyAsyncRepository[Any].get).parameters
     assert "with_for_update" in repo_get_params
+
+    sync_create_params = inspect.signature(service.SQLAlchemySyncRepositoryService[Any, Any].create).parameters
+    assert "data" in sync_create_params
+    assert all(p.kind != inspect.Parameter.VAR_KEYWORD for p in sync_create_params.values())
+
+    sync_update_params = inspect.signature(service.SQLAlchemySyncRepositoryService[Any, Any].update).parameters
+    assert "data" in sync_update_params
+    assert "item_id" in sync_update_params
+    assert all(p.kind != inspect.Parameter.VAR_KEYWORD for p in sync_update_params.values())
+
+
+def test_advanced_alchemy_litestar_exception_handler_contract() -> None:
+    """Verify SQLAlchemyInitPlugin exception handler registration and integer status-code key behavior."""
+    assert hasattr(litestar_exc_handler, "exception_to_http_response")
+    assert hasattr(litestar_exc_handler, "ConflictError")
+
+    default_cfg = litestar.SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
+    default_app: Any = Litestar(route_handlers=[], plugins=[litestar.SQLAlchemyPlugin(config=default_cfg)])
+    assert (
+        default_app.exception_handlers.get(exceptions.RepositoryError)
+        is litestar_exc_handler.exception_to_http_response
+    )
+
+    def custom_500_handler(request: Any, exc: Exception) -> Any:
+        return None
+
+    int_key_cfg = litestar.SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
+    int_key_app: Any = Litestar(
+        route_handlers=[],
+        plugins=[litestar.SQLAlchemyPlugin(config=int_key_cfg)],
+        exception_handlers={500: custom_500_handler},
+    )
+    assert exceptions.RepositoryError not in int_key_app.exception_handlers
+
+    explicit_cfg = litestar.SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
+    explicit_app: Any = Litestar(
+        route_handlers=[],
+        plugins=[litestar.SQLAlchemyPlugin(config=explicit_cfg)],
+        exception_handlers={
+            500: custom_500_handler,
+            exceptions.RepositoryError: litestar_exc_handler.exception_to_http_response,
+        },
+    )
+    assert (
+        explicit_app.exception_handlers.get(exceptions.RepositoryError)
+        is litestar_exc_handler.exception_to_http_response
+    )

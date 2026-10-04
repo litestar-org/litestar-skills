@@ -19,7 +19,9 @@ from msgspec import Meta
 ## Numeric Constraints
 
 Applies to `int` and `float` only (`decimal.Decimal` does not accept numeric `Meta` constraints
-and raises `TypeError`; validate `Decimal` bounds in `__post_init__`).
+and raises `TypeError`; validate `Decimal` bounds in `__post_init__`). Mixing `gt` with `ge` or
+`lt` with `le` raises `ValueError` at runtime and is rejected by `Meta.__init__` type-stub
+overloads (0.22.0+).
 
 | Parameter | Description | Example |
 | --- | --- | --- |
@@ -65,8 +67,9 @@ class Product(msgspec.Struct, kw_only=True):
 | `pattern` | Regex pattern | `Meta(pattern=r"^\d{4}$")` |
 
 Patterns use search semantics and are unanchored unless the expression includes `^` and `$`.
-String constraints on `dict` keys (for example `dict[Slug, int]`) are also enforced when decoding
-JSON or MessagePack and emitted under `propertyNames` in JSON Schema.
+String constraints and JSON Schema metadata on `dict` keys (for example `dict[Slug, int]`) are
+also enforced when decoding JSON or MessagePack and emitted under `propertyNames` in JSON Schema
+(0.22.0+).
 
 ```python
 NonEmptyStr = Annotated[str, Meta(min_length=1)]

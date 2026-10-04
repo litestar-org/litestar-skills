@@ -163,19 +163,19 @@ class UserService:
 
     async def get_by_id(self, user_id: UUID) -> User | None:
         """Get user by ID."""
-        return await self.driver.get_one_or_none(
-            User,
-            id=user_id,
+        return await self.driver.select_one_or_none(
+            "SELECT id, email, name, is_active FROM users WHERE id = :id",
+            {"id": user_id},
+            schema_type=User,
         )
 
     async def create(self, data: UserCreate) -> User:
         """Create a new user."""
-        user = User(
-            id=uuid4(),
-            email=data.email,
-            name=data.name,
+        return await self.driver.select_one(
+            "INSERT INTO users (id, email, name) VALUES (:id, :email, :name) RETURNING id, email, name, is_active",
+            {"id": uuid4(), "email": data.email, "name": data.name},
+            schema_type=User,
         )
-        return await self.driver.add(user)
 ```
 
 ## Import Organization

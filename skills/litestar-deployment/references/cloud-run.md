@@ -124,8 +124,8 @@ Cloud Run Services scale based on incoming HTTP traffic and scale to zero when i
 
 `litestar-queues` natively supports **one-shot serverless execution** via `CloudRunExecutionConfig` and `litestar queues run-task`:
 
-1. Configure `QueueConfig(execution_mode="cloud_run", cloud_run=CloudRunExecutionConfig(project_id=..., region=..., job_name="my-app-tasks"))` on the web service.
-2. Deploy a **Cloud Run Job** using the same container image with `litestar queues run-task` as its entrypoint:
+1. Configure `QueueConfig(queue_backend=..., execution_backend=CloudRunExecutionConfig(project_id="my-project", region="us-central1", job_name="my-app-tasks"))` on the web service (using a persistent `queue_backend` such as SQLSpec, Advanced Alchemy, or Redis/Valkey).
+2. Deploy a **Cloud Run Job** using the same container image with `litestar queues run-task` as its entrypoint and `QUEUES_CONFIG_FACTORY` pointing to a callable that returns your `QueueConfig` or `QueueService`:
 
 ```bash
 gcloud run jobs create my-app-tasks \
@@ -133,12 +133,12 @@ gcloud run jobs create my-app-tasks \
     --region us-central1 \
     --command "litestar" \
     --args "queues,run-task" \
-    --set-env-vars "LITESTAR_APP=app.server.asgi:create_app" \
+    --set-env-vars "LITESTAR_APP=app.server.asgi:create_app,QUEUES_CONFIG_FACTORY=app.config:create_queue_config" \
     --set-secrets "DATABASE_URL=database-url:latest,SECRET_KEY=secret-key:latest" \
     --service-account app-sa@my-project.iam.gserviceaccount.com
 ```
 
-When the web application enqueues a task, `litestar-queues` dispatches a Cloud Run Job execution passing `LITESTAR_QUEUES_TASK_NAME`, `LITESTAR_QUEUES_TASK_ID`, and `LITESTAR_QUEUES_PAYLOAD_B64`; the container processes that single task and exits immediately. For scheduled lease recovery and history pruning, trigger a second Cloud Run Job (`--args "queues,run-maintenance"`) via Cloud Scheduler. See [`../../litestar-queues/SKILL.md`](../../litestar-queues/SKILL.md).
+When the web application enqueues a task, `litestar-queues` persists the task record in the queue backend and dispatches a Cloud Run Job execution passing `QUEUES_TASK_ID` (plus any `CloudRunExecutionConfig.extra_env`); the Cloud Run Job loads `QUEUES_CONFIG_FACTORY`, claims the live record by `QUEUES_TASK_ID`, executes the task with heartbeats, and exits immediately. For scheduled reconciliation, stale recovery, and retention pruning, configure `QueueConfig(maintenance=QueueMaintenanceConfig(...))` and trigger a second Cloud Run Job (`--args "queues,run-maintenance"`) via Cloud Scheduler. See [`../../litestar-queues/SKILL.md`](../../litestar-queues/SKILL.md).
 
 ### Option B: Long-Running Workers (`litestar-saq` or `litestar-queues` Daemon)
 

@@ -44,11 +44,12 @@ from litestar.params import (
 @get("/orgs/{org_id:uuid}/items")
 async def list_items(
     org_id: Annotated[UUID, PathParameter(description="Organization UUID")],
+    api_key: Annotated[str, HeaderParameter(name="X-API-Key", min_length=16)],
     limit: Annotated[int, QueryParameter(ge=1, le=100)] = 20,
     page_token: Annotated[str | None, QueryParameter(name="pageToken")] = None,
-    api_key: Annotated[str, HeaderParameter(name="X-API-Key", min_length=16)],
     session_id: FromCookie[str | None] = None,
 ) -> list[Item]:
+    _ = (api_key, session_id)
     return await search_items(org_id=org_id, limit=limit, page_token=page_token)
 ```
 
