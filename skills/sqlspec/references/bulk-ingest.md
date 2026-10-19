@@ -2,7 +2,7 @@
 
 ## Overview
 
-SQLSpec `v0.65.0` exposes adapter-gated bulk ingest and export through four storage bridge methods:
+SQLSpec `v0.67.0` exposes adapter-gated bulk ingest and export through four storage bridge methods:
 
 - `load_from_arrow(table, source, *, overwrite=False)` -- load an Arrow table or coercible Arrow source.
 - `load_from_storage(table, source, *, file_format, overwrite=False)` -- load a local path, registered alias, or cloud URI.

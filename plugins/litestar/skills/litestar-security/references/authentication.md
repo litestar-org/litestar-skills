@@ -85,7 +85,9 @@ app = Litestar(
 Custom controller class attributes on a plain `Controller` are **not**
 propagated by Litestar — use `SecureController` / `PublicController` for
 application controllers, and reserve `opt = {"auth": ...}` for `Router`,
-`Litestar`, or third-party controllers that cannot subclass `SecureController`.
+`Litestar`, or third-party controllers that cannot subclass `SecureController`
+(omit `ClassVar` when assigning `opt = {"auth": public()}` on a `litestar.Controller`
+subclass because `Controller.opt` is typed as an instance attribute in mypy).
 
 ### Implicit Defaults
 
@@ -95,7 +97,43 @@ application controllers, and reserve `opt = {"auth": ...}` for `Router`,
 | No mechanisms configured | `public()` |
 
 The implicit `required()` is what makes third-party routes answer `401`; see
-[Composition](composition.md).
+[Composition](composition.md). When `SecurityConfig` registers only non-default
+mechanisms (`participates_by_default=False`), any route without an explicit
+`auth` policy falls back to implicit `required()` and fails at startup with
+`ImproperlyConfiguredException: Implicit required authentication needs at least one default-participating mechanism`
+— ensure public controllers inherit from `PublicController` or set
+`opt = {"auth": public()}`.
+
+## Custom Authentication Mechanisms
+
+When registering a custom `AuthenticationMechanism` in
+`SecurityConfig(slots=(...,), mechanisms=(...,))` and OpenAPI is enabled,
+`OpenAPISchemeSet.from_registry()` inspects every registered mechanism during
+`SecurityPlugin.on_app_init()`. Both `scheme_name` and
+`security_scheme=SecurityScheme(...)` are required, or startup raises
+`ImproperlyConfiguredException: Authentication mechanism <name> has no native OpenAPI security scheme`:
+
+```python
+from litestar.openapi.spec import SecurityScheme
+from litestar_security import AuthenticationMechanism, SecurityConfig
+
+custom_mechanism = AuthenticationMechanism(
+    authenticator=custom_verifier,
+    resolver=custom_identity_resolver,
+    scheme_name="CustomHeader",
+    security_scheme=SecurityScheme(
+        type="apiKey",
+        name="X-Custom-Token",
+        security_scheme_in="header",
+    ),
+    session_capable=False,
+)
+
+security_config = SecurityConfig(
+    slots=(custom_slot,),
+    mechanisms=(custom_mechanism,),
+)
+```
 
 ## Non-HTTP Handlers
 
@@ -107,9 +145,35 @@ The `auth` policy also compiles for WebSocket and raw ASGI handlers. See
 Browser sessions require native CSRF coverage, derived automatically for
 session-capable policies.
 
-- `auth=public()` excludes a stateless route from native CSRF.
+- `auth=public()` (including `PublicController`) excludes a stateless route from
+  native CSRF (`exclude_from_csrf=True`). Setting `opt={"exclude_from_csrf": False}`
+  on a handler under `public()` raises
+  `ImproperlyConfiguredException: Native CSRF exclusions must be exactly True`.
+- To keep a public controller's cookie-session `POST` routes protected by native
+  Litestar CSRF, subclass `SecureController` with
+  `auth: ClassVar[AuthenticationPolicy] = exclude()` on the controller and set
+  `opt={"exclude_from_csrf": False}` on the `POST` handlers (or declare
+  `opt={"csrf_required": True}` on individual HTTP handlers under `public()`):
+
+```python
+from typing import ClassVar
+
+from litestar import post
+from litestar_security import AuthenticationPolicy, SecureController, exclude
+
+
+class PublicFormController(SecureController):
+    path = "/forms"
+    auth: ClassVar[AuthenticationPolicy] = exclude()
+
+    @post("/submit", opt={"exclude_from_csrf": False})
+    async def submit(self) -> dict[str, bool]:
+        return {"ok": True}
+```
+
 - A public handler that establishes cookie-authenticated state (a login route)
-  must declare `csrf_required=True`. This key is HTTP-only.
+  can also declare `opt={"csrf_required": True}` (`CSRF_REQUIRED_OPT_KEY`). This
+  key is HTTP-only.
 - `auth=exclude()` (along with `SecurityConfig(exclude=[...])` and
   `exclude_from_auth=True`) derives no CSRF demand from default mechanisms and
   writes no native CSRF exclusion either, leaving the route to Litestar's own
@@ -122,11 +186,15 @@ session-capable policies.
 `auth` drives the OpenAPI security requirements. Litestar's `security=`
 parameter is reserved for that projection — do not hand-write it.
 
-Schema endpoints are recognized by the handler Litestar generated for them, not
-by URL. An application route is authenticated by its own `auth` even when it
-sits under the OpenAPI base path, so `path="/api"` on `OpenAPIConfig` never
-relaxes `/api/orders`. To serve documentation from application handlers,
-declare `opt={"auth": public()}` on the router or controller that owns them.
+Schema endpoints (`/schema`, `/docs`, etc. from `OpenAPIPlugin`,
+`OpenAPIController`, and `OpenAPIRenderPlugin`) are recognized automatically by
+`RouteCompiler._is_openapi_handler` and marked `public()`. Do **not** add
+`r"^/docs"` or `r"^/schema"` to `SecurityConfig.exclude` — doing so triggers
+`LitestarWarning: Litestar Security exclusion patterns match no registered route`.
+An application route is authenticated by its own `auth` even when it sits under
+the OpenAPI base path, so `path="/api"` on `OpenAPIConfig` never relaxes
+`/api/orders`. To serve custom documentation from application handlers, declare
+`opt={"auth": public()}` on the router or controller that owns them.
 
 ## Status Codes
 

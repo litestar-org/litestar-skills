@@ -98,17 +98,23 @@ results = await service.get_many(
 )
 
 results = await service.get_many(
-    SearchFilter(field_name={"name", "email"}, value="acme", ignore_case=True),
+    SearchFilter(
+        field_name={"name", "email"},
+        value="100%_acme",
+        ignore_case=True,
+        escape_wildcards=True,
+    ),
 )
 ```
 
 - `field_name`: single column name (`str`) or `set[str]` (combines multiple columns with `OR`)
 - `ignore_case=False` (default): uses case-sensitive `.like()`; set `ignore_case=True` for case-insensitive `.ilike()`
+- `escape_wildcards=False` (default): when `True`, escapes `%`, `_`, and `/` via `escape_like_value(value, escape_char=LIKE_ESCAPE_CHAR)` (`LIKE_ESCAPE_CHAR = "/"`) and emits `ESCAPE '/'` so wildcard characters in user input match literally (note: Spanner does not support SQL `ESCAPE`, so `escape_wildcards` must remain `False` on Spanner)
 - The value is wrapped in `%value%` wildcards automatically
 
 ### NotInSearchFilter
 
-Inverse of `SearchFilter` — excludes rows matching the pattern (`NOT LIKE` / `NOT ILIKE`, combining multiple `field_name` entries with `AND`). Accepts `ignore_case`.
+Inverse of `SearchFilter` — excludes rows matching the pattern (`NOT LIKE` / `NOT ILIKE`, combining multiple `field_name` entries with `AND`). Accepts `ignore_case` and `escape_wildcards`.
 
 ```python
 from advanced_alchemy.filters import NotInSearchFilter
@@ -183,11 +189,12 @@ Sort results by a column, model attribute, or SQL expression.
 from advanced_alchemy.filters import OrderBy
 
 results = await service.get_many(
-    OrderBy(field_name="created_at", sort_order="desc"),
+    OrderBy(field_name="created_at", sort_order="desc", nulls="last"),
 )
 ```
 
 - `sort_order`: `"asc"` (default) or `"desc"`
+- `nulls`: `"first"`, `"last"`, or `None` (default, database-specific). Compiles to native `NULLS FIRST` / `NULLS LAST` on PostgreSQL, SQLite, Oracle, DuckDB, CockroachDB, and Spanner, and emulates non-native placements on MySQL, MariaDB, and SQL Server (MSSQL) with a leading `CASE WHEN ... IS NULL` sort key.
 
 ### LimitOffset
 
@@ -400,16 +407,19 @@ filter_deps = create_filter_dependencies(
 | `id_field` | `str` (default `"id"`) | Target model column for `id_filter` |
 | `search` | `str \| set[str] \| list[str]` | `searchString` |
 | `search_ignore_case` | `bool` | `searchIgnoreCase` |
+| `search_escape_wildcards` | `bool` | Escapes `%` and `_` in `SearchFilter` (no extra query param) |
 | `created_at` | `bool` | `createdBefore`, `createdAfter` |
 | `updated_at` | `bool` | `updatedBefore`, `updatedAfter` |
 | `pagination_type` | `Literal["limit_offset"]` | `currentPage`, `pageSize` |
 | `pagination_size` | `int` (default `20`) | Default `pageSize` value |
 | `sort_field` | `str \| set[str] \| list[str]` | `orderBy` |
 | `sort_order` | `Literal["asc", "desc"]` | `sortOrder` |
-| `in_fields` | `FieldNameConfig` | `<field>In` (camelCase, e.g. `teamIdIn`) |
-| `not_in_fields` | `FieldNameConfig` | `<field>NotIn` (camelCase, e.g. `roleNotIn`) |
-| `boolean_fields` | `FieldNameConfig` | `<field>` boolean query param (camelCase, e.g. `isActive`) |
+| `sort_nulls` | `Literal["first", "last"] \| None` | Pins `OrderBy(nulls=...)` placement |
+| `in_fields` | `FieldNameConfig` | `<field>In` (camelCase by default, e.g. `teamIdIn`) |
+| `not_in_fields` | `FieldNameConfig` | `<field>NotIn` (camelCase by default, e.g. `roleNotIn`) |
+| `boolean_fields` | `FieldNameConfig` | `<field>` boolean query param (camelCase by default, e.g. `isActive`) |
 | `choice_fields` | `ChoiceFieldConfig` | `<field>` literal choice query param (`ChoiceField(name, choices)` or `(name, choices)`) |
+| `alias_generator` | `Literal["snake_case", "camel_case"] \| Callable[[str], str]` | Maps snake_case parameter names (`created_before`, `page_size`, `sort_order`, or field names) to public query parameters in Litestar and FastAPI (defaults to camelCase; pass `"snake_case"` to keep snake_case) |
 
 ### Using in Litestar Routes
 

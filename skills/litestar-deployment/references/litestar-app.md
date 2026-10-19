@@ -55,16 +55,118 @@ Litestar supports multiple ASGI servers:
 
 Prefer Granian for new projects. Drop to uvicorn only when Granian's HTTP/2 behavior is incompatible with your deploy target.
 
-## IAP (Identity-Aware Proxy) Authentication
+### Health Check Endpoint (`/health`)
 
-Google Cloud IAP provides authentication at the infrastructure layer. Litestar can consume IAP JWT tokens for user identity.
+Every deployed Litestar container should expose a `/health` endpoint for Kubernetes, Cloud Run, and Railway probes. Exclude the endpoint from authentication so unauthenticated platform probes receive `200 OK` rather than `401 Unauthorized`:
 
-### How It Works
+```python
+from litestar import Litestar, get
+from litestar_granian import GranianPlugin
 
-1. Google Cloud IAP intercepts requests before they reach the application
-2. IAP adds the `X-Goog-IAP-JWT-Assertion` header with a signed JWT
-3. Litestar middleware verifies the JWT and extracts user identity
-4. Users are auto-provisioned on first access (if enabled)
+
+@get("/health", opt={"exclude_from_auth": True}, sync_to_thread=False)
+def health_check() -> dict[str, str]:
+    """Return service readiness status for platform health probes."""
+    return {"status": "ok"}
+
+
+app = Litestar(
+    route_handlers=[health_check],
+    plugins=[GranianPlugin(static="auto")],
+)
+```
+
+When using `litestar-security`, mark the route or controller with `auth=public()` (or subclass `PublicController`) so `SecurityPlugin` allows unauthenticated probe requests.
+
+### Reverse Proxy Headers
+
+When deployed behind Cloud Run, Railway, nginx, or a Kubernetes Ingress:
+
+- **With `litestar-vite` (`VitePlugin`)**: set `LITESTAR_TRUSTED_PROXIES="*"` (or the proxy CIDR list) or pass `RuntimeConfig(trusted_proxies="*")` on `ViteConfig`. `VitePlugin` automatically registers `ProxyHeadersMiddleware` to apply `X-Forwarded-Proto`, `X-Forwarded-Host`, and `X-Forwarded-For`.
+- **API-only Granian (without `litestar-vite`)**: Granian does not expose `--proxy-headers` or `--forwarded-allow-ips` CLI flags. Wrap the ASGI app with `granian.utils.proxies.wrap_asgi_with_proxy_headers`:
+
+```python
+from functools import partial
+
+from granian.utils.proxies import wrap_asgi_with_proxy_headers
+from litestar import Litestar
+from litestar_granian import GranianPlugin
+
+app = Litestar(
+    route_handlers=[health_check],
+    plugins=[GranianPlugin(static="auto")],
+    middleware=[
+        partial(wrap_asgi_with_proxy_headers, trusted_hosts=["127.0.0.1", "10.0.0.0/8"]),
+    ],
+)
+```
+
+## IAP (Identity-Aware Proxy) Authentication (Match-Your-Stack)
+
+Google Cloud IAP provides authentication at the infrastructure layer. Litestar can consume IAP JWT tokens (`X-Goog-IAP-JWT-Assertion`) either through the first-party `litestar-security` plugin or via a custom `AbstractAuthenticationMiddleware`.
+
+### Option A: `litestar-security` (`GoogleIAPConfig` — Recommended First-Party)
+
+`litestar-security` natively verifies `X-Goog-IAP-JWT-Assertion` headers against Google's ES256 JWKS and pairs cleanly with session or bearer mechanisms via `any_of("google-iap", "session")`. See [`../../litestar-security/SKILL.md`](../../litestar-security/SKILL.md):
+
+```python
+from datetime import timedelta
+
+from litestar import Litestar
+from litestar_security import (
+    InvalidCredentials,
+    Principal,
+    SecurityConfig,
+    SecurityPlugin,
+    VerificationUnavailable,
+)
+from litestar_security.providers import CachedJWKSProvider, HttpxJWKSFetcher, JWKSSource
+from litestar_security.providers.iap import GoogleIAPClaims, GoogleIAPConfig
+
+IAP_JWKS = JWKSSource(
+    issuer="https://cloud.google.com/iap",
+    jwks_uri="https://www.gstatic.com/iap/verify/public_key-jwk",
+    algorithms=frozenset({"ES256"}),
+)
+
+
+class IAPIdentityResolver:
+    """Resolve a GoogleIAPClaims payload into an application Principal."""
+
+    def __init__(self, allowed_domains: frozenset[str]) -> None:
+        self.allowed_domains = allowed_domains
+
+    async def resolve(
+        self,
+        claims: GoogleIAPClaims,
+    ) -> Principal[dict[str, str]] | InvalidCredentials | VerificationUnavailable:
+        """Validate the hosted email domain and construct the principal."""
+        email = (claims.email or "").strip().lower()
+        if not email or email.rsplit("@", maxsplit=1)[-1] not in self.allowed_domains:
+            return InvalidCredentials(code="unauthorized_domain")
+        return Principal(
+            id=claims.subject,
+            display_name=email,
+            user={"sub": claims.subject, "email": email},
+        )
+
+
+iap_config = GoogleIAPConfig(
+    audience="/projects/123456789/global/backendServices/987654321",
+    identity_resolver=IAPIdentityResolver(allowed_domains=frozenset({"example.com"})),
+    jwks=CachedJWKSProvider(entries=[IAP_JWKS], fetcher=HttpxJWKSFetcher(), fetcher_owned=True),
+    clock_skew=timedelta(seconds=30),
+)
+
+app = Litestar(
+    route_handlers=[health_check],
+    plugins=[SecurityPlugin(SecurityConfig(iap=iap_config))],
+)
+```
+
+### Option B: Custom `AbstractAuthenticationMiddleware`
+
+When not using `litestar-security`, verify the `X-Goog-IAP-JWT-Assertion` header in a subclass of Litestar's `AbstractAuthenticationMiddleware`:
 
 ### Authentication Flow
 
@@ -151,10 +253,20 @@ async def resolve_iap_user(email: str, user_service: UserService) -> User | None
 The `IAPAuthenticationMiddleware` supports both IAP and local JWT authentication. IAP takes priority when the header is present, with fallback to Bearer token in the Authorization header:
 
 ```python
+from typing import Any
+
+from litestar.connection import ASGIConnection
+from litestar.exceptions import NotAuthorizedException
+from litestar.middleware import AbstractAuthenticationMiddleware, AuthenticationResult
+
+
 class IAPAuthenticationMiddleware(AbstractAuthenticationMiddleware):
     """Authenticate requests via Google Cloud IAP JWT header first, falling back to local Bearer JWT."""
 
-    async def authenticate_request(self, connection: ASGIConnection) -> AuthenticationResult:
+    async def authenticate_request(
+        self,
+        connection: ASGIConnection[Any, Any, Any, Any],
+    ) -> AuthenticationResult:
         """Verify X-Goog-IAP-JWT-Assertion when enabled, or fall back to Authorization Bearer token."""
         if self.iap_enabled and self.iap_audience:
             iap_token = connection.headers.get("X-Goog-IAP-JWT-Assertion")
@@ -224,14 +336,15 @@ The built templates are included in the Python wheel and served from the applica
 ## Cross-references
 
 - Granian server tuning: [`../../litestar-granian/SKILL.md`](../../litestar-granian/SKILL.md)
+- First-party security and Google IAP (`GoogleIAPConfig`): [`../../litestar-security/SKILL.md`](../../litestar-security/SKILL.md)
 - Vite asset bundling and TypeGen: [`../../litestar-vite/SKILL.md`](../../litestar-vite/SKILL.md)
 - Queue worker deployment (`litestar-queues`): [`../../litestar-queues/SKILL.md`](../../litestar-queues/SKILL.md)
 - SAQ worker deployment (`litestar-saq`): [`../../litestar-saq/SKILL.md`](../../litestar-saq/SKILL.md)
-- IAP middleware lives in: [middleware.md](../../litestar/references/middleware.md)
+- Custom Litestar middleware: [middleware.md](../../litestar/references/middleware.md)
 
 ## Official References
 
-- <https://docs.litestar.dev/main/usage/cli.html>
+- <https://docs.litestar.dev/latest/usage/cli.html>
 - <https://cloud.google.com/iap/docs/identity-howto>
 - <https://cloud.google.com/iap/docs/signed-headers-howto>
-- <https://docs.litestar.dev/main/usage/middleware/index.html>
+- <https://docs.litestar.dev/latest/usage/middleware/index.html>

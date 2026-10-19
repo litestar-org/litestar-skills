@@ -28,7 +28,11 @@ from google.adk.runners import Runner
 from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.base_toolset import BaseToolset
 from google.genai import types
-from sqlspec.extensions.adk import SQLSpecMemoryService, SQLSpecSessionService
+from sqlspec.extensions.adk import (
+    SQLSpecArtifactService,
+    SQLSpecMemoryService,
+    SQLSpecSessionService,
+)
 
 DYNAMIC_INSTRUCTION_KEY = "temp:dynamic_instruction"
 MAX_CACHED_RUNNERS = 8
@@ -42,7 +46,7 @@ CacheKey: TypeAlias = tuple[
     str,
     str,
     tuple[int, int, int] | None,
-    tuple[int, int] | None,
+    tuple[int | None, int | None] | None,
 ]
 
 
@@ -88,6 +92,7 @@ class AgentApplicationFactory:
         max_output_tokens: int,
         session_service: SQLSpecSessionService,
         memory_service: SQLSpecMemoryService,
+        artifact_service: SQLSpecArtifactService | None = None,
         skill_version: str = "v1",
         cache_config: ContextCacheConfig | None = None,
         compaction_config: EventsCompactionConfig | None = None,
@@ -157,6 +162,7 @@ class AgentApplicationFactory:
             app=app,
             session_service=session_service,
             memory_service=memory_service,
+            artifact_service=artifact_service,
         )
         self._runners[key] = runner
         while len(self._runners) > MAX_CACHED_RUNNERS:
@@ -555,16 +561,18 @@ def build_usage_event(app_name: str, state_delta: dict[str, Any]) -> Event:
 
 ---
 
-## 5. Dishka & Native DI Wiring (`Scope.APP` vs `Scope.REQUEST`)
+## 5. Dishka & Native DI Wiring (`Scope.APP` vs `Scope.REQUEST`) & Store Backends
 
 Separate singleton agent infrastructure (`Scope.APP`) from per-request domain services (`Scope.REQUEST`):
 
 | Component | Scope | Rationale |
 | --- | --- | --- |
-| `SQLSpecSessionService`, `SQLSpecMemoryService`, `SQLSpecArtifactService` | `Scope.APP` | Stateless store services sharing the app-wide `AsyncpgConfig` pool |
+| `SQLSpecSessionService`, `SQLSpecMemoryService`, `SQLSpecArtifactService` | `Scope.APP` | Stateless store services sharing the app-wide `AsyncpgConfig` or `SpannerAsyncConfig` pool |
 | `RunContextRegistry` | `Scope.APP` | In-memory map of active turn tokens shared between `RunnerService` and bound tools |
 | `AgentApplicationFactory` | `Scope.APP` | Holds bounded LRU cache of compiled `App` / `Runner` graphs |
 | `AgentRunnerService` | `Scope.REQUEST` | Injects request-scoped domain services, binds `DomainToolContext` per turn, and releases the token in `finally:` |
+
+### PostgreSQL (`AsyncpgADKStore` & `AsyncpgADKMemoryStore`)
 
 ```python
 from dishka import Provider, Scope, provide
@@ -592,20 +600,86 @@ class AgentProvider(Provider):
         return SQLSpecMemoryService(AsyncpgADKMemoryStore(db_config))
 ```
 
----
+### Google Cloud Spanner (`SpannerAsyncADKStore`, `SpannerAsyncADKMemoryStore` & `SpannerAsyncADKArtifactStore`)
 
-## 6. Session Windowing & Retention Pruning
-
-Bound history retrieval on long-running sessions with `GetSessionConfig(num_recent_events=...)` and schedule retention cleanup for stale sessions, events, and memories using SQLSpec's built-in `prune_sessions`, `prune_events`, and `prune_memory` maintenance helpers.
+When deploying on Google Cloud Spanner, `sqlspec.adapters.spanner.adk` provides async and sync stores for sessions/events (`SpannerAsyncADKStore`), hybrid RRF vector + FTS memory (`SpannerAsyncADKMemoryStore`), and versioned artifact metadata (`SpannerAsyncADKArtifactStore`) paired with `SQLSpecArtifactService`:
 
 ```python
-from google.adk.sessions.base_session_service import GetSessionConfig
+from sqlspec.adapters.spanner import SpannerAsyncConfig, SpannerPoolParams
+from sqlspec.adapters.spanner.adk import (
+    SpannerADKConfig,
+    SpannerADKRetentionConfig,
+    SpannerAsyncADKArtifactStore,
+    SpannerAsyncADKMemoryStore,
+    SpannerAsyncADKStore,
+)
 from sqlspec.extensions.adk import (
+    SQLSpecArtifactService,
     SQLSpecMemoryService,
     SQLSpecSessionService,
+)
+
+spanner_adk_settings: SpannerADKConfig = {
+    "shard_count": 16,
+    "vector_dimensions": 768,
+    "vector_distance_type": "COSINE",
+    "vector_index_enabled": True,
+    "scann_tree_depth": 2,
+    "scann_num_leaves": 1000,
+    "enable_hybrid_search": True,
+    "enable_memory_graph": True,
+    "retention": SpannerADKRetentionConfig(
+        session_ttl_seconds=30 * 86_400,
+        event_ttl_seconds=90 * 86_400,
+        memory_ttl_seconds=90 * 86_400,
+        artifact_ttl_seconds=90 * 86_400,
+    ),
+}
+
+spanner_config = SpannerAsyncConfig(
+    connection_config=SpannerPoolParams(
+        project="my-gcp-project",
+        instance_id="agent-prod",
+        database_id="agent-state",
+    ),
+    extension_config={"adk": spanner_adk_settings},
+)
+
+
+def build_spanner_adk_services(
+    config: SpannerAsyncConfig,
+    *,
+    artifact_storage_uri: str = "gs://my-agent-artifacts",
+) -> tuple[SQLSpecSessionService, SQLSpecMemoryService, SQLSpecArtifactService]:
+    """Construct Spanner-backed ADK session, memory, and artifact services."""
+    session_service = SQLSpecSessionService(SpannerAsyncADKStore(config))
+    memory_service = SQLSpecMemoryService(SpannerAsyncADKMemoryStore(config))
+    artifact_service = SQLSpecArtifactService(
+        SpannerAsyncADKArtifactStore(config),
+        artifact_storage_uri=artifact_storage_uri,
+    )
+    return session_service, memory_service, artifact_service
+```
+
+---
+
+## 6. Session Windowing, Paginated Listing & Retention Pruning
+
+Bound history retrieval on long-running sessions with `GetSessionConfig(num_recent_events=...)`, paginate session listings with SQLSpec's `order_by` / `descending` / `limit` / `offset` parameters (`SessionOrderBy`), and schedule retention cleanup using `prune_sessions`, `prune_events`, `prune_memory`, `prune_user_state`, and `prune_artifacts` (each returning a `PruneReport` `TypedDict` with `"deleted_count"`, `"elapsed_ms"`, and `"table"`).
+
+```python
+from google.adk.sessions.base_session_service import GetSessionConfig, ListSessionsResponse
+from sqlspec.extensions.adk import (
+    PruneReport,
+    SessionOrderBy,
+    SQLSpecArtifactService,
+    SQLSpecMemoryService,
+    SQLSpecSessionService,
+    prune_artifacts,
     prune_events,
     prune_memory,
     prune_sessions,
+    prune_user_state,
 )
 
 
@@ -626,33 +700,69 @@ async def load_recent_session_window(
     )
 
 
+async def list_recent_user_sessions(
+    session_service: SQLSpecSessionService,
+    *,
+    app_name: str,
+    user_id: str,
+    order_by: SessionOrderBy = "update_time",
+    limit: int = 20,
+    offset: int = 0,
+) -> ListSessionsResponse:
+    """List a bounded page of user sessions ordered deterministically by timestamp."""
+    return await session_service.list_sessions(
+        app_name=app_name,
+        user_id=user_id,
+        order_by=order_by,
+        descending=True,
+        limit=limit,
+        offset=offset,
+    )
+
+
 async def prune_expired_agent_records(
     session_service: SQLSpecSessionService,
     memory_service: SQLSpecMemoryService,
     *,
+    artifact_service: SQLSpecArtifactService | None = None,
     app_name: str | None = None,
     retention_days: int = 30,
+    user_state_idle_days: int = 180,
 ) -> dict[str, int]:
-    """Delete idle sessions, expired events, and user memory entries older than the retention window."""
-    sessions_report = await prune_sessions(
+    """Delete idle sessions, expired events, user memories, idle user state, and aged artifacts."""
+    sessions_report: PruneReport = await prune_sessions(
         session_service.store,
         idle_days=retention_days,
         app_name=app_name,
     )
-    events_report = await prune_events(
+    events_report: PruneReport = await prune_events(
         session_service.store,
         older_than_days=retention_days,
         app_name=app_name,
     )
-    memories_report = await prune_memory(
+    memories_report: PruneReport = await prune_memory(
         memory_service.store,
         older_than_days=retention_days,
         app_name=app_name,
         scope="user",
     )
-    return {
-        "deleted_sessions": sessions_report.deleted_count,
-        "deleted_events": events_report.deleted_count,
-        "deleted_memories": memories_report.deleted_count,
+    user_state_report: PruneReport = await prune_user_state(
+        session_service.store,
+        idle_days=user_state_idle_days,
+        app_name=app_name,
+    )
+    counts = {
+        "deleted_sessions": sessions_report["deleted_count"],
+        "deleted_events": events_report["deleted_count"],
+        "deleted_memories": memories_report["deleted_count"],
+        "deleted_user_states": user_state_report["deleted_count"],
     }
+    if artifact_service is not None:
+        artifacts_report: PruneReport = await prune_artifacts(
+            artifact_service,
+            older_than_days=retention_days,
+            app_name=app_name,
+        )
+        counts["deleted_artifacts"] = artifacts_report["deleted_count"]
+    return counts
 ```

@@ -58,7 +58,9 @@ set -euo pipefail
 
 echo "--- Railway Deploy ---"
 
-# Run database migrations before starting the app
+# Run database migrations before starting the app (Match-Your-Stack):
+#   advanced-alchemy: app database upgrade --no-prompt (or litestar database upgrade --no-prompt)
+#   sqlspec:          app db upgrade --no-prompt       (or litestar db upgrade --no-prompt / sqlspec upgrade --no-prompt)
 echo "Running database migrations..."
 app database upgrade --no-prompt
 

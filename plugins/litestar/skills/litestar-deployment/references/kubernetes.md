@@ -167,6 +167,39 @@ spec:
 
 No HTTP probes for the worker. Kubernetes restarts the pod if the process exits. Set `terminationGracePeriodSeconds: 120` to allow in-flight tasks to finish before `SIGKILL`. When using `litestar-queues`, configure `QueueConfig(maintenance=QueueMaintenanceConfig(...))` and add a Kubernetes `CronJob` that invokes `litestar queues run-maintenance` periodically to reconcile external executions, recover stale tasks, and prune terminal task/event history.
 
+## Database Migration Job (Match-Your-Stack)
+
+Run schema migrations as a one-off Kubernetes `Job` before rolling out a new API image:
+
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate-{{ image_tag }}
+  namespace: {{ namespace }}
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ service_account_name }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+      containers:
+        - name: migrate
+          image: {{ api_image_repo }}:{{ image_tag }}
+          # Option A (advanced-alchemy): ["litestar", "database", "upgrade", "--no-prompt"]
+          # Option B (sqlspec):          ["litestar", "db", "upgrade", "--no-prompt"]
+          command: ["litestar", "database", "upgrade", "--no-prompt"]
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets
+```
+
 ## HorizontalPodAutoscaler
 
 ```yaml

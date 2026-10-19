@@ -111,7 +111,11 @@ async def queue_report(queue_service: QueueService, report_id: str) -> str:
     return result.status or "unknown"
 ```
 
-In addition to `await queue_service.enqueue(render_report, ...)` (the primary DI pattern in route handlers), decorated tasks expose `await render_report.enqueue(report_id)` and `await render_report.using(priority=20, run_after=60).enqueue(report_id)`. `Task.enqueue()` uses the active default `QueueService` registered by `QueuePlugin`, or falls back to an inline `"memory"` + `"immediate"` service when called in unit tests with no application wired. `result.record` holds the `QueuedTaskRecord` returned at enqueue time.
+In addition to `await queue_service.enqueue(render_report, ...)` (the primary DI pattern in route handlers), decorated tasks expose `await render_report.enqueue(report_id)`, `await render_report.using(priority=20, run_after=60).enqueue(report_id)`, and direct invocation via `await render_report(report_id)` (`Task.__call__`), which runs the wrapped callable inline (offloading synchronous callables to a thread unless `sync_to_thread=False`) so other tasks or services can reuse task bodies without a second queue hop. `result.record` holds the `QueuedTaskRecord` returned at enqueue time.
+
+- **Reserved enqueue keyword arguments:** `Task.enqueue(**kwargs)` forwards keyword arguments directly to `QueueService.enqueue(task, *args, scheduled_at=..., run_after=..., expires_in=..., expires_at=..., key=..., queue=..., priority=..., retries=..., timeout=..., execution_backend=..., execution_profile=..., description=..., log_level=..., log_success=..., requeue_on_stale=..., metadata=..., **kwargs)`. `@task` function parameters must never use those 16 reserved keyword names (`scheduled_at`, `run_after`, `expires_in`, `expires_at`, `key`, `queue`, `priority`, `retries`, `timeout`, `execution_backend`, `execution_profile`, `description`, `log_level`, `log_success`, `requeue_on_stale`, `metadata`) because they are consumed as enqueue options instead of reaching `record.kwargs`.
+- **`Task.enqueue()` default-service fallback:** `Task.enqueue()` resolves `get_default_service()` (set by `QueuePlugin` lifespan startup) and **silently falls back** to an inline `"memory"` + `"immediate"` service when none is active (such as in unit tests with no application wired). Code that requires durable persistence outside request DI must resolve `QueueService` explicitly (`app.plugins.get(QueuePlugin).config.get_service(app.state)` or `get_default_service()` with an explicit `None` guard) rather than relying on `Task.enqueue()`.
+- **Foreground CLI execution (`execution_backend="immediate"`):** CLI commands that trigger `@task` jobs should not maintain separate `--enqueue` vs direct-call code paths. Route them through `await queue_service.enqueue(task, ..., execution_backend="immediate")` so the queue backend persists, claims, executes inline in the foreground via `ImmediateExecutionBackend`, and records terminal state and events through a single unified task pipeline.
 
 When enqueueing against an external execution backend such as Cloud Tasks, catch `QueueDispatchError` (`from litestar_queues.exceptions import QueueDispatchError`) and inspect `exc.committed`: when `True`, the record (`exc.task_id`) is already durably committed in SQL and bounded maintenance will repair the lost delivery.
 
@@ -123,24 +127,34 @@ Identity precedence is strict:
 4. `unique_by="arguments"`.
 5. No identity.
 
-`unique_until="terminal"` is the default and releases the identity after completion, failure, or cancellation. `unique_until="forever"` stores a permanent reservation until `await queue_service.reset_task_identity(effective_key)` removes it.
+`unique_until="terminal"` is the default and releases the identity after completion, failure, or cancellation. `unique_until="forever"` stores a permanent reservation (`TaskReservation`, inspectable via `await queue_service.get_task_identity(effective_key)`): a collision returns a `TaskResult` pointing to the existing reservation's `task_id` without enqueueing a duplicate record, and the reservation persists after terminal states until `await queue_service.reset_task_identity(effective_key)` removes it — making `unique_until="forever"` + explicit `key` an idempotent "schedule once" primitive without external CAS locks.
 
 Do not combine a configured `key` with `unique_by`. Do not set `unique_until="forever"` without a configured `key` or `unique_by`. Use `QueueConfig.max_argument_identity_bytes` to bound canonical payloads hashed by `unique_by="arguments"`.
 
 Use `interval` or five-field `cron`, never both. Recurring tasks inherit configured `retries` on startup and succession, and persisted occurrences retain their retry budget and backoff until completion. Use `task_modules=("app.domain.reports.jobs",)`, `discover_tasks("app.domain", "jobs")`, or `AutowirePlugin(AutowireConfig(domain_packages=["app.domain"], integrations=["dishka", "queues"]))` before string enqueueing or schedule initialization.
 
-To mark a failure permanent and bypass retries, call `non_retryable("message")` or raise `NonRetryableError`. To cooperatively cancel execution from within a handler, call `job_cancelled("message")` or raise `JobCancelledError`. Calling `await queue_service.cancel_task(task_id, include_running=True)` cancels any active remote provider execution (Cloud Run Jobs or Cloud Tasks) first before writing durable cancellation state.
+To mark a failure permanent and bypass retries, call `non_retryable("message")` or raise `NonRetryableError`. To cooperatively cancel execution from within a handler, call `job_cancelled("message")` or raise `JobCancelledError`. Durable cancellation is cooperative: `await queue_service.cancel_task(task_id, include_running=True) -> bool` (returning `True` only for the caller that wins the durable state transition; or bulk `await queue_service.cancel_tasks(..., include_running=True) -> int`) cancels any active remote provider execution (Cloud Run Jobs or Cloud Tasks) first before writing durable `"cancelled"` state and notifying the worker control channel. When the worker reconciles running tasks (`WorkerConfig.cancellation_poll_interval`, default `1.0s`, or immediately on control notification), it marks `TaskExecutionContext` cancelled (`context.is_cancelled` / `await context.wait_cancelled()` / `context.raise_if_cancelled()`) and cancels the local task coroutine; long-running task bodies should race `await get_current_task_context().wait_cancelled()` or call `context.raise_if_cancelled()` and clean up resources in `try...finally` blocks.
 
 ### Dependency Injection and Error Sanitization
 
-Supply attempt-scoped dependencies to task handlers through `task_dependency_resolver` or `task_dependency_provider`:
+Tasks have no implicit access to `app` or `app.state`. Supply attempt-scoped dependencies to task handlers through `task_dependency_resolver` (`TaskDependencyResolver`) or `task_dependency_provider` (`TaskDependencyProvider`), which are **mutually exclusive** on `QueueConfig`:
 
 ```python
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncGenerator, Mapping
 from contextlib import asynccontextmanager
 from typing import Any
 
-from litestar_queues import QueueConfig, Task, TaskExecutionContext, QueuedTaskRecord
+from litestar_queues import QueueConfig, QueuedTaskRecord, Task, TaskExecutionContext
+
+
+async def resolve_task_dependencies(
+    task: Task[Any, Any],
+    record: QueuedTaskRecord,
+    context: TaskExecutionContext,
+) -> Mapping[str, object]:
+    if "attempt_id" not in task.signature.parameters:
+        return {}
+    return {"attempt_id": str(record.id)}
 
 
 @asynccontextmanager
@@ -148,7 +162,10 @@ async def provide_task_dependencies(
     task: Task[Any, Any],
     record: QueuedTaskRecord,
     context: TaskExecutionContext,
-) -> AsyncIterator[Mapping[str, Any]]:
+) -> AsyncGenerator[Mapping[str, Any], None]:
+    if "attempt_id" not in task.signature.parameters:
+        yield {}
+        return
     yield {"attempt_id": str(record.id)}
 
 
@@ -164,7 +181,7 @@ queue_config = QueueConfig(
 )
 ```
 
-`task_dependency_provider` enters an async context manager for each attempt, merges the yielded mapping into task keyword arguments, and guarantees clean exit on success, error, timeout, or cancellation.
+Use `task_dependency_resolver` when supplying stateless keyword arguments, and `task_dependency_provider` when the attempt owns a scoped resource: `task_dependency_provider` enters an async context manager inside the attempt timeout, merges the yielded mapping directly into task keyword arguments via `kwargs.update(extra_kwargs)` (inspect `task.signature.parameters` so you only yield keys accepted by that task), and guarantees clean `__aexit__` on success, error, timeout, claim loss, shutdown interruption, or cancellation (provider objects may also expose optional `open()` and `close()` lifecycle hooks managed by `QueueService`).
 
 When the application uses **Dishka**, task handlers can either receive dependencies from `task_dependency_provider` or resolve an async `Scope.REQUEST` container that reuses an active in-process request container (`request_container_var.get()`) when running inline and opens a fresh worker scope when running in an external worker:
 
@@ -675,6 +692,9 @@ async def create_import() -> Response[dict[str, str]]:
 - **Do not assume `run-task` starts a worker.** It consumes one already-persisted record and exits.
 - **Do not import optional configs from `litestar_queues.backends`.** Use the concrete `.sqlspec`, `.advanced_alchemy`, `.redis`, or `.valkey` module.
 - **Do not enqueue by string before task discovery.** Import task modules or call `discover_tasks()`.
+- **Do not name `@task` parameters after reserved `QueueService.enqueue` options.** `scheduled_at`, `run_after`, `expires_in`, `expires_at`, `key`, `queue`, `priority`, `retries`, `timeout`, `execution_backend`, `execution_profile`, `description`, `log_level`, `log_success`, `requeue_on_stale`, and `metadata` are consumed by `enqueue()` instead of reaching `record.kwargs`.
+- **Do not set both `task_dependency_resolver` and `task_dependency_provider`.** They are mutually exclusive on `QueueConfig`.
+- **Do not maintain separate `--enqueue` vs direct-call CLI code paths.** Route foreground CLI invocations through `await queue_service.enqueue(task, ..., execution_backend="immediate")` so persistence, execution, and terminal events share one pipeline.
 
 </guardrails>
 
@@ -695,6 +715,8 @@ async def create_import() -> Response[dict[str, str]]:
 - [ ] `QueueEventsConfig` enables delivery, stream, or history
 - [ ] Task modules are loaded before string enqueueing and schedule initialization
 - [ ] Handlers inject `NamedDependency[QueueService]`
+- [ ] `@task` parameter names avoid the 16 reserved `QueueService.enqueue` keyword arguments
+- [ ] Only one of `task_dependency_resolver` or `task_dependency_provider` is configured
 - [ ] Uniqueness uses one identity source and the intended lifetime
 - [ ] `max_argument_identity_bytes` bounds untrusted argument-derived identity inputs
 - [ ] Maintenance thresholds and one external schedule are explicit

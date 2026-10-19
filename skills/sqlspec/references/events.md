@@ -122,6 +122,7 @@ For custom queue stores or extensions, `sqlspec.extensions.events` exports diale
 - `lock_clause(select_for_update=True, skip_locked=True)` renders `FOR UPDATE SKIP LOCKED` or `FOR UPDATE`.
 - `row_limit_clause(dialect, n)` and `select_limit_prefix(dialect, n)` render `LIMIT n`, `FETCH FIRST n ROWS ONLY` (Oracle), or `TOP n` (MSSQL/T-SQL).
 - `claim_verified(row, leased_until)` verifies lease ownership after a claim `UPDATE` even on drivers that do not report `rows_affected`.
+- `EventRuntimeHints` (`select_for_update`, `skip_locked`, `json_passthrough`, `poll_interval`, `cleanup_on_ack`, `use_run_in_transaction`) lets adapter configs tune queue execution. For example, `SpannerSyncConfig` and `SpannerAsyncConfig` return `EventRuntimeHints(cleanup_on_ack=False, use_run_in_transaction=True)` so claims run inside Spanner's retryable `run_in_transaction()` runner and acknowledged-row cleanup is delegated to Spanner's native `ROW DELETION POLICY` (`TTL INTERVAL` on `spangres`) alongside optional `EventsConfig.shard_count` hash-shard prefixing (`shard_id INT64 AS (MOD(FARM_FINGERPRINT(event_id), N)) STORED`) and covering index (`STORING` / `INCLUDE`).
 
 ## Framework Fan-Out (`SQLSpecChannelsBackend`)
 

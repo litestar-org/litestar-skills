@@ -317,7 +317,7 @@ msgspec.structs.force_setattr(event, "event_type", event.event_type.lower())
 for f in msgspec.structs.fields(User):
     assert f.required is (f.default is msgspec.NODEFAULT and f.default_factory is msgspec.NODEFAULT)
 
-# TypeGuards for Struct instances and classes (added in msgspec 0.20.0; checks StructMeta)
+# TypeIs narrowing for Struct instances and classes (added in msgspec 0.20.0; checks StructMeta)
 assert msgspec.inspect.is_struct(user)
 assert msgspec.inspect.is_struct_type(User)
 struct_info = msgspec.inspect.type_info(User)
@@ -402,7 +402,7 @@ types, but it may contain at most one untagged Struct.
 - Direct Struct construction trusts the caller and does not enforce field annotations.
   Typed `decode()` and `convert()` perform runtime type and `Meta` constraint validation.
 - `msgspec.StructMeta` is publicly exposed, and `msgspec.inspect.is_struct()` /
-  `msgspec.inspect.is_struct_type()` provide `TypeGuard` checks for Struct instances and classes (0.20.0+).
+  `msgspec.inspect.is_struct_type()` provide `TypeIs` checks for Struct instances and classes (0.20.0+).
 - `msgspec.structs.replace()` and Python's `copy.replace()` call `__post_init__` (0.21.0+).
 - `ValidationError` and `DecodeError` raised inside `dec_hook` propagate directly without
   being double-wrapped in another `ValidationError` (0.21.1+).

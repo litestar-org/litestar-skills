@@ -131,6 +131,12 @@ users, count = await service.get_many_and_count(LimitOffset(limit=20, offset=0))
 
 user = await service.update({"name": "New Name"}, item_id=user_id)
 user = await service.upsert({"email": "test@example.com", "name": "Test"})
+users = await service.upsert_many(
+    [{"email": "a@example.com", "name": "A"}, {"email": "b@example.com", "name": "B"}],
+    match_fields=["email"],
+    no_merge=False,
+    chunk_size=None,
+)
 
 await service.delete(user_id)
 await service.delete_many([user_id, user_model])

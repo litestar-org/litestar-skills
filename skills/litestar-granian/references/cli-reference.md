@@ -135,3 +135,16 @@ When `GranianPlugin` is registered, Litestar's `run` command provides the follow
   - Retired Granian flags: `--threads`, `--threading-mode`, `--log-access`, `--log-access-format`, `--log-access-fmt`.
   - Use `--runtime-threads`, `--runtime-mode`, `--granian-access-log`, and `--granian-access-log-fmt` instead.
   - Non-existent Uvicorn proxy flags (`--proxy-headers`, `--forwarded-allow-ips`): use `granian.utils.proxies.wrap_asgi_with_proxy_headers` in `Litestar(middleware=[...])`.
+
+## Standalone `granian` CLI Differences
+
+When invoking the standalone `granian` CLI directly (`granian --interface asgi app:app`) instead of `litestar run`, note these surface differences in `granian` 2.8.4:
+
+| Concern | `litestar run` (`litestar-granian` 0.16.0) | Standalone `granian` (`granian` 2.8.4) |
+| --- | --- | --- |
+| Target & interface | `litestar --app app:app run` (always passes `--interface=asgi` and auto-detects `--factory`) | `granian --interface asgi app:app` (defaults to `--interface rsgi`; pass `--factory` / `--no-factory` explicitly) |
+| Server logging | `--granian-log` / `--granian-no-log`, `--granian-log-level` | `--log` / `--no-log`, `--log-level` |
+| Access logging | `--granian-access-log` / `--granian-no-access-log`, `--granian-access-log-fmt` | `--access-log` / `--no-access-log`, `--access-log-fmt` |
+| Worker kill timeout | Defaults to `5` seconds (plus `5` seconds in the Litestar supervisor) | Defaults to `None` (`disabled`) |
+| Static mounts | Every `--static-path-route` must be paired with a `--static-path-mount` | Single `--static-path-mount` without `--static-path-route` defaults route to `/static` |
+| Litestar-only flags | `-d` / `--debug`, `-P` / `--pdb` / `--use-pdb`, `--create-self-signed-cert`, `--ssl-certfile`, `-F` / `--fd` / `--file-descriptor`, `-I` / `--reload-include`, `-E` / `--reload-exclude`, `-R` / `--reload-dir`, `-W` / `--wc` / `--web-concurrency` | Not present on standalone `granian` (`--ssl-certificate`, `--reload-paths`, and `--workers` only) |

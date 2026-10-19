@@ -222,8 +222,10 @@ build-onefiles:
         ZIG_ARCH=$([ "$ARCH" = "aarch64" ] && echo "aarch64" || echo "x86_64")
         curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-${ZIG_ARCH}-linux-${ZIG_VERSION}.tar.xz" \
           | tar -xJ --strip-components=1 -C "$ZIG_INSTALL_DIR"
-        echo "$ZIG_INSTALL_DIR" >> $GITHUB_PATH
         uv tool install cargo-zigbuild
+        echo "$ZIG_INSTALL_DIR" >> "$GITHUB_PATH"
+        echo "$(uv tool dir --bin)" >> "$GITHUB_PATH"
+        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
     - uses: dtolnay/rust-toolchain@stable
       with:
@@ -262,10 +264,11 @@ build-onefiles:
         PYAPP_ALLOW_UPDATES: "true"
       run: cargo zigbuild --release --target ${{ matrix.job.target }}.2.17
 
-    - name: Rename binary
+    - name: Rename binary and clean up build scratch
       run: |
         cp ${{ env.PYAPP_REPO }}/target/${{ matrix.job.target }}.2.17/release/pyapp dist/${{ matrix.job.artifact }}
         chmod +x dist/${{ matrix.job.artifact }}
+        rm -rf "${{ env.PYAPP_REPO }}" dist/python-dist-${{ matrix.job.target }}.tar.gz
 
     - name: Offline smoke test (network-isolated)
       if: contains(matrix.job.target, 'x86_64-unknown-linux-gnu')
@@ -273,6 +276,7 @@ build-onefiles:
         docker run --rm --network=none \
           -v $PWD/dist/${{ matrix.job.artifact }}:/app:ro \
           gcr.io/distroless/cc-debian12:nonroot /app --help
+        rm -rf "$HOME/.<app>"
 
     - uses: actions/upload-artifact@v6
       with:
@@ -433,6 +437,8 @@ Minimum recipe for most projects: wheel + 2 Linux onefiles. Add macOS/Windows wh
 | --- | --- | --- |
 | Missing `fetch-depth: 0` | `git log <prev>..` fails in changelog step | `with: fetch-depth: 0` on checkout |
 | `cancel-in-progress: true` on release | Interrupted releases corrupt artifacts | Use `false` for release concurrency |
+| `uv tool install cargo-zigbuild` without adding `$(uv tool dir --bin)` to `$GITHUB_PATH` | Script falls back to `cargo build --release`, binding to runner's `GLIBC_2.39` and failing inside Bookworm/distroless (`GLIBC_2.36`) containers | Export `$(uv tool dir --bin)` (`$HOME/.local/bin`) and `$HOME/.cargo/bin` to `$GITHUB_PATH`, and fail hard if `cargo-zigbuild` is missing on Linux |
+| Leaving `dist/.scratch`, `dist/python-dist.tar.gz`, and host `~/.<app>` on disk after onefile build/smoke test | Runner disk exhaustion (`No space left on device`) during `docker/build-push-action` | Delete scratch dir, intermediate tarball, and extracted host runtime dir immediately after linking/smoke testing |
 | Building wheel per-matrix-cell | Multiple non-identical wheels uploaded | Separate `build-wheel` job, download via artifact |
 | `--generate-notes` without manual changelog | Release notes missing the assets/deploy-kit section | Write CHANGELOG.md then pass `--notes-file CHANGELOG.md` |
 | Forgetting `if-no-files-found: error` | Silent empty release | Always set on upload-artifact in release workflows |

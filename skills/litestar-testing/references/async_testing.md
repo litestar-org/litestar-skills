@@ -238,7 +238,7 @@ async def test_inline_async_app() -> None:
         assert resp.status_code == 200
 ```
 
-Both helpers accept a single handler, `Controller` subclass, `Router`, or sequence of them as `route_handlers` (default `None`), plus keyword-only arguments matching `Litestar(...)` (`dependencies`, `guards`, `middleware`, `plugins`, `stores`, `state`, `on_startup`, `on_shutdown`, `lifespan`, `exception_handlers`, `dto`, `return_dto`, `template_config`, `static_files_config`, `cors_config`, `csrf_config`, `compression_config`, `allowed_hosts`, `response_cache_config`, `logging_config`, `openapi_config`, `opt`, `parameters`, `path`, `security`, `tags`, `signature_namespace`, `signature_types`, `type_encoders`, `request_class`, `response_class`, `websocket_class`, `response_cookies`, `response_headers`, `before_request`, `after_request`, `after_response`, `before_send`, `after_exception`, `on_app_init`, `listeners`, `event_emitter_backend`, `cache_control`, `etag`, `include_in_schema`, `multipart_form_part_limit=1000`, `pdb_on_exception`, `experimental_features`, `debug=True`) and test-client options (`backend="asyncio"`, `backend_options=None`, `base_url="http://testserver.local"`, `raise_server_exceptions=True`, `root_path=""`, `session_config=None`, `timeout=None`).
+Both helpers accept a single handler, `Controller` subclass, `Router`, or sequence of them as `route_handlers` (default `None`), plus keyword-only arguments matching `Litestar(...)` (`dependencies`, `guards`, `middleware`, `plugins`, `stores`, `state`, `on_startup`, `on_shutdown`, `lifespan`, `exception_handlers`, `dto`, `return_dto`, `template_config`, `static_files_config`, `cors_config`, `csrf_config`, `compression_config`, `allowed_hosts`, `response_cache_config`, `logging_config`, `openapi_config`, `opt`, `parameters`, `path`, `security`, `tags`, `signature_namespace`, `signature_types`, `type_encoders`, `request_class`, `response_class`, `websocket_class`, `response_cookies`, `response_headers`, `before_request`, `after_request`, `after_response`, `before_send`, `after_exception`, `on_app_init`, `listeners`, `event_emitter_backend`, `cache_control`, `etag`, `include_in_schema`, `multipart_form_part_limit=1000`, `pdb_on_exception`, `experimental_features`, `debug=True`) and test-client options (`backend="asyncio"`, `backend_options=None`, `base_url="http://testserver.local"`, `raise_server_exceptions=True`, `root_path=""`, `session_config=None`, `timeout=None`). Note: `request_max_body_size`, `type_decoders`, and `debugger_module` are only accepted on `Litestar(...)` directly — construct `Litestar(...)` and wrap it in `AsyncTestClient(app=app)` / `TestClient(app=app)` when testing those options.
 
 ### Dependency Replacements (Native `Provide` and Dishka)
 
@@ -273,6 +273,10 @@ async def test_with_fake_service() -> None:
 ```
 
 When using Dishka, decorate route handlers with `@inject` (or `@inject_websocket` / register on a `DishkaRouter` from `dishka.integrations.litestar`) and pass a test `Provider` subclass after `LitestarProvider()` and the production providers in `make_async_container(LitestarProvider(), AppProvider(), TestProvider())` before calling `setup_dishka(container=container, app=app)`. For full-application tests, make the application factory accept a dependency map or extra Dishka providers and return a new `Litestar` instance. Never mutate a shared app between tests.
+
+- **`DishkaRouter` controller monkey-patching isolation**: `DishkaRouter.register()` mutates `ControllerSubclass.get_route_handlers` in-place on the controller class (`ControllerSubclass.__dict__["get_route_handlers"] = _inject_route_handlers(...)`). If an earlier test in the session registers a `Controller` subclass on a `DishkaRouter`, any subsequent isolated unit test mounting that same `Controller` class on a plain `Litestar` or `create_async_test_client` without `setup_dishka(...)` fails with `AttributeError: 'State' object has no attribute 'dishka_container'`. Snapshot and restore `get_route_handlers` via `monkeypatch.setattr(MyController, "get_route_handlers", MyController.get_route_handlers)` before registering on `DishkaRouter`, or wire a test Dishka container with `setup_dishka(container=container, app=app)`.
+- **Runtime type hints with `from __future__ import annotations`**: `@inject`, `@inject_websocket`, and `DishkaRouter.register` call `typing.get_type_hints(func)` at decoration/registration time. Keep `FromDishka[...]` and injected types in module-level runtime globals (`func.__globals__`), never inside `if TYPE_CHECKING:` or local test-function scopes.
+- **`litestar-autowire` cache isolation (`clear_autowire_cache()`)**: When testing apps that use `AutowirePlugin`, call `clear_autowire_cache()` (`from litestar_autowire import clear_autowire_cache`) in an `autouse` fixture before and after each test (and evict temporary package names from `sys.modules`).
 
 ### Session Helpers (`set_session_data` / `get_session_data`)
 
@@ -345,7 +349,7 @@ Available `WebSocketTestSession` methods:
 
 ## Tagged source
 
-- [2.24 test-client helpers](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/testing/helpers.py)
-- [2.24 RequestFactory](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/testing/request_factory.py)
-- [2.24 WebSocketTestSession](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/testing/websocket_test_session.py)
-- [2.24 dependency replacement guidance](https://github.com/litestar-org/litestar/blob/v2.24.0/docs/onboarding/fastapi.rst)
+- [2.25 test-client helpers](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/testing/helpers.py)
+- [2.25 RequestFactory](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/testing/request_factory.py)
+- [2.25 WebSocketTestSession](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/testing/websocket_test_session.py)
+- [2.25 dependency replacement guidance](https://github.com/litestar-org/litestar/blob/v2.25.0/docs/onboarding/fastapi.rst)

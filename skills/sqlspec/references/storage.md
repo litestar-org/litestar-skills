@@ -107,7 +107,7 @@ Backend-specific tuning includes PostgreSQL table/autovacuum settings, MySQL and
 
 Adapter-local `adk`, `events`, and `litestar` packages expose concrete database stores. Instantiate them only when integrating those systems directly; normal framework and ADK integrations construct them from the registered adapter config.
 
-BigQuery does not provide an ADK session or memory backend. Artifact service protocols exist under the ADK extension, but SQLSpec does not claim a concrete artifact metadata store for every adapter.
+BigQuery ships `BigQueryADKStore` only as an analytics-replica/telemetry path and does not provide an OLTP ADK session or memory backend. Cloud Spanner ships concrete `SpannerSyncADKArtifactStore` and `SpannerAsyncADKArtifactStore` in `sqlspec.adapters.spanner.adk` alongside its sync/async session and memory stores; other adapters expose the `BaseAsyncADKArtifactStore` / `BaseSyncADKArtifactStore` contracts for custom metadata stores.
 
 ## Cross References
 

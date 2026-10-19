@@ -342,9 +342,9 @@ You can override either handler by passing your own `NotFoundError` or `Integrit
 
 ## Audited Upstream Source Links
 
-- [`litestar/exceptions/base_exceptions.py` (v2.24.0)](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/exceptions/base_exceptions.py)
-- [`litestar/exceptions/http_exceptions.py` (v2.24.0)](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/exceptions/http_exceptions.py)
-- [`litestar/exceptions/responses/__init__.py` (v2.24.0)](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/exceptions/responses/__init__.py)
-- [`litestar/plugins/problem_details.py` (v2.24.0)](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/plugins/problem_details.py)
+- [`litestar/exceptions/base_exceptions.py` (v2.25.0)](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/exceptions/base_exceptions.py)
+- [`litestar/exceptions/http_exceptions.py` (v2.25.0)](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/exceptions/http_exceptions.py)
+- [`litestar/exceptions/responses/__init__.py` (v2.25.0)](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/exceptions/responses/__init__.py)
+- [`litestar/plugins/problem_details.py` (v2.25.0)](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/plugins/problem_details.py)
 - [`advanced_alchemy/exceptions.py`](https://github.com/litestar-org/advanced-alchemy/blob/main/advanced_alchemy/exceptions.py)
 - [`advanced_alchemy/extensions/litestar/exception_handler.py`](https://github.com/litestar-org/advanced-alchemy/blob/main/advanced_alchemy/extensions/litestar/exception_handler.py)

@@ -465,7 +465,7 @@ async def counter_island() -> ComponentResponse:
 {{ vite_fragment("resources/components/Counter.tsx", props={"initial": 0}, mode="island") }}
 ```
 
-In development, `FragmentEngine` dispatches `render_fragment` over `TCPStreamIPCTransport` to `/__litestar_ssr__` (`litestarViteSsrPlugin` using Vite 7+ `ModuleRunner`). In production, it uses `StdioIPCTransport` backed by `litestar-vite-ssr-worker`.
+In development, `FragmentEngine` dispatches `render_fragment` over `TCPStreamIPCTransport` to `/__litestar_ssr__` (`litestarViteSsrPlugin` using Vite 7+ `ModuleRunner`). In production, it uses `StdioIPCTransport` (`["node", "<ssr_bundle_path>"]` or `InertiaSSRConfig.command`, backed by `startSsrWorker` from `litestar-vite-plugin/ssr-worker`).
 
 ---
 
@@ -479,5 +479,5 @@ In development, `FragmentEngine` dispatches `render_fragment` over `TCPStreamIPC
 - **Template helpers** work across template, htmx, and hybrid modes (anywhere you render server-side HTML)
 - **Canonical scripts** in `package.json`: `dev`, `build`, `preview`/`serve`, `generate-types`
 
-Use the `v0.31.0` example tree and `assets init` templates above. Do not copy
+Use the `v0.32.0` example tree and `assets init` templates above. Do not copy
 unreleased application repositories when auditing a published package contract.

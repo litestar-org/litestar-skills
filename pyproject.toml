@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "litestar-skills"
-version = "0.10.0"
+version = "0.11.0"
 description = "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -45,17 +45,18 @@ dev = [
 # working environment — otherwise those checks silently run against stale or
 # missing upstreams.
 validation = [
-  "advanced-alchemy[cli,cryptography,fsspec,obstore]>=1.11.0",
+  "advanced-alchemy[cli,cryptography,fsspec,obstore]>=1.12.0",
   "argon2-cffi>=23.1",  # advanced_alchemy.types.password_hash.argon2 imports argon2 at module load
   "dishka>=1.4",
   "flask>=3.0",        # advanced_alchemy.extensions.flask imports flask at module load
-  "litestar[jinja,jwt]>=2.24.0",
+  "litestar[jinja,jwt]>=2.25.0",
   "litestar-autowire>=0.2.0",
   "litestar-email>=0.4.0",
   "litestar-granian>=0.16.0",
   "litestar-htmx>=0.5.0",
-  "litestar-mcp[a2a]>=0.14.0",
-  "litestar-queues[advanced-alchemy,sqlspec]>=0.12.0",
+  "litestar-mcp[a2a]>=0.16.0",
+  "litestar-queues[advanced-alchemy]>=0.12.0 ; python_version < '3.11'",
+  "litestar-queues[advanced-alchemy,sqlspec]>=0.12.0 ; python_version >= '3.11'",
   "litestar-saq[psycopg]>=0.8.0",
   "litestar-security>=0.6.0",
   "litestar-vite>=0.32.0",
@@ -64,7 +65,7 @@ validation = [
   "pytest-databases>=0.19.0",
   "sanic[ext]>=24.6",  # advanced_alchemy.extensions.flask/sanic imports sanic_ext at module load
   "sqlmodel>=0.0.27",
-  "sqlspec[adk,asyncpg,duckdb,oracledb,performance,psycopg]>=0.65.0",
+  "sqlspec[adk,asyncpg,duckdb,oracledb,performance,psycopg]>=0.67.0 ; python_version >= '3.11'",
 ]
 
 [project.urls]
@@ -173,7 +174,7 @@ exclude_lines = [
 # bump-my-version — atomic multi-manifest version sync
 # ============================================================
 [tool.bumpversion]
-current_version = "0.10.0"
+current_version = "0.11.0"
 commit = false
 tag = false
 tag_name = "v{new_version}"

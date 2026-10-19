@@ -1,12 +1,183 @@
 # Custom Agent Runtimes, Tool Engineering & Multi-Step Workflows
 
-Use this reference when building custom **`google-genai` + `msgspec`** agent loops, `SpecTree` specialist hierarchies, parallel tool runners, multi-step `DynamicWorkflow` DAGs, or standalone structured-output LLM services.
+Use this reference when building first-party **`litestar_mcp.agent`** runtimes (`Agent`, `AgentGroup`, `AgentRuntime`, `GoogleGenAIClient`, `DynamicWorkflow`, `WorkflowEngine`, `agent_to_mcp`, `agent_to_a2a`), custom **`google-genai` + `msgspec`** agent loops, `SpecTree` specialist hierarchies, parallel tool runners, or standalone structured-output LLM services.
 
 ---
 
-## 1. Provider-Neutral `msgspec.Struct` Runtime Types
+## 1. First-Party `litestar_mcp.agent` Runtime, `AgentGroup`, `DynamicWorkflow` & MCP/A2A Bridges
 
-Model conversation contents, parts, tool calls, usage counters, and session records as `msgspec.Struct` types so events serialize directly to PostgreSQL `JSONB` and SSE payloads without ORM overhead.
+When `litestar-mcp` (`>=0.16.0`) is installed, prefer `litestar_mcp.agent` over hand-rolled tool loops and workflow runners:
+
+- **`Agent` & `@tool` / `SkillController`**: pass `@tool`-decorated functions or `SkillController` subclasses directly to `Agent(tools=[...], skills=[...])`. Tools that declare `ctx: ToolContext` receive the active request/session context automatically.
+- **`AgentGroup(coordinator=..., specialists=[...])`**: binds specialist agents to a coordinator and automatically injects a typed `transfer_to_agent(target_agent: Literal[...], reason: str = "")` tool on the coordinator.
+- **`GoogleGenAIClient` & `AgentRuntime`**: `GoogleGenAIClient(model="gemini-3.8-flash", ...)` wraps `google-genai` with native async streaming, thought-token configuration (`thinking_budget`, `thinking_level`, `include_thoughts`), and tool-call normalization. `AgentRuntime` enforces `TurnBudget(max_turns=..., max_tool_calls=..., timeout_seconds=...)` and persists conversation history via `MemorySessionStore` or `LitestarStoreSessionStore`.
+- **`DynamicWorkflow` & `WorkflowEngine`**: executes multi-step DAGs where each `WorkflowNode` runs either an `Agent` (prompted with `{key}` placeholders from `WorkflowContext.state` and upstream `StepResult.output` values) or an async Python `handler(ctx: WorkflowContext)`. Independent dependency waves run concurrently via `asyncio.TaskGroup`.
+- **MCP & A2A Bridges**: expose any `Agent` or `AgentGroup` as a `LitestarMCP` plugin (`agent_to_mcp`) or `LitestarA2A` plugin (`agent_to_a2a`), or import external MCP tools into an agent (`mcp_to_tools`, `discover_mcp_tools`).
+
+```python
+from typing import Any
+
+from litestar.stores.memory import MemoryStore
+from litestar_mcp import LitestarA2A, LitestarMCP, SkillController, tool
+from litestar_mcp.agent import (
+    Agent,
+    AgentGroup,
+    AgentRuntime,
+    DynamicWorkflow,
+    GoogleGenAIClient,
+    TurnBudget,
+    TurnRequest,
+    TurnResponse,
+    WorkflowContext,
+    WorkflowEngine,
+    agent_to_a2a,
+    agent_to_mcp,
+)
+from litestar_mcp.agent.sessions import LitestarStoreSessionStore
+from litestar_mcp.core.context import ToolContext
+
+
+@tool(description="Fetch live workload metrics for a database cluster.")
+async def fetch_cluster_metrics(cluster_id: str, ctx: ToolContext) -> dict[str, Any]:
+    """Return CPU, IOPS, and storage utilization for cluster_id."""
+    return {
+        "cluster_id": cluster_id,
+        "requested_by": ctx.owner_key() or "anonymous",
+        "cpu_pct": 68.5,
+        "iops": 14200,
+    }
+
+
+class SizingSkills(SkillController):
+    """Reusable skill controller grouped for sizing specialists."""
+
+    prefix = "sizing"
+
+    @tool(description="Estimate target node count from peak IOPS and CPU utilization.")
+    async def estimate_nodes(self, cpu_pct: float, iops: int) -> dict[str, Any]:
+        """Compute recommended node count."""
+        nodes = max(2, int((cpu_pct / 25.0) + (iops / 5000.0)))
+        return {"recommended_nodes": nodes, "ha_topology": "regional"}
+
+
+metrics_specialist = Agent(
+    name="metrics_specialist",
+    description="Collects and interprets database cluster telemetry.",
+    instructions="Fetch cluster metrics using fetch_cluster_metrics and summarize bottlenecks.",
+    tools=[fetch_cluster_metrics],
+)
+
+sizing_specialist = Agent(
+    name="sizing_specialist",
+    description="Computes target Cloud SQL or AlloyDB node sizing from telemetry.",
+    instructions="Use sizing_estimate_nodes to size the target cluster.",
+    skills=[SizingSkills],
+)
+
+coordinator = Agent(
+    name="migration_coordinator",
+    description="Coordinates workload triage and delegates to metrics or sizing specialists.",
+    instructions=(
+        "Triage user questions. Call transfer_to_agent to hand off telemetry lookups "
+        "to metrics_specialist or capacity calculations to sizing_specialist."
+    ),
+)
+
+migration_group = AgentGroup(
+    coordinator=coordinator,
+    specialists=[metrics_specialist, sizing_specialist],
+)
+
+
+def build_agent_runtime(store: MemoryStore) -> AgentRuntime:
+    """Construct a budgeted AgentRuntime backed by a Litestar store."""
+    model_client = GoogleGenAIClient(
+        model="gemini-3.8-flash",
+        vertexai=True,
+        temperature=0.2,
+        thinking_budget=1024,
+    )
+    return AgentRuntime(
+        migration_group,
+        default_model=model_client,
+        budget=TurnBudget(max_turns=10, max_tool_calls=25, timeout_seconds=120.0),
+        sessions=LitestarStoreSessionStore(store=store, key_prefix="litestar_mcp:session"),
+    )
+
+
+async def run_interactive_turn(
+    runtime: AgentRuntime,
+    *,
+    session_id: str,
+    message: str,
+    workspace_id: str,
+) -> TurnResponse:
+    """Execute a single multi-turn request with fenced dynamic context."""
+    return await runtime.run_turn(
+        TurnRequest(
+            user_message=message,
+            session_id=session_id,
+            dynamic_context=f"Active workspace: {workspace_id}",
+        )
+    )
+
+
+def build_assessment_workflow() -> DynamicWorkflow:
+    """Build a multi-step DAG combining agent nodes and deterministic Python handlers."""
+    workflow = DynamicWorkflow(name="cluster-assessment")
+    workflow.add_node(
+        "collect_metrics",
+        agent=metrics_specialist,
+        prompt="Collect metrics for cluster {cluster_id} and summarize peak load.",
+    )
+    workflow.add_node(
+        "compute_sizing",
+        agent=sizing_specialist,
+        depends_on=["collect_metrics"],
+        prompt="Based on telemetry ({collect_metrics}), compute target node sizing.",
+    )
+
+    async def format_report(ctx: WorkflowContext) -> dict[str, Any]:
+        return {
+            "cluster_id": ctx.state.get("cluster_id"),
+            "metrics_summary": ctx.results["collect_metrics"].output,
+            "sizing_plan": ctx.results["compute_sizing"].output,
+        }
+
+    workflow.add_node(
+        "format_report",
+        handler=format_report,
+        depends_on=["compute_sizing"],
+        condition=lambda ctx: ctx.results["compute_sizing"].status == "completed",
+    )
+    return workflow
+
+
+async def run_assessment_workflow(runtime: AgentRuntime, cluster_id: str) -> dict[str, Any]:
+    """Execute the assessment DAG and return the terminal report payload."""
+    engine = WorkflowEngine(default_runtime=runtime)
+    workflow = build_assessment_workflow()
+    ctx = await engine.execute_run(workflow, initial_state={"cluster_id": cluster_id})
+    return dict(ctx.results["format_report"].output)
+
+
+def build_agent_bridge_plugins(runtime: AgentRuntime) -> tuple[LitestarMCP, LitestarA2A]:
+    """Expose the coordinator group as both a LitestarMCP plugin and a LitestarA2A plugin."""
+    mcp_plugin = agent_to_mcp(migration_group, path="/mcp")
+    a2a_plugin = agent_to_a2a(
+        migration_group,
+        path="/a2a",
+        base_url="https://api.example.com",
+        runtime=runtime,
+    )
+    return mcp_plugin, a2a_plugin
+```
+
+---
+
+## 2. Provider-Neutral `msgspec.Struct` Runtime Types (Custom Loop)
+
+When building a custom `google-genai` loop without `litestar_mcp.agent`, model conversation contents, parts, tool calls, usage counters, and session records as `msgspec.Struct` types so events serialize directly to PostgreSQL `JSONB` and SSE payloads without ORM overhead.
 
 ```python
 from datetime import datetime, timezone
@@ -126,7 +297,7 @@ class AgentLimits(msgspec.Struct, kw_only=True, frozen=True):
 
 ---
 
-## 2. Custom Tool Engineering (`declare`, `msgspec` Schema Translation & `execute_parallel`)
+## 3. Custom Tool Engineering (`declare`, `msgspec` Schema Translation & `execute_parallel`)
 
 Use `msgspec.json.schema()` to derive JSON Schema from Python type annotations and translate `$ref` / `anyOf` / `enum` into the subset accepted by `google.genai.types.FunctionDeclaration`. Execute multiple model-requested tool calls concurrently with `asyncio.gather()` while streaming `tool_start` / `tool_end` events through an `asyncio.Queue`.
 
@@ -336,7 +507,7 @@ async def execute_parallel(
 
 ---
 
-## 3. `AgentSpec`, `SpecTree` Delegation & Fenced `RequestDraft` Assembly
+## 4. `AgentSpec`, `SpecTree` Delegation & Fenced `RequestDraft` Assembly
 
 When using a native `google-genai` loop, `SpecTree` automatically injects a `transfer_to_agent` tool into every agent in the hierarchy with an `enum` of valid specialist and coordinator names.
 
@@ -433,15 +604,9 @@ class SpecTree:
 
 ---
 
-## 4. Multi-Step `DynamicWorkflow`, `WorkflowEngine` & `BaseSpecialistNode`
+## 5. Custom Typed Specialist Nodes (`BaseSpecialistNode`)
 
-When an agent capability requires deterministic multi-phase execution (e.g., parallel discovery -> schema complexity analysis -> target sizing -> synthesis report) rather than open-ended chat transfers, build a `DynamicWorkflow` and expose it to the coordinator via `workflow_tool()`.
-
-Key mechanics:
-
-- **Savepoint & Fallback Isolation**: each `WorkflowNode` can specify `retries`, `timeout_seconds`, and a `fallback_node` so transient tool or schema failures degrade gracefully.
-- **Typed Specialist Nodes (`BaseSpecialistNode[InputT, OutputT]`)**: enforce `response_mime_type="application/json"` with `msgspec.json.schema(output_type)`, decode via `msgspec.json.decode(..., type=output_type)`, and provide a deterministic `_fallback_output(input_data, reason)` if JSON validation fails.
-- **Terminal Output Promotion (`use_as_output=True`)**: terminal synthesis nodes stream their Markdown directly to the client's SSE `delta` stream while intermediate nodes run silently and only emit phase progress markers.
+When building a custom workflow engine with typed `msgspec.Struct` node inputs and outputs rather than `litestar_mcp.agent.DynamicWorkflow`, define a generic `BaseSpecialistNode[InputT, OutputT]` that enforces `response_mime_type="application/json"` with `msgspec.json.schema(output_type)`, decodes via `msgspec.json.decode(..., type=output_type)`, and falls back deterministically when JSON validation fails.
 
 ```python
 import asyncio
@@ -519,7 +684,7 @@ class BaseSpecialistNode(WorkflowNode, Generic[InputT, OutputT], ABC):
 
 ---
 
-## 5. Standalone Structured-Output LLM Classifiers & Embedders
+## 6. Standalone Structured-Output LLM Classifiers & Embedders
 
 For non-conversational domain tasks (SKU classification, document extraction, health probes, vector embeddings), use `google.genai.Client(vertexai=True)` with `response_mime_type="application/json"`, `response_schema`, and `tenacity` exponential backoff on HTTP 429 rate limits.
 
@@ -555,7 +720,7 @@ class GeminiClassifierService:
     def __init__(
         self,
         *,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3.8-flash",
         embedding_model: str = "gemini-embedding-001",
         project: str | None = None,
         location: str | None = None,

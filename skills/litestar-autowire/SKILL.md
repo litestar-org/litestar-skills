@@ -23,6 +23,10 @@ consistent convention.
 - Configure third-party loaders via `integrations` (`DishkaIntegration()`, `QueuesIntegration()`).
 - Configure Dishka and Litestar Queues separately; Autowire only discovers or
   wraps their domain-owned components.
+- Keep runtime-inspected controller imports (`FromDishka`, `NamedDependency`,
+  `Request`, injected service types, and DTOs) at module top-level with
+  `# noqa: TC001, TC002` (or `"**/controllers.py" = ["TC001", "TC002", "TC003"]`
+  in Ruff `per-file-ignores`) when `from __future__ import annotations` is active.
 - Call `clear_autowire_cache()` when tests create, replace, or remove modules.
 
 ## Quick Reference
@@ -177,10 +181,15 @@ project already uses Dishka and needs `DishkaRouter`. See
   `from __future__ import annotations` is enabled in controller modules.**
   `DishkaRouter.register` calls `typing.get_type_hints()` on each controller
   handler at registration time, which raises `NameError` if injected types are
-  absent from runtime module globals or defined only in a function scope.
+  absent from runtime module globals or defined only in a function scope. Keep
+  those imports at module top-level with `# noqa: TC001, TC002` (or configure
+  Ruff `per-file-ignores` for controller modules).
 - **Do not reuse a `Controller` class across unit tests after `DishkaRouter`
-  registration without restoring `get_route_handlers`.** `DishkaRouter.register`
-  monkey-patches `ControllerSubclass.get_route_handlers` in-place on the class.
+  registration without restoring `get_route_handlers` or providing a Dishka
+  container.** `DishkaRouter.register` monkey-patches
+  `ControllerSubclass.get_route_handlers` in-place on the class, so mounting
+  that controller on an isolated `Litestar` test app without `setup_dishka`
+  fails at request time with `AttributeError: 'State' object has no attribute 'dishka_container'`.
 - **Do not give custom integrations the names `dishka` or `queues`.** Built-in
   name collisions fail during configuration.
 - **Do not reuse stale discovery state in tests or reload tooling.** Clear the
@@ -199,8 +208,8 @@ project already uses Dishka and needs `DishkaRouter`. See
 - [ ] Queue task discovery is enabled only with the Queues extra and integration.
 - [ ] Dishka and Litestar Queues retain their own application configuration.
 - [ ] Controller modules wired with Dishka keep `FromDishka[...]` dependency
-  types importable at runtime rather than inside `if TYPE_CHECKING:` under
-  `from __future__ import annotations`.
+  types importable at runtime (`# noqa: TC001, TC002`) rather than inside
+  `if TYPE_CHECKING:` under `from __future__ import annotations`.
 - [ ] Custom integrations satisfy `AutowireIntegration` and use unique names.
 - [ ] Router hooks are paired with a compatible `router_class`.
 - [ ] Tests call `clear_autowire_cache()` around dynamic module changes and

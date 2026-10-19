@@ -140,9 +140,11 @@ env:
 
 After bumping:
 
-1. **Check the install-dir patch still applies.** The regex in `patch_pyapp_install_dir()` (`tools/bundler.py`) matches the PyApp source. Upstream refactors break it:
+1. **Check the install-dir patch still applies.** The regex in `patch_pyapp_install_dir()` (`tools/bundler.py`) matches the PyApp `src/app.rs` `initialize()` expression (in PyApp `v0.29.0` there is no separate `storage_dir()` or `project_dirs()` helper function, and runtime overrides use `PYAPP_INSTALL_DIR_<PROJECT_NAME>`). Upstream refactors break it:
 
    ```python
+   import re
+
    pattern = re.compile(
        r"platform_dirs\(\)\s*\.data_local_dir\(\)\s*"
        r"\.join\(project_name\(\)\)\s*"
@@ -160,12 +162,14 @@ After bumping:
 
    If the pattern doesn't match, update the regex. The replacement expression (`render_install_dir_expression`) usually doesn't need changes — PyApp's `directories::BaseDirs` dependency is stable.
 
-2. **Check the Cargo.toml `sed` patch for static linking.** If PyApp changes its dependency names or moves the `[dependencies]` section, the `sed` invocations break:
+2. **Check the Cargo.toml `sed` patch for static linking.** In PyApp `v0.29.0`, `bzip2 = "0.6.0"` uses the pure-Rust `libbz2-rs-sys` backend by default (making `static = ["bzip2-sys?/static"]` a harmless no-op) and there is no `xz`/`lzma` dependency, so this patch primarily guards older PyApp pins or future C-backed compression dependencies. If PyApp changes its dependency names or moves the `[dependencies]` section, the `sed` invocations break:
 
    ```bash
    sed -i 's/bzip2 = "\([^"]*\)"/bzip2 = { version = "\1", features = ["static"] }/' Cargo.toml
    sed -i '/\[dependencies\]/a bzip2-sys = { version = "*", features = ["static"] }' Cargo.toml
    ```
+
+   If rewriting `Cargo.toml` in Python with `re.MULTILINE`, match end-of-line with `[ \t]*$` rather than `\s*$` so `\s*` does not consume the newline and join the next line into the substitution.
 
 3. **Rebuild and smoke-test.** Offline test in particular — the biggest PyApp regressions touch tarball extraction.
 
@@ -197,7 +201,9 @@ Then `make build-onefile` fetches the new archive.
 
 ## Change the PyApp install location
 
-The install root is set via `bundler.py --install-root`. Pick somewhere under `$HOME` to keep the binary relocatable across users.
+For a **runtime-only** override (without rebuilding the binary), set `PYAPP_INSTALL_DIR_<PROJECT_NAME>=/custom/path` (where `<PROJECT_NAME>` is the uppercased `PYAPP_PROJECT_NAME` with `-` replaced by `_`; keep it set when running `<binary> self remove` or `<binary> self restore`).
+
+To change the **compiled-in default** install root, pass `--install-root` to `bundler.py`. Pick somewhere under `$HOME` to keep the binary relocatable across users.
 
 Edit **one** file:
 

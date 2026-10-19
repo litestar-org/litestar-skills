@@ -158,7 +158,7 @@ from advanced_alchemy.filters import FilterTypes
 from advanced_alchemy.service import OffsetPagination
 from litestar import Controller, Request, delete, get, patch, post
 from litestar.di import NamedDependency
-from litestar.params import FromPath, SkipValidation
+from litestar.params import FromPath, JSONBody, SkipValidation
 from msgspec import to_builtins
 
 from app.domain.accounts.guards import requires_active_user
@@ -212,7 +212,7 @@ class TaskController(Controller):
     @post("/")
     async def create_task(
         self,
-        data: TaskCreate,
+        data: JSONBody[TaskCreate],
         tasks_service: NamedDependency[TaskService],
         request: Request,
     ) -> Task:
@@ -227,7 +227,7 @@ class TaskController(Controller):
     async def update_task(
         self,
         task_id: FromPath[UUID],
-        data: TaskUpdate,
+        data: JSONBody[TaskUpdate],
         tasks_service: NamedDependency[TaskService],
         request: Request,
     ) -> Task:

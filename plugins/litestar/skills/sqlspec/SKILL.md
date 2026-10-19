@@ -128,11 +128,11 @@ await db.load_from_records("users", [{"id": 1, "name": "Ada"}])
 | PostgreSQL sync | `psycopg` | Sync+async, PYFORMAT params |
 | SQLite | `sqlite`, `aiosqlite` | QMARK params, local dev |
 | DuckDB analytics | `duckdb` | Arrow-native OLAP, extension load/install lifecycle, direct object-store transfer |
-| Arrow / multi-engine ETL | `adbc` | Arrow-native ingest/export across DuckDB, PostgreSQL, BigQuery, Flight SQL |
+| Arrow / multi-engine ETL | `adbc` | Arrow-native ingest/export across DuckDB, PostgreSQL, BigQuery, Flight SQL, GizmoSQL, Quack, Oracle, and Db2 |
 | MySQL async | `asyncmy` | PYFORMAT params |
 | Oracle | `oracledb` | NAMED_COLON params, sync+async |
 | IBM Db2 | `db2` | QMARK params, sync+async via `ibm_db`, `SYSCAT` catalog reflection |
-| BigQuery / Spanner | `bigquery`, `spanner` | NAMED_AT params, cloud job/session controls |
+| BigQuery / Spanner | `bigquery`, `spanner` | NAMED_AT params, cloud job/session controls, Spanner sync+async drivers, Property Graph & Vector/Search index AST |
 | Raw SQL strings | Driver methods | `select()`, `execute()` |
 | Dynamic queries | Query builder | `sql.select()...to_statement()`, `sql.update()...from_()`, `sql.upsert()` |
 | SQL from files | `SQLFileLoader` | Metadata directives, `-- param:`, `-- fragment:`, `/* include: */`, `/* slot: */`, caching |
@@ -265,9 +265,9 @@ For detailed instructions, patterns, and API guides, refer to the following docu
 
 ### Architecture & Performance
 
-- **[Architecture & Caching](references/architecture.md)** -- Core data flow, global cache configuration, namespaces, and driver-local statement caches.
-- **[Performance & Cloud Controls](references/performance.md)** -- Bounded async bridge, cache/fetch tuning, BigQuery job controls, Spanner session controls.
-- **[Data Dictionary](references/data-dictionary.md)** -- Dialect feature flags, runtime introspection (`get_tables`, `get_columns`, `get_indexes`), ADBC native metadata/statistics.
+- **[Architecture & Caching](references/architecture.md)** -- Core data flow, global cache configuration, namespaces, `StatementCacheHolder`, and zero-copy AST sharing.
+- **[Performance & Cloud Controls](references/performance.md)** -- Bounded async bridge, cache/fetch tuning, BigQuery job controls, Spanner sync/async session controls.
+- **[Data Dictionary](references/data-dictionary.md)** -- Dialect feature flags, runtime introspection (`get_tables`, `get_columns`, `get_indexes`), Spanner Property Graph/Change Stream metadata, ADBC native metadata/statistics.
 
 ### Query Building & Execution
 
@@ -290,7 +290,7 @@ For detailed instructions, patterns, and API guides, refer to the following docu
 - **[Framework Extensions](references/extensions.md)** -- Litestar plugin, FastAPI/Starlette integration.
 - **[Storage Integration](references/storage.md)** -- ADK store, Litestar session stores, event channel backends.
 - **[Event Channels (Pub/Sub)](references/events.md)** -- `AsyncEventChannel`, subscribe/publish patterns.
-- **[ADK Extension](references/adk.md)** -- ADK 2 session/memory stores, scoped state, artifact service contracts.
+- **[ADK Extension](references/adk.md)** -- ADK 2 session/memory/artifact stores, scoped state, Spanner hybrid vector/FTS/RRF & Property Graph memory.
 
 ### Migrations & Schema
 

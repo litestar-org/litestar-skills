@@ -120,12 +120,51 @@ async def get_connection() -> object:
 
 Cloud Run Services scale based on incoming HTTP traffic and scale to zero when idle, so continuous polling daemons (`litestar workers run` or `litestar queues run`) should not run inside a scale-to-zero HTTP Service.
 
-### Option A: `litestar-queues` on Cloud Run Jobs (Recommended for Serverless)
+### Option A1: `litestar-queues` with Cloud Tasks (Scale-to-Zero Serverless Push)
 
-`litestar-queues` natively supports **one-shot serverless execution** via `CloudRunExecutionConfig` and `litestar queues run-task`:
+`CloudTasksExecutionConfig` (`pip install "litestar-queues[cloud-tasks]"`) keeps **no worker process anywhere** (`WorkerConfig(placement="external")`). When a route handler enqueues a task, `QueueService.enqueue()` persists the record in the queue backend (`SQLSpecBackendConfig` with `worker_wakeups=None`, `SQLAlchemyBackendConfig`, or Redis/Valkey) and immediately schedules a Google Cloud Task (`schedules_on_enqueue=True`). When the task is due, Cloud Tasks pushes `POST /_litestar-queues/cloud-tasks` to the consumer Cloud Run Service (protected by `trust_platform_auth=True` or `guards`), so every instance can scale to zero when idle.
 
-1. Configure `QueueConfig(queue_backend=..., execution_backend=CloudRunExecutionConfig(project_id="my-project", region="us-central1", job_name="my-app-tasks"))` on the web service (using a persistent `queue_backend` such as SQLSpec, Advanced Alchemy, or Redis/Valkey).
-2. Deploy a **Cloud Run Job** using the same container image with `litestar queues run-task` as its entrypoint and `QUEUES_CONFIG_FACTORY` pointing to a callable that returns your `QueueConfig` or `QueueService`:
+### Option A2: `litestar-queues` on Cloud Run Jobs (Isolated Per-Task Containers)
+
+`CloudRunExecutionConfig` (`pip install "litestar-queues[cloudrun]"`) runs each task in an **isolated Cloud Run Job execution** via `litestar queues run-task`:
+
+- **Step 1**: Configure `QueueConfig` with a persistent `queue_backend` and `execution_backend=CloudRunExecutionConfig(...)`:
+
+```python
+from litestar_queues import (
+    CloudRunExecutionConfig,
+    QueueConfig,
+    QueueMaintenanceConfig,
+    WorkerConfig,
+)
+
+
+def create_queue_config() -> QueueConfig:
+    """Create QueueConfig targeting isolated Cloud Run Job executions."""
+    return QueueConfig(
+        queue_backend="sqlspec",
+        execution_backend=CloudRunExecutionConfig(
+            project_id="my-project",
+            region="us-central1",
+            job_name="my-app-tasks",
+            profiles={
+                "default": "my-app-tasks",
+                "heavy": "my-app-tasks-heavy",
+            },
+            timeout=900,
+        ),
+        worker=WorkerConfig(placement="server"),
+        maintenance=QueueMaintenanceConfig(
+            time_budget=300,
+            coordination_timeout=360,
+            external_limit=100,
+            stale_after=900,
+        ),
+        task_modules=("app.domain.tasks",),
+    )
+```
+
+- **Step 2**: Deploy a **Cloud Run Job** using the same container image with `litestar queues run-task` as its entrypoint and `QUEUES_CONFIG_FACTORY` pointing to a callable that returns your `QueueConfig` or `QueueService`:
 
 ```bash
 gcloud run jobs create my-app-tasks \
@@ -133,16 +172,45 @@ gcloud run jobs create my-app-tasks \
     --region us-central1 \
     --command "litestar" \
     --args "queues,run-task" \
-    --set-env-vars "LITESTAR_APP=app.server.asgi:create_app,QUEUES_CONFIG_FACTORY=app.config:create_queue_config" \
+    --set-env-vars "LITESTAR_APP=app.server.asgi:create_app,QUEUES_CONFIG_FACTORY=app.config:create_queue_config,LITESTAR_QUEUES_TASK_MODULES=app.domain.tasks" \
     --set-secrets "DATABASE_URL=database-url:latest,SECRET_KEY=secret-key:latest" \
     --service-account app-sa@my-project.iam.gserviceaccount.com
 ```
 
-When the web application enqueues a task, `litestar-queues` persists the task record in the queue backend and dispatches a Cloud Run Job execution passing `QUEUES_TASK_ID` (plus any `CloudRunExecutionConfig.extra_env`); the Cloud Run Job loads `QUEUES_CONFIG_FACTORY`, claims the live record by `QUEUES_TASK_ID`, executes the task with heartbeats, and exits immediately. For scheduled reconciliation, stale recovery, and retention pruning, configure `QueueConfig(maintenance=QueueMaintenanceConfig(...))` and trigger a second Cloud Run Job (`--args "queues,run-maintenance"`) via Cloud Scheduler. See [`../../litestar-queues/SKILL.md`](../../litestar-queues/SKILL.md).
+The dispatcher worker reserves pending records (`reserve_external_dispatch`) and triggers a Cloud Run Job execution passing `QUEUES_TASK_ID` (plus any `CloudRunExecutionConfig.extra_env`); the Cloud Run Job loads `QUEUES_CONFIG_FACTORY`, claims the live record by `QUEUES_TASK_ID`, executes the task with heartbeats, and exits immediately. For scheduled reconciliation, stale recovery, and retention pruning, configure `QueueConfig(maintenance=QueueMaintenanceConfig(...))` and trigger a second Cloud Run Job (`--args "queues,run-maintenance"`) via Cloud Scheduler. See [`../../litestar-queues/SKILL.md`](../../litestar-queues/SKILL.md).
 
 ### Option B: Long-Running Workers (`litestar-saq` or `litestar-queues` Daemon)
 
 If you use `litestar-saq` (`litestar workers run`) or continuous `litestar queues run` / `run-consumer` workers, deploy them on **GKE**, **Compute Engine**, or a dedicated Cloud Run Worker Pool / Service with `min-instances: 1` and `cpu-throttling: false`.
+
+## Database Migrations via Cloud Run Jobs (Match-Your-Stack)
+
+Run schema migrations before deploying a new revision using a one-shot Cloud Run Job:
+
+```bash
+# Option A: advanced-alchemy (litestar database upgrade --no-prompt)
+gcloud run jobs create my-app-migrate \
+    --image us-docker.pkg.dev/my-project/repo/app:v1.0.0 \
+    --region us-central1 \
+    --command "litestar" \
+    --args "database,upgrade,--no-prompt" \
+    --set-env-vars "LITESTAR_APP=app.server.asgi:create_app" \
+    --set-secrets "DATABASE_URL=database-url:latest,SECRET_KEY=secret-key:latest" \
+    --service-account app-sa@my-project.iam.gserviceaccount.com
+
+# Option B: sqlspec (litestar db upgrade --no-prompt)
+gcloud run jobs create my-app-migrate \
+    --image us-docker.pkg.dev/my-project/repo/app:v1.0.0 \
+    --region us-central1 \
+    --command "litestar" \
+    --args "db,upgrade,--no-prompt" \
+    --set-env-vars "LITESTAR_APP=app.server.asgi:create_app" \
+    --set-secrets "DATABASE_URL=database-url:latest,SECRET_KEY=secret-key:latest" \
+    --service-account app-sa@my-project.iam.gserviceaccount.com
+
+# Execute and wait for completion before traffic rollout
+gcloud run jobs execute my-app-migrate --region us-central1 --wait
+```
 
 ## IAP (Identity-Aware Proxy)
 

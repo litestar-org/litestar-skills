@@ -97,7 +97,7 @@ Dependencies can be declared at four ownership layers:
 Resolution rules:
 
 - **Inner overrides outer**: `handler.resolve_dependencies()` merges dictionaries top-down (`Litestar -> Router -> Controller -> Handler`). A provider registered under the same key on an inner layer overrides the outer layer's provider for that handler.
-- **Cross-layer sub-dependencies**: a provider at an inner layer (e.g. `Controller`) can depend on a provider from an outer layer (e.g. `Litestar`), as well as request parameters (`FromPath`, `FromQuery`, `FromHeader`, `FromCookie`) and reserved kwargs (`request`, `socket`, `state`, `scope`, `headers`, `cookies`, `query`, `data`, `body`).
+- **Cross-layer sub-dependencies**: a provider at an inner layer (e.g. `Controller`) can depend on a provider from an outer layer (e.g. `Litestar`), as well as request parameters (`FromPath`, `FromQuery`, `FromHeader`, `FromCookie`) and explicitly typed reserved kwargs (`request: Request`, `socket: WebSocket`, `state: State | ImmutableState`, `scope: Scope`, `headers: Headers`, `cookies: RequestCookies`, `query: QueryParams`, `data: JSONBody[T]`/`RequestBody[T]`, `body: RawBody`).
 - **Unique key per `Provide` instance**: registering the same `Provide` instance (or an equal `Provide` wrapping the same callable) under two *different* keys in the same ownership chain raises `ImproperlyConfiguredException`. To override a dependency at a lower layer, reuse the exact same key.
 - **Disjoint names & `data` compatibility**: dependency keys cannot collide with path parameter names, aliased parameter names, or `RESERVED_KWARGS`. If both a dependency and the route handler consume `data`, their annotations and form encodings must match (`ImproperlyConfiguredException` otherwise).
 
@@ -120,9 +120,10 @@ async def list_users(
 
 - **Why `SkipValidation[T]` matters**: Litestar validates all handler and provider parameters through `SignatureModel` (`msgspec.convert`). While client parameter validation errors return `400 ValidationException`, a validation failure on a dependency parameter raises `500 InternalServerException`. Wrapping arbitrary non-msgspec types or union filter lists in `SkipValidation[T]` treats their `SignatureModel` field as `Any` at runtime while preserving static typing for `mypy` and `pyright`.
 - **Missing provider check at startup**: if a parameter is marked with `NamedDependency[T]` and no matching key exists in the handler's `Litestar -> Router -> Controller -> Handler` ownership layers, Litestar raises `ImproperlyConfiguredException` at app startup unless the parameter is optional (`T | None`) or defines a default value (`= default`).
-- **Deprecations (2.23–2.24 -> 3.0)**:
+- **Deprecations (2.23–2.25 -> 3.0)**:
   - `litestar.params.Dependency` and `DependencyKwarg` (including `Dependency(skip_validation=True)`) are deprecated since 2.23 and removed in 3.0.
-  - Implicit name-matched dependency injection (omitting `NamedDependency[T]`) emits `LitestarDeprecationWarning` in 2.24 and is removed in 3.0.
+  - Implicit name-matched dependency injection (omitting `NamedDependency[T]`) emits `LitestarDeprecationWarning` in 2.24+ and is removed in 3.0.
+  - Untyped reserved kwargs (`data`, `body`, `headers`, `query`, `cookies`, `scope`, `request`, `socket`) in dependencies or handlers emit `LitestarDeprecationWarning` in 2.25 and require their explicit Litestar 3 types (`JSONBody[T]`/`RequestBody[T]`, `RawBody`, `Headers`, `QueryParams`, `RequestCookies`, `Scope`, `Request`, `WebSocket`).
 
 ## Dependency Replacement in Tests
 
@@ -269,10 +270,11 @@ from litestar import websocket_listener
 @inject_websocket
 async def task_ws_handler(
     data: dict[str, str],
-    session_tracker: Inject[ConnectionTracker],  # Scope.SESSION
-    container: Inject[AsyncContainer],  # SESSION-scoped container
+    session_tracker: Inject[ConnectionTracker],
+    container: Inject[AsyncContainer],
 ) -> dict[str, str]:
-    async with container() as request_container:  # enters Scope.REQUEST per message
+    """Resolve Scope.SESSION dependencies directly and enter Scope.REQUEST per message."""
+    async with container() as request_container:
         task_service = await request_container.get(TaskService)
         await task_service.process_event(data)
     return {"status": "processed"}
@@ -305,7 +307,7 @@ async def task_ws_handler(
 
 ## Tagged source
 
-- [2.24 dependency injection guide](https://github.com/litestar-org/litestar/blob/v2.24.0/docs/usage/dependency-injection.rst)
-- [2.24 `Provide` and `NamedDependency`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/di.py)
-- [2.24 test override guidance](https://github.com/litestar-org/litestar/blob/v2.24.0/docs/onboarding/fastapi.rst)
+- [2.25 dependency injection guide](https://github.com/litestar-org/litestar/blob/v2.25.0/docs/usage/dependency-injection.rst)
+- [2.25 `Provide` and `NamedDependency`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/di.py)
+- [2.25 test override guidance](https://github.com/litestar-org/litestar/blob/v2.25.0/docs/onboarding/fastapi.rst)
 - [Dishka 1.10.1 Litestar integration](https://github.com/reagento/dishka/blob/1.10.1/src/dishka/integrations/litestar.py)

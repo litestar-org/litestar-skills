@@ -1,6 +1,6 @@
 # Repository Patterns
 
-Advanced Alchemy 1.11 names collection reads `get_many()` and
+Advanced Alchemy names collection reads `get_many()` and
 `get_many_and_count()`. Do not introduce `list()` or `list_and_count()`; those
 aliases are deprecated and scheduled for removal in 2.0.
 
@@ -231,9 +231,25 @@ instance = await repo.update(model_instance)
 instances = await repo.update_many([model1, model2])
 
 instance = await repo.upsert(model_instance, match_fields=["email"])
+instances = await repo.upsert_many(
+    [model1, model2],
+    match_fields=["email"],
+    no_merge=False,
+    chunk_size=None,
+)
 
 instance = await repo.delete(id)
 
 exists = await repo.exists(email="x@y.com")
 count = await repo.count()
 ```
+
+### Bulk Upsert (`upsert_many`) Dispatch & Fallback Rules
+
+`repo.upsert_many(data, *, match_fields=None, no_merge=False, chunk_size=None, ...)` uses `resolve_upsert_strategy()` from `advanced_alchemy.operations` to dispatch to the most efficient native bulk upsert statement for the active dialect whenever `match_fields` maps to a primary key or non-partial unique constraint/index:
+
+- **PostgreSQL / SQLite / DuckDB / CockroachDB**: `INSERT ... ON CONFLICT (...) DO UPDATE` with `RETURNING` hydration.
+- **MySQL / MariaDB**: `INSERT ... ON DUPLICATE KEY UPDATE` followed by a chunked `SELECT` hydration (only when the table has a single unambiguous unique key matching `match_fields`).
+- **Oracle / SQL Server (MSSQL)**: `MERGE INTO ... USING (...)` followed by a chunked `SELECT` hydration.
+- **Google Cloud Spanner**: `INSERT OR UPDATE ... THEN RETURN` when `match_fields` matches the primary key.
+- **Automatic Fallback (`SELECT` + partition + `add_many`/`update_many`)**: Used when `no_merge=True` is passed, when `match_fields` cannot be proven unique on the dialect, when the input batch contains duplicate match keys, or when the model requires ORM unit-of-work lifecycle handling (mapper events, populated relationships, joined-table inheritance, or `FileObject` / `StoredObject` columns).

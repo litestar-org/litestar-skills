@@ -33,9 +33,9 @@ This guidance is audited against `litestar-vite` `0.32.0` and covers release cha
 | `0.30.1` | Static auth exclusion and Granian static eligibility (#351). | `ViteConfig.exclude_static_from_auth=True` emits `opt={"exclude_from_auth": True}` directly on static route handlers and decouples `VitePlugin.get_static_server_config()` (`StaticServerConfig`, `StaticPlacement`, `StaticServerMount`) for Granian native static serving. |
 | `0.31.0` | CSRF constants in `routes.ts` and static helper fallbacks (#354). | `generate_routes_ts` emits `CSRF_COOKIE_NAME` and `CSRF_HEADER_NAME` from `app.csrf_config`. `getCsrfHeaderName`, `getCsrfToken`, `csrfHeaders`, and `csrfFetch` accept `CsrfOptions` / `CsrfFetchOptions` (`headerName`, `cookieName`) when `window.__LITESTAR_CSRF_*__` globals are absent. |
 | `0.32.0` | UI component fragments & `<litestar-island>` (#369). | Render React, Vue, Svelte, or Astro fragments from Python via `ComponentResponse(component, props=..., mode="static" \| "island")`, `FragmentEngine`, `render_fragment`, or Jinja `{{ vite_fragment(...) }}`, with scoped CSS chunk extraction from `manifest.json` and `<litestar-island>` client hydration (`getIslandClientScript()` from `litestar-vite-plugin/fragments`). |
-| `0.32.0` | Persistent IPC SSR worker, Vite 7+ `ModuleRunner`, and circuit breaker (#369). | `litestar_vite.ipc` provides `StdioIPCTransport` (prod stdin/stdout JSON-RPC worker `litestar-vite-ssr-worker`), `TCPStreamIPCTransport` (dev `/__litestar_ssr__` via `litestarViteSsrPlugin` using Vite 7+ `ModuleRunner`), and `SSRCircuitBreaker` (`CircuitState`). `InertiaSSRConfig` removes legacy HTTP `url`/`auto_start`/`health_check`/`health_check_timeout` fields and adds `fallback_to_client`, `circuit_breaker_enabled`, `circuit_breaker_failure_threshold`, and `circuit_breaker_reset_timeout`. |
+| `0.32.0` | Persistent IPC SSR worker, Vite 7+ `ModuleRunner`, and circuit breaker (#369). | `litestar_vite.ipc` provides `StdioIPCTransport` (prod stdin/stdout JSON-RPC worker running `startSsrWorker` from `litestar-vite-plugin/ssr-worker`), `TCPStreamIPCTransport` (dev `/__litestar_ssr__` via `litestarViteSsrPlugin` using Vite 7+ `ModuleRunner`), and `SSRCircuitBreaker` (`CircuitState`). `InertiaSSRConfig` removes legacy HTTP `url`/`auto_start`/`health_check`/`health_check_timeout` fields and adds `fallback_to_client`, `circuit_breaker_enabled`, `circuit_breaker_failure_threshold`, and `circuit_breaker_reset_timeout`. |
 | `0.32.0` | AsyncAPI 3.0 & typed channels (#368). | `TypeGenConfig(generate_channels=True)` (default `True`) exports `asyncapi.json` and `channels.ts` (`ChannelMap`) when `AsyncAPIPlugin` (`litestar-asyncapi`, extra `litestar-vite[asyncapi]`) is registered on the Litestar app (removing stale outputs when absent), paired with `createTypedChannels()` in `litestar-vite-plugin/helpers`. |
-| `0.32.0` | Single-port AnyIO streaming proxy, Vite `>=7.0.0` floor, & Inertia slot tokens (#369). | Unifies dev mode on the single-port AnyIO byte-streaming proxy (`ViteProxyMiddleware` + `/static/vite-hmr`), enforces Vite `>=7.0.0` peer dependency floor, and supports `<!--inertia-head-->` / `<!--inertia-body-->` slot replacement with fallback to `#app`. |
+| `0.32.0` | Single-port AnyIO streaming proxy, Vite `>=7.0.0` floor, & Inertia slot tokens (#369). | Unifies dev mode on the single-port AnyIO byte-streaming proxy (`ViteProxyMiddleware` + `/static/vite-hmr`), enforces Vite `>=7.0.0` peer dependency floor, and supports `<!--inertia-head-->`, `<!--inertia-body-->` / `<!--inertia-->`, and `@inertiaHead` / `@inertia` slot replacement with fallback to `#app`. |
 
 ## Inertia Protocol Boundary
 
@@ -68,7 +68,8 @@ and `--overwrite` only after reviewing collisions.
 - `v0.30.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.30.0>
 - `v0.30.1`: <https://github.com/litestar-org/litestar-vite/tree/v0.30.1>
 - `v0.31.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.31.0>
-- Tagged changelog: <https://github.com/litestar-org/litestar-vite/blob/v0.31.0/docs/changelog.rst>
-- Tagged configuration: <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/src/py/litestar_vite/config>
-- Tagged Inertia tests: <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/src/py/tests/unit/inertia>
-- Tagged CLI tests: <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/src/py/tests>
+- `v0.32.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.32.0>
+- Tagged changelog: <https://github.com/litestar-org/litestar-vite/blob/v0.32.0/docs/changelog.rst>
+- Tagged configuration: <https://github.com/litestar-org/litestar-vite/tree/v0.32.0/src/py/litestar_vite/config>
+- Tagged Inertia tests: <https://github.com/litestar-org/litestar-vite/tree/v0.32.0/src/py/tests/unit/inertia>
+- Tagged CLI tests: <https://github.com/litestar-org/litestar-vite/tree/v0.32.0/src/py/tests>

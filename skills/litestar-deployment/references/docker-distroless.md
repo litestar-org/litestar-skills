@@ -78,7 +78,7 @@ COPY src/ ./src/
 
 RUN uv run app assets build \
     && uv sync ${UV_INSTALL_ARGS} --frozen --no-editable \
-    && uv build --wheel
+    && uv build --wheel --clear
 
 # =============================================================================
 # Stage 3: Runtime Preparation
@@ -157,7 +157,8 @@ STOPSIGNAL SIGINT
 EXPOSE 8000
 
 ENTRYPOINT ["/usr/local/bin/tini", "--"]
-CMD ["app", "run", "--host", "0.0.0.0"]
+# Or ["app", "run", "--host", "0.0.0.0", "--port", "8000"] when [project.scripts] defines an `app` CLI alias
+CMD ["litestar", "run", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ## Why distroless

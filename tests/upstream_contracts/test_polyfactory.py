@@ -1,10 +1,11 @@
 import ast
+import asyncio
 import importlib.util
 import inspect
 from dataclasses import dataclass, field
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Annotated, Any, TypedDict, cast
 
 import attrs
 import msgspec
@@ -12,6 +13,10 @@ import polyfactory
 import polyfactory.factories
 import pydantic
 import pytest
+from advanced_alchemy.base import UUIDBase
+from litestar import Litestar, post
+from litestar.params import JSONBody
+from litestar.testing import TestClient
 from polyfactory import (
     AsyncPersistenceProtocol,
     BaseFactory,
@@ -144,6 +149,79 @@ def test_polyfactory_330_fields_and_post_generated_contract() -> None:
     with pytest.raises(TypeError, match="post_generated decorator can only be used on classmethods"):
         post_generated(build_reference)
 
+    @dataclass
+    class CollectionBox:
+        items: list[str]
+
+    class DefaultCollectionFactory(DataclassFactory[CollectionBox]):
+        __min_collection_length__ = 3
+
+    class RandomizedCollectionFactory(DataclassFactory[CollectionBox]):
+        __randomize_collection_length__ = True
+        __min_collection_length__ = 3
+        __max_collection_length__ = 3
+
+    assert len(DefaultCollectionFactory.build().items) == 1
+    assert len(RandomizedCollectionFactory.build().items) == 3
+
+    with pytest.raises(ConfigurationException):
+        DataclassFactory.create_factory(
+            CollectionBox,
+            __min_collection_length__=6,
+            __max_collection_length__=2,
+        )
+
+    @dataclass
+    class NestedCustomer:
+        label: str
+
+    class NestedCustomerFactory(DataclassFactory[NestedCustomer]):
+        __set_as_default_factory_for_type__ = True
+        label = "pinned-customer"
+
+    @dataclass
+    class NestedEnvelope:
+        customer: NestedCustomer
+
+    class NestedEnvelopeFactory(DataclassFactory[NestedEnvelope]):
+        pass
+
+    assert NestedCustomerFactory.__set_as_default_factory_for_type__ is True
+    assert NestedEnvelopeFactory.build().customer.label == "pinned-customer"
+
+    sync_store: list[Order] = []
+    async_store: list[Order] = []
+
+    class OrderSyncPersistence(SyncPersistenceProtocol[Order]):
+        def save(self, data: Order) -> Order:
+            sync_store.append(data)
+            return data
+
+        def save_many(self, data: list[Order]) -> list[Order]:
+            sync_store.extend(data)
+            return data
+
+    class OrderAsyncPersistence(AsyncPersistenceProtocol[Order]):
+        async def save(self, data: Order) -> Order:
+            async_store.append(data)
+            return data
+
+        async def save_many(self, data: list[Order]) -> list[Order]:
+            async_store.extend(data)
+            return data
+
+    class PersistedOrderFactory(OrderFactory):
+        __sync_persistence__ = OrderSyncPersistence
+        __async_persistence__ = OrderAsyncPersistence
+
+    PersistedOrderFactory.create_sync(tenant_id="acme")
+    PersistedOrderFactory.create_batch_sync(2, tenant_id="acme")
+    assert len(sync_store) == 3
+
+    asyncio.run(PersistedOrderFactory.create_async(tenant_id="acme"))
+    asyncio.run(PersistedOrderFactory.create_batch_async(2, tenant_id="acme"))
+    assert len(async_store) == 3
+
 
 def test_polyfactory_330_pydantic_msgspec_attrs_typeddict_contract() -> None:
     """Verify ModelFactory, MsgspecFactory, AttrsFactory, and TypedDictFactory."""
@@ -162,7 +240,9 @@ def test_polyfactory_330_pydantic_msgspec_attrs_typeddict_contract() -> None:
     assert cast("object", constructed.count) == "not-an-int"
 
     class EventStruct(msgspec.Struct):
-        name: str
+        name: Annotated[str, msgspec.Meta(min_length=4, max_length=8)]
+        score: Annotated[int, msgspec.Meta(ge=10, le=20)]
+        ext: msgspec.msgpack.Ext
         optional_tag: str | msgspec.UnsetType = msgspec.UNSET
 
     class EventFactory(MsgspecFactory[EventStruct]):
@@ -170,6 +250,35 @@ def test_polyfactory_330_pydantic_msgspec_attrs_typeddict_contract() -> None:
 
     event_instance = EventFactory.build()
     assert isinstance(event_instance, EventStruct)
+    assert 4 <= len(event_instance.name) <= 8
+    assert 10 <= event_instance.score <= 20
+    assert isinstance(event_instance.ext, msgspec.msgpack.Ext)
+
+    class RetailLine(msgspec.Struct, tag="retail"):
+        sku: str
+
+    class WholesaleLine(msgspec.Struct, tag="wholesale"):
+        bulk_sku: str
+
+    class CreateOrderPayload(msgspec.Struct):
+        line: RetailLine | WholesaleLine
+
+    class CreateOrderPayloadFactory(MsgspecFactory[CreateOrderPayload]):
+        pass
+
+    variants = list(CreateOrderPayloadFactory.coverage())
+    assert {type(v.line) for v in variants} == {RetailLine, WholesaleLine}
+
+    @post("/orders")
+    async def create_order_handler(data: JSONBody[CreateOrderPayload]) -> dict[str, str]:
+        return {"variant": type(data.line).__name__}
+
+    app = Litestar([create_order_handler])
+    with TestClient(app) as client:
+        for payload in variants:
+            response = client.post("/orders", json=msgspec.to_builtins(payload))
+            assert response.status_code == 201
+            assert response.json()["variant"] == type(payload.line).__name__
 
     @attrs.define
     class ItemAttrs:
@@ -227,8 +336,26 @@ def test_polyfactory_330_sqlalchemy_and_pytest_plugin_contract() -> None:
     assert isinstance(invoice, InvoiceModel)
     assert isinstance(invoice.code, str)
 
+    class LedgerEntryModel(UUIDBase):
+        __tablename__ = "ledger_entries_contract_test"
+
+        description: Mapped[str] = mapped_column(String(48))
+
+    class LedgerEntryModelFactory(SQLAlchemyFactory[LedgerEntryModel]):
+        __set_primary_key__ = False
+        __set_relationships__ = False
+        __set_association_proxy__ = False
+
+    ledger_entry = LedgerEntryModelFactory.build()
+    assert isinstance(ledger_entry, LedgerEntryModel)
+    assert len(ledger_entry.description) <= 48
+
     reg_sig = inspect.signature(register_fixture)
     assert list(reg_sig.parameters) == ["factory", "scope", "autouse", "name"]
+
+    decorated = register_fixture(InvoiceModelFactory, name="custom_invoice_factory")
+    assert decorated is InvoiceModelFactory
+    assert "custom_invoice_factory" in globals()
 
     with pytest.raises(ParameterException):
         register_fixture(cast("Any", InvoiceModel))

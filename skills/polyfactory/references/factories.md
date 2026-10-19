@@ -12,7 +12,7 @@ Reference for picking and configuring factory bases. The factory base owns *how*
 | `@attrs.define` / `attr.s` | `AttrsFactory[T]` | `polyfactory.factories.attrs_factory` |
 | `TypedDict` | `TypedDictFactory[T]` | `polyfactory.factories.typed_dict_factory` |
 | Beanie `Document` | `BeanieDocumentFactory[T]` | `polyfactory.factories.beanie_odm_factory` |
-| Odmantic `Model` | `OdmanticModelFactory[T]` | `polyfactory.factories.odmantic_odm_factory` |
+| Odmantic `Model` / `EmbeddedModel` | `OdmanticModelFactory[T]` | `polyfactory.factories.odmantic_odm_factory` |
 | SQLAlchemy declarative | `SQLAlchemyFactory[T]` | `polyfactory.factories.sqlalchemy_factory` |
 
 A mismatched base raises `ConfigurationException` during factory class creation. Always match the backend, and import from the concrete submodule (`polyfactory.factories.__all__` only exports `BaseFactory`, `DataclassFactory`, and `TypedDictFactory`, so importing `ModelFactory`, `MsgspecFactory`, or `SQLAlchemyFactory` from `polyfactory.factories` fails at runtime and under `mypy`/`pyright`).
@@ -185,7 +185,7 @@ class OrderFactory(DataclassFactory[Order]):
     __max_collection_length__ = 3
 ```
 
-When `__randomize_collection_length__` is `False` (default), collections use `__min_collection_length__` (or `1` when `0` is not empty-allowed).
+When `__randomize_collection_length__` is `False` (default), variable-length collections produce a single element (or key-value pair) and ignore `__min_collection_length__` and `__max_collection_length__`. Setting `__min_collection_length__ > __max_collection_length__` raises `ConfigurationException` during class creation.
 
 ### Custom type providers
 

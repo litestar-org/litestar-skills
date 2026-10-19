@@ -60,18 +60,18 @@ export default defineConfig({
 })
 ```
 
-**litestar-fullstack-inertia** — in `litestar-vite` v0.30+, Python `ViteConfig(paths=PathConfig(bundle_dir=...))` is the single source of truth and writes `.litestar.json` on startup/CLI invocation so `litestar({ input: [...] })` in `vite.config.ts` inherits `bundleDir` and `hotFile` automatically:
+**litestar-fullstack-inertia** — in `litestar-vite` v0.30+, Python `ViteConfig(paths=PathConfig(bundle_dir=...))` is the single source of truth and writes `.litestar.json` on startup/CLI invocation so `litestar({ input: [...] })` in `vite.config.ts` inherits `bundleDir`, `hotFile`, and `assetUrl` automatically (and `litestar assets build` exports OpenAPI/routes metadata, runs `TypeGenConfig` codegen once with `LITESTAR_VITE_SKIP_BUILD_TYPEGEN=1`, installs `node_modules` if missing, and runs the Vite build):
 
 ```python
 from pathlib import Path
 from litestar_vite.config import PathConfig, ViteConfig
 
 
-def get_vite_config() -> ViteConfig:
+def get_vite_config(base_dir: Path) -> ViteConfig:
     """Configure litestar-vite to emit assets inside the app/ Python package."""
     return ViteConfig(
         paths=PathConfig(
-            root=BASE_DIR.parent,
+            root=base_dir.parent,
             bundle_dir=Path("app/domain/web/public"),
             resource_dir=Path("resources"),
         ),
@@ -88,10 +88,10 @@ Rule: **Vite's `outDir` and litestar-vite's `bundle_dir` must point inside one o
 
 - Emit all compiled frontend bundles (`PathConfig.bundle_dir` / Vite `build.outDir`) inside a Python package directory included by Hatchling (`app/...` or `src/py/<pkg>/...`).
 - Choose exactly one Hatchling asset inclusion strategy (`[tool.hatch.build.targets.wheel.force-include]` OR `ignore-vcs = true`) — never combine both.
-- Guard custom Hatchling build hooks (`BuildHookInterface.initialize`) with `if version == "editable": return` so `uv sync` succeeds before frontend assets are built, and exclude `tools/build` from `mypy` and `pyright`.
+- Guard custom Hatchling build hooks (`BuildHookInterface.initialize`) with `if version == "editable":` (warning to `sys.stderr`, creating the placeholder directory, and returning early when compiled assets do not exist yet) so `uv sync` succeeds before frontend assets are built, and exclude `tools/build` from `mypy` and `pyright`.
 - Run asset compilation, static template generation, and license collection before `uv build --wheel --clear`.
-- Treat `PYAPP_*` configuration variables (`PYAPP_PROJECT_PATH`, `PYAPP_PYTHON_VERSION`, `PYAPP_DISTRIBUTION_EMBED`, `PYAPP_DISTRIBUTION_VARIANT_GIL`, `PYAPP_SKIP_INSTALL`) as compile-time inputs to `cargo build` / `cargo zigbuild`; at runtime, inspect `os.getenv("PYAPP")` (`"1"` or path when running under Pass-Through) to detect PyApp execution.
-- Use `cargo zigbuild --release --target <arch>-unknown-linux-gnu.2.17` with `BZIP2_SYS_STATIC=1` and `LZMA_API_STATIC=1` when building portable Linux PyApp binaries.
+- Treat `PYAPP_*` configuration variables (`PYAPP_PROJECT_PATH`, `PYAPP_PYTHON_VERSION`, `PYAPP_DISTRIBUTION_EMBED`, `PYAPP_DISTRIBUTION_VARIANT_GIL`, `PYAPP_SKIP_INSTALL`) as compile-time inputs to `cargo build` / `cargo zigbuild`; at runtime, use `PYAPP_INSTALL_DIR_<PROJECT_NAME>` (where `<PROJECT_NAME>` is the uppercased `PYAPP_PROJECT_NAME` with `-` replaced by `_`) to override the extraction directory and inspect `os.getenv("PYAPP")` (`"1"` or path when built with `PYAPP_PASS_LOCATION=1`) to detect PyApp execution.
+- Use `cargo zigbuild --release --target <arch>-unknown-linux-gnu.2.17` with `BZIP2_SYS_STATIC=1` and `LZMA_API_STATIC=1` when building portable Linux PyApp binaries, and ensure both `$(uv tool dir --bin)` (`$HOME/.local/bin`) and `$HOME/.cargo/bin` are on `PATH` / `$GITHUB_PATH` so the build never silently falls back to `cargo build --release` and binds to the runner's host `glibc`.
 
 ## Quick Reference
 
@@ -152,7 +152,7 @@ Configure `ViteConfig(paths=PathConfig(bundle_dir=Path("app/domain/web/public"))
 
 - **`force-include`** (inertia): List the built-asset directory explicitly under `[tool.hatch.build.targets.wheel.force-include]`. Built assets stay `.gitignore`d. Explicit, auditable.
 - **`ignore-vcs = true`** (SPA): Tell Hatchling to ignore `.gitignore`. All package files ship. Simpler; requires discipline to keep dev junk out of package dirs.
-- **Optional custom Hatchling hook**: If you add a `BuildHookInterface` subclass (e.g., `tools/build/hatch_build.py`) to run `bun run build` during `uv build`, guard `initialize(version, build_data)` with `if version == "editable": return` so `uv sync` does not trigger a frontend build during editable installs, and exclude `tools/build` from `mypy` and `pyright`.
+- **Optional custom Hatchling hook**: If you add a `BuildHookInterface` subclass (e.g., `tools/build/hatch_build.py`) to validate or build frontend assets during `uv build`, guard `initialize(version, build_data)` with `if version == "editable":` (warning to `sys.stderr`, creating the placeholder directory, and returning early instead of raising `ValueError` or running a frontend build) so `uv sync` succeeds before frontend assets exist, and exclude `tools/build` from `mypy` and `pyright`.
 
 See [references/wheel-assets.md](references/wheel-assets.md) for full config.
 
@@ -164,8 +164,8 @@ Create `install`, `build-assets`, `build-wheel`. Make the wheel target **depend*
 
 Decide which flavor:
 
-- **Simple**: add `[tool.hatch.build.targets.binary]` to `pyproject.toml` and run `uv run hatch build --target binary`. Good when end-users have PyPI access. See [pyapp-simple.md](references/pyapp-simple.md).
-- **Advanced**: write a `tools/bundler.py` that pre-installs deps into a `python-build-standalone` archive, patches PyApp's `src/app.rs` for a custom install dir, then runs `cargo zigbuild`. Good for air-gapped distribution or bespoke install locations. See [pyapp-advanced.md](references/pyapp-advanced.md).
+- **Simple**: add `[tool.hatch.build.targets.binary]` to `pyproject.toml` and run `uv run hatch build --target binary` (runtime install location can still be overridden via `PYAPP_INSTALL_DIR_<PROJECT_NAME>`). Good when end-users have PyPI access. See [pyapp-simple.md](references/pyapp-simple.md).
+- **Advanced**: write a `tools/bundler.py` that pre-installs deps into a `python-build-standalone` archive, patches PyApp's `src/app.rs` for a custom compiled-in default install dir, then runs `cargo zigbuild`. Good for air-gapped distribution or bespoke default install locations. See [pyapp-advanced.md](references/pyapp-advanced.md).
 
 ### Step 5: Add GitHub Actions CI
 
@@ -186,16 +186,16 @@ Trigger on `v*` tags. Run the test matrix first. Then build the wheel once. Then
 - **Vite/bun output must land inside a Python package directory.** Otherwise Hatchling drops it. Set `PathConfig.bundle_dir` (and any explicit Vite `build.outDir`) to a path under `src/py/<pkg>/` or `<pkg>/`.
 - **`uv build` runs last.** Assets, licenses, templates, OpenAPI TypeGen all run **before** `uv build --wheel --clear`.
 - **Pick one bundling strategy.** `force-include` or `ignore-vcs = true`, not both. Mixing them causes duplicate-file warnings and unpredictable wheel contents.
-- **Skip editable installs in custom Hatchling hooks.** If a custom `BuildHookInterface` runs in `pyproject.toml` (e.g., `path = "tools/build/hatch_build.py"`), short-circuit when `version == "editable"` and exclude `tools/build` from `mypy`/`pyright` unless `hatchling` is in the typecheck environment.
-- **PyApp `PYAPP_*` config vars are build-time, not runtime.** `PYAPP_PROJECT_NAME`, `PYAPP_PYTHON_VERSION`, `PYAPP_DISTRIBUTION_EMBED`, `PYAPP_DISTRIBUTION_VARIANT_GIL` are consumed when `cargo build` compiles PyApp — not when the resulting binary runs. At runtime, PyApp sets `PYAPP=1` (or the executable path when `PYAPP_PASS_LOCATION=1`) inside the spawned Python process.
+- **Skip or warn-only on editable installs in custom Hatchling hooks.** `uv sync` installs the project in editable mode (`version == "editable"`) before `uv run app assets build` can execute. If a custom `BuildHookInterface` runs in `pyproject.toml` (e.g., `path = "tools/build/hatch_build.py"`), short-circuit when `version == "editable"` (warning to `sys.stderr`, creating the placeholder directory, and returning early instead of raising `ValueError` or running `bun run build`) and exclude `tools/build` from `mypy`/`pyright` unless `hatchling` is in the typecheck environment.
+- **PyApp `PYAPP_*` config vars are build-time (except `PYAPP_INSTALL_DIR_<PROJECT_NAME>`).** `PYAPP_PROJECT_NAME`, `PYAPP_PYTHON_VERSION`, `PYAPP_DISTRIBUTION_EMBED`, `PYAPP_DISTRIBUTION_VARIANT_GIL` are consumed when `cargo build` compiles PyApp — not when the resulting binary runs. At runtime, the compiled binary reads `PYAPP_INSTALL_DIR_<PROJECT_NAME>` (uppercased `PYAPP_PROJECT_NAME` with `-` replaced by `_`; keep set for `self remove` / `self restore`) to override the extraction directory, and sets `PYAPP=1` (or the executable path when `PYAPP_PASS_LOCATION=1`) inside the spawned Python process.
 - **PyApp version upgrades touch multiple files.** `pyproject.toml`, `build-onefile-package.sh`, `.github/workflows/release.yml`, `tools/bundler.py`. See [upgrading.md](references/upgrading.md).
-- **`cargo-zigbuild` for portable glibc.** Plain `cargo build` on a modern Linux runner produces binaries that fail on older distros (glibc too new). Use `cargo zigbuild --target x86_64-unknown-linux-gnu.2.17` to link against glibc 2.17 (CentOS 7-era). Required for broad compatibility.
-- **Static-link native deps in PyApp.** Set `BZIP2_SYS_STATIC=1` and `LZMA_API_STATIC=1` before `cargo zigbuild`, or patch `Cargo.toml` to add `features = ["static"]`. Otherwise the onefile fails to load on systems without matching `libbz2.so` / `liblzma.so`.
+- **`cargo-zigbuild` for portable glibc — and verify it is on `PATH`.** Plain `cargo build` on a modern Linux runner links against the runner's host `glibc` (e.g. `GLIBC_2.39` on Ubuntu 24.04), producing binaries that pass host smoke tests (`./dist/app --help`) but fail inside older distros or Debian Bookworm / distroless containers (`GLIBC_2.36`) with `version 'GLIBC_2.39' not found`. Use `cargo zigbuild --target x86_64-unknown-linux-gnu.2.17` to link against glibc 2.17, add `$(uv tool dir --bin)` (`$HOME/.local/bin`) and `$HOME/.cargo/bin` to `PATH` / `$GITHUB_PATH` after `uv tool install cargo-zigbuild`, and never allow Linux CI builds to fall back silently to `cargo build --release`.
+- **Static-link native deps in PyApp.** Set `BZIP2_SYS_STATIC=1` and `LZMA_API_STATIC=1` before `cargo zigbuild`, or patch `Cargo.toml` to add `features = ["static"]`. (In PyApp `v0.29.0`, `bzip2 = "0.6.0"` uses the pure-Rust `libbz2-rs-sys` backend by default and has no `xz`/`lzma` dependency, so these flags are a harmless belt-and-suspenders safeguard that remain critical when pinning older PyApp releases.)
 - **Pin `uv` and `bun` versions in CI.** Use exact pinned versions (e.g., `UV_VERSION=0.11.6` and `BUN_INSTALL_VERSION=bun-v1.3.12`). Drift in either breaks reproducible builds.
 - **Create placeholder asset dirs in CI.** Hatchling's `force-include` target fails if `app/domain/web/public` or `src/py/app/server/static/web` doesn't exist at wheel/editable-build time. CI jobs that don't build the frontend (lint, mypy, pyright) still need `mkdir -p <asset-dir>` before `uv sync`.
-- **Never commit built frontend output.** Keep `bundle_dir` paths in `.gitignore`. CI rebuilds them on every run. Reason: JS builds are non-deterministic across machines and cause noisy diffs.
+- **Never commit built frontend output or `.litestar.json`.** Keep `bundle_dir` paths (including `hot` and `hot.ssr`) and `.litestar.json` in `.gitignore`. CI rebuilds them on every run. Reason: JS builds are non-deterministic across machines and cause noisy diffs.
 - **Coverage on one Python version only.** Multiple versions uploading the same `coverage.xml` silently stomp each other. Pin it to one version in your matrix (`if: matrix.python-version == '3.12'`).
-- **Disk cleanup on self-hosted runners.** GitHub's `ubuntu-latest` has ~30GB free; building wheels + PyApp + Docker images can blow past that. Aggressive cleanup before the build job is routine.
+- **Disk cleanup on CI runners (including PyApp scratch and runtime extraction dirs).** GitHub's `ubuntu-latest` has ~30GB free; bundling large native wheels creates `dist/.scratch` (~1.2 GB) and `dist/python-dist.tar.gz` (~280 MB), and running `./dist/<app> --help` on the runner host extracts ~750 MB into `~/.<app>/runtime`. Remove `dist/.scratch`, `dist/python-dist.tar.gz`, and the extracted host runtime directory before running downstream `docker/build-push-action` steps.
 
 </guardrails>
 

@@ -1,10 +1,11 @@
 import ast
 import dataclasses
 import inspect
+import warnings
 from collections.abc import AsyncGenerator
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any, cast, get_args
+from typing import Any, cast, get_args, get_origin
 
 import click
 import dishka
@@ -13,6 +14,7 @@ import litestar.dto as litestar_dto
 import litestar.exceptions.responses as litestar_exc_responses
 import litestar.handlers as litestar_handlers
 import msgspec
+import pytest
 from advanced_alchemy.extensions.litestar import SQLAlchemyDTO, SQLAlchemyDTOConfig
 from dishka import Provider, Scope, make_async_container
 from dishka.integrations.litestar import (
@@ -56,7 +58,16 @@ from litestar.config.response_cache import (
     default_cache_key_builder,
 )
 from litestar.connection import ASGIConnection
-from litestar.datastructures import CacheControlHeader, Cookie, ETag, ImmutableState, State, UploadFile
+from litestar.datastructures import (
+    CacheControlHeader,
+    Cookie,
+    ETag,
+    Headers,
+    ImmutableState,
+    MultiDict,
+    State,
+    UploadFile,
+)
 from litestar.di import Dependency as DIDependency
 from litestar.di import NamedDependency, Provide
 from litestar.dto import (
@@ -76,6 +87,7 @@ from litestar.exceptions import (
     HTTPException,
     ImproperlyConfiguredException,
     InternalServerException,
+    LitestarDeprecationWarning,
     MethodNotAllowedException,
     MissingDependencyException,
     NoRouteMatchFoundException,
@@ -134,6 +146,10 @@ from litestar.params import (
     MultipartBody,
     PathParameter,
     QueryParameter,
+    QueryParams,
+    RawBody,
+    RequestBody,
+    RequestCookies,
     SkipValidation,
     SkipValidationMarker,
     URLEncodedBody,
@@ -185,20 +201,23 @@ def _load_litestar_ast(relative_path: str) -> ast.Module:
     return ast.parse(source)
 
 
-def test_litestar_224_explicit_parameter_and_dependency_contract() -> None:
-    """Verify Litestar 2.22-2.24 explicit parameter, body, and dependency markers."""
-    assert version("litestar") == "2.24.0"
+def test_litestar_225_explicit_parameter_and_dependency_contract() -> None:
+    """Verify Litestar 2.22-2.25 explicit parameter, body, reserved-kwarg, and dependency markers."""
+    assert version("litestar") == "2.25.0"
 
     assert isinstance(get_args(FromPath[int])[1], PathParameter)
     assert isinstance(get_args(FromQuery[str])[1], QueryParameter)
     assert isinstance(get_args(FromHeader[str])[1], HeaderParameter)
     assert isinstance(get_args(FromCookie[str])[1], CookieParameter)
 
+    request_body = get_args(RequestBody[dict[str, str]])[1]
     json_body = get_args(JSONBody[dict[str, str]])[1]
     msgpack_body = get_args(MsgPackBody[dict[str, str]])[1]
     multipart_body = get_args(MultipartBody[dict[str, str]])[1]
     urlencoded_body = get_args(URLEncodedBody[dict[str, str]])[1]
 
+    assert isinstance(request_body, BodyKwarg)
+    assert request_body.media_type == RequestEncodingType.JSON
     assert isinstance(json_body, BodyKwarg)
     assert json_body.media_type == RequestEncodingType.JSON
     assert isinstance(msgpack_body, BodyKwarg)
@@ -208,10 +227,58 @@ def test_litestar_224_explicit_parameter_and_dependency_contract() -> None:
     assert isinstance(urlencoded_body, BodyKwarg)
     assert urlencoded_body.media_type == RequestEncodingType.URL_ENCODED
 
+    assert getattr(RawBody, "__supertype__", None) is bytes
+    assert getattr(QueryParams, "__supertype__", None) == MultiDict[Any]
+    cookies_supertype = getattr(RequestCookies, "__supertype__", None)
+    assert get_origin(cookies_supertype) is dict
+    assert get_args(cookies_supertype) == (str, str)
+
     assert get_args(NamedDependency[str])[0] is str
     assert isinstance(get_args(NamedDependency[str])[1], DIDependency)
     assert get_args(SkipValidation[str])[0] is str
     assert isinstance(get_args(SkipValidation[str])[1], SkipValidationMarker)
+
+    @post("/typed-body")
+    async def typed_body_handler(data: RequestBody[dict[str, str]]) -> dict[str, str]:
+        return data
+
+    @post("/typed-reserved")
+    async def typed_reserved_handler(
+        body: RawBody,
+        query: QueryParams,
+        cookies: RequestCookies,
+        headers: Headers,
+        scope: ASGIScope,
+    ) -> dict[str, int]:
+        _ = (headers, scope)
+        return {"bytes": len(body), "query": len(query), "cookies": len(cookies)}
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", LitestarDeprecationWarning)
+        app = Litestar(route_handlers=[typed_body_handler, typed_reserved_handler])
+
+    with TestClient(app=app) as client:
+        body_resp = client.post("/typed-body", json={"k": "v"})
+        assert body_resp.status_code == 201
+        assert body_resp.json() == {"k": "v"}
+
+        raw_resp = client.post("/typed-reserved?x=1", content=b"abc")
+        assert raw_resp.status_code == 201
+        assert raw_resp.json() == {"bytes": 3, "query": 1, "cookies": 0}
+
+    @post("/untyped-data")
+    async def untyped_data_handler(data: dict[str, str]) -> dict[str, str]:
+        return data
+
+    @post("/untyped-raw")
+    async def untyped_raw_handler(body: bytes) -> int:
+        return len(body)
+
+    with pytest.warns(LitestarDeprecationWarning, match="Reserved kwarg 'data'"):
+        Litestar(route_handlers=[untyped_data_handler])
+
+    with pytest.warns(LitestarDeprecationWarning, match="Reserved kwarg 'body'"):
+        Litestar(route_handlers=[untyped_raw_handler])
 
 
 def test_litestar_app_and_app_config_contract() -> None:

@@ -130,21 +130,31 @@ Dishka extra raises `RuntimeError`; dependency failures within Dishka propagate.
 
 ### Dishka controller gotchas
 
-- **Runtime type hint resolution with `from __future__ import annotations`**:
+- **Runtime type hint resolution with `from __future__ import annotations` (`# noqa: TC001, TC002`)**:
   `DishkaRouter.register` wraps each controller route handler using
   `typing.get_type_hints(func)` at router registration time. When a controller
   module enables `from __future__ import annotations`, every type referenced in
-  a route handler signature (including `FromDishka[ServiceType]` and
-  `ServiceType`) must exist in the module's runtime globals (`func.__globals__`).
-  Hiding `ServiceType` or `FromDishka` inside `if TYPE_CHECKING:`, or defining
-  them in a local function scope under `from __future__ import annotations`,
-  raises `NameError` during `AutowirePlugin.on_app_init`.
+  a route handler signature (including `FromDishka[ServiceType]`,
+  `ServiceType`, `Request`, and request/response DTOs) must exist in the
+  module's runtime globals (`func.__globals__`). Hiding `ServiceType` or
+  `FromDishka` inside `if TYPE_CHECKING:`, or defining them in a local function
+  scope under `from __future__ import annotations`, raises `NameError` during
+  `AutowirePlugin.on_app_init`. Mark runtime-inspected annotation imports with
+  `# noqa: TC001, TC002` (or configure
+  `"**/controllers.py" = ["TC001", "TC002", "TC003"]` under
+  `[tool.ruff.lint.per-file-ignores]`) so Ruff does not move them into
+  `if TYPE_CHECKING:`.
 - **In-place `Controller.get_route_handlers` mutation**:
   `DishkaRouter.register` mutates each `Controller` subclass in-place by
   assigning `ControllerSubclass.get_route_handlers = _inject_route_handlers(ControllerSubclass.get_route_handlers)`
-  directly on the class object. Reusing the same `Controller` class across unit
-  tests without restoring `get_route_handlers` leaks Dishka wrapping into later
-  tests. See [Testing](testing.md) for isolation patterns.
+  directly on the class object (`ControllerSubclass.__dict__["get_route_handlers"]`).
+  Reusing the same `Controller` class across unit tests without restoring
+  `get_route_handlers` leaks Dishka wrapping into later tests — mounting that
+  controller on an isolated `Litestar(route_handlers=[MyController])` test app
+  without `setup_dishka` fails at request time with
+  `AttributeError: 'State' object has no attribute 'dishka_container'` because
+  the wrapped handler reads `request.state.dishka_container`. See
+  [Testing](testing.md) for isolation patterns.
 
 ## Litestar Queues
 

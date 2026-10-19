@@ -40,10 +40,12 @@ from litestar_vite.codegen import (
 )
 from litestar_vite.config import InertiaTypeGenConfig, LoggingConfig, PaginationContainer, SPAConfig
 from litestar_vite.fragments import vite_fragment
+from litestar_vite.html_transform import inject_inertia_ssr_tags
 from litestar_vite.inertia import (
     InertiaBack,
     InertiaExternalRedirect,
     InertiaRedirect,
+    InertiaRequest,
     InertiaResponse,
     PrecognitionResponse,
     always,
@@ -71,9 +73,12 @@ from litestar_vite.ipc import (
 from litestar_vite.plugin import (
     ProxyHeadersMiddleware,
     SSRProxyMiddleware,
+    StaticFilesConfig,
     ViteProxyMiddleware,
     create_vite_hmr_handler,
 )
+from litestar_vite.scaffolding import FrameworkTemplate, TemplateContext, generate_project, get_available_templates
+from litestar_vite.scaffolding.templates import FrameworkType, get_template
 
 
 def test_litestar_vite_032_config_contract() -> None:
@@ -82,8 +87,38 @@ def test_litestar_vite_032_config_contract() -> None:
     config = ViteConfig()
     assert config.mode == "template"
     assert config.enabled is None
+    assert config.static_props == {}
+    assert config.dev_mode is False
     assert config.exclude_static_from_auth is True
     assert config.include_root_spa_paths is False
+
+    path_cfg = PathConfig()
+    assert path_cfg.bundle_dir == Path("public")
+    assert path_cfg.resource_dir == Path("src")
+    assert path_cfg.static_dir == Path("src/public")
+    assert path_cfg.manifest_name == "manifest.json"
+    assert path_cfg.hot_file == "hot"
+    assert path_cfg.asset_url == "/static/"
+    assert path_cfg.ssr_output_dir is None
+
+    runtime_cfg = RuntimeConfig()
+    assert runtime_cfg.dev_mode is False
+    assert runtime_cfg.proxy_mode is None
+    assert runtime_cfg.external_dev_server is None
+    assert runtime_cfg.host == "127.0.0.1"
+    assert runtime_cfg.port == 5173
+    assert runtime_cfg.protocol == "http"
+    assert runtime_cfg.executor == "node"
+    assert runtime_cfg.is_react is False
+    assert runtime_cfg.health_check is False
+    assert runtime_cfg.detect_nodeenv is False
+    assert runtime_cfg.set_environment is True
+    assert runtime_cfg.set_static_folders is True
+    assert runtime_cfg.spa_handler is True
+    assert runtime_cfg.http2 is True
+    assert runtime_cfg.csp_nonce is None
+    assert runtime_cfg.trusted_proxies is None
+    assert runtime_cfg.extra_route_prefixes == ()
 
     sig_params = set(inspect.signature(ViteConfig).parameters)
     expected_params = {
@@ -247,6 +282,19 @@ def test_litestar_vite_032_inertia_exports() -> None:
     assert inspect.isclass(InertiaRedirect)
     assert inspect.isclass(InertiaBack)
     assert inspect.isclass(InertiaExternalRedirect)
+    assert inspect.isclass(InertiaRequest)
+    assert hasattr(InertiaRequest, "is_inertia")
+    assert hasattr(InertiaRequest, "inertia_enabled")
+    assert hasattr(InertiaRequest, "inertia_version")
+    assert hasattr(InertiaRequest, "is_partial_render")
+    assert hasattr(InertiaRequest, "partial_keys")
+    assert hasattr(InertiaRequest, "partial_except_keys")
+    assert hasattr(InertiaRequest, "except_once_props_keys")
+    assert hasattr(InertiaRequest, "reset_keys")
+    assert hasattr(InertiaRequest, "error_bag")
+    assert hasattr(InertiaRequest, "merge_intent")
+    assert hasattr(InertiaRequest, "is_precognition")
+    assert hasattr(InertiaRequest, "precognition_validate_only")
 
 
 def test_litestar_vite_032_inertia_config_ssr_and_precognition_contract() -> None:
@@ -424,3 +472,70 @@ def test_litestar_vite_032_csrf_routes_ts_and_cli_contract() -> None:
         "status",
     }
     assert expected_cli_commands.issubset(set(commands_dict.keys()))
+
+
+def test_litestar_vite_032_ssr_slots_island_and_scaffolding_contract(tmp_path: Path) -> None:
+    """Verify Inertia SSR slot injection, <litestar-island> wrapper, StaticFilesConfig, and scaffolding templates."""
+    shell_comments = "<html><head><!--inertia-head--></head><body><!--inertia-body--></body></html>"
+    injected_comments = inject_inertia_ssr_tags(
+        shell_comments,
+        head=["<title>Dashboard</title>"],
+        body="<div id='app' data-page='{}'>SSR</div>",
+    )
+    assert "<title>Dashboard</title>" in injected_comments
+    assert "<div id='app' data-page='{}'>SSR</div>" in injected_comments
+
+    shell_directives = "<html><head>@inertiaHead</head><body>@inertia</body></html>"
+    injected_directives = inject_inertia_ssr_tags(
+        shell_directives,
+        head=["<meta name='ssr' content='1'>"],
+        body="<div id='app'>Body</div>",
+    )
+    assert "<meta name='ssr' content='1'>" in injected_directives
+    assert "<div id='app'>Body</div>" in injected_directives
+
+    cfg = ViteConfig(
+        mode="template",
+        dev_mode=False,
+        paths=PathConfig(root=tmp_path, bundle_dir=tmp_path / "public"),
+    )
+    loader = ViteAssetLoader(config=cfg)
+    engine = FragmentEngine(config=cfg, asset_loader=loader)
+    assert engine.get_component_css_urls("resources/components/Counter.tsx") == []
+    assert engine.generate_component_css_tags("resources/components/Counter.tsx") == ""
+
+    static_files_cfg = StaticFilesConfig(opt={"exclude_from_auth": True}, tags=["static"])
+    assert static_files_cfg.has_asgi_overrides() is False
+    plugin = VitePlugin(config=cfg, static_files_config=static_files_cfg)
+    assert plugin.config is cfg
+
+    template_names = {t.value for t in FrameworkType}
+    expected_templates = {
+        "react",
+        "react-router",
+        "react-tanstack",
+        "react-inertia",
+        "react-inertia-jinja",
+        "vue",
+        "vue-inertia",
+        "vue-inertia-ssr",
+        "vue-inertia-jinja",
+        "vue-inertia-jinja-ssr",
+        "svelte",
+        "svelte-inertia",
+        "svelte-inertia-jinja",
+        "sveltekit",
+        "nuxt",
+        "astro",
+        "htmx",
+        "jinja-htmx",
+        "htmx-no-jinja",
+        "angular",
+        "angular-cli",
+    }
+    assert expected_templates == template_names
+    assert len(get_available_templates()) == 21
+    react_inertia_tpl = get_template("react-inertia")
+    assert isinstance(react_inertia_tpl, FrameworkTemplate)
+    assert inspect.isclass(TemplateContext)
+    assert callable(generate_project)

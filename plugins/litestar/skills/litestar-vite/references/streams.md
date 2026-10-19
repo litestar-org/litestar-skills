@@ -228,6 +228,6 @@ cannot recover.
 
 ## Official References
 
-- <https://github.com/litestar-org/litestar-vite/blob/v0.31.0/docs/usage/streams.rst>
-- <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/src/js/src/helpers>
-- <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/htmx-stream>
+- <https://github.com/litestar-org/litestar-vite/blob/v0.32.0/docs/usage/streams.rst>
+- <https://github.com/litestar-org/litestar-vite/tree/v0.32.0/src/js/src/helpers>
+- <https://github.com/litestar-org/litestar-vite/tree/v0.32.0/examples/htmx-stream>

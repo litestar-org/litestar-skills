@@ -72,7 +72,8 @@ async def login_page() -> InertiaResponse:
 | Property | Type | Description |
 | --- | --- | --- |
 | `request.is_inertia` | `bool` | `True` when `X-Inertia: true` header is present |
-| `request.inertia_enabled` | `bool` | `True` when `is_inertia` or the route handler defines a `component=` / `page=` opt key |
+| `request.inertia_enabled` | `bool` | `True` when the route handler defines a `component=` / `page=` opt key |
+| `request.inertia_version` | `str \| None` | Client asset version from `X-Inertia-Version` header |
 | `request.is_partial_render` | `bool` | `True` when `X-Inertia-Partial-Component` matches the route's component and partial filter headers are present |
 | `request.partial_keys` | `set[str]` | Keys requested via `X-Inertia-Partial-Data` |
 | `request.partial_except_keys` | `set[str]` | Keys excluded via `X-Inertia-Partial-Except` |
@@ -104,8 +105,8 @@ inertia = InertiaConfig(
 ```
 
 - In development, `TCPStreamIPCTransport` connects to `/__litestar_ssr__` (`litestarViteSsrPlugin` from `litestar-vite-plugin/dev-ssr` using Vite 7+ `ModuleRunner`).
-- In production, `StdioIPCTransport` spawns `litestar-vite-ssr-worker` over stdin/stdout JSON-RPC.
-- `<!--inertia-head-->` and `<!--inertia-body-->` slot tokens in `root_template` are replaced with SSR head/body output, falling back to `#app`.
+- In production, `StdioIPCTransport` spawns the bundled SSR worker (`InertiaSSRConfig.command`, defaulting to `["node", "<ssr_bundle_path>"]` running `startSsrWorker` from `litestar-vite-plugin/ssr-worker`) over newline-delimited JSON `stdin`/`stdout` pipes.
+- `<!--inertia-head-->`, `<!--inertia-body-->` / `<!--inertia-->`, and bare `@inertiaHead` / `@inertia` slot tokens in `root_template` are replaced with SSR head/body output (`inject_inertia_ssr_tags`), falling back to `#app`.
 
 ## End-to-End Authenticated Controller & Page Example
 

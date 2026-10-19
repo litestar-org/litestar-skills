@@ -155,6 +155,8 @@ def test_pytest_databases_019_provider_and_port_contract() -> None:
     assert callable(get_xdist_worker_id)
     assert callable(get_xdist_worker_num)
     assert callable(get_xdist_worker_count)
+    assert get_xdist_worker_count() >= 0
+    assert (get_xdist_worker_id() is None) == (get_xdist_worker_num() is None)
 
     for release in range(11, 19):
         assert hasattr(postgres, f"postgres_{release}_service")
@@ -237,6 +239,11 @@ def test_pytest_databases_019_imported_plugin_modules_contract() -> None:
         "oracle_23ai_startup_connection"
     ]
     assert not hasattr(oracle, "oracle_23ai_startup_connection")
+    assert not hasattr(oracle, "xdist_oracle_isolation_level")
+    assert "psycopg" in _ast_top_level_imports("pytest_databases.docker.postgres")
+    assert "psycopg" in _ast_top_level_imports("pytest_databases.docker.cockroachdb")
+    assert "oracledb" in _ast_top_level_imports("pytest_databases.docker.oracle")
+    assert "pymongo" in _ast_top_level_imports("pytest_databases.docker.mongodb")
 
     assert issubclass(mssql.MSSQLService, ServiceContainer)
     assert hasattr(mssql.MSSQLService, "connection_string")
@@ -335,6 +342,8 @@ def test_pytest_databases_019_optional_client_plugin_modules_contract() -> None:
         set(),
     )
     assert "elasticsearch7" in _ast_top_level_imports("pytest_databases.docker.elastic_search")
+    assert "xdist_elastic_search_isolation_level" not in es_funcs
+    assert "xdist_elasticsearch_isolation_level" not in es_funcs
     assert {
         "elasticsearch_7_service",
         "elasticsearch_8_service",
@@ -348,6 +357,7 @@ def test_pytest_databases_019_optional_client_plugin_modules_contract() -> None:
 
     bq_classes, bq_funcs = _ast_top_level_names("pytest_databases.docker.bigquery")
     assert "BigQueryService" in bq_classes
+    assert "google" in _ast_top_level_imports("pytest_databases.docker.bigquery")
     assert _ast_class_contract("pytest_databases.docker.bigquery", "BigQueryService") == (
         {"project": "str", "dataset": "str", "credentials": "Credentials"},
         {"endpoint", "client_options"},
@@ -362,6 +372,8 @@ def test_pytest_databases_019_optional_client_plugin_modules_contract() -> None:
 
     spanner_classes, spanner_funcs = _ast_top_level_names("pytest_databases.docker.spanner")
     assert "SpannerService" in spanner_classes
+    assert "google" in _ast_top_level_imports("pytest_databases.docker.spanner")
+    assert "xdist_spanner_isolation_level" not in spanner_funcs
     assert _ast_class_contract("pytest_databases.docker.spanner", "SpannerService") == (
         {"credentials": "Credentials", "project": "str", "database_name": "str", "instance_name": "str"},
         {"endpoint", "client_options"},
@@ -370,6 +382,7 @@ def test_pytest_databases_019_optional_client_plugin_modules_contract() -> None:
 
     gizmo_classes, gizmo_funcs = _ast_top_level_names("pytest_databases.docker.gizmosql")
     assert "GizmoSQLService" in gizmo_classes
+    assert "adbc_driver_flightsql" in _ast_top_level_imports("pytest_databases.docker.gizmosql")
     assert _ast_class_contract("pytest_databases.docker.gizmosql", "GizmoSQLService") == (
         {"username": "str", "password": "str"},
         {"uri"},
@@ -385,6 +398,7 @@ def test_pytest_databases_019_optional_client_plugin_modules_contract() -> None:
 
     azure_classes, azure_funcs = _ast_top_level_names("pytest_databases.docker.azure_blob")
     assert "AzureBlobService" in azure_classes
+    assert "azure" in _ast_top_level_imports("pytest_databases.docker.azure_blob")
     assert _ast_class_contract("pytest_databases.docker.azure_blob", "AzureBlobService") == (
         {
             "connection_string": "str",
@@ -402,3 +416,19 @@ def test_pytest_databases_019_optional_client_plugin_modules_contract() -> None:
         "azurite_in_memory",
         "azure_blob_xdist_isolation_level",
     } <= azure_funcs
+
+    allowed_clientless_imports = {
+        "__future__",
+        "contextlib",
+        "dataclasses",
+        "docker",
+        "os",
+        "pytest",
+        "pytest_databases",
+        "shlex",
+        "time",
+        "typing",
+        "urllib",
+    }
+    for clientless_mod in ("mysql", "mariadb", "dolt", "mssql", "yugabyte", "minio", "rustfs"):
+        assert _ast_top_level_imports(f"pytest_databases.docker.{clientless_mod}") <= allowed_clientless_imports

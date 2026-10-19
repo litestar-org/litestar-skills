@@ -125,6 +125,8 @@ else:
 
 ### Advanced Alchemy Standalone CLI
 
+Install the `cli` extra (`pip install 'advanced-alchemy[cli]'`, which provides `rich-click`) when invoking the standalone `alchemy` CLI or `get_alchemy_group()`. Importing `advanced_alchemy.cli` or framework extensions at runtime does not require `rich` or `click` to be installed (`_ConsoleProxy` lazily resolves `rich.get_console()` only when CLI output is emitted, and `get_alchemy_group()` raises `MissingDependencyError(package="click", install_package="cli")` only when called without `click`).
+
 ```bash
 # Generate migration
 alchemy --config path.to.alchemy_config.config make-migrations -m "add user table"

@@ -27,6 +27,7 @@ from litestar_saq import (
 )
 from litestar_saq import cli as saq_cli
 from litestar_saq import controllers as saq_controllers
+from litestar_saq import decorators as saq_decorators
 from litestar_saq import instrumentation as saq_instrumentation
 from litestar_saq import typing as saq_typing
 from litestar_saq.exceptions import ImproperConfigurationError
@@ -211,6 +212,51 @@ def test_litestar_saq_080_contract() -> None:
     plugin = SAQPlugin(config=saq_config)
     assert plugin.config is saq_config
 
+    otel_queue_config = QueueConfig(dsn="postgresql://localhost/db", metadata={"region": "us-east-1"})
+    default_otel_plugin = SAQPlugin(config=SAQConfig(queue_configs=[otel_queue_config], enable_otel=None))
+    default_worker = default_otel_plugin.get_workers()["default"]
+    assert vars(default_worker)["_enable_otel"] is False
+    assert default_worker.get_structlog_context() == {
+        "worker_id": default_worker.id,
+        "queue_name": "default",
+        "concurrency": 10,
+        "separate_process": True,
+        "worker_meta_region": "us-east-1",
+    }
+
+    if OPENTELEMETRY_INSTALLED:
+        enabled_otel_plugin = SAQPlugin(
+            config=SAQConfig(
+                queue_configs=[QueueConfig(dsn="postgresql://localhost/db")],
+                enable_otel=True,
+                otel_tracer_name="custom_tracer",
+            )
+        )
+        assert vars(enabled_otel_plugin.get_workers()["default"])["_enable_otel"] is True
+    else:
+        with pytest.raises(ImproperlyConfiguredException, match="enable_otel=True"):
+            SAQConfig(enable_otel=True).should_enable_otel()
+
+    hb_init_params = inspect.signature(HeartbeatManager.__init__).parameters
+    assert hb_init_params["flush_interval"].default == 30.0
+    worker_init_fn = vars(Worker)["__init__"]
+    worker_init_params = inspect.signature(worker_init_fn).parameters
+    assert worker_init_params["enable_heartbeat_manager"].default is True
+    assert worker_init_params["heartbeat_flush_interval"].default == 30.0
+    assert worker_init_params["enable_otel"].default is False
+    assert worker_init_params["shutdown_grace_period_s"].default is None
+    assert worker_init_params["cancellation_hard_deadline_s"].default is None
+    assert worker_init_params["poll_interval"].default is None
+
+    assert set(saq_instrumentation.__all__) == {
+        "InstrumentedQueue",
+        "create_process_span",
+        "end_process_span",
+        "extract_trace_context",
+        "get_tracer",
+        "inject_trace_context",
+    }
+
     namespace = saq_config.signature_namespace
     assert namespace["TaskQueues"] is TaskQueues
     assert namespace["Job"] is Job
@@ -225,13 +271,23 @@ def test_litestar_saq_080_contract() -> None:
     assert set(cli_app.commands.keys()) == {"run", "status"}
     run_opts = {opt for param in cli_app.commands["run"].params for opt in param.opts}
     assert {"--workers", "--queues", "-v", "--verbose", "-d", "--debug"} <= run_opts
+    assert "--process" not in run_opts
 
     build_controller_fn = vars(saq_controllers)["build_controller"]
     controller_cls = build_controller_fn(url_base="/saq", include_in_schema_=False)
     assert controller_cls.tags == ["SAQ"]
     assert controller_cls.include_in_schema is False
+    for handler_name in ("queue_list", "queue_detail", "job_detail", "job_retry", "job_abort", "health", "index"):
+        assert hasattr(controller_cls, handler_name)
 
     assert callable(monitored_job)
+    assert saq_decorators.MIN_HEARTBEAT_INTERVAL == 1.0
+    assert saq_decorators.DEFAULT_HEARTBEAT_INTERVAL == 5.0
+    calculate_interval_fn = vars(saq_decorators)["_calculate_interval"]
+    assert calculate_interval_fn(Job(function="task", heartbeat=120), None) == 60.0
+    assert calculate_interval_fn(Job(function="task", heartbeat=0), None) == 5.0
+    assert calculate_interval_fn(Job(function="task", heartbeat=1), None) == 1.0
+    assert calculate_interval_fn(Job(function="task", heartbeat=120), 15.0) == 15.0
     with pytest.raises(ValueError, match="Heartbeat interval must be positive"):
         monitored_job(interval=0)
     with pytest.raises(ValueError, match="Heartbeat interval must be positive"):

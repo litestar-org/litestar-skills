@@ -2,12 +2,13 @@ import enum
 import inspect as stdlib_inspect
 from decimal import Decimal
 from importlib.metadata import version
-from typing import Annotated, Any, Literal, cast
+from typing import Annotated, Any, Generic, Literal, TypeVar, cast
 
 import msgspec
 import pytest
 from litestar import Litestar, post
-from litestar.dto import DTOConfig, MsgspecDTO
+from litestar.dto import DTOConfig, MsgspecDTO, dto_field
+from litestar.params import JSONBody
 from litestar.testing import TestClient
 
 
@@ -184,6 +185,25 @@ def test_msgspec_0220_meta_schema_and_codecs_contract() -> None:
     dec_encoder = msgspec.json.Encoder(decimal_format=float)
     assert dec_encoder.encode(Decimal("1.25")) == b"1.25"
 
+    mp_dec_encoder = msgspec.msgpack.Encoder(decimal_format=float)
+    assert msgspec.msgpack.decode(mp_dec_encoder.encode(Decimal("1.25"))) == 1.25
+
+    ext = msgspec.msgpack.Ext(1, b"payload")
+    decoded_ext = msgspec.msgpack.decode(msgspec.msgpack.encode(ext))
+    assert isinstance(decoded_ext, msgspec.msgpack.Ext)
+    assert decoded_ext.code == 1
+    assert bytes(decoded_ext.data) == b"payload"
+
+    item_t = TypeVar("item_t")
+
+    class Box(msgspec.Struct, Generic[item_t]):
+        value: item_t
+
+    assert msgspec.json.decode(b'{"value":42}', type=Box[int]) == Box(value=42)
+
+    assert msgspec.yaml.decode(msgspec.yaml.encode({"x": 1}), type=dict[str, int]) == {"x": 1}
+    assert msgspec.toml.decode(b"x = 1", type=dict[str, int]) == {"x": 1}
+
     class Color(enum.Enum):
         RED = "red"
 
@@ -204,22 +224,22 @@ def test_msgspec_0220_meta_schema_and_codecs_contract() -> None:
     assert type(exc_info.value) is msgspec.DecodeError
 
     class Account(msgspec.Struct, kw_only=True):
-        id: int = 1
+        id: Annotated[int, msgspec.Meta(extra=dto_field("read-only"))] = 1
         name: str
         internal_note: str = "audit-only"
 
     class AccountCreateDTO(MsgspecDTO[Account]):
-        config = DTOConfig(exclude={"id", "internal_note"})
+        config = DTOConfig(exclude={"internal_note"})
 
     class AccountReadDTO(MsgspecDTO[Account]):
         config = DTOConfig(exclude={"internal_note"})
 
     @post("/accounts", dto=AccountCreateDTO, return_dto=AccountReadDTO, sync_to_thread=False)
-    def create_account(data: Account) -> Account:
+    def create_account(data: JSONBody[Account]) -> Account:
         return data
 
     with TestClient(app=Litestar(route_handlers=[create_account])) as client:
-        response = client.post("/accounts", json={"name": "Ada"})
+        response = client.post("/accounts", json={"name": "Ada", "id": 999})
         assert response.status_code == 201
         assert response.json() == {"id": 1, "name": "Ada"}
 

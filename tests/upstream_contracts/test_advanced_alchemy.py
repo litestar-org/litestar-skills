@@ -30,8 +30,8 @@ from litestar import Litestar
 
 
 def test_advanced_alchemy_111_public_api_contract() -> None:
-    """Verify the documented Advanced Alchemy 1.11 public entrypoints."""
-    assert version("advanced-alchemy") == "1.11.0"
+    """Verify the documented Advanced Alchemy 1.12 public entrypoints."""
+    assert version("advanced-alchemy") == "1.12.0"
     assert {
         "AdvancedDeclarativeBase",
         "BasicAttributes",
@@ -159,6 +159,8 @@ def test_advanced_alchemy_111_public_api_contract() -> None:
         "MultiFilter",
         "FilterMap",
         "LogicalOperatorMap",
+        "LIKE_ESCAPE_CHAR",
+        "escape_like_value",
     } <= set(filters.__all__)
     assert {
         "CacheConfig",
@@ -199,14 +201,30 @@ def test_advanced_alchemy_111_public_api_contract() -> None:
         "DependencyCache",
         "FieldNameType",
         "FilterConfig",
+        "resolve_filter_aliases",
     } <= set(dep_utils.__all__)
     assert {
         "SchemaDumpConfig",
         "decode_json",
         "encode_json",
     } <= set(ser_utils.__all__)
-    assert {"MergeStatement", "OnConflictUpsert"} <= set(operations.__all__)
-    assert {"RoutingAsyncSessionMaker", "RoundRobinSelector", "RandomSelector"} <= set(routing.__all__)
+    assert {
+        "MergeStatement",
+        "OnConflictUpsert",
+        "UpsertKind",
+        "UpsertStrategy",
+        "resolve_column_default",
+        "resolve_upsert_strategy",
+        "validate_identifier",
+    } <= set(operations.__all__)
+    assert {
+        "RoutingAsyncSessionMaker",
+        "RoutingSyncSessionMaker",
+        "RoundRobinSelector",
+        "RandomSelector",
+        "dispose_session_maker_async",
+        "dispose_session_maker_sync",
+    } <= set(routing.__all__)
     assert routing_config.ReplicaConfig is routing_config.EngineConfig
     assert {"ReplicaConfig", "RoutingConfig", "RoutingStrategy"} <= set(routing_config.__all__)
     assert {
@@ -244,8 +262,18 @@ def test_advanced_alchemy_filter_and_service_behavioral_contracts() -> None:
     """Verify filter defaults, operators, FilterConfig keys, and service signatures."""
     search_filter = filters.SearchFilter(field_name="name", value="alice")
     assert search_filter.ignore_case is False
-    assert set(filters.SearchFilter.__dataclass_fields__) == {"field_name", "value", "ignore_case"}
-    assert set(filters.OrderBy.__dataclass_fields__) == {"field_name", "sort_order"}
+    assert search_filter.escape_wildcards is False
+    assert filters.LIKE_ESCAPE_CHAR == "/"
+    assert filters.escape_like_value("100%_done/ok") == "100/%/_done//ok"
+    assert set(filters.SearchFilter.__dataclass_fields__) == {
+        "field_name",
+        "value",
+        "ignore_case",
+        "escape_wildcards",
+    }
+    order_by = filters.OrderBy(field_name="name")
+    assert order_by.nulls is None
+    assert set(filters.OrderBy.__dataclass_fields__) == {"field_name", "sort_order", "nulls"}
 
     assert {
         "eq",
@@ -271,16 +299,19 @@ def test_advanced_alchemy_filter_and_service_behavioral_contracts() -> None:
         "id_field",
         "sort_field",
         "sort_order",
+        "sort_nulls",
         "pagination_type",
         "pagination_size",
         "search",
         "search_ignore_case",
+        "search_escape_wildcards",
         "created_at",
         "updated_at",
         "not_in_fields",
         "in_fields",
         "boolean_fields",
         "choice_fields",
+        "alias_generator",
     } == set(dep_utils.FilterConfig.__annotations__)
 
     service_get_params = inspect.signature(service.SQLAlchemyAsyncRepositoryReadService[Any, Any].get).parameters
@@ -293,6 +324,21 @@ def test_advanced_alchemy_filter_and_service_behavioral_contracts() -> None:
     for method_name in ("update", "upsert", "get_or_upsert", "get_and_update"):
         params = inspect.signature(getattr(service.SQLAlchemyAsyncRepositoryService, method_name)).parameters
         assert "with_for_update" in params
+
+    for target_cls in (
+        repository.SQLAlchemyAsyncRepository[Any],
+        repository.SQLAlchemySyncRepository[Any],
+        service.SQLAlchemyAsyncRepositoryService[Any, Any],
+        service.SQLAlchemySyncRepositoryService[Any, Any],
+    ):
+        upsert_many_params = inspect.signature(target_cls.upsert_many).parameters
+        assert "no_merge" in upsert_many_params
+        assert "chunk_size" in upsert_many_params
+        assert upsert_many_params["no_merge"].default is False
+        assert upsert_many_params["chunk_size"].default is None
+
+    for bulk_method in ("create_upsert_many", "create_merge_many", "create_insert_or_update_many"):
+        assert hasattr(operations.OnConflictUpsert, bulk_method)
 
     repo_get_params = inspect.signature(repository.SQLAlchemyAsyncRepository[Any].get).parameters
     assert "with_for_update" in repo_get_params
