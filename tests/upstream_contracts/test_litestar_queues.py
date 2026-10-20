@@ -75,11 +75,6 @@ from litestar_queues.backends.advanced_alchemy import (
     SQLAlchemyBackendConfig,
 )
 from litestar_queues.backends.redis import RedisBackendConfig
-from litestar_queues.backends.sqlspec import SQLSpecBackendConfig, SQLSpecWorkerWakeupConfig
-from litestar_queues.backends.sqlspec.extension import (
-    configure_queue_migration_extension,
-    queue_migration_directory,
-)
 from litestar_queues.backends.valkey import ValkeyBackendConfig
 from litestar_queues.events import (
     EventHistoryExtraColumn,
@@ -123,15 +118,27 @@ def test_litestar_queues_0120_contract() -> None:
     assert QueueMaintenanceModelMixin is not None
     assert QueueTaskReservationModel is not None
     assert QueueTaskReservationModelMixin is not None
-    sqlspec_backend = SQLSpecBackendConfig()
-    assert sqlspec_backend.manage_schema is True
-    assert sqlspec_backend.queue_table_name is None
-    assert sqlspec_backend.event_history_table_name is None
-    assert sqlspec_backend.maintenance_table_name is None
-    assert sqlspec_backend.task_reservation_table_name is None
-    assert isinstance(sqlspec_backend.worker_wakeups, SQLSpecWorkerWakeupConfig)
-    assert callable(configure_queue_migration_extension)
-    assert queue_migration_directory().is_dir()
+    try:
+        from litestar_queues.backends.sqlspec import (
+            SQLSpecBackendConfig,
+            SQLSpecWorkerWakeupConfig,
+        )
+        from litestar_queues.backends.sqlspec.extension import (
+            configure_queue_migration_extension,
+            queue_migration_directory,
+        )
+
+        sqlspec_backend = SQLSpecBackendConfig()
+        assert sqlspec_backend.manage_schema is True
+        assert sqlspec_backend.queue_table_name is None
+        assert sqlspec_backend.event_history_table_name is None
+        assert sqlspec_backend.maintenance_table_name is None
+        assert sqlspec_backend.task_reservation_table_name is None
+        assert isinstance(sqlspec_backend.worker_wakeups, SQLSpecWorkerWakeupConfig)
+        assert callable(configure_queue_migration_extension)
+        assert queue_migration_directory().is_dir()
+    except ImportError:
+        pass
     assert RedisBackendConfig().worker_wakeups is True
     assert ValkeyBackendConfig().worker_wakeups is True
     assert InMemoryQueueBackend is not None

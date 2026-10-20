@@ -9,6 +9,10 @@ from types import ModuleType
 from typing import Any, cast
 
 import pytest
+
+if sys.version_info < (3, 11):
+    pytest.skip("sqlspec requires Python 3.11+", allow_module_level=True)
+
 import sqlglot
 import sqlspec as sqlspec_pkg
 import sqlspec.dialects as dialects_pkg

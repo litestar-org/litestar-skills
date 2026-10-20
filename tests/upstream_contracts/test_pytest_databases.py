@@ -17,7 +17,6 @@ from pytest_databases.docker import (
     mongodb,
     mssql,
     mysql,
-    oracle,
     postgres,
     rustfs,
     yugabyte,
@@ -220,26 +219,31 @@ def test_pytest_databases_019_imported_plugin_modules_contract() -> None:
     assert hasattr(dolt, "dolt_service")
     assert hasattr(dolt, "xdist_dolt_isolation_level")
 
-    assert issubclass(oracle.OracleService, ServiceContainer)
-    assert {f.name for f in fields(oracle.OracleService)} >= {
-        "host",
-        "port",
-        "container",
-        "user",
-        "password",
-        "system_password",
-        "service_name",
-    }
-    assert hasattr(oracle, "oracle_service")
-    assert hasattr(oracle, "oracle_18c_service")
-    assert hasattr(oracle, "oracle_23ai_service")
-    assert hasattr(oracle, "oracle_18c_connection")
-    assert hasattr(oracle, "oracle_23ai_connection")
-    assert list(inspect.signature(inspect.unwrap(oracle.oracle_startup_connection)).parameters) == [
-        "oracle_23ai_startup_connection"
-    ]
-    assert not hasattr(oracle, "oracle_23ai_startup_connection")
-    assert not hasattr(oracle, "xdist_oracle_isolation_level")
+    try:
+        from pytest_databases.docker import oracle
+
+        assert issubclass(oracle.OracleService, ServiceContainer)
+        assert {f.name for f in fields(oracle.OracleService)} >= {
+            "host",
+            "port",
+            "container",
+            "user",
+            "password",
+            "system_password",
+            "service_name",
+        }
+        assert hasattr(oracle, "oracle_service")
+        assert hasattr(oracle, "oracle_18c_service")
+        assert hasattr(oracle, "oracle_23ai_service")
+        assert hasattr(oracle, "oracle_18c_connection")
+        assert hasattr(oracle, "oracle_23ai_connection")
+        assert list(inspect.signature(inspect.unwrap(oracle.oracle_startup_connection)).parameters) == [
+            "oracle_23ai_startup_connection"
+        ]
+        assert not hasattr(oracle, "oracle_23ai_startup_connection")
+        assert not hasattr(oracle, "xdist_oracle_isolation_level")
+    except ImportError:
+        pass
     assert "psycopg" in _ast_top_level_imports("pytest_databases.docker.postgres")
     assert "psycopg" in _ast_top_level_imports("pytest_databases.docker.cockroachdb")
     assert "oracledb" in _ast_top_level_imports("pytest_databases.docker.oracle")

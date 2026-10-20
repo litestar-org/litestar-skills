@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -96,11 +97,23 @@ def load_locked_versions(path: Path = LOCK_PATH) -> dict[str, str]:
     return {canonicalize_name(str(package["name"])): str(package["version"]) for package in data.get("package", [])}
 
 
-def fetch_pypi_releases(package: str) -> dict[str, list[dict[str, Any]]]:
-    """Fetch a project's release artifact map from the official PyPI API."""
-    with urlopen(PYPI_URL.format(name=package), timeout=30) as response:  # noqa: S310
-        payload = cast("dict[str, Any]", json.load(response))
-    return cast("dict[str, list[dict[str, Any]]]", payload["releases"])
+def fetch_pypi_releases(package: str, max_retries: int = 3) -> dict[str, list[dict[str, Any]]]:
+    """Fetch a project's release artifact map from the official PyPI API with retry handling."""
+    url = PYPI_URL.format(name=package)
+    last_error: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            with urlopen(url, timeout=30) as response:
+                payload = cast("dict[str, Any]", json.load(response))
+            return cast("dict[str, list[dict[str, Any]]]", payload["releases"])
+        except (URLError, TimeoutError, OSError) as exc:
+            last_error = exc
+            if attempt < max_retries - 1:
+                time.sleep(2**attempt)
+    if last_error is not None:
+        raise last_error
+    msg = f"Failed to fetch releases for {package}"
+    raise RuntimeError(msg)
 
 
 def check_package(

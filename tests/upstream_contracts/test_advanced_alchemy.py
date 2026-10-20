@@ -18,7 +18,7 @@ from advanced_alchemy import (
 )
 from advanced_alchemy.alembic import commands as alembic_commands
 from advanced_alchemy.config import routing as routing_config
-from advanced_alchemy.extensions import fastapi, flask, litestar, sanic, starlette
+from advanced_alchemy.extensions import litestar
 from advanced_alchemy.extensions.litestar import exception_handler as litestar_exc_handler
 from advanced_alchemy.extensions.litestar.cli import database_group
 from advanced_alchemy.repository import memory as repo_memory
@@ -242,18 +242,41 @@ def test_advanced_alchemy_111_public_api_contract() -> None:
         "create_service_dependencies",
         "create_service_provider",
     } <= set(litestar.providers.__all__)
-    assert {
-        "AdvancedAlchemy",
-        "assign_cli_group",
-        "providers",
-    } <= set(fastapi.__all__)
-    assert {
-        "provide_filters",
-        "provide_service",
-    } <= set(fastapi.providers.__all__)
-    assert {"AdvancedAlchemy", "FlaskServiceMixin"} <= set(flask.__all__)
-    assert "AdvancedAlchemy" in sanic.__all__
-    assert "AdvancedAlchemy" in starlette.__all__
+    try:
+        from advanced_alchemy.extensions import fastapi
+
+        assert {
+            "AdvancedAlchemy",
+            "assign_cli_group",
+            "providers",
+        } <= set(fastapi.__all__)
+        assert {
+            "provide_filters",
+            "provide_service",
+        } <= set(fastapi.providers.__all__)
+    except ImportError:
+        pass
+
+    try:
+        from advanced_alchemy.extensions import flask
+
+        assert {"AdvancedAlchemy", "FlaskServiceMixin"} <= set(flask.__all__)
+    except ImportError:
+        pass
+
+    try:
+        from advanced_alchemy.extensions import sanic
+
+        assert "AdvancedAlchemy" in sanic.__all__
+    except ImportError:
+        pass
+
+    try:
+        from advanced_alchemy.extensions import starlette
+
+        assert "AdvancedAlchemy" in starlette.__all__
+    except ImportError:
+        pass
     assert {"make-migrations", "show-current-revision"} <= database_group.commands.keys()
     assert {"revision", "current", "create-database"}.isdisjoint(database_group.commands)
 

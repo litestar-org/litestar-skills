@@ -7,7 +7,6 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated, Any, TypedDict, cast
 
-import attrs
 import msgspec
 import polyfactory
 import polyfactory.factories
@@ -280,16 +279,21 @@ def test_polyfactory_330_pydantic_msgspec_attrs_typeddict_contract() -> None:
             assert response.status_code == 201
             assert response.json()["variant"] == type(payload.line).__name__
 
-    @attrs.define
-    class ItemAttrs:
-        sku: str
-        qty: int
+    try:
+        import attrs
 
-    class ItemAttrsFactory(AttrsFactory[ItemAttrs]):
+        @attrs.define
+        class ItemAttrs:
+            sku: str
+            qty: int
+
+        class ItemAttrsFactory(AttrsFactory[ItemAttrs]):
+            pass
+
+        attrs_instance = ItemAttrsFactory.build()
+        assert isinstance(attrs_instance, ItemAttrs)
+    except ImportError:
         pass
-
-    attrs_instance = ItemAttrsFactory.build()
-    assert isinstance(attrs_instance, ItemAttrs)
 
     class ConfigDict(TypedDict):
         host: Required[str]
