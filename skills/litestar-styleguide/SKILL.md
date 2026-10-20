@@ -12,6 +12,7 @@ This is the **shared style baseline** that every other skill in this plugin refe
 - **Terse, imperative, authoritative.** State the preferred choice and a one-line `Reason:`; never hedge ("you might want to…").
 - **PEP 604 unions (`T | None`) and PEP 585 generics (`list[T]`, `dict[K, V]`).** Never use `typing.Optional`, `typing.Union`, `typing.List`, or `typing.Dict`.
 - **`from __future__ import annotations` is a library-author guardrail, not a consumer rule.** Application code (handlers, services, tests) MAY use it; avoid it only in modules defining runtime-introspected types (`msgspec.Struct`, SQLAlchemy `Mapped[...]`, Dishka `@provide`, SAQ `@task`).
+- **Keep runtime-inspected route annotations at module top-level (`# noqa: TC001, TC002`).** When `from __future__ import annotations` and Ruff `flake8-type-checking` (`TC`) are active in Litestar controller/handler modules, keep `Request`, `NamedDependency`, `FromDishka`, `FromPath`, `FromQuery`, `JSONBody`, and request/response DTO imports at module top-level with `# noqa: TC001, TC002` (or `"**/controllers.py" = ["TC001", "TC002", "TC003"]` in `per-file-ignores`), never inside `if TYPE_CHECKING:`. Reason: Litestar and Dishka inspect handler annotations at runtime during app startup and OpenAPI generation.
 - **Async all I/O, Google-style docstrings, function-based pytest tests (`@pytest.mark.anyio`).**
 - **Litestar first-party stack bias with match-your-stack flexibility.** Prefer `msgspec`, `advanced-alchemy` / `sqlspec`, `litestar-granian`, `litestar-saq` / `litestar-queues` when starting fresh, and match the user's existing stack when present.
 
@@ -20,8 +21,8 @@ This is the **shared style baseline** that every other skill in this plugin refe
 | Slice | Reference File | Key Topics |
 | --- | --- | --- |
 | Cross-language principles | [`references/general.md`](references/general.md) | Simplicity over cleverness, boundary validation, naming, import order |
-| Python conventions | [`references/python.md`](references/python.md) | PEP 604/585, `msgspec.Struct`, async I/O, docstrings, `ruff`, `mypy`, `pyright`, `prek` |
-| Litestar baseline | [`references/litestar.md`](references/litestar.md) | Typed markers (`FromPath`, `FromQuery`, `NamedDependency`, `SkipValidation`), `Provide` vs Dishka, `MsgspecDTO`, Guards, plugins |
+| Python conventions | [`references/python.md`](references/python.md) | PEP 604/585, `# noqa: TC001, TC002`, `msgspec.Struct`, async I/O, docstrings, `ruff`, `mypy`, `pyright`, `prek` |
+| Litestar baseline | [`references/litestar.md`](references/litestar.md) | Typed markers (`FromPath`, `FromQuery`, `JSONBody`, `RequestBody`, `NamedDependency`, `SkipValidation`), `Provide` vs Dishka, `MsgspecDTO`, Guards, plugins |
 | TypeScript conventions | [`references/typescript.md`](references/typescript.md) | Strict `tsconfig`, discriminated unions, named exports, `oxlint` / `biome` |
 | Testing conventions | [`references/testing.md`](references/testing.md) | `pytest` + `anyio`, `AsyncTestClient` lifespan fixtures, Vitest, 90%+ coverage |
 | CI/CD conventions | [`references/ci-cd.md`](references/ci-cd.md) | GitHub Actions with `setup-uv`, `prek` / `.pre-commit-config.yaml`, matrix builds |

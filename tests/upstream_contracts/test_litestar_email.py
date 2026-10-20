@@ -80,12 +80,20 @@ def test_litestar_email_040_version_and_exports() -> None:
         "mailgun",
     }
     assert get_backend_class("console") is ConsoleBackend
+    assert get_backend_class("litestar_email.backends.console.ConsoleBackend") is ConsoleBackend
     assert get_backend_class("memory") is InMemoryBackend
     assert get_backend_class("smtp") is SMTPBackend
     assert get_backend_class("resend") is ResendBackend
     assert get_backend_class("sendgrid") is SendGridBackend
     assert get_backend_class("mailgun") is MailgunBackend
     assert get_backend_class("ses") is SESBackend
+    assert isinstance(get_backend(ResendConfig(api_key="re_test")), ResendBackend)
+    assert isinstance(get_backend(SendGridConfig(api_key="SG.test")), SendGridBackend)
+    assert isinstance(
+        get_backend(MailgunConfig(api_key="key-test", domain="mg.example.com")),
+        MailgunBackend,
+    )
+    assert isinstance(get_transport("httpx"), HttpxTransport)
     assert all(
         symbol is not None
         for symbol in (
@@ -103,7 +111,14 @@ def test_litestar_email_040_version_and_exports() -> None:
             get_transport,
         )
     )
-    for nonexistent in ("EmailAttachment", "FallbackConfig", "RateLimitConfig", "RetryConfig"):
+    for nonexistent in (
+        "ConsoleConfig",
+        "EmailAttachment",
+        "FallbackConfig",
+        "InMemoryConfig",
+        "RateLimitConfig",
+        "RetryConfig",
+    ):
         assert not hasattr(litestar_email, nonexistent)
 
 

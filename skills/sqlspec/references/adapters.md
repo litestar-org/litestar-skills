@@ -22,7 +22,7 @@
 | Psycopg | `"psycopg"` | `postgres` | PYFORMAT (`%s`) | `helper` | Both | psycopg adapt |
 | PyMSSQL | `"pymssql"` | `tsql` | PYFORMAT (`%s`) input, positional execution | `helper` | No | SQL Server native |
 | PyMySQL | `"pymysql"` | `mysql` | PYFORMAT (`%s`) | `helper` | No | MySQL native |
-| Spanner | `"spanner"` | `spanner` | NAMED_AT (`@name`) | `helper` | No | Spanner proto |
+| Spanner | `"spanner"` | `spanner` | NAMED_AT (`@name`) | `helper` | Both | Spanner proto |
 | SQLite | `"sqlite"` | `sqlite` | QMARK (`?`) | `helper` | No | Python stdlib |
 
 ### JSON Strategy
@@ -41,9 +41,9 @@ Check the adapter config flags before building generic tooling:
 | Native row streaming | All adapters except `duckdb` and `spanner` | `select_stream(..., native_only=True)` rejects unsupported adapters. ADBC, Arrow ODBC, `db2`, and `mssql_python` expose native stream implementations. |
 | Native Arrow export | All adapters except `db2` and `pymssql` | Availability also requires PyArrow. `supports_arrow_streaming` is a separate capability and is not implied by native table export. For native columnar Arrow reads from Db2, use `arrow_odbc` with the IBM CLI/ODBC driver. |
 | Native Arrow import | All adapters except `bigquery`, `db2`, and `pymssql` | Check `config.storage_capabilities()` at runtime. `load_from_records()` normalizes through Arrow. |
-| ADK session/event and memory stores | Adapter-local `adk` packages, including PostgreSQL, CockroachDB, MySQL, SQLite, Oracle, IBM Db2, DuckDB, ADBC, Arrow ODBC, SQL Server, and Spanner families | BigQuery ships `BigQueryADKStore` only as an analytics-replica/telemetry path (not for live low-latency transactional session writes or memory stores). Verify the concrete store export for the selected adapter instead of inferring it from database support. |
+| ADK session/event, memory, and artifact stores | Adapter-local `adk` packages, including PostgreSQL, CockroachDB, MySQL, SQLite, Oracle, IBM Db2, DuckDB, ADBC, Arrow ODBC, SQL Server, and Spanner families | Spanner ships concrete `SpannerSyncADKArtifactStore` and `SpannerAsyncADKArtifactStore` alongside sync/async session and memory stores. BigQuery ships `BigQueryADKStore` only as an analytics-replica/telemetry path (not for live low-latency transactional session writes or memory stores). Verify the concrete store export for the selected adapter instead of inferring it from database support. |
 | Event transports | PostgreSQL: `notify`, `notify_queue`, `poll_queue`; Oracle: `aq`, `txeventq`, `poll_queue`; others: `poll_queue` | Retired names `listen_notify`, `listen_notify_durable`, and `table_queue` raise configuration errors. |
-| Cloud job/session controls | `bigquery`, `spanner` | BigQuery controls live in `BigQueryConfig.driver_features`; Spanner controls live in `SpannerSyncConfig.driver_features`, per-call kwargs, and `provide_session()` / `provide_read_session()`. |
+| Cloud job/session controls | `bigquery`, `spanner` | BigQuery controls live in `BigQueryConfig.driver_features`; Spanner controls live in `SpannerSyncConfig.driver_features` / `SpannerAsyncConfig.driver_features`, per-call kwargs, and `provide_session()` / `provide_write_session()` / `provide_read_session()`. |
 
 ---
 
@@ -105,6 +105,12 @@ Check the adapter config flags before building generic tooling:
 ### ADBC
 
 - Optimized for Arrow framework transfers; prefer `select_to_arrow()` over row-based methods.
+- Supports pip-installable ADBC drivers with automatic dialect and parameter-style detection:
+  - **Core analytical & relational**: `adbc-driver-postgresql` (`postgres`), `adbc-driver-duckdb` (`duckdb`), `adbc-driver-sqlite` (`sqlite`), `adbc-driver-bigquery` (`bigquery`), `adbc-driver-snowflake` (`snowflake`), and `adbc-driver-flightsql` (`flightsql` / `duckdb`).
+  - **Oracle (`adbc-driver-oracle`)**: `oracle://` URIs or `driver_name="oracle"` / `"oracledb"`, resolved via `adbc_driver_oracle.dbapi.connect` (pure Go wire protocol — no Oracle Instant Client required), `:1, :2` (`POSITIONAL_COLON`) parameter binding, and `enable_lowercase_column_names=True` by default.
+  - **IBM Db2 (`adbc-driver-db2`)**: `db2://` URIs or `driver_name="db2"` / `"ibmdb2"` / `"ibm_db"`, resolved via `adbc_driver_db2.dbapi.connect` (pure Go DRDA driver with prebuilt Linux `aarch64` wheels), `?` (`QMARK`) parameter binding, and `enable_lowercase_column_names=True` by default.
+  - **GizmoSQL (`adbc-driver-gizmosql`)**: `gizmosql://` / `gizmo://` URIs or `driver_name="gizmosql"` / `"gizmo"`, preferring `adbc_driver_gizmosql.dbapi.connect` when installed with fallback to `adbc_driver_flightsql.dbapi.connect`. Supports `auth_type="external"` (`adbc.gizmosql.auth_type`) for OAuth/SSO and `gizmosql_backend="duckdb" | "sqlite"` dialect selection.
+  - **Quack (`adbc-driver-quack`)**: `quack://` / `quack+tls://` URIs or `driver_name="quack"`, resolved via `adbc_driver_quack.dbapi.connect` with `token` (`adbc.quack.token`) authentication for remote DuckDB `quack` servers.
 - FlightSQL supports TLS/mTLS, RPC timeouts, message size, cookies, and headers via connection parameters (with native `db_kwargs` taking precedence).
 
 ### AsyncPG & PostgreSQL Extension Dialects
@@ -127,8 +133,20 @@ Every adapter normalizes common `connection_config` parameter aliases and DSN st
 ### DuckDB
 
 - Native Apache Arrow support for `select_to_arrow()` and `load_from_arrow()`.
+- **Unified native `fetchall()` Python type contract**: `sqlspec.adapters.duckdb.core` enforces `ARROW_MIN_ROWS = 64` and `description_has_arrow_divergent_types(description)`. Result sets containing Arrow-divergent types (`HUGEINT`, `UHUGEINT`, `BIT`, `TIMETZ`, `TIMESTAMP_NS`, `INTERVAL`, `MAP`, `BIGNUM`, `VARINT`, fixed-size arrays, or nested `UUID`) always use `fetchall()` so native Python types are preserved; safe scalar queries use Arrow materialization only when the row count reaches `ARROW_MIN_ROWS` (64).
 - Direct object-store routing for `load_from_storage()` and `select_to_storage()` (`s3://`, `gs://`, `gcs://`, `r2://`) when native DuckDB secrets are configured.
 - `DuckDBExtensionConfig` separates install and load lifecycle: `install=True` forces an `install_extension()` call, `force_install=True` reinstalls, and `required=True` turns load/install failures from best-effort warnings into exceptions.
+
+### Cloud Spanner (`sqlspec.adapters.spanner` & `sqlspec.dialects.spanner`)
+
+- Ships both synchronous (`SpannerSyncConfig`, `SpannerSyncDriver`, `SpannerSyncConnection`, `SpannerSyncCursor`, `SpannerSyncExceptionHandler`) and native AsyncIO (`SpannerAsyncConfig`, `SpannerAsyncDriver`, `SpannerAsyncConnection`, `SpannerAsyncCursor`, `SpannerAsyncExceptionHandler`) adapters built on `google-cloud-spanner>=3.64.0` (`SpannerAsyncClient`).
+- Both configs and drivers expose `provide_session()`, `provide_write_session()`, `provide_read_session()`, `run_in_transaction()`, `execute_partitioned_dml()`, and mutation helpers (`write_insert()`, `write_upsert()`, `write_update()`, `write_delete()`).
+- Exports `SpannerSyncDataDictionary` and `SpannerAsyncDataDictionary` (`sqlspec.adapters.spanner.data_dictionary`) with `mode="googlesql"` or `"postgresql"` (`spangres`), covering `property_graphs`, `change_streams`, `sequences`, `ddl`, and `system` metadata domains.
+- Ships first-party extension stores across sync and async configs:
+  - **Litestar sessions**: `SpannerSyncStore`, `SpannerAsyncStore`, `SpannerLitestarConfig` (`sqlspec.adapters.spanner.litestar`)
+  - **Events queue**: `SpannerSyncEventQueueStore`, `SpannerAsyncEventQueueStore` (`sqlspec.adapters.spanner.events`) with hash-shard prefixing (`shard_count`), covering index (`STORING` / `INCLUDE`), native `ROW DELETION POLICY` (`TTL INTERVAL` on `spangres`), and `EventRuntimeHints(cleanup_on_ack=False, use_run_in_transaction=True)`
+  - **Google ADK**: `SpannerSyncADKStore`, `SpannerAsyncADKStore`, `SpannerSyncADKMemoryStore`, `SpannerAsyncADKMemoryStore`, `SpannerSyncADKArtifactStore`, `SpannerAsyncADKArtifactStore`, `SpannerADKConfig`, `SpannerADKRetentionConfig` (`sqlspec.adapters.spanner.adk`)
+- **Built-in `spanner` and `spangres` SQLGlot dialects (`sqlspec.dialects.spanner`)**: exports `Spanner`, `Spangres`, `SpannerPropertyGraph`, `SpannerGraphTable`, expression classes (`ApproxCosineDistance`, `CosineDistance`, `DotProduct`, `EuclideanDistance`, `GetNextSequenceValue`, `Score`, `ScoreNgrams`, `Search`, `SearchSubstring`, `Snippet`, `TokenizeFulltext`, `TokenizeNgrams`, `TokenizeSubstring`), and builder helpers (`graph_table`, `snippet`, `score_ngrams`, `score`, `approx_cosine_distance`, `cosine_distance`, `dot_product`, `euclidean_distance`, `get_next_sequence_value`, `search`, `search_substring`, `tokenize_fulltext`, `tokenize_ngrams`, `tokenize_substring`). Parses and transpiles `CREATE/DROP PROPERTY GRAPH`, `GRAPH_TABLE(... MATCH ... COLUMNS (...))`, `CREATE/DROP VECTOR INDEX` (`IF NOT EXISTS`, `STORING`), `DROP SEARCH INDEX`, `INTERLEAVE IN [PARENT]`, `ROW DELETION POLICY` / `TTL INTERVAL`, and `HIDDEN` `TOKENLIST` columns.
 
 ### BigQuery
 

@@ -25,7 +25,7 @@ ViteConfig(
     spa=SPAConfig(),
     logging=LoggingConfig(),
     deploy=DeployConfig(),
-    static_props=None,
+    static_props={},
     dev_mode=False,
     base_url=None,
     guards=None,
@@ -43,12 +43,12 @@ ViteConfig(
 | `paths` | `PathConfig()` | Filesystem and asset URL path configuration |
 | `runtime` | `RuntimeConfig()` | Dev server, proxy, and process execution settings |
 | `types` | `None` | `True` or `TypeGenConfig(...)` to enable end-to-end TypeScript generation |
-| `inertia` | `None` | `True`, `InertiaConfig(...)`, or `dict` (auto-sets `mode="hybrid"` when `mode=None`) |
+| `inertia` | `None` | `True` or `InertiaConfig(...)` (auto-sets `mode="hybrid"` when `mode=None`) |
 | `spa` | `True` (for `spa`/`hybrid`) or `SPAConfig` | HTML transformation and CSRF injection settings |
 | `logging` | `None` (`LoggingConfig()`) | Console and lifecycle logging configuration |
 | `deploy` | `False` (`DeployConfig(enabled=False)`) | Remote storage deployment settings (`litestar assets deploy`) |
-| `static_props` | `None` | Static JSON-serializable dict exposed via `virtual:litestar-static-props` and `static-props.ts` |
-| `dev_mode` | `None` (from `runtime.dev_mode`) | Shortcut override for `runtime.dev_mode` |
+| `static_props` | `{}` | Static JSON-serializable dict exposed via `virtual:litestar-static-props` and `static-props.ts` |
+| `dev_mode` | `False` | Top-level shortcut that sets `runtime.dev_mode = True` when `True` (read effective state via `config.is_dev_mode`) |
 | `base_url` | `VITE_BASE_URL` or `None` | Public base URL of the Litestar application |
 | `enabled` | `None` (auto-detect / `VITE_ENABLED`) | `False` skips runtime routes, middleware, static routers, lifespans, and SPA handler while keeping CLI/config active |
 | `guards` | `None` | Litestar route guards applied to SPA catch-all HTML routes |
@@ -73,12 +73,17 @@ from litestar_vite import (
     StaticServerMount,
     VitePlugin,
 )
+from litestar_vite.plugin import StaticFilesConfig
 
-plugin = VitePlugin(config=vite_config, asset_loader=None, static_files_config=None)
+plugin = VitePlugin(
+    config=vite_config,
+    asset_loader=None,
+    static_files_config=StaticFilesConfig(opt={"exclude_from_auth": True}),
+)
 static_cfg: StaticServerConfig = plugin.get_static_server_config()
 ```
 
-- `static_files_config`: Optional dict matching Litestar's `create_static_files_router` kwargs (excluding `path` and `directories`).
+- `static_files_config`: Optional `StaticFilesConfig` dataclass (`from litestar_vite.plugin import StaticFilesConfig`) configuring Litestar's `create_static_files_router` kwargs (`after_request`, `after_response`, `before_request`, `cache_control`, `exception_handlers`, `guards`, `middleware`, `opt`, `security`, `tags`).
 - `plugin.get_static_server_config()` returns `StaticServerConfig(placement=StaticPlacement.NATIVE | StaticPlacement.ASGI, mounts=(StaticServerMount(...),), reason=...)` for Granian native static file serving eligibility without requiring `exclude_static_from_auth`.
 
 ## PathConfig

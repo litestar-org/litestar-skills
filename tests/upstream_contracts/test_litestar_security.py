@@ -3,24 +3,34 @@
 import dataclasses
 import inspect
 from importlib.metadata import version
+from typing import Any, ClassVar
 
 import pytest
-from litestar import Litestar, Router, get
+from litestar import Controller, Litestar, Router, get, post
+from litestar.config.csrf import CSRFConfig
+from litestar.connection import ASGIConnection
 from litestar.exceptions import ImproperlyConfiguredException, LitestarWarning
+from litestar.openapi.spec import SecurityScheme
 from litestar.testing import TestClient
 from litestar_security import (
+    CSRF_REQUIRED_OPT_KEY,
     AssuranceRequirement,
     AssuranceTrait,
     AuthenticationEvidence,
+    AuthenticationMechanism,
+    AuthenticationOutcome,
+    AuthenticationPolicy,
     AuthorizationPredicate,
     AuthorizationSnapshot,
     ContentSecurityPolicy,
+    CredentialExtraction,
     CredentialVerifier,
     CSPMode,
     CurrentUser,
     ExternalCSRF,
     InvalidCredentials,
     MFAConfig,
+    NoCredentials,
     PasskeyConfig,
     Principal,
     PublicController,
@@ -448,3 +458,194 @@ def test_litestar_security_060_websocket_and_cli_contract() -> None:
     assert security_group is not None
     assert routes_command is not None
     assert "routes" in security_group.commands
+
+
+def test_litestar_security_060_public_controller_csrf_vs_exclude() -> None:
+    """Verify PublicController CSRF exclusion vs SecureController exclude() + opt={'exclude_from_csrf': False}."""
+    assert CSRF_REQUIRED_OPT_KEY == "csrf_required"
+    csrf_config = CSRFConfig(secret="a" * 32)
+
+    class _InvalidPublicCSRFController(PublicController):
+        path = "/invalid-public"
+
+        @post("/submit", opt={"exclude_from_csrf": False})
+        async def submit(self) -> dict[str, bool]:
+            return {"ok": True}
+
+    with pytest.raises(ImproperlyConfiguredException, match="Native CSRF exclusions must be exactly True"):
+        Litestar(
+            route_handlers=[_InvalidPublicCSRFController],
+            csrf_config=csrf_config,
+            plugins=[SecurityPlugin(SecurityConfig[_User]())],
+        )
+
+    class _ExcludedPublicFormController(SecureController):
+        path = "/forms"
+        auth: ClassVar[AuthenticationPolicy] = exclude()
+
+        @post("/submit", opt={"exclude_from_csrf": False})
+        async def submit(self) -> dict[str, bool]:
+            return {"ok": True}
+
+    class _PublicLoginController(PublicController):
+        path = "/access"
+
+        @post("/login", opt={CSRF_REQUIRED_OPT_KEY: True})
+        async def login(self) -> dict[str, bool]:
+            return {"ok": True}
+
+        @get("/status")
+        async def status(self) -> dict[str, bool]:
+            return {"ok": True}
+
+    app = Litestar(
+        route_handlers=[_ExcludedPublicFormController, _PublicLoginController],
+        csrf_config=csrf_config,
+        plugins=[SecurityPlugin(SecurityConfig[_User]())],
+    )
+    handlers_by_path = {
+        (route.path, method): handler
+        for route in app.routes
+        for method, (handler, _) in getattr(route, "route_handler_map", {}).items()
+    }
+    assert handlers_by_path[("/forms/submit", "POST")].opt.get("exclude_from_csrf") is False
+    assert "exclude_from_csrf" not in handlers_by_path[("/access/login", "POST")].opt
+    assert handlers_by_path[("/access/status", "GET")].opt.get("exclude_from_csrf") is True
+
+
+class _CustomHeaderSlot:
+    name = "custom-header"
+
+    def extract(self, connection: ASGIConnection[Any, Any, Any, Any]) -> CredentialExtraction[str]:
+        del connection
+        return NoCredentials()
+
+
+class _CustomHeaderVerifier:
+    name = "custom-header"
+    slot = "custom-header"
+    participates_by_default = False
+
+    async def authenticate(
+        self,
+        credential: str,
+        connection: ASGIConnection[Any, Any, Any, Any],
+    ) -> AuthenticationOutcome[str]:
+        del credential, connection
+        return InvalidCredentials()
+
+
+class _CustomIdentityResolver:
+    async def resolve(self, claims: str) -> Principal[_User] | InvalidCredentials | VerificationUnavailable:
+        return Principal(id=claims, user=_User(id=claims))
+
+
+def test_litestar_security_060_custom_mechanism_openapi_and_non_default_controllers() -> None:
+    """Verify custom AuthenticationMechanism OpenAPI scheme enforcement and OpenAPI route auto-detection."""
+    slot = _CustomHeaderSlot()
+    verifier = _CustomHeaderVerifier()
+    resolver = _CustomIdentityResolver()
+
+    with pytest.raises(
+        ImproperlyConfiguredException,
+        match="Authentication mechanism OpenAPI scheme name and definition must be configured together",
+    ):
+        AuthenticationMechanism(authenticator=verifier, resolver=resolver, scheme_name="CustomHeader")
+
+    missing_scheme_mechanism = AuthenticationMechanism(authenticator=verifier, resolver=resolver)
+
+    @get("/ping", auth=public())
+    async def ping() -> dict[str, str]:
+        return {"ok": "true"}
+
+    with pytest.raises(
+        ImproperlyConfiguredException,
+        match="Authentication mechanism custom-header has no native OpenAPI security scheme",
+    ):
+        Litestar(
+            route_handlers=[ping],
+            plugins=[
+                SecurityPlugin(
+                    SecurityConfig[_User](
+                        slots=(slot,),
+                        mechanisms=(missing_scheme_mechanism,),
+                    ),
+                ),
+            ],
+        )
+
+    valid_mechanism = AuthenticationMechanism(
+        authenticator=verifier,
+        resolver=resolver,
+        scheme_name="CustomHeader",
+        security_scheme=SecurityScheme(
+            type="apiKey",
+            name="X-Custom-Token",
+            security_scheme_in="header",
+        ),
+    )
+
+    class _UnmarkedPlainController(Controller):
+        path = "/plain"
+
+        @get("/")
+        async def index(self) -> dict[str, str]:
+            return {"ok": "true"}
+
+    with pytest.raises(
+        ImproperlyConfiguredException,
+        match="Implicit required authentication needs at least one default-participating mechanism",
+    ):
+        Litestar(
+            route_handlers=[_UnmarkedPlainController],
+            plugins=[
+                SecurityPlugin(
+                    SecurityConfig[_User](
+                        slots=(slot,),
+                        mechanisms=(valid_mechanism,),
+                    ),
+                ),
+            ],
+        )
+
+    class _PublicPlainController(Controller):
+        path = "/plain"
+        opt = {AUTH_POLICY_OPT_KEY: public()}
+
+        @get("/")
+        async def index(self) -> dict[str, str]:
+            return {"ok": "true"}
+
+    app = Litestar(
+        route_handlers=[_PublicPlainController],
+        plugins=[
+            SecurityPlugin(
+                SecurityConfig[_User](
+                    slots=(slot,),
+                    mechanisms=(valid_mechanism,),
+                ),
+            ),
+        ],
+    )
+    schema = app.openapi_schema
+    assert schema.components.security_schemes is not None
+    assert "CustomHeader" in schema.components.security_schemes
+
+    docs_excluded_app = Litestar(
+        route_handlers=[_PublicPlainController],
+        plugins=[
+            SecurityPlugin(
+                SecurityConfig[_User](
+                    slots=(slot,),
+                    mechanisms=(valid_mechanism,),
+                    exclude=[r"^/docs"],
+                ),
+            ),
+        ],
+    )
+    with (
+        pytest.warns(LitestarWarning, match="match no registered route"),
+        TestClient(app=docs_excluded_app) as client,
+    ):
+        response = client.get("/schema/openapi.json")
+        assert response.status_code == 200

@@ -369,18 +369,24 @@ createInertiaApp({
 ```tsx
 // resources/ssr.tsx
 import { createInertiaApp } from "@inertiajs/react"
-import createServer from "@inertiajs/react/server"
 import { renderToString } from "react-dom/server"
 import { resolvePageComponent } from "litestar-vite-plugin/inertia-helpers"
+import { startSsrWorker } from "litestar-vite-plugin/ssr-worker"
 
 const pages = import.meta.glob("./pages/**/*.tsx")
 
-createServer(async (page) => createInertiaApp({
-  page,
-  render: renderToString,
-  resolve: (name) => resolvePageComponent(`./pages/${name}.tsx`, pages),
-  setup: ({ App, props }) => <App {...props} />,
-}))
+export default async function render(page: any) {
+  return createInertiaApp({
+    page,
+    render: renderToString,
+    resolve: (name) => resolvePageComponent(`./pages/${name}.tsx`, pages),
+    setup: ({ App, props }) => <App {...props} />,
+  })
+}
+
+if (!import.meta.env?.DEV) {
+  startSsrWorker({ render })
+}
 ```
 
 ## Forms, Scoped Error Bags & Validation

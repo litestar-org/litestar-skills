@@ -99,7 +99,7 @@ Branch on the domain capability before execution, then branch on the returned re
 - ADBC metadata can be a transport fallback. Treat transport-fallback or lossy output as inspection data, not lossless export.
 - BigQuery operational metadata can be region-scoped or billed.
 - Oracle diagnostics can require privileges or licensed packs.
-- Spanner has separate GoogleSQL and PostgreSQL metadata shapes.
+- Spanner (`SpannerSyncDataDictionary` and `SpannerAsyncDataDictionary`) has separate GoogleSQL (`mode="googlesql"`) and PostgreSQL (`mode="postgresql"`) metadata shapes, supporting `property_graphs`, `change_streams`, `sequences`, `ddl`, and `system` metadata domains.
 - Arrow ODBC does not expose a portable raw ODBC catalog bridge in Python.
 
 Use the runtime capability profile as the final answer; do not hard-code a static support matrix into application logic.

@@ -83,7 +83,7 @@ def test_index(client: TestClient) -> None:
 For isolated route handler, controller, or router tests without bootstrapping the full application factory, use `create_async_test_client` (or `create_test_client` for sync tests). Both build a `Litestar` instance and return a configured test client.
 
 - First positional argument `route_handlers`: a single handler, `Controller` subclass, `Router`, a sequence of them, or `None`.
-- Keyword-only arguments forward all `Litestar(...)` settings (`dependencies`, `guards`, `middleware`, `plugins`, `stores`, `state`, `on_startup`, `on_shutdown`, `lifespan`, `exception_handlers`, `dto`, `return_dto`, `template_config`, `static_files_config`, `cors_config`, `csrf_config`, `compression_config`, `allowed_hosts`, `response_cache_config`, `logging_config`, `openapi_config`, `opt`, `parameters`, `path`, `security`, `tags`, `signature_namespace`, `signature_types`, `type_encoders`, `request_class`, `response_class`, `websocket_class`, `response_cookies`, `response_headers`, `before_request`, `after_request`, `after_response`, `before_send`, `after_exception`, `on_app_init`, `listeners`, `event_emitter_backend`, `cache_control`, `etag`, `include_in_schema`, `multipart_form_part_limit=1000`, `pdb_on_exception`, `experimental_features`, `debug=True`) plus client parameters (`backend="asyncio"`, `backend_options=None`, `base_url="http://testserver.local"`, `raise_server_exceptions=True`, `root_path=""`, `session_config=None`, `timeout=None`).
+- Keyword-only arguments forward `Litestar(...)` settings (`dependencies`, `guards`, `middleware`, `plugins`, `stores`, `state`, `on_startup`, `on_shutdown`, `lifespan`, `exception_handlers`, `dto`, `return_dto`, `template_config`, `static_files_config`, `cors_config`, `csrf_config`, `compression_config`, `allowed_hosts`, `response_cache_config`, `logging_config`, `openapi_config`, `opt`, `parameters`, `path`, `security`, `tags`, `signature_namespace`, `signature_types`, `type_encoders`, `request_class`, `response_class`, `websocket_class`, `response_cookies`, `response_headers`, `before_request`, `after_request`, `after_response`, `before_send`, `after_exception`, `on_app_init`, `listeners`, `event_emitter_backend`, `cache_control`, `etag`, `include_in_schema`, `multipart_form_part_limit=1000`, `pdb_on_exception`, `experimental_features`, `debug=True`) plus client parameters (`backend="asyncio"`, `backend_options=None`, `base_url="http://testserver.local"`, `raise_server_exceptions=True`, `root_path=""`, `session_config=None`, `timeout=None`). Note: `request_max_body_size`, `type_decoders`, and `debugger_module` are only accepted on `Litestar(...)` directly — construct `Litestar(...)` and wrap it in `AsyncTestClient(app=app)` / `TestClient(app=app)` when testing those options.
 
 ```python
 import pytest
@@ -155,6 +155,8 @@ async def async_client(app: Litestar) -> AsyncGenerator[AsyncTestClient[Litestar
 ### Mocking Guards
 
 Guards are functions of `(connection: ASGIConnection, route_handler: BaseRouteHandler) -> None | Awaitable[None]`. Test the real guard with fake identity or authorization providers, or unit-test the guard directly with `RequestFactory`. Build a fresh app with replacement providers; Litestar has no mutable `app.dependency_overrides` registry.
+
+> **Gotcha (`exclude_from_auth` vs `guards`):** Setting `exclude_from_auth=True` (or `opt={"exclude_from_auth": True}`) only bypasses `AbstractAuthenticationMiddleware`, leaving `"user"` and `"auth"` unset in `connection.scope`. Any guard attached at the `Litestar`, `Router`, or `Controller` layer still executes, and reading `connection.user` or `connection.auth` directly raises `ImproperlyConfiguredException` (`500`). App/Controller-wide guards must check `route_handler.opt.get("exclude_from_auth")` or `connection.scope.get("user")`.
 
 ```python
 from collections.abc import AsyncGenerator
@@ -265,6 +267,26 @@ async def dishka_client() -> AsyncGenerator[tuple[AsyncTestClient[Litestar], Asy
     async with AsyncTestClient(app=app) as client:
         yield client, mock_email
     await container.close()
+```
+
+- **`DishkaRouter` controller monkey-patching isolation in tests**: `DishkaRouter.register()` (used directly or via `AutowirePlugin(AutowireConfig(..., integrations=["dishka"]))`) mutates `ControllerSubclass.get_route_handlers` in-place on the controller class (`ControllerSubclass.__dict__["get_route_handlers"] = _inject_route_handlers(...)`). If an earlier test in the pytest session registers a `Controller` subclass on a `DishkaRouter` (e.g., via `create_app()`), any subsequent isolated unit test mounting that same `Controller` class on a plain `Litestar` or `create_async_test_client` *without* `setup_dishka(...)` fails at request time with `AttributeError: 'State' object has no attribute 'dishka_container'` (or `KeyError: 'dishka_container'`). Isolate by snapshotting `get_route_handlers` with `monkeypatch.setattr(MyController, "get_route_handlers", MyController.get_route_handlers)` before `DishkaRouter` registration, or wire a test Dishka container with `setup_dishka(container=container, app=app)`.
+- **Runtime type hints with `from __future__ import annotations`**: `@inject`, `@inject_websocket`, and `DishkaRouter.register` call `typing.get_type_hints(func)` at decoration/registration time. Keep `FromDishka[...]` and injected service types at module top-level (`func.__globals__`), never inside `if TYPE_CHECKING:` or local test-function scopes when `from __future__ import annotations` is active.
+
+#### Autowire Cache Isolation (`clear_autowire_cache()`)
+
+When testing applications that use `litestar-autowire` (`AutowirePlugin` / `AutowireConfig`), discovery caches imported domain modules and optional-module misses in process-local caches. Use an `autouse` fixture that calls `clear_autowire_cache()` before and after each test (and evicts temporary module names from `sys.modules` when generating packages under `tmp_path`):
+
+```python
+from collections.abc import Iterator
+import pytest
+from litestar_autowire import clear_autowire_cache
+
+
+@pytest.fixture(autouse=True)
+def isolate_autowire_cache() -> Iterator[None]:
+    clear_autowire_cache()
+    yield
+    clear_autowire_cache()
 ```
 
 ### Session Testing (`set_session_data` and `get_session_data`)
@@ -744,7 +766,7 @@ async def test_create_account_validation(async_client, payload, expected_status)
 ## Official References
 
 - <https://docs.litestar.dev/2/usage/testing.html>
-- <https://github.com/litestar-org/litestar/tree/v2.24.0>
+- <https://github.com/litestar-org/litestar/tree/v2.25.0>
 - <https://docs.pytest.org/en/stable/>
 - <https://anyio.readthedocs.io/en/stable/testing.html>
 

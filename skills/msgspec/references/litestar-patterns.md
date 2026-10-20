@@ -202,24 +202,28 @@ Choose the right layer for the job:
 - **Direct `msgspec.Struct` (`CamelizedBaseStruct`)** for wire shapes and internal messaging —
   lowest overhead, fastest encode/decode, sufficient for the vast majority of Litestar request and
   response bodies.
-- **`MsgspecDTO[StructType]` (`from litestar.dto import DTOConfig, MsgspecDTO`)** when a single
-  Struct backs multiple route projections (for example, excluding read-only or sensitive fields on
-  `dto=` / `return_dto=` without defining separate Struct classes):
+- **`MsgspecDTO[StructType]` (`from litestar.dto import DTOConfig, MsgspecDTO, dto_field`)** when a
+  single Struct backs multiple route projections (for example, marking fields with
+  `msgspec.Meta(extra=dto_field("read-only"))` / `dto_field("private")` or excluding fields via
+  `DTOConfig(exclude=...)` on `dto=` / `return_dto=` without defining separate Struct classes):
 
 ```python
+from typing import Annotated
+
 import msgspec
 from litestar import post
-from litestar.dto import DTOConfig, MsgspecDTO
+from litestar.dto import DTOConfig, MsgspecDTO, dto_field
+from litestar.params import JSONBody
 
 
 class User(msgspec.Struct, kw_only=True):
-    id: int = 1
+    id: Annotated[int, msgspec.Meta(extra=dto_field("read-only"))] = 1
     name: str
     internal_note: str = ""
 
 
 class UserCreateDTO(MsgspecDTO[User]):
-    config = DTOConfig(exclude={"id", "internal_note"})
+    config = DTOConfig(exclude={"internal_note"})
 
 
 class UserReadDTO(MsgspecDTO[User]):
@@ -227,7 +231,7 @@ class UserReadDTO(MsgspecDTO[User]):
 
 
 @post("/users", dto=UserCreateDTO, return_dto=UserReadDTO)
-async def create_user(data: User) -> User:
+async def create_user(data: JSONBody[User]) -> User:
     return data
 ```
 

@@ -1,9 +1,24 @@
+import importlib
+import importlib.util
 import inspect
+import sys
 from dataclasses import dataclass
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any
+from types import ModuleType
+from typing import Any, cast
 
+import pytest
+
+if sys.version_info < (3, 11):
+    pytest.skip("sqlspec requires Python 3.11+", allow_module_level=True)
+
+import sqlglot
+import sqlspec as sqlspec_pkg
+import sqlspec.dialects as dialects_pkg
+import sqlspec.extensions.events as events_pkg
+import sqlspec.storage as storage_pkg
+import sqlspec.utils as utils_pkg
 from google.adk.sessions.base_session_service import GetSessionConfig
 from sqlspec import (
     SQL,
@@ -61,7 +76,8 @@ from sqlspec.adapters.db2.litestar import (
 from sqlspec.adapters.sqlite import SqliteConfig, SqliteDriver, SqliteDriverFeatures
 from sqlspec.builder import Merge
 from sqlspec.cli import add_migration_commands, get_sqlspec_group
-from sqlspec.core import CursorPagination, OffsetPagination, Pagination, StatementConfig
+from sqlspec.config import EventsConfig
+from sqlspec.core import CursorPagination, OffsetPagination, Pagination, ParameterStyle, StatementConfig
 from sqlspec.core.config_runtime import (
     build_postgres_extension_probe_names,
     is_postgres_extension_active,
@@ -82,9 +98,44 @@ from sqlspec.core.filters import (
     normalize_cursor_keys,
 )
 from sqlspec.core.result import SQLResult
+from sqlspec.core.statement import ProcessedState
 from sqlspec.dialects import DB2
 from sqlspec.dialects.db2 import DB2Tokenizer
 from sqlspec.dialects.postgres import ParadeDB, PGTextSearch, PGVector
+from sqlspec.dialects.spanner import (
+    ApproxCosineDistance,
+    CosineDistance,
+    DotProduct,
+    EuclideanDistance,
+    GetNextSequenceValue,
+    Score,
+    ScoreNgrams,
+    Search,
+    SearchSubstring,
+    Snippet,
+    Spangres,
+    Spanner,
+    SpannerGraphTable,
+    SpannerPropertyGraph,
+    TokenizeFulltext,
+    TokenizeNgrams,
+    TokenizeSubstring,
+    approx_cosine_distance,
+    cosine_distance,
+    dot_product,
+    euclidean_distance,
+    get_next_sequence_value,
+    graph_table,
+    score,
+    score_ngrams,
+    search,
+    search_substring,
+    snippet,
+    tokenize_fulltext,
+    tokenize_ngrams,
+    tokenize_substring,
+)
+from sqlspec.driver._query_cache import StatementCacheHolder
 from sqlspec.extensions.adk import (
     PruneReport,
     SQLSpecArtifactService,
@@ -98,6 +149,7 @@ from sqlspec.extensions.adk import (
     prune_user_state,
 )
 from sqlspec.extensions.events import (
+    EventRuntimeHints,
     claim_verified,
     lock_clause,
     row_limit_clause,
@@ -147,9 +199,9 @@ class UserRow:
     name: str
 
 
-def test_sqlspec_065_contract() -> None:
-    """Validate sqlspec 0.65.0 core contracts and exported API surface."""
-    assert version("sqlspec") == "0.65.0"
+def test_sqlspec_067_contract() -> None:
+    """Validate sqlspec 0.67.0 core contracts and exported API surface."""
+    assert version("sqlspec") == "0.67.0"
 
     assert "sqlspec" in inspect.signature(SQLSpecPlugin).parameters
     spec = SQLSpec()
@@ -358,34 +410,40 @@ def test_sqlspec_065_config_backed_service_and_cursor_pagination_contract() -> N
 
 def test_sqlspec_065_filter_dependencies_contract() -> None:
     """Verify Litestar filter dependencies support cursor pagination and extended filters."""
-    offset_config: FilterConfig = {
-        "id_filter": int,
-        "created_at": True,
-        "updated_at": True,
-        "pagination_type": "limit_offset",
-        "pagination_size": 25,
-        "pagination_max_size": 100,
-        "search": "name,email",
-        "not_in_fields": [FieldNameType(name="status", type_hint=str)],
-        "boolean_fields": {"is_active", "is_verified"},
-        "choice_fields": [ChoiceField(name="tier", choices=("free", "pro", "enterprise"))],
-        "sort_field": {"created_at", "id"},
-        "sort_order": "desc",
-        "sort_field_aliases": {"created": "created_at", "id": "id"},
-    }
+    offset_config = cast(
+        "FilterConfig",
+        {
+            "id_filter": int,
+            "created_at": True,
+            "updated_at": True,
+            "pagination_type": "limit_offset",
+            "pagination_size": 25,
+            "pagination_max_size": 100,
+            "search": "name,email",
+            "not_in_fields": [FieldNameType(name="status", type_hint=str)],
+            "boolean_fields": {"is_active", "is_verified"},
+            "choice_fields": [ChoiceField(name="tier", choices=("free", "pro", "enterprise"))],
+            "sort_field": {"created_at", "id"},
+            "sort_order": "desc",
+            "sort_field_aliases": {"created": "created_at", "id": "id"},
+        },
+    )
     offset_deps = create_filter_dependencies(offset_config)
     assert "limit_offset_filter" in offset_deps
     assert "filters" in offset_deps
     assert "is_active_boolean_filter" in offset_deps
     assert "tier_choices_filter" in offset_deps
 
-    cursor_config: FilterConfig = {
-        "pagination_type": "cursor",
-        "pagination_size": 25,
-        "pagination_max_size": 100,
-        "cursor_keys": (CursorKey("created_at", sort_order="desc"), "id"),
-        "search": "name,email",
-    }
+    cursor_config = cast(
+        "FilterConfig",
+        {
+            "pagination_type": "cursor",
+            "pagination_size": 25,
+            "pagination_max_size": 100,
+            "cursor_keys": (CursorKey("created_at", sort_order="desc"), "id"),
+            "search": "name,email",
+        },
+    )
     cursor_deps = create_filter_dependencies(cursor_config)
     assert "cursor_filter" in cursor_deps
     assert "filters" in cursor_deps
@@ -705,3 +763,337 @@ def test_sqlspec_065_adk_bounded_session_contract() -> None:
     assert config.after_timestamp == 1_725_000_000.0
     assert {"app_name", "user_id", "session_id", "config"}.issubset(get_session_params)
     assert {"app_name", "user_id", "order_by", "descending", "limit", "offset"}.issubset(list_sessions_params)
+
+
+def test_sqlspec_067_spanner_async_adapter_and_stores_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify Spanner sync/async adapters, data dictionaries, ADK/Litestar/Events stores, and runtime hints."""
+    spanner_pkgs = _load_spanner_packages(monkeypatch)
+    spanner_mod = spanner_pkgs["spanner"]
+    spanner_dd = spanner_pkgs["data_dictionary"]
+    spanner_adk = spanner_pkgs["adk"]
+    spanner_artifact = spanner_pkgs["artifact_store"]
+    spanner_litestar = spanner_pkgs["litestar"]
+    spanner_events = spanner_pkgs["events"]
+
+    for spanner_cls in (
+        spanner_mod.SpannerSyncConfig,
+        spanner_mod.SpannerAsyncConfig,
+        spanner_mod.SpannerSyncDriver,
+        spanner_mod.SpannerAsyncDriver,
+        spanner_mod.SpannerSyncCursor,
+        spanner_mod.SpannerAsyncCursor,
+        spanner_mod.SpannerSyncExceptionHandler,
+        spanner_mod.SpannerAsyncExceptionHandler,
+        spanner_dd.SpannerSyncDataDictionary,
+        spanner_dd.SpannerAsyncDataDictionary,
+        spanner_adk.SpannerSyncADKStore,
+        spanner_adk.SpannerAsyncADKStore,
+        spanner_adk.SpannerSyncADKMemoryStore,
+        spanner_adk.SpannerAsyncADKMemoryStore,
+        spanner_adk.SpannerSyncADKArtifactStore,
+        spanner_adk.SpannerAsyncADKArtifactStore,
+        spanner_litestar.SpannerSyncStore,
+        spanner_litestar.SpannerAsyncStore,
+        spanner_events.SpannerSyncEventQueueStore,
+        spanner_events.SpannerAsyncEventQueueStore,
+    ):
+        assert isinstance(spanner_cls, type)
+    assert spanner_mod.SpannerSyncConnection is not None
+    assert spanner_mod.SpannerAsyncConnection is not None
+    assert spanner_mod.SpannerConnectionParams is not None
+    assert spanner_mod.SpannerPoolParams is not None
+    assert spanner_mod.SpannerDriverFeatures is not None
+
+    assert spanner_dd.SpannerSyncDataDictionary(mode="googlesql") is not None
+    assert spanner_dd.SpannerAsyncDataDictionary(mode="postgresql") is not None
+
+    assert spanner_adk.SpannerADKConfig is not None
+    assert spanner_adk.SpannerADKRetentionConfig is not None
+    assert isinstance(spanner_artifact.USER_SCOPED_SESSION_ID, str)
+
+    assert spanner_litestar.SpannerLitestarConfig is not None
+    assert "shard_count" in EventsConfig.__annotations__
+
+    sync_cfg = spanner_mod.SpannerSyncConfig(
+        connection_config={"instance_id": "test-instance", "database_id": "test-db"},
+        extension_config={"events": {"shard_count": 8, "retention_seconds": 86_400}},
+    )
+    async_cfg = spanner_mod.SpannerAsyncConfig(
+        connection_config={"instance_id": "test-instance", "database_id": "test-db"},
+        extension_config={"events": {"shard_count": 8, "retention_seconds": 86_400}},
+    )
+    assert sync_cfg.driver_type is spanner_mod.SpannerSyncDriver
+    assert async_cfg.driver_type is spanner_mod.SpannerAsyncDriver
+    assert sync_cfg.is_async is False
+    assert async_cfg.is_async is True
+
+    for cfg in (sync_cfg, async_cfg):
+        assert hasattr(cfg, "provide_session")
+        assert hasattr(cfg, "provide_write_session")
+        assert hasattr(cfg, "provide_read_session")
+        assert hasattr(cfg, "run_in_transaction")
+        assert hasattr(cfg, "execute_partitioned_dml")
+        hints = cfg.get_event_runtime_hints()
+        assert isinstance(hints, EventRuntimeHints)
+        assert hints.cleanup_on_ack is False
+        assert hints.use_run_in_transaction is True
+
+    for drv in (spanner_mod.SpannerSyncDriver, spanner_mod.SpannerAsyncDriver):
+        assert hasattr(drv, "run_in_transaction")
+        assert hasattr(drv, "execute_partitioned_dml")
+        assert hasattr(drv, "write_insert")
+        assert hasattr(drv, "write_upsert")
+        assert hasattr(drv, "write_update")
+        assert hasattr(drv, "write_delete")
+
+    sync_event_store = spanner_events.SpannerSyncEventQueueStore(sync_cfg)
+    async_event_store = spanner_events.SpannerAsyncEventQueueStore(async_cfg)
+    for store in (sync_event_store, async_event_store):
+        ddl_statements = store.create_statements()
+        assert len(ddl_statements) == 2
+        assert "FARM_FINGERPRINT(event_id)" in ddl_statements[0]
+        assert "PRIMARY KEY (shard_id, event_id)" in ddl_statements[0]
+        assert "ROW DELETION POLICY" in ddl_statements[0]
+        assert "STORING" in ddl_statements[1]
+
+
+def test_sqlspec_067_spanner_dialect_graph_vector_search_contract() -> None:
+    """Verify Spanner and Spangres dialect Property Graph, Vector Index, and Search AST nodes and builders."""
+    for cls in (
+        Spanner,
+        Spangres,
+        SpannerPropertyGraph,
+        SpannerGraphTable,
+        ApproxCosineDistance,
+        CosineDistance,
+        DotProduct,
+        EuclideanDistance,
+        GetNextSequenceValue,
+        Score,
+        ScoreNgrams,
+        Search,
+        SearchSubstring,
+        Snippet,
+        TokenizeFulltext,
+        TokenizeNgrams,
+        TokenizeSubstring,
+    ):
+        assert issubclass(cls, object)
+
+    for helper in (
+        approx_cosine_distance,
+        cosine_distance,
+        dot_product,
+        euclidean_distance,
+        get_next_sequence_value,
+        graph_table,
+        score,
+        score_ngrams,
+        search,
+        search_substring,
+        snippet,
+        tokenize_fulltext,
+        tokenize_ngrams,
+        tokenize_substring,
+    ):
+        assert callable(helper)
+
+    graph_ddl = (
+        "CREATE OR REPLACE PROPERTY GRAPH FinGraph "
+        "NODE TABLES (Account, Person) "
+        "EDGE TABLES (Transfers SOURCE KEY (from_id) REFERENCES Account (id) "
+        "DESTINATION KEY (to_id) REFERENCES Account (id))"
+    )
+    parsed_graph = sqlglot.parse_one(graph_ddl, read="spanner")
+    assert isinstance(parsed_graph.this, SpannerPropertyGraph)
+    rendered_graph = parsed_graph.sql("spanner")
+    assert "CREATE OR REPLACE PROPERTY GRAPH FinGraph" in rendered_graph
+    assert "NODE TABLES" in rendered_graph
+    assert "EDGE TABLES" in rendered_graph
+
+    drop_graph = sqlglot.parse_one("DROP PROPERTY GRAPH IF EXISTS FinGraph", read="spanner")
+    assert "DROP PROPERTY GRAPH IF EXISTS FinGraph" in drop_graph.sql("spanner")
+
+    graph_query = (
+        "SELECT id FROM GRAPH_TABLE(FinGraph MATCH (a:Account)-[t:Transfers]->(b:Account) COLUMNS (a.id AS id))"
+    )
+    parsed_query = sqlglot.parse_one(graph_query, read="spanner")
+    assert parsed_query.find(SpannerGraphTable) is not None
+    assert "GRAPH_TABLE" in parsed_query.sql("spanner")
+
+    built_gt = graph_table(
+        "FinGraph",
+        "(a:Account)-[t:Transfers]->(b:Account)",
+        ["a.id AS id"],
+        where="a.id = @account_id",
+    )
+    assert isinstance(built_gt, SpannerGraphTable)
+    assert "GRAPH_TABLE" in built_gt.sql("spanner")
+
+    vec_idx = (
+        "CREATE VECTOR INDEX IF NOT EXISTS idx_mem_vec "
+        "ON adk_memory (embedding) STORING (content_text) "
+        "WHERE embedding IS NOT NULL "
+        "OPTIONS (distance_type = 'COSINE', tree_depth = 2)"
+    )
+    rendered_vec = sqlglot.transpile(vec_idx, read="spanner", write="spanner")[0]
+    assert "CREATE VECTOR INDEX IF NOT EXISTS idx_mem_vec" in rendered_vec
+    assert "STORING (content_text)" in rendered_vec
+
+    assert (
+        "DROP VECTOR INDEX idx_mem_vec"
+        in sqlglot.transpile("DROP VECTOR INDEX idx_mem_vec", read="spanner", write="spanner")[0]
+    )
+    assert (
+        "DROP SEARCH INDEX idx_mem_fts"
+        in sqlglot.transpile("DROP SEARCH INDEX idx_mem_fts", read="spanner", write="spanner")[0]
+    )
+
+
+def test_sqlspec_067_adbc_enterprise_and_gizmodata_drivers_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify ADBC driver resolution and parameter styles for Oracle, Db2, GizmoSQL, and Quack."""
+    adbc_core = _load_adapter_core_module(monkeypatch, "adbc")
+
+    assert adbc_core.resolve_driver_name("oracle", "oracle://localhost:1521/FREEPDB1") == (
+        "adbc_driver_oracle.dbapi.connect"
+    )
+    assert adbc_core.resolve_driver_name_from_config({"uri": "oracle://localhost:1521/FREEPDB1"}) == (
+        "adbc_driver_oracle.dbapi.connect"
+    )
+    assert adbc_core.resolve_dialect_from_driver_path("adbc_driver_oracle.dbapi.connect") == "oracle"
+    assert adbc_core.resolve_dialect_from_config({"uri": "oracle://localhost:1521/FREEPDB1"}) == "oracle"
+    oracle_stmt_cfg = adbc_core.get_statement_config("oracle")
+    assert oracle_stmt_cfg.parameter_config.default_parameter_style == ParameterStyle.POSITIONAL_COLON
+
+    assert adbc_core.resolve_driver_name("db2", "db2://localhost:50000/testdb") == ("adbc_driver_db2.dbapi.connect")
+    assert adbc_core.resolve_driver_name_from_config({"uri": "db2://localhost:50000/testdb"}) == (
+        "adbc_driver_db2.dbapi.connect"
+    )
+    assert adbc_core.resolve_dialect_from_driver_path("adbc_driver_db2.dbapi.connect") == "db2"
+    assert adbc_core.resolve_dialect_from_config({"uri": "db2://localhost:50000/testdb"}) == "db2"
+    db2_stmt_cfg = adbc_core.get_statement_config("db2")
+    assert db2_stmt_cfg.parameter_config.default_parameter_style == ParameterStyle.QMARK
+
+    gizmo_connect = adbc_core.resolve_driver_name("gizmosql", "gizmosql://localhost:31337")
+    assert gizmo_connect in {"adbc_driver_gizmosql.dbapi.connect", "adbc_driver_flightsql.dbapi.connect"}
+    assert adbc_core.resolve_dialect_from_config({"uri": "gizmosql://localhost:31337"}) == "duckdb"
+    assert (
+        adbc_core.resolve_dialect_from_config({"uri": "gizmosql://localhost:31337", "gizmosql_backend": "sqlite"})
+        == "sqlite"
+    )
+    gizmo_cfg = adbc_core.build_connection_config(
+        {"uri": "gizmosql://localhost:31337", "auth_type": "external", "tls_skip_verify": True}
+    )
+    assert gizmo_cfg["db_kwargs"]["adbc.gizmosql.auth_type"] == "external"
+
+    assert adbc_core.resolve_driver_name("quack", "quack://localhost:8815") == "adbc_driver_quack.dbapi.connect"
+    assert adbc_core.resolve_driver_name_from_config({"uri": "quack+tls://localhost:8815"}) == (
+        "adbc_driver_quack.dbapi.connect"
+    )
+    assert adbc_core.resolve_dialect_from_driver_path("adbc_driver_quack.dbapi.connect") == "duckdb"
+    assert adbc_core.resolve_dialect_from_config({"uri": "quack+tls://localhost:8815"}) == "duckdb"
+    quack_cfg = adbc_core.build_connection_config({"uri": "quack+tls://localhost:8815", "token": "my-quack-token"})
+    assert quack_cfg["db_kwargs"]["adbc.quack.token"] == "my-quack-token"
+
+
+def test_sqlspec_067_statement_cache_holder_and_duckdb_type_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify shared StatementCacheHolder, zero-copy AST sharing, DuckDB type contract, and PEP 562 lazy barrels."""
+    for pkg in (sqlspec_pkg, dialects_pkg, events_pkg, storage_pkg):
+        assert hasattr(pkg, "__getattr__")
+        assert hasattr(pkg, "__dir__")
+    for pkg in (sqlspec_pkg, events_pkg, storage_pkg):
+        assert hasattr(pkg, "_EXPORTS")
+    assert utils_pkg.__all__ == ()
+
+    sqlite_cfg = SqliteConfig(connection_config={"database": ":memory:"})
+    holder = sqlite_cfg.driver_features["_statement_cache_holder"]
+    assert isinstance(holder, StatementCacheHolder)
+    with sqlite_cfg.provide_session() as s1, sqlite_cfg.provide_session() as s2:
+        s1_any: Any = s1
+        s2_any: Any = s2
+        assert s1_any._cache_holder is holder
+        assert s2_any._cache_holder is holder
+        assert s1_any._statement_cache is s2_any._statement_cache
+        assert s1_any._cache_holder.rebind_processor is s2_any._cache_holder.rebind_processor
+
+    parsed_expr = sqlglot.parse_one("SELECT 1")
+    state = ProcessedState(
+        compiled_sql="SELECT 1",
+        execution_parameters=[],
+        parsed_expression=parsed_expr,
+        operation_type="SELECT",
+        expression_is_shared=True,
+    )
+    assert state.expression_is_shared is True
+    owned_expr = state.ensure_owned_expression()
+    assert owned_expr is not None
+    assert owned_expr is not parsed_expr
+    assert state.expression_is_shared is False
+
+    duckdb_core = _load_adapter_core_module(monkeypatch, "duckdb")
+    assert duckdb_core.ARROW_MIN_ROWS == 64
+    assert callable(duckdb_core.description_has_arrow_divergent_types)
+    assert duckdb_core.description_has_arrow_divergent_types([("id", "INTEGER", None, None, None, None, None)]) is False
+    assert (
+        duckdb_core.description_has_arrow_divergent_types([("big_id", "HUGEINT", None, None, None, None, None)]) is True
+    )
+
+
+def _load_adapter_core_module(monkeypatch: pytest.MonkeyPatch, adapter_name: str) -> Any:
+    """Load an adapter's pure-Python core module directly from site-packages without importing its driver __init__."""
+    adapter_dir = Path(inspect.getfile(sqlspec_pkg)).resolve().parent / "adapters" / adapter_name
+    pkg_name = f"sqlspec.adapters.{adapter_name}"
+    if pkg_name not in sys.modules:
+        pkg_mod = ModuleType(pkg_name)
+        pkg_mod.__path__ = [str(adapter_dir)]
+        monkeypatch.setitem(sys.modules, pkg_name, pkg_mod)
+    core_path = adapter_dir / "core.py"
+    spec = importlib.util.spec_from_file_location(f"{pkg_name}.core", core_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, f"{pkg_name}.core", module)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_spanner_packages(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """Import Spanner adapter packages with fallback stubs when google-cloud-spanner is absent from the test venv."""
+    typing_path = Path(inspect.getfile(sqlspec_pkg)).resolve().parent / "adapters" / "spanner" / "_typing.py"
+    spec = importlib.util.spec_from_file_location("sqlspec.adapters.spanner._typing", typing_path)
+    assert spec is not None
+    assert spec.loader is not None
+    typing_mod: Any = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(typing_mod)
+
+    for export_name, (mod_name, attr_name) in typing_mod._LAZY_DRIVER_EXPORTS.items():
+        try:
+            resolved = getattr(importlib.import_module(mod_name), attr_name, None)
+        except ModuleNotFoundError:
+            resolved = None
+        if resolved is None:
+            resolved = type(
+                attr_name,
+                (),
+                {
+                    "STRING": "STRING",
+                    "TIMESTAMP": "TIMESTAMP",
+                    "BYTES": "BYTES",
+                    "INT64": "INT64",
+                    "JSON": "JSON",
+                    "FLOAT64": "FLOAT64",
+                    "BOOL": "BOOL",
+                    "READ_WRITE": "READ_WRITE",
+                },
+            )
+        setattr(typing_mod, export_name, resolved)
+
+    monkeypatch.setitem(sys.modules, "sqlspec.adapters.spanner._typing", typing_mod)
+    return {
+        "spanner": importlib.import_module("sqlspec.adapters.spanner"),
+        "data_dictionary": importlib.import_module("sqlspec.adapters.spanner.data_dictionary"),
+        "adk": importlib.import_module("sqlspec.adapters.spanner.adk"),
+        "artifact_store": importlib.import_module("sqlspec.adapters.spanner.adk.artifact_store"),
+        "litestar": importlib.import_module("sqlspec.adapters.spanner.litestar"),
+        "events": importlib.import_module("sqlspec.adapters.spanner.events"),
+    }

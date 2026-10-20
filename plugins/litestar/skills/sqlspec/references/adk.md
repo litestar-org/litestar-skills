@@ -16,7 +16,7 @@ All store classes live under `sqlspec.extensions.adk`. Each has an async base (u
 | `BaseAsyncADKMemoryStore` / `BaseSyncADKMemoryStore` | Long-term memory entries searchable per user | `SQLSpecMemoryService`, `SQLSpecSyncMemoryService` | `StoredMemory` |
 | `BaseAsyncADKArtifactStore` / `BaseSyncADKArtifactStore` | Versioned artifact **metadata** contract (content lives in object storage) | `SQLSpecArtifactService` (async store) | `StoredArtifact` |
 
-All records are `TypedDict`s (see `sqlspec/extensions/adk/_types.py`, `memory/_types.py`, `artifact/_types.py`). Adapter support guarantees cover session/event and memory stores. Adapter-specific concrete artifact metadata stores are not part of the support matrix.
+All records are `TypedDict`s (see `sqlspec/extensions/adk/_types.py`, `memory/_types.py`, `artifact/_types.py`). Adapter support guarantees cover session/event and memory stores across all supported OLTP adapters, plus concrete artifact metadata stores on Cloud Spanner (`SpannerSyncADKArtifactStore`, `SpannerAsyncADKArtifactStore`).
 
 ### Session store
 
@@ -53,7 +53,7 @@ recent_sessions = await service.list_sessions(
 
 ### Artifact store
 
-Persists artifact **metadata** when a deployment supplies a concrete metadata store. The metadata record tracks filename, version, MIME type, `canonical_uri`, and `custom_metadata`; bytes live in a `sqlspec.storage` backend via `artifact_storage_uri="s3://..."` or a registered storage alias. Versioning is append-only starting from `0`.
+Persists artifact **metadata** when a deployment supplies a concrete metadata store (such as Cloud Spanner's `SpannerSyncADKArtifactStore` or `SpannerAsyncADKArtifactStore` in `sqlspec.adapters.spanner.adk`, supporting `USER_SCOPED_SESSION_ID` user-scoped artifacts, hash sharding, and `ROW DELETION POLICY` TTL). The metadata record tracks filename, version, MIME type, `canonical_uri`, and `custom_metadata`; bytes live in a `sqlspec.storage` backend via `artifact_storage_uri="s3://..."` (or `gs://...`) or a registered storage alias. Versioning is append-only starting from `0`.
 
 ## Converters
 
@@ -69,7 +69,7 @@ Memory and artifact modules ship their own converter helpers (`sqlspec.extension
 
 ## Per-Adapter Store Implementations
 
-Production adapters ship concrete session/event and memory stores from their `sqlspec.adapters.<adapter>.adk` package: `asyncpg`, `psycopg`, `psqlpy`, `cockroach_asyncpg`, `cockroach_psycopg`, `oracledb`, `db2`, `sqlite`, `aiosqlite`, `duckdb`, `aiomysql`, `asyncmy`, `pymysql`, `mysqlconnector`, `mssql_python`, `pymssql`, `spanner`, `adbc`, and `arrow_odbc`. Each contains both `<Adapter>ADKStore` (session/event) and `<Adapter>ADKMemoryStore` (memory) (with sync/async pairs such as `Db2SyncADKStore` / `Db2AsyncADKStore` and `Db2SyncADKMemoryStore` / `Db2AsyncADKMemoryStore` for dual-mode adapters).
+Production adapters ship concrete session/event and memory stores from their `sqlspec.adapters.<adapter>.adk` package: `asyncpg`, `psycopg`, `psqlpy`, `cockroach_asyncpg`, `cockroach_psycopg`, `oracledb`, `db2`, `sqlite`, `aiosqlite`, `duckdb`, `aiomysql`, `asyncmy`, `pymysql`, `mysqlconnector`, `mssql_python`, `pymssql`, `spanner`, `adbc`, and `arrow_odbc`. Each contains both `<Adapter>ADKStore` (session/event) and `<Adapter>ADKMemoryStore` (memory) (with sync/async pairs such as `Db2SyncADKStore` / `Db2AsyncADKStore`, `SpannerSyncADKStore` / `SpannerAsyncADKStore`, and `SpannerSyncADKMemoryStore` / `SpannerAsyncADKMemoryStore` for dual-mode adapters; `sqlspec.adapters.spanner.adk` also ships `SpannerSyncADKArtifactStore`, `SpannerAsyncADKArtifactStore`, `SpannerADKConfig`, and `SpannerADKRetentionConfig`).
 
 Representative storage strategies:
 
@@ -79,7 +79,7 @@ Representative storage strategies:
 | `cockroach_asyncpg` / `cockroach_psycopg` | `JSONB` | Same surface as Postgres; tuned for Cockroach's MVCC |
 | `oracledb` | `JSON` native (21c+), `BLOB` + `IS JSON` check (12c–20c), raw `BLOB` otherwise | Version-aware; `JSONStorageType` enum in the Oracle ADK package |
 | `db2` | `CLOB` (`IS JSON`) | Sync (`Db2SyncADKStore`, `Db2SyncADKMemoryStore`) and async (`Db2AsyncADKStore`, `Db2AsyncADKMemoryStore`) stores with UTC timestamps |
-| `spanner` | JSON (`param_types.JSON`) or STRING fallback | Uses Spanner transactions; `param_types.JSON` when available |
+| `spanner` | JSON (`param_types.JSON`) or STRING fallback | Sync & async session/memory/artifact stores (`SpannerSync*` / `SpannerAsync*`), `embedding ARRAY<FLOAT32>`, ScaNN `CREATE VECTOR INDEX`, `SCORE(content_tokens, @query)` FTS, 4-mode Hybrid RRF (`enable_hybrid_search`) + Vector + FTS + Simple `search_entries`, optional `CREATE OR REPLACE PROPERTY GRAPH` (`enable_memory_graph`), and per-table `ROW DELETION POLICY` (`SpannerADKRetentionConfig`) |
 | `duckdb` | `JSON` | Single-file analytics; syncs via sync driver |
 | `sqlite` / `aiosqlite` | `TEXT` with JSON1 functions | Local dev; small footprint |
 | `asyncmy` / `pymysql` / `mysqlconnector` | `JSON` | Uses MySQL's native JSON type |

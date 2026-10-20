@@ -79,6 +79,9 @@ services:
       context: .
       dockerfile: tools/deploy/docker/Dockerfile.distroless
     restart: "no"
+    # Match-Your-Stack:
+    #   advanced-alchemy -> command: litestar database upgrade --no-prompt
+    #   sqlspec          -> command: litestar db upgrade --no-prompt
     command: litestar database upgrade --no-prompt
     env_file:
       - .env.docker
@@ -180,7 +183,7 @@ docker compose run --rm migrator
 | Valkey over Redis | Drop-in Redis replacement, fully open-source (BSD license). |
 | Port offsets (15432, 16379) | Avoid conflicts with locally installed PostgreSQL/Redis. |
 | `condition: service_healthy` | App and worker wait for healthy database and cache before starting. |
-| Separate `migrator` service | Runs once (`restart: "no"`), applies schema migrations, then exits. |
+| Separate `migrator` service | Runs once (`restart: "no"`), applies schema migrations (`litestar database upgrade --no-prompt` for `advanced-alchemy`, or `litestar db upgrade --no-prompt` for `sqlspec`), then exits. |
 | `SAQ_USE_SERVER_LIFESPAN: "false"` | Worker and app manage SAQ lifecycle independently. |
 | `.env.docker` file | All environment variables in one file. Never committed to git. |
 

@@ -20,6 +20,7 @@ from litestar.params import (
     FromPath,
     FromQuery,
     HeaderParameter,
+    JSONBody,
     MultipartBody,
     PathParameter,
     QueryParameter,
@@ -32,17 +33,17 @@ async def get_item(item_id: FromPath[int]) -> Item:
 
 
 @post("/items")
-async def create_item(data: CreateItemDTO) -> Item:
+async def create_item(data: JSONBody[CreateItemDTO]) -> Item:
     return await save_item(data)
 
 
 @put("/items/{item_id:int}")
-async def replace_item(item_id: FromPath[int], data: ReplaceItemDTO) -> Item:
+async def replace_item(item_id: FromPath[int], data: JSONBody[ReplaceItemDTO]) -> Item:
     return await overwrite_item(item_id, data)
 
 
 @patch("/items/{item_id:int}")
-async def update_item(item_id: FromPath[int], data: UpdateItemDTO) -> Item:
+async def update_item(item_id: FromPath[int], data: JSONBody[UpdateItemDTO]) -> Item:
     return await modify_item(item_id, data)
 
 

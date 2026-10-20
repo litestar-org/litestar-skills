@@ -27,6 +27,8 @@ RETIRED_TOKENS = (
     "OIDCProviderConfig",
     "DefaultJWKSCache",
     "from litestar_mcp.auth",
+    "SKILL_FILE_NAME",
+    "AgentTeam",
 )
 RETIRED_GRANIAN_FLAGS = (
     "--threads",

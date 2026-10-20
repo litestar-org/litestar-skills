@@ -43,9 +43,9 @@ Subclass `ASGIMiddleware` (`litestar.middleware.ASGIMiddleware`) for custom cros
 | `should_bypass_for_scope` | `Callable[[Scope], bool] \| None = None` | Runtime predicate evaluated per request against `Scope`; return `True` to bypass `handle()`. |
 | `async def handle(self, scope, receive, send, next_app)` | `None` | Executes middleware logic and awaits `next_app(scope, receive, send)`. |
 
-### `exclude_path_pattern` vs `should_bypass_for_scope` (Litestar 2.24 / 3.0)
+### `exclude_path_pattern` vs `should_bypass_for_scope` (Litestar 2.25 / 3.0)
 
-In Litestar 2.24, `ASGIMiddleware` checks `exclude_path_pattern` against both static `route_handler.paths` and the runtime `scope["path"]`, emitting a deprecation warning whenever the two checks disagree (for example, matching file extensions like `r"\.css$"` on a parameterized route `/static/{file_path:path}`). Starting in Litestar 3.0, `exclude_path_pattern` will only be evaluated once against `route_handler.paths` when building the route stack.
+In Litestar 2.24–2.25, `ASGIMiddleware` checks `exclude_path_pattern` against both static `route_handler.paths` and the runtime `scope["path"]`, emitting a deprecation warning whenever the two checks disagree (for example, matching file extensions like `r"\.css$"` on a parameterized route `/static/{file_path:path}`). Starting in Litestar 3.0, `exclude_path_pattern` will only be evaluated once against `route_handler.paths` when building the route stack.
 
 - Use `exclude_path_pattern` with anchored regexes for **static route exclusions**: `exclude_path_pattern = ("^/health$", "^/metrics$", "^/schema")`.
 - Use `should_bypass_for_scope` for **dynamic runtime checks** against `scope["path"]`, headers, or query strings.
@@ -182,6 +182,7 @@ import os
 
 from litestar import Litestar, post
 from litestar.config.csrf import CSRFConfig
+from litestar.params import JSONBody
 
 csrf_config = CSRFConfig(
     secret=os.environ.get("CSRF_SECRET", "change-me-in-production"),
@@ -199,7 +200,7 @@ csrf_config = CSRFConfig(
 
 
 @post("/webhooks/stripe", exclude_from_csrf=True)
-async def stripe_webhook(data: dict[str, object]) -> dict[str, str]:
+async def stripe_webhook(data: JSONBody[dict[str, object]]) -> dict[str, str]:
     return {"received": str(data.get("id", ""))}
 
 
@@ -477,16 +478,16 @@ app = Litestar(
 - Declarative route security policies (`SecurityPlugin`): [litestar-security](../../litestar-security/SKILL.md)
 - Cloud Run / GKE IAP and proxy configuration: [litestar-app.md](../../litestar-deployment/references/litestar-app.md)
 
-## Audited Source (Litestar 2.24.0)
+## Audited Source (Litestar 2.25.0)
 
-- [`litestar/middleware/base.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/middleware/base.py)
-- [`litestar/middleware/authentication.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/middleware/authentication.py)
-- [`litestar/middleware/allowed_hosts.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/middleware/allowed_hosts.py)
-- [`litestar/middleware/cors.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/middleware/cors.py)
-- [`litestar/middleware/csrf.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/middleware/csrf.py)
-- [`litestar/middleware/compression/middleware.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/middleware/compression/middleware.py)
-- [`litestar/middleware/logging.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/middleware/logging.py)
-- [`litestar/middleware/rate_limit.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/middleware/rate_limit.py)
-- [`litestar/middleware/response_cache.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/middleware/response_cache.py)
-- [`litestar/middleware/session/server_side.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/middleware/session/server_side.py)
-- [`litestar/middleware/session/client_side.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/middleware/session/client_side.py)
+- [`litestar/middleware/base.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/middleware/base.py)
+- [`litestar/middleware/authentication.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/middleware/authentication.py)
+- [`litestar/middleware/allowed_hosts.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/middleware/allowed_hosts.py)
+- [`litestar/middleware/cors.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/middleware/cors.py)
+- [`litestar/middleware/csrf.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/middleware/csrf.py)
+- [`litestar/middleware/compression/middleware.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/middleware/compression/middleware.py)
+- [`litestar/middleware/logging.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/middleware/logging.py)
+- [`litestar/middleware/rate_limit.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/middleware/rate_limit.py)
+- [`litestar/middleware/response_cache.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/middleware/response_cache.py)
+- [`litestar/middleware/session/server_side.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/middleware/session/server_side.py)
+- [`litestar/middleware/session/client_side.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/middleware/session/client_side.py)

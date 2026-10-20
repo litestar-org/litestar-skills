@@ -134,17 +134,28 @@ internal dependency as an optional target.
   assert controllers are reachable through the selected router.
 - Dishka `Controller.get_route_handlers` mutation: `DishkaRouter.register`
   monkey-patches `ControllerSubclass.get_route_handlers` in-place on the
-  controller class (`ControllerSubclass.__dict__["get_route_handlers"]`). If a
-  unit test reuses an imported `Controller` class across Dishka and non-Dishka
-  apps (or across multiple Dishka registrations), snapshot `get_route_handlers`
-  with `monkeypatch.setattr(AccountController, "get_route_handlers", AccountController.get_route_handlers)`
-  before constructing the app (or delete `get_route_handlers` from
-  `AccountController.__dict__` in teardown), or generate isolated controller
-  modules under `tmp_path` per test.
-- Dishka and `from __future__ import annotations`: `DishkaRouter.register`
-  evaluates handler annotations at registration time via
-  `typing.get_type_hints(func)`. Keep `FromDishka[...]` and injected service
-  classes in module-level runtime globals (`func.__globals__`) rather than inside
+  controller class (`ControllerSubclass.__dict__["get_route_handlers"]`). If an
+  earlier test registers a `Controller` with `DishkaRouter` (for example via
+  `create_app()`) and a later unit test mounts that same `Controller` class on
+  an isolated `Litestar(route_handlers=[AccountController])` app without
+  `setup_dishka`, requests fail with
+  `AttributeError: 'State' object has no attribute 'dishka_container'` because
+  the wrapped route handler reads `request.state.dishka_container`. Isolate
+  tests by:
+  1. Snapshotting `get_route_handlers` with
+     `monkeypatch.setattr(AccountController, "get_route_handlers", AccountController.get_route_handlers)`
+     before constructing the Dishka app (or deleting `"get_route_handlers"` from
+     `AccountController.__dict__` in teardown);
+  2. Calling `setup_dishka(container, app)` or attaching a lightweight ASGI
+     middleware that sets `scope.setdefault("state", {})["dishka_container"]` on
+     isolated test apps; or
+  3. Generating isolated controller modules under `tmp_path` per test.
+- Dishka and `from __future__ import annotations` (`# noqa: TC001, TC002`):
+  `DishkaRouter.register` evaluates handler annotations at registration time via
+  `typing.get_type_hints(func)`. Keep `FromDishka[...]`, `Request`, and injected
+  service classes in module-level runtime globals (`func.__globals__`) with
+  `# noqa: TC001, TC002` (or `"**/controllers.py" = ["TC001", "TC002", "TC003"]`
+  in `[tool.ruff.lint.per-file-ignores]`) rather than inside
   `if TYPE_CHECKING:` or local test-function scopes when
   `from __future__ import annotations` is active.
 - Queues: provide or monkeypatch `litestar_queues.discover_tasks`; assert the

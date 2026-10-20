@@ -674,9 +674,9 @@ For deep-dives on specific surfaces, see:
 - <https://vite.dev/guide/>
 - <https://vite.dev/config/>
 - <https://inertiajs.com/docs/v3>
-- <https://github.com/litestar-org/litestar-vite/tree/v0.31.0>
-- <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/docs>
-- <https://github.com/litestar-org/litestar-vite/tree/v0.31.0/src/py/tests>
+- <https://github.com/litestar-org/litestar-vite/tree/v0.32.0>
+- <https://github.com/litestar-org/litestar-vite/tree/v0.32.0/docs>
+- <https://github.com/litestar-org/litestar-vite/tree/v0.32.0/src/py/tests>
 - <https://www.npmjs.com/package/litestar-vite-plugin>
 
 ## Shared Styleguide Baseline

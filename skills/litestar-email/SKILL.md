@@ -416,10 +416,11 @@ For direct backend tests, use `backend = config.get_backend()` and await
 
 - Do not pass `html_body` to `EmailMessage`; only
   `EmailMultiAlternatives` defines that field.
-- Do not import nonexistent symbols such as `EmailAttachment`,
-  `FallbackConfig`, `RateLimitConfig`, or `RetryConfig`. Attachments are
-  `(filename, content_bytes, mimetype)` tuples added via `attach()` or
-  `attachments=[...]`.
+- Do not import nonexistent symbols such as `ConsoleConfig`, `InMemoryConfig`,
+  `EmailAttachment`, `FallbackConfig`, `RateLimitConfig`, or `RetryConfig`.
+  Console and memory backends use `backend="console"` and `backend="memory"`
+  (no config dataclass); attachments are `(filename, content_bytes, mimetype)`
+  tuples added via `attach()` or `attachments=[...]`.
 - Do not pass file paths as attachments. Pass
   `(filename, content_bytes, mimetype)` or call `attach()`.
 - Do not pass a string to `reply_to`; pass `list[str]`.

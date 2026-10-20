@@ -62,9 +62,16 @@ from pytest_databases.helpers import (
 
 
 def test_worker_identity() -> None:
-    worker_id = get_xdist_worker_id()  # "gw0" under xdist; otherwise None
-    worker_num = get_xdist_worker_num()  # 0 under gw0; otherwise None
-    worker_count = get_xdist_worker_count()  # 1 without xdist
+    """Inspect pytest-xdist worker environment helpers.
+
+    Returns ("gw0", 0, <count>) on worker gw0 under pytest-xdist,
+    or (None, None, 0) when running without pytest-xdist.
+    """
+    worker_id = get_xdist_worker_id()
+    worker_num = get_xdist_worker_num()
+    worker_count = get_xdist_worker_count()
+    assert worker_count >= 0
+    assert (worker_id is None) == (worker_num is None)
 ```
 
 Use helpers only for test data or resources the package does not isolate

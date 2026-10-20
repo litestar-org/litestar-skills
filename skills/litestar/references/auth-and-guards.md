@@ -156,7 +156,7 @@ auth_middleware = DefineMiddleware(
 app = Litestar(route_handlers=[], middleware=[auth_middleware])
 ```
 
-`AbstractAuthenticationMiddleware.__init__` signature and defaults in Litestar 2.24:
+`AbstractAuthenticationMiddleware.__init__` signature and defaults in Litestar 2.25:
 
 - `app: ASGIApp`
 - `exclude: str | list[str] | None = None` — regex path patterns to bypass authentication.
@@ -200,6 +200,7 @@ from uuid import UUID
 
 from litestar import Litestar, Request, Response, get, post
 from litestar.connection import ASGIConnection
+from litestar.params import JSONBody
 from litestar.security.jwt import JWTAuth, JWTCookieAuth, Token
 import msgspec
 
@@ -261,7 +262,7 @@ jwt_cookie_auth = JWTCookieAuth[User, Token](
 
 
 @post("/login", exclude_from_auth=True)
-async def login(data: dict[str, str]) -> Response[User]:
+async def login(data: JSONBody[dict[str, str]]) -> Response[User]:
     user = User(id=UUID(int=1), email=data["email"], roles=["member"])
     return jwt_auth.login(
         identifier=str(user.id),
@@ -284,7 +285,7 @@ app = Litestar(
 )
 ```
 
-Key `JWTAuth` / `JWTCookieAuth` options in Litestar 2.24:
+Key `JWTAuth` / `JWTCookieAuth` options in Litestar 2.25:
 
 - `revoked_token_handler: Callable[[Any, ASGIConnection], SyncOrAsyncUnion[bool]] | None = None` — invoked after decoding and before `retrieve_user_handler`; returning `True` raises `NotAuthorizedException("Token has been revoked")`.
 - `accepted_audiences: Sequence[str] | None = None`, `accepted_issuers: Sequence[str] | None = None`, `require_claims: Sequence[str] | None = None`.
@@ -337,6 +338,7 @@ from litestar import Litestar, Request, post
 from litestar.connection import ASGIConnection
 from litestar.middleware.session.client_side import CookieBackendConfig
 from litestar.middleware.session.server_side import ServerSideSessionConfig
+from litestar.params import JSONBody
 from litestar.security.session_auth import SessionAuth
 from litestar.stores.memory import MemoryStore
 
@@ -378,7 +380,7 @@ session_auth = SessionAuth[User, ServerSideSessionConfig](
 
 
 @post("/session/login", exclude_from_auth=True)
-async def session_login(request: Request[Any, Any, Any], data: dict[str, str]) -> dict[str, str]:
+async def session_login(request: Request[Any, Any, Any], data: JSONBody[dict[str, str]]) -> dict[str, str]:
     request.set_session({"user_id": data["user_id"]})
     return {"status": "logged_in"}
 
@@ -552,11 +554,11 @@ class GlobalStreamController(Controller):
 - RealtimeEvent contract and publisher: [channels-and-sse.md](channels-and-sse.md)
 - Exception hierarchy and RFC 9457 Problem Details: [exceptions.md](exceptions.md)
 
-## Audited Source (Litestar 2.24.0)
+## Audited Source (Litestar 2.25.0)
 
-- [`litestar/connection/base.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/connection/base.py)
-- [`litestar/handlers/base.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/handlers/base.py)
-- [`litestar/middleware/authentication.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/middleware/authentication.py)
-- [`litestar/security/jwt/auth.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/security/jwt/auth.py)
-- [`litestar/security/jwt/token.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/security/jwt/token.py)
-- [`litestar/security/session_auth/auth.py`](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/security/session_auth/auth.py)
+- [`litestar/connection/base.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/connection/base.py)
+- [`litestar/handlers/base.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/handlers/base.py)
+- [`litestar/middleware/authentication.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/middleware/authentication.py)
+- [`litestar/security/jwt/auth.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/security/jwt/auth.py)
+- [`litestar/security/jwt/token.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/security/jwt/token.py)
+- [`litestar/security/session_auth/auth.py`](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/security/session_auth/auth.py)

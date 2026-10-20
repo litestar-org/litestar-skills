@@ -1,12 +1,66 @@
 # Terminal-Aware SSE Streaming, Context Caching, Compaction & Background Queues
 
-Use this reference when implementing SSE streaming controllers, transcript reconstruction, static-prefix context caching, rolling conversation compaction, `litestar-queues` background jobs, and OpenTelemetry tracing.
+Use this reference when implementing SSE streaming controllers (`AgentChatController` or custom `AgentStreamService.adapt()`), client-side SSE consumption (`iter_agent_stream`), transcript reconstruction, static-prefix context caching, rolling conversation compaction, `litestar-queues` background jobs, and OpenTelemetry tracing.
 
 ---
 
-## 1. Terminal-Aware `StreamService.adapt()` with Keep-Alive Pings
+## 1. First-Party `AgentChatController`, `AgentStreamFrame` & `iter_agent_stream` (`litestar_mcp.agent`)
 
-Long-running tool calls, multi-step workflows, and thinking models can pause for several seconds between chunks. Wrap the underlying event iterator in a producer task with `asyncio.wait_for(..., timeout=ping_interval)` so the HTTP SSE stream:
+When using `litestar_mcp.agent`, mount `AgentChatController` (or a subclass overriding `path`, `guards`, and `ping_interval`) and register an `AgentRuntime` under the `"runtime"` dependency key:
+
+- **`POST /agent/chat`**: streams `AgentStreamFrame` SSE events (`"session"`, `"delta"`, `"thought"`, `"tool_call"`, `"tool_result"`, `"transfer"`, `"complete"`, `"error"`) and automatically emits `: ping` SSE keep-alive comments every `ping_interval` seconds while idle.
+- **`POST /agent/turns`**: executes a non-streaming turn and returns a typed `TurnResult` (`session_id`, `turn_id`, `agent`, `content`, `token_usage`).
+- **`GET /agent/sessions/{session_id:str}`**: returns `SessionHistory` scoped to the caller's resolved owner ID (`request.user` or `ANONYMOUS_OWNER`).
+- **`iter_agent_stream(response)`**: decodes a streaming `httpx2.Response` via `httpx2.EventSource` directly into typed `AgentStreamFrame` structs.
+
+```python
+from collections.abc import AsyncIterator
+
+import httpx2
+from litestar import Litestar
+from litestar.di import Provide
+from litestar_mcp.agent import (
+    AgentChatController,
+    AgentRuntime,
+    AgentStreamFrame,
+    iter_agent_stream,
+)
+
+
+class WorkspaceAgentChatController(AgentChatController):
+    """Scoped agent chat controller with a 10-second SSE keep-alive heartbeat."""
+
+    path = "/api/v1/agent"
+    ping_interval = 10.0
+
+
+def create_agent_chat_app(runtime: AgentRuntime) -> Litestar:
+    """Mount WorkspaceAgentChatController with the 'runtime' dependency provider."""
+    return Litestar(
+        route_handlers=[WorkspaceAgentChatController],
+        dependencies={"runtime": Provide(lambda: runtime, sync_to_thread=False)},
+    )
+
+
+async def consume_agent_sse(
+    client: httpx2.AsyncClient,
+    *,
+    message: str,
+    session_id: str | None = None,
+) -> AsyncIterator[AgentStreamFrame]:
+    """Stream typed AgentStreamFrame events from POST /api/v1/agent/chat using httpx2."""
+    payload = {"message": message, "session_id": session_id}
+    async with client.stream("POST", "/api/v1/agent/chat", json=payload) as response:
+        response.raise_for_status()
+        async for frame in iter_agent_stream(response):
+            yield frame
+```
+
+---
+
+## 2. Custom Terminal-Aware `StreamService.adapt()` with Keep-Alive Pings
+
+When using Google ADK (`runner.run_async`) or a custom `google-genai` loop without `litestar_mcp.agent`, wrap the underlying event iterator in a producer task with `asyncio.wait_for(..., timeout=ping_interval)` so the HTTP SSE stream:
 
 1. Emits `session` immediately with `session_id` and `compacted_through_seq`.
 2. Emits `ping` frames when idle so reverse proxies and browsers do not drop the connection.
@@ -185,7 +239,7 @@ class AgentStreamService:
 
 ---
 
-## 2. Session History CRUD & `TranscriptReconstructor`
+## 3. Session History CRUD & `TranscriptReconstructor`
 
 Expose dedicated session endpoints (`GET /sessions`, `GET /sessions/{session_id}`, `DELETE /sessions/{session_id}`) alongside `POST /chat` so clients can list conversations, restore full transcripts with correlated tool call previews on page reload, and delete sessions.
 
@@ -296,7 +350,7 @@ class AgentSessionController(Controller):
 
 ---
 
-## 3. Static-Prefix Context Caching (`CacheRegistry`)
+## 4. Static-Prefix Context Caching (`CacheRegistry`)
 
 When using a native `google-genai` runtime, cache the immutable prefix `(model, backend_scope, static_instruction, sorted_tool_declarations)`:
 
@@ -345,7 +399,7 @@ def compute_static_prefix_digest(
 
 ---
 
-## 4. Safe-Cut Conversation Compaction & `litestar-queues` Background Tasks
+## 5. Safe-Cut Conversation Compaction & `litestar-queues` Background Tasks
 
 Never block an HTTP SSE response to run conversation summarization or vector embedding generation. Instead:
 
@@ -448,7 +502,7 @@ async def schedule_post_turn_compaction(
 
 ---
 
-## 5. OpenTelemetry Observability Spans
+## 6. OpenTelemetry Observability Spans
 
 Instrument every layer of the agent loop with structured OpenTelemetry spans so latency bottlenecks, cache hit rates, specialist delegations, and tool failures are visible in distributed traces:
 

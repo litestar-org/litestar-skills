@@ -1,18 +1,18 @@
 ---
 name: litestar-ai
-description: Auto-activate for Google ADK, LlmAgent, Runner, SQLSpecSessionService, google-genai, AgentRuntime, SpecTree, DynamicWorkflow, FunctionTool, or SSE agent chats. Not for offline ML training.
+description: Auto-activate for Google ADK, LlmAgent, Runner, SQLSpecSessionService, google-genai, AgentRuntime, AgentGroup, SpecTree, DynamicWorkflow, FunctionTool, or SSE agent chats. Not for offline ML training.
 ---
 
 # Litestar AI & Custom Agent Engineering
 
-Build production AI agents, multi-agent specialist hierarchies, multi-step workflows, and structured LLM services in Litestar using either **Google ADK (`google-adk` + `sqlspec.extensions.adk`)** or a **native `google-genai` + `msgspec` agent runtime**.
+Build production AI agents, multi-agent specialist hierarchies, multi-step workflows, and structured LLM services in Litestar using **Google ADK (`google-adk` + `sqlspec.extensions.adk`)**, **first-party `litestar_mcp.agent` (`litestar-mcp`)**, or a **custom `google-genai` + `msgspec` agent runtime**.
 
 ## Code Style Rules
 
 - **PEP 604 unions only**: `T | None`, never `Optional[T]`. Use built-in `list` and `dict` generics.
 - **Async all I/O**: every model call, tool execution, session read/write, memory search, and cache lookup must be `async`.
 - **`msgspec.Struct` wire contracts**: define request, response, SSE event, and runtime state payloads as `msgspec.Struct` (unless the project already standardizes on Pydantic).
-- **Short-lived database transactions**: never hold open database connections across LLM generation turns; bind request-scoped services via an invocation-scoped `RunContextRegistry` token and acquire DB sessions inside individual tool calls or persistence steps.
+- **Short-lived database transactions**: never hold open database connections across LLM generation turns; bind request-scoped services via an invocation-scoped `RunContextRegistry` token or `ToolContext` and acquire DB sessions inside individual tool calls or persistence steps.
 - **Google-style docstrings**: document every agent factory, tool function, runtime service, and controller handler. Tool docstrings and parameter types define the model-visible tool schema.
 
 ## Quick Reference
@@ -21,10 +21,11 @@ Build production AI agents, multi-agent specialist hierarchies, multi-step workf
 
 | Pattern | Primary Signals | Best For |
 | --- | --- | --- |
-| **Google ADK + SQLSpec** (`google.adk` + `sqlspec.extensions.adk`) | `LlmAgent`, `App`, `Runner`, `SQLSpecSessionService`, `SQLSpecMemoryService`, `FunctionTool`, `SkillToolset` | Multi-turn conversational agents using ADK's built-in `sub_agents` delegation, `ContextCacheConfig`, `EventsCompactionConfig`, and `BasePlugin` callbacks backed by SQLSpec stores |
-| **Native `google-genai` + `msgspec` Runtime** (`google.genai` + `msgspec` + `sqlspec`) | `AgentRuntime`, `AgentSpec`, `SpecTree`, `DynamicWorkflow`, `WorkflowEngine`, `declare`, `CacheRegistry`, `CompactionPolicy` | Explicit control over DAG workflows (`WorkflowNode`), parallel tool execution (`asyncio.gather`) with live SSE events, optimistic session locking (`expected_version`), and custom prompt slot fencing |
+| **Google ADK + SQLSpec** (`google.adk` + `sqlspec.extensions.adk`) | `LlmAgent`, `App`, `Runner`, `SQLSpecSessionService`, `SQLSpecMemoryService`, `SQLSpecArtifactService`, `FunctionTool`, `SkillToolset` | Multi-turn conversational agents using ADK's built-in `sub_agents` delegation, `ContextCacheConfig`, `EventsCompactionConfig`, and `BasePlugin` callbacks backed by SQLSpec stores (`AsyncpgADKStore`, `SpannerAsyncADKStore`, etc.) |
+| **First-Party `litestar_mcp.agent` Runtime** (`litestar_mcp.agent`) | `Agent`, `AgentGroup`, `AgentRuntime`, `GoogleGenAIClient`, `TurnBudget`, `TurnRequest`, `TurnResponse`, `AgentChatController`, `AgentStreamFrame`, `iter_agent_stream`, `DynamicWorkflow`, `WorkflowNode`, `WorkflowEngine`, `agent_to_mcp`, `agent_to_a2a` | Turn-key Litestar agent serving with `@tool` / `SkillController` universal DI (`Provide`, `FromDishka`, `ToolContext`), coordinator + specialist `AgentGroup` delegation, `GoogleGenAIClient(model="gemini-3.8-flash")` streaming over `httpx2`, in-process `DynamicWorkflow` DAGs, and MCP/A2A bridges |
+| **Custom `google-genai` + `msgspec` Runtime** (`google.genai` + `msgspec` + `sqlspec`) | `AgentSpec`, `SpecTree`, `declare`, `CacheRegistry`, `CompactionPolicy`, `BaseSpecialistNode` | Custom domain runtimes requiring direct `JSONB` event-log persistence with optimistic session locking (`expected_version`), monotonic `seq` assignment, static-prefix `CacheRegistry`, and custom prompt slot fencing |
 | **Structured-Output Domain Service** (`google.genai` + `GenerateContentConfig`) | `response_mime_type="application/json"`, `response_schema`, `embed_content`, `tenacity.retry` | Single-shot or batch classification, entity extraction, and embedding pipelines without multi-turn conversation state |
-| **MCP Server Surface** (`litestar-mcp`) | `LitestarMCP`, `MCPConfig`, `mcp_tool=`, `mcp_resource=` | Exposing Litestar route handlers or domain services to external MCP clients (use `litestar-mcp`) |
+| **MCP & A2A Server Surface** (`litestar-mcp`) | `LitestarMCP`, `MCPConfig`, `LitestarA2A`, `A2AConfig`, `mcp_tool=`, `mcp_resource=`, `agent_to_mcp`, `agent_to_a2a` | Exposing Litestar route handlers, `SkillController` classes, or `Agent` / `AgentGroup` instances to external MCP and A2A 1.0 clients (use `litestar-mcp`) |
 
 ### Session State Scope Prefixes
 
@@ -42,8 +43,8 @@ Build production AI agents, multi-agent specialist hierarchies, multi-step workf
 | `session` | `{"session_id": "...", "compacted_through_seq": 12}` | Emitted first so the client can bind the active session ID |
 | `tool_call` | `{"id": "...", "name": "...", "author": "...", "args": {...}}` | Model requested a tool invocation |
 | `tool_start` | `{"id": "...", "name": "...", "author": "...", "args": {...}}` | Parallel tool runner or workflow node started execution |
-| `tool_end` | `{"id": "...", "name": "...", "author": "...", "status": "completed" \| "error", "result_preview": "..."}` | Tool finished with bounded JSON preview |
-| `delta` | `{"text": "..."}` | Incremental assistant Markdown text chunk (thoughts excluded) |
+| `tool_end` / `tool_result` | `{"id": "...", "name": "...", "author": "...", "status": "completed" \| "error", "result_preview": "..."}` | Tool finished with bounded JSON preview (or `AgentStreamFrame` `tool_result` in `litestar_mcp.agent`) |
+| `delta` | `{"text": "..."}` | Incremental assistant Markdown text chunk (thoughts excluded; emitted separately as `thought` in `litestar_mcp.agent`) |
 | `ping` | `{}` | Keep-alive frame emitted on idle intervals before terminal frame |
 | `complete` | `{"prompt_tokens": ..., "output_tokens": ..., "total_tokens": ..., "cached_tokens": ..., "finish_reason": "STOP"}` | Terminal success frame with aggregated turn token usage |
 | `error` | `{"code": "...", "message": "..."}` | Terminal error frame (`session_turn_limit`, `llm_calls_exhausted`, `session_conflict`, `stream_error`) |
@@ -54,25 +55,26 @@ Build production AI agents, multi-agent specialist hierarchies, multi-step workf
 
 1. Inspect `pyproject.toml` and existing agent modules.
 2. If `google-adk` is installed or `LlmAgent` / `Runner` is present, follow the **Google ADK + SQLSpec** pattern in [adk-and-serving.md](references/adk-and-serving.md).
-3. If `google-genai` is used directly with `msgspec.Struct` events, `SpecTree`, or `DynamicWorkflow`, follow the **Native `google-genai` Runtime** pattern in [custom-agents-and-tools.md](references/custom-agents-and-tools.md).
+3. If `litestar_mcp.agent` (`Agent`, `AgentGroup`, `AgentRuntime`, `GoogleGenAIClient`, `AgentChatController`, `DynamicWorkflow`) or a custom `google-genai` + `msgspec` loop (`AgentSpec`, `SpecTree`) is used, follow [custom-agents-and-tools.md](references/custom-agents-and-tools.md).
 4. If the task is non-conversational classification, extraction, or embedding, implement a **Structured-Output Domain Service** with `response_mime_type="application/json"` and `tenacity` backoff on HTTP 429.
 
 ### 2. Design Agent Hierarchies & Prompt Isolation
 
 1. **Coordinator + Specialist Tree**:
    - In Google ADK, compose `LlmAgent(name="coordinator", sub_agents=[...], static_instruction=..., instruction=_dynamic_instruction)`.
-   - In the native runtime, build a `SpecTree(root=coordinator, specialists={...}, declarations={...})` which automatically injects an enum-constrained `transfer_to_agent` tool into every agent in the tree.
+   - In `litestar_mcp.agent`, compose `AgentGroup(coordinator=coordinator, specialists=[...])`, which automatically attaches an enum-constrained `transfer_to_agent` tool to the coordinator.
+   - In a custom `google-genai` runtime, build a `SpecTree(root=coordinator, specialists={...})` which automatically injects an enum-constrained `transfer_to_agent` tool into every agent in the tree.
 2. **Static vs Dynamic Instructions**:
-   - Keep `static_instruction` strictly immutable across turns and tenants so Vertex AI / Gemini context caching (`ContextCacheConfig` or `CacheRegistry`) produces stable SHA-256 digests.
-   - Inject per-request context (tenant metadata, active engine/environment summary) via `temp:dynamic_instruction` in turn state and read it through a callable `instruction` / `dynamic_instruction` hook.
+   - Keep `static_instruction` (or `Agent.instructions`) strictly immutable across turns and tenants so Vertex AI / Gemini context caching (`ContextCacheConfig` or `CacheRegistry`) produces stable SHA-256 digests.
+   - Inject per-request context (tenant metadata, active engine/environment summary) via `temp:dynamic_instruction` in ADK turn state (read through a callable `instruction` hook) or `TurnRequest(dynamic_context=...)` in `litestar_mcp.agent`.
 3. **Prompt-Injection Fencing**:
    - Wrap dynamic state, skill indices, and preloaded memory in explicit `<<<BEGIN_SYSTEM_INSTRUCTION>>> ... <<<END_SYSTEM_INSTRUCTION>>>` fences with a directive to treat the enclosed block as read-only reference data.
 
 ### 3. Engineer Tools & Request-Scoped DI Binding
 
 1. **Bind Request-Scoped Services Safely**:
-   - Register tools once at application startup (`Scope.APP`), but resolve request-scoped domain services (`Scope.REQUEST`) per turn through a `RunContextRegistry`.
-   - At turn start, call `token = run_contexts.bind(tool_context)` and pass `temp:run_context_token: token` in the turn's `state_delta`; always call `run_contexts.release(token)` inside a `finally:` block when the stream closes.
+   - In Google ADK, register tools once at application startup (`Scope.APP`), but resolve request-scoped domain services (`Scope.REQUEST`) per turn through a `RunContextRegistry`. At turn start, call `token = run_contexts.bind(tool_context)` and pass `temp:run_context_token: token` in `state_delta`; always call `run_contexts.release(token)` inside a `finally:` block when the stream closes.
+   - In `litestar_mcp.agent`, decorate functions or `SkillController` methods with `@tool` (`from litestar_mcp import SkillController, Tool, tool`); `Tool.execute` resolves `ToolContext`, Litestar `Provide` / `Dependency`, and Dishka `FromDishka[T]` per invocation via `ToolContext.from_connection(request)`.
 2. **Normalize Outputs & Contain Recoverable Errors**:
    - Convert all tool return values into JSON-safe builtins (`msgspec.to_builtins` or a recursive `json_safe` helper) before persisting to `JSONB` event columns.
    - Catch expected domain errors inside tool wrappers and return `{"error": {"code": "...", "message": "..."}}` so the model can self-correct or narrow its query instead of crashing the turn.
@@ -80,28 +82,30 @@ Build production AI agents, multi-agent specialist hierarchies, multi-step workf
 ### 4. Wire Persistence, Context Caching & Compaction
 
 1. **Persistence**:
-   - For Google ADK, wire `SQLSpecSessionService`, `SQLSpecMemoryService`, and optionally `SQLSpecArtifactService` from `sqlspec.extensions.adk`.
-   - For the native runtime, wire `SessionStore` (with `version = version + 1 WHERE id = :id AND version = :expected` optimistic locking), `EventStore` (monotonic `seq` assignment under `SELECT last_seq ... FOR UPDATE`), and `MemoryStore` (parallel `app` + `user` hybrid FTS/vector search).
+   - For Google ADK, wire `SQLSpecSessionService`, `SQLSpecMemoryService`, and optionally `SQLSpecArtifactService` from `sqlspec.extensions.adk` (backed by `AsyncpgADKStore` / `AsyncpgADKMemoryStore`, `SpannerAsyncADKStore` / `SpannerAsyncADKMemoryStore` / `SpannerAsyncADKArtifactStore`, or another SQLSpec adapter store).
+   - For `litestar_mcp.agent`, configure `AgentRuntime(..., sessions=LitestarStoreSessionStore(store))` or `MemorySessionStore()`, and optionally supply a `compaction_hook`.
+   - For custom `google-genai` runtimes, wire `SessionStore` (with `version = version + 1 WHERE id = :id AND version = :expected` optimistic locking), `EventStore` (monotonic `seq` assignment under `SELECT last_seq ... FOR UPDATE`), and `MemoryStore` (parallel `app` + `user` hybrid FTS/vector search).
 2. **Context Caching & Compaction**:
-   - Enable `ContextCacheConfig` / `EventsCompactionConfig` in ADK `App(...)`, or wire `CacheRegistry` + `CompactionPolicy` + `Summarizer` in the native runtime.
+   - Enable `ContextCacheConfig` / `EventsCompactionConfig` in ADK `App(...)`, or wire `CacheRegistry` + `CompactionPolicy` + `Summarizer` in a custom runtime.
    - Offload post-turn conversation compaction and vector embedding backfills to `litestar-queues` or `litestar-saq` background tasks so HTTP SSE streams never block on summarization.
 
 ### 5. Expose Terminal-Aware Streaming & Session Endpoints
 
-1. Adapt internal runtime events through a `StreamService` that yields an initial `session` event, deduplicated `tool_call` / `tool_end` events, thought-filtered `delta` chunks, idle `ping` frames, and exactly one terminal `complete` or `error` event.
-2. Wrap the SSE generator in `try ... finally: await close_async_iterator(events)` so client disconnects deterministically release `RunContextRegistry` tokens and background producer tasks.
+1. Mount `AgentChatController` from `litestar_mcp.agent` (`/agent/chat`, `/agent/turns`, `/agent/sessions/{session_id:str}`) or adapt runtime events through a `StreamService` that yields an initial `session` event, deduplicated `tool_call` / `tool_end` events, thought-filtered `delta` chunks, idle `ping` frames, and exactly one terminal `complete` or `error` event.
+2. Wrap custom SSE generators in `try ... finally: await close_async_iterator(events)` so client disconnects deterministically release `RunContextRegistry` tokens and background producer tasks.
 
 </workflow>
 
 <guardrails>
 
 - **Never hold database connections across LLM awaits** — model generation takes seconds; holding a pooled connection across `generate_content` or `runner.run_async` exhausts the connection pool under concurrency.
-- **Never instantiate `google.genai.Client` or `Runner` per request** — construct `ModelClient`, `RunContextRegistry`, `CacheRegistry`, and bounded `ApplicationFactory` caches at `Scope.APP`.
-- **Never interpolate per-tenant or per-turn strings into `static_instruction`** — dynamic strings bust the static-prefix context cache on every turn; pass dynamic context via `temp:` state instead.
-- **Never leak raw model `thought` parts or `thought_signature` bytes into user-visible `delta` frames** — filter out `part.thought is True` when extracting assistant text deltas while preserving `thought_signature` on persisted history turns for Gemini 2.5/3 thinking continuity.
+- **Never instantiate `google.genai.Client` or `Runner` per request** — construct `GoogleGenAIClient`, `ModelClient`, `RunContextRegistry`, `CacheRegistry`, and bounded `ApplicationFactory` caches at `Scope.APP`.
+- **Always use `AgentGroup` in `litestar_mcp.agent`** — group specialist agents under a coordinator via `AgentGroup(coordinator=..., specialists=[...])` from `litestar_mcp.agent`.
+- **Never interpolate per-tenant or per-turn strings into `static_instruction`** — dynamic strings bust the static-prefix context cache on every turn; pass dynamic context via `temp:` state or `TurnRequest(dynamic_context=...)` instead.
+- **Never leak raw model `thought` parts or `thought_signature` bytes into user-visible `delta` frames** — filter out `part.thought is True` when extracting assistant text deltas while preserving `thought_signature` on persisted history turns for Gemini 3 thinking continuity.
 - **Never inject unsanitized memory hits into prompts** — strip control characters, HTML-escape text, sanitize author labels, and cap preloaded memory size before inserting `<APPLICATION_MEMORY>` or `<PAST_CONVERSATIONS>` blocks.
 - **Never split a `FunctionCall` from its matching `FunctionResponse` during compaction** — always cut history at a turn boundary where all open function call IDs have been answered (`find_safe_cut`).
-- **Never allow unbounded tool or model loops** — enforce `max_turns_per_session`, `max_message_chars`, `max_tool_calls_per_turn`, and `max_model_calls_per_turn` via ADK `BasePlugin` callbacks or native `GuardHooks`.
+- **Never allow unbounded tool or model loops** — enforce `max_turns_per_session`, `max_message_chars`, `max_tool_calls_per_turn`, and `max_model_calls_per_turn` via ADK `BasePlugin` callbacks, `TurnBudget` in `litestar_mcp.agent`, or custom `GuardHooks`.
 
 </guardrails>
 
@@ -388,7 +392,7 @@ class AgentChatController(Controller):
 sql_runtime = SQLSpec()
 db_config = AsyncpgConfig(
     connection_config=AsyncpgPoolConfig(dsn="postgresql://app:app@localhost:5432/app"),
-    extension_config={"adk": {"session_table": "adk_sessions", "events_table": "adk_events"}},
+    extension_config={"adk": {"session_table": "adk_session", "events_table": "adk_event"}},
 )
 sql_runtime.add_config(db_config)
 
@@ -398,7 +402,7 @@ memory_store = SQLSpecMemoryService(AsyncpgADKMemoryStore(db_config))
 
 specialist_agent = LlmAgent(
     name="metrics_specialist",
-    model="gemini-2.5-flash",
+    model="gemini-3.8-flash",
     description="Analyzes workload health and capacity metrics.",
     static_instruction="You are the metrics specialist. Answer using workspace telemetry tools.",
     instruction=_dynamic_instruction,
@@ -407,7 +411,7 @@ specialist_agent = LlmAgent(
 
 coordinator_agent = LlmAgent(
     name="workspace_coordinator",
-    model="gemini-2.5-flash",
+    model="gemini-3.8-flash",
     description="Coordinates workspace analysis and delegates to specialists.",
     static_instruction="You coordinate workspace diagnostics and delegate metrics questions.",
     instruction=_dynamic_instruction,
@@ -448,9 +452,9 @@ app = Litestar(
 
 ## References Index
 
-- **[adk-and-serving.md](references/adk-and-serving.md)** — Google ADK `LlmAgent` + `App` + `Runner` architecture, bounded LRU `AgentApplicationFactory`, `SQLSpecSessionService` / `SQLSpecMemoryService` / `SQLSpecArtifactService` store wiring, `RunContextRegistry` + `JSONSafeTool`, sanitized `PreloadMemoryTool`, `BasePlugin` guardrails, Dishka & native DI wiring, and `prune_sessions` / `prune_memory` retention pruning.
-- **[custom-agents-and-tools.md](references/custom-agents-and-tools.md)** — Native `google-genai` + `msgspec` agent runtime (`AgentRuntime`, `AgentSpec`, `SpecTree` with `transfer_to_agent`), `GeminiModelClient` turn normalization, `declare()` + `msgspec.json.schema` to Gemini schema translation, `execute_parallel` tool runner, multi-step `DynamicWorkflow` / `WorkflowEngine` / `BaseSpecialistNode`, and standalone structured-output LLM classifiers.
-- **[streaming-and-queues.md](references/streaming-and-queues.md)** — Terminal-aware SSE `StreamService.adapt()`, `TranscriptReconstructor` session history endpoints, static-prefix `CacheRegistry`, rolling `CompactionPolicy` + `Summarizer` with `find_safe_cut`, `litestar-queues` background compaction and embedding jobs, and OpenTelemetry tracing spans.
+- **[adk-and-serving.md](references/adk-and-serving.md)** — Google ADK `LlmAgent` + `App` + `Runner` architecture, bounded LRU `AgentApplicationFactory`, `SQLSpecSessionService` / `SQLSpecMemoryService` / `SQLSpecArtifactService` store wiring (`AsyncpgADKStore`, `SpannerAsyncADKStore`, `SpannerAsyncADKMemoryStore`, `SpannerAsyncADKArtifactStore`), `RunContextRegistry` + `JSONSafeTool`, sanitized `PreloadMemoryTool`, `BasePlugin` guardrails, Dishka & native DI wiring, and `prune_sessions` / `prune_events` / `prune_memory` / `prune_user_state` / `prune_artifacts` retention pruning.
+- **[custom-agents-and-tools.md](references/custom-agents-and-tools.md)** — First-party `litestar_mcp.agent` runtime (`Agent`, `AgentGroup`, `AgentRuntime`, `GoogleGenAIClient`, `TurnBudget`, `AgentChatController`, `DynamicWorkflow`, `WorkflowEngine`, `agent_to_mcp`, `agent_to_a2a`), custom `google-genai` + `msgspec` agent runtime (`AgentSpec`, `SpecTree` with `transfer_to_agent`), `declare()` + `msgspec.json.schema` to Gemini schema translation, `execute_parallel` tool runner, `BaseSpecialistNode`, and standalone structured-output LLM classifiers.
+- **[streaming-and-queues.md](references/streaming-and-queues.md)** — Terminal-aware SSE `StreamService.adapt()` and `litestar_mcp.agent` `AgentStreamFrame` / `iter_agent_stream`, `TranscriptReconstructor` session history endpoints, static-prefix `CacheRegistry`, rolling `CompactionPolicy` + `Summarizer` with `find_safe_cut`, `litestar-queues` background compaction and embedding jobs, and OpenTelemetry tracing spans.
 
 ## Official References
 

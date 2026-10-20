@@ -30,8 +30,9 @@ connect with the client already used by the project.
 pip install "pytest-databases[postgres]"
 ```
 
+In `conftest.py`:
+
 ```python
-# conftest.py
 pytest_plugins = ["pytest_databases.docker.postgres"]
 ```
 

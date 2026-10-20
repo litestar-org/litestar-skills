@@ -4,11 +4,11 @@ High-level bulk/upsert operations and session-event listeners that sit above the
 
 ## `advanced_alchemy.operations`
 
-Core exports (`__all__ = ("MergeStatement", "OnConflictUpsert", "validate_identifier")`). These are dialect-aware SQL building blocks — the repository and service layers (and the Litestar `store` / `session` backends) call them under the hood when you use `upsert()` / `upsert_many()` with `match_fields`.
+Core exports (`__all__ = ("MergeStatement", "OnConflictUpsert", "UpsertKind", "UpsertStrategy", "resolve_column_default", "resolve_upsert_strategy", "validate_identifier")`). These are dialect-aware SQL building blocks — the repository and service layers (and the Litestar `store` / `session` backends) call them under the hood when you use `upsert()` / `upsert_many()` with `match_fields`.
 
-### `OnConflictUpsert`
+### `OnConflictUpsert` (Single-Row and Bulk)
 
-Cross-dialect native upsert — dispatches to PostgreSQL / SQLite / DuckDB `ON CONFLICT DO UPDATE`, MySQL / MariaDB `ON DUPLICATE KEY UPDATE`, or CockroachDB `ON CONFLICT`.
+Cross-dialect native upsert — dispatches to PostgreSQL / SQLite / DuckDB / CockroachDB `ON CONFLICT DO UPDATE` or MySQL / MariaDB `ON DUPLICATE KEY UPDATE`.
 
 ```python
 from advanced_alchemy.operations import OnConflictUpsert
@@ -29,11 +29,30 @@ async def upsert_order(session: AsyncSession, order_table, values: dict) -> None
     await session.execute(stmt)
 ```
 
-`supports_native_upsert(dialect_name)` is the guard. Defaults to `False` for Oracle / SQL Server — fall back to `create_merge_upsert` there (see below).
+`supports_native_upsert(dialect_name)` returns `True` for `postgresql`, `sqlite`, `duckdb`, `cockroachdb`, `mysql`, and `mariadb`. It returns `False` for `oracle`, `mssql`, and `spanner+spanner` — use `create_merge_upsert` / `create_merge_many` or `create_insert_or_update_many` there.
 
-### `MergeStatement` + `create_merge_upsert`
+#### Bulk Upsert Primitives (`create_upsert_many`, `create_merge_many`, `create_insert_or_update_many`)
 
-For Oracle and PostgreSQL 15+ (when `ON CONFLICT` is not desired), `OnConflictUpsert.create_merge_upsert(...)` returns a `(MergeStatement, additional_params)` tuple. The `additional_params` dict carries generated values (such as Oracle UUID primary keys) that must be merged into the bind parameter dict before `session.execute`.
+Advanced Alchemy 1.12 adds native multi-row upsert statement builders used by `repository.upsert_many()`:
+
+- `OnConflictUpsert.create_upsert_many(table, rows, conflict_columns, update_columns=None, dialect_name=None, validate_identifiers=False, model_type=None) -> Insert`
+  - Builds a multi-row `INSERT ... ON CONFLICT (...) DO UPDATE` (PostgreSQL, SQLite, DuckDB, CockroachDB) or `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL, MariaDB).
+  - When `model_type` has an `updated_at` column that is not already in `update_columns` or `conflict_columns`, the `DO UPDATE` clause automatically sets `updated_at` to the current UTC timestamp.
+- `OnConflictUpsert.create_merge_many(table, rows, conflict_columns, update_columns=None, dialect_name=None, validate_identifiers=False) -> MergeStatement`
+  - Builds a multi-row `MERGE` statement for `oracle`, `postgresql` (15+), `cockroachdb`, and `mssql`.
+  - Automatically populates missing primary-key or `default` values per row via `resolve_column_default`.
+- `OnConflictUpsert.create_insert_or_update_many(table, rows) -> Insert`
+  - Builds a Google Cloud Spanner `INSERT OR UPDATE` statement (`dml_strategy="insert_or_update"`), which supports `THEN RETURN` via `.returning(model_type)` when matching on the table's primary key.
+
+### `MergeStatement` + `create_merge_upsert` / `create_merge_many`
+
+`MergeStatement` compiles dialect-specific `MERGE INTO ... USING ... WHEN MATCHED THEN UPDATE ... WHEN NOT MATCHED THEN INSERT ...` SQL for:
+
+- **Oracle** (`"oracle"`): `SELECT ... FROM DUAL` for single-row merges, or `UNION ALL` subqueries across `FROM DUAL` for multi-row `create_merge_many`.
+- **PostgreSQL 15+ / CockroachDB** (`"postgresql"`): `USING (VALUES (...)) AS src(...)`.
+- **SQL Server** (`"mssql"`): `USING (VALUES (...)) AS src(...)` terminated with the T-SQL mandatory trailing semicolon (`;`).
+
+For single-row merges, `OnConflictUpsert.create_merge_upsert(...)` returns a `(MergeStatement, additional_params)` tuple. The `additional_params` dict carries generated values (such as UUID primary keys) that must be merged into the bind parameter dict before `session.execute`:
 
 ```python
 from advanced_alchemy.operations import OnConflictUpsert
@@ -48,9 +67,20 @@ merge_stmt, extra_params = OnConflictUpsert.create_merge_upsert(
 await session.execute(merge_stmt, {**extra_params, "external_id": "ord-42", "status": "paid", "total": 99})
 ```
 
+### `resolve_upsert_strategy`, `UpsertStrategy`, and `resolve_column_default`
+
+`resolve_upsert_strategy(table, match_fields, dialect) -> UpsertStrategy` inspects the table's primary key, `UniqueConstraint`s, and `Index(unique=True)` definitions against the active SQLAlchemy `Dialect` to select a cached `UpsertStrategy(kind, supports_returning, conflict_columns, dialect_name)` where `kind: UpsertKind = Literal["on_conflict", "merge", "insert_or_update", "fallback"]`:
+
+- **`"on_conflict"`**: `postgresql`, `cockroachdb`, `sqlite`, `duckdb` (with `supports_returning=True` when the dialect supports `insert_executemany_returning`), and `mysql` / `mariadb` (`supports_returning=False`, and only when the table has a single unambiguous unique key matching `match_fields`).
+- **`"merge"`**: `oracle` and `mssql` (`supports_returning=False`).
+- **`"insert_or_update"`**: `spanner` / `spanner+spanner` (`supports_returning=True`, only when `match_fields` matches the primary key; non-PK unique columns resolve to `"fallback"`).
+- **`"fallback"`**: Returned when `match_fields` does not match a provable non-partial, non-expression unique constraint/PK on the target dialect, or when MySQL/MariaDB has multiple unique keys where `ON DUPLICATE KEY UPDATE` could match an unintended constraint.
+
+`resolve_column_default(arg)` evaluates a SQLAlchemy `ColumnDefault.arg` (returning `arg(None)` or `arg()` for callables, or the literal value otherwise).
+
 ### `validate_identifier`
 
-Guardrail for dynamically-built identifiers — accepts only `[a-zA-Z_][a-zA-Z0-9_]*`. Pass `validate_identifiers=True` to `create_upsert` / `create_merge_upsert` when any identifier comes from config (never from user input, even validated).
+Guardrail for dynamically-built identifiers — accepts only `[a-zA-Z_][a-zA-Z0-9_]*`. Pass `validate_identifiers=True` to `create_upsert`, `create_upsert_many`, `create_merge_upsert`, or `create_merge_many` when any identifier comes from config (never from user input, even validated).
 
 ## Session listeners (`advanced_alchemy._listeners`)
 

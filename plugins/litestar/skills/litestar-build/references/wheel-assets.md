@@ -153,20 +153,20 @@ export default defineConfig({
 
 `outDir` is an absolute path into `src/py/app/server/static/web/`. Because `src/py/app` is the Hatchling package, anything under `static/web/` ships.
 
-For `litestar-fullstack-inertia`, `litestar-vite` v0.30+ makes Python `ViteConfig(paths=PathConfig(bundle_dir=...))` the single source of truth. When `litestar assets build` runs, `litestar-vite` writes `.litestar.json` so `litestar({ input: [...] })` in `vite.config.ts` inherits `bundleDir` and `hotFile` automatically:
+For `litestar-fullstack-inertia`, `litestar-vite` v0.30+ makes Python `ViteConfig(paths=PathConfig(bundle_dir=...))` the single source of truth. When `litestar assets build` runs, `litestar-vite` writes `.litestar.json` (`set_environment`), exports OpenAPI and route metadata, runs `TypeGenConfig` CLI codegen once (setting `LITESTAR_VITE_SKIP_BUILD_TYPEGEN=1` so the Vite plugin does not repeat codegen during `vite build`), installs `node_modules` if missing, and executes the Vite build so `litestar({ input: [...] })` in `vite.config.ts` inherits `bundleDir`, `hotFile`, and `assetUrl` automatically:
 
 ```python
 from pathlib import Path
 from litestar_vite.config import PathConfig, RuntimeConfig, ViteConfig
 
 
-def get_vite_config(self) -> ViteConfig:
+def get_vite_config(base_dir: Path, *, dev_mode: bool = False) -> ViteConfig:
     """Configure litestar-vite to emit compiled assets inside app/domain/web/public."""
     return ViteConfig(
-        dev_mode=self.DEV_MODE,
+        dev_mode=dev_mode,
         runtime=RuntimeConfig(executor="bun", trusted_proxies="*"),
         paths=PathConfig(
-            root=BASE_DIR.parent,
+            root=base_dir.parent,
             bundle_dir=Path("app/domain/web/public"),
             resource_dir=Path("resources"),
         ),
@@ -177,25 +177,38 @@ def get_vite_config(self) -> ViteConfig:
 
 ## Optional: Custom Hatchling `BuildHookInterface`
 
-If you want `uv build --wheel` to invoke `bun run build` automatically via a custom Hatchling build hook (`[tool.hatch.build.targets.wheel.hooks.custom]`), follow two mandatory guardrails:
+If you use a custom Hatchling build hook (`[tool.hatch.build.targets.wheel.hooks.custom]`) either to verify that compiled frontend assets exist in `bundle_dir` or to invoke `bun run build` automatically during `uv build --wheel`, follow two mandatory guardrails:
 
-1. **Short-circuit editable installs (`if version == "editable": return`)** — `uv sync` installs the project in editable mode (`version == "editable"`). Without this guard, `uv sync` fails in fresh checkouts or CI lint jobs before Node/Bun dependencies exist.
+1. **Degrade gracefully on editable installs (`if version == "editable":`)** — `uv sync` installs the project in editable mode (`version == "editable"`) *before* `uv run app assets build` can execute (because the `app` CLI entry point comes from the editable install itself). Raising `ValueError` when assets are missing — or running `bun run build` before JS dependencies exist — creates a circular dependency that breaks `uv sync` in fresh checkouts and CI lint/typecheck jobs. When `version == "editable"`, create the placeholder `bundle_dir`, print a warning to `sys.stderr` if assets are missing, and `return` early instead of raising `ValueError`.
 2. **Exclude the build-hook directory (`tools/build`) from `mypy` and `pyright`** — `hatchling` lives in `[build-system].requires`, not in project runtime/dev dependencies, so typecheckers will report `Cannot find implementation or library stub for module named "hatchling.builders.hooks.plugin.interface"` unless excluded.
 
 ```python
-import subprocess
+from pathlib import Path
+import sys
 from typing import Any
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
 
 class AssetBuildHook(BuildHookInterface):
-    """Build frontend assets during wheel/sdist builds while skipping editable installs."""
+    """Verify compiled frontend assets exist for release wheels while degrading gracefully on editable installs."""
 
     def initialize(self, version: str, build_data: dict[str, Any]) -> None:
-        """Skip editable installs so uv sync succeeds without building frontend assets."""
+        """Ensure bundle_dir exists; warn on editable installs or fail wheel builds when assets are missing."""
+        bundle_dir = Path(self.root) / "app" / "domain" / "web" / "public"
+        has_assets = bundle_dir.is_dir() and any(
+            path.name not in {".gitkeep", "hot", "hot.ssr"} for path in bundle_dir.iterdir()
+        )
         if version == "editable":
+            bundle_dir.mkdir(parents=True, exist_ok=True)
+            if not has_assets:
+                print(
+                    f"Warning: frontend assets not found in {bundle_dir}; continuing editable install.",
+                    file=sys.stderr,
+                )
             return
-        subprocess.run(["bun", "run", "build"], check=True)
+        if not has_assets:
+            msg = f"Compiled frontend assets missing in {bundle_dir}. Run `uv run app assets build` before `uv build`."
+            raise ValueError(msg)
 ```
 
 Wire the hook in `pyproject.toml` (`tools/build/hatch_build.py`) and exclude `tools/build` from `mypy` and `pyright`:
@@ -357,7 +370,9 @@ Or factor this into a composite action (see `github-ci.md`).
 # https://github.com/litestar-org/litestar-fullstack-inertia — .gitignore
 app/domain/web/public/*
 app/domain/web/public/hot
+app/domain/web/public/hot.ssr
 !app/domain/web/public/.gitkeep
+.litestar.json
 .vite
 resources/lib/generated/*
 !resources/lib/generated/page-props.user.ts

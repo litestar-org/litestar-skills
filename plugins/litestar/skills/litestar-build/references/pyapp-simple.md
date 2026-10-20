@@ -69,7 +69,7 @@ PYAPP_ALLOW_UPDATES = "1"
 | `PYAPP_ALLOW_UPDATES=1` | Enable the `self update` subcommand at runtime. |
 | `PYAPP_DISTRIBUTION_VARIANT_GIL` | Optional on Python 3.13+: set to `freethreaded` to select the free-threaded (no-GIL) distribution variant when using default PBS archives. |
 
-At runtime, the compiled PyApp wrapper sets `PYAPP=1` in the environment (or the binary's path when built with `PYAPP_PASS_LOCATION=1`), so application code can detect onefile execution via `bool(os.getenv("PYAPP"))`.
+At runtime, the compiled PyApp wrapper sets `PYAPP=1` in the environment (or the binary's path when built with `PYAPP_PASS_LOCATION=1`), so application code can detect onefile execution via `bool(os.getenv("PYAPP"))`. Users can also override the runtime extraction directory by exporting `PYAPP_INSTALL_DIR_<PROJECT_NAME>=/custom/path` (where `<PROJECT_NAME>` is the uppercased `PYAPP_PROJECT_NAME` with `-` replaced by `_`; keep it set when invoking `<binary> self remove` or `<binary> self restore`).
 
 ## Release pipeline (multi-platform)
 
@@ -118,13 +118,13 @@ Then a `publish` job collects all four and uploads to the GitHub release.
 
 ## Limitations of the simple flavor
 
-**Install location:** the user can't pick it. PyApp installs to `platform_dirs().data_local_dir()`, which is OS-specific:
+**Default install location:** By default, PyApp extracts into `platform_dirs().data_local_dir().join(project_name()).join(distribution_id()).join(project_version())`, which is OS-specific:
 
 - Linux: `~/.local/share/<project>/<distribution_id>/<version>/`
 - macOS: `~/Library/Application Support/<project>/<distribution_id>/<version>/`
 - Windows: `%LOCALAPPDATA%\<project>\<distribution_id>\<version>\`
 
-Good for typical CLI tools. Wrong if you need `~/.myapp/` or `/opt/myapp/`. For that, see [pyapp-advanced.md](pyapp-advanced.md).
+Users can override this at **runtime** via `PYAPP_INSTALL_DIR_<PROJECT_NAME>=/custom/path` (where `<PROJECT_NAME>` is the uppercased `PYAPP_PROJECT_NAME` with `-` replaced by `_`; keep it set when running `<binary> self remove` or `<binary> self restore`), but `hatch-binary` cannot change the **compiled-in default** directory (e.g., making the binary default to `~/.myapp/runtime/` or `/opt/myapp/` without requiring a runtime env var). For a custom compiled-in default, see [pyapp-advanced.md](pyapp-advanced.md).
 
 **Offline installs:** without `PYAPP_DISTRIBUTION_EMBED=1` the binary downloads Python on first run. With it, the binary still calls `uv pip install` at first run, which fetches wheels from PyPI — so you're not fully air-gapped. For fully offline binaries, see [pyapp-advanced.md](pyapp-advanced.md).
 

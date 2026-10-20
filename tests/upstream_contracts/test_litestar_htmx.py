@@ -47,6 +47,7 @@ from litestar_vite.fragments import vite_fragment
 
 def test_litestar_htmx_050_exports_and_plugin_reexports() -> None:
     """Verify public exports of litestar_htmx and compatibility re-exports in litestar.plugins.htmx."""
+    assert version("litestar") == "2.25.0"
     assert version("litestar-htmx") == "0.5.0"
     expected_exports = {
         "ClientRedirect",
@@ -230,6 +231,7 @@ def test_litestar_htmx_050_response_helper_contract() -> None:
     redirect = ClientRedirect("/login?next=/items")
     assert redirect.headers["HX-Redirect"] == "/login?next=/items"
     assert "Location" not in redirect.headers
+    assert ClientRedirect("/search?q=hello world").headers["HX-Redirect"] == "/search?q=hello%20world"
 
     refresh = ClientRefresh()
     assert refresh.headers["HX-Refresh"] == "true"
@@ -239,12 +241,14 @@ def test_litestar_htmx_050_response_helper_contract() -> None:
     assert pushed.headers["HX-Push-Url"] == "/items"
     assert PushUrl("ok", False).headers["HX-Push-Url"] == "false"
     assert PushUrl("ok", True).headers["HX-Push-Url"] == "false"
+    assert PushUrl("ok", "False").headers["HX-Push-Url"] == "false"
 
     replaced = ReplaceUrl("ok", "/items")
     assert replaced.status_code == 200
     assert replaced.headers["HX-Replace-Url"] == "/items"
     assert ReplaceUrl("ok", False).headers["HX-Replace-Url"] == "false"
     assert ReplaceUrl("ok", True).headers["HX-Replace-Url"] == "false"
+    assert ReplaceUrl("ok", "False").headers["HX-Replace-Url"] == "false"
 
     reswapped = Reswap("ok", "outerHTML")
     assert reswapped.headers["HX-Reswap"] == "outerHTML"
@@ -300,6 +304,7 @@ def test_litestar_htmx_050_response_helper_contract() -> None:
     assert template.headers["HX-Reswap"] == "outerHTML"
     assert template.headers["HX-Retarget"] == "#item-list"
     assert json.loads(template.headers["HX-Trigger"]) == {"itemsLoaded": {"count": 0}}
+    assert HTMXTemplate(template_name="partials/item-list.html", push_url=True).headers["HX-Push-Url"] == "false"
 
     with pytest.raises(ImproperlyConfiguredException):
         HTMXTemplate(template_name="partials/item-list.html", trigger_event="itemsLoaded")

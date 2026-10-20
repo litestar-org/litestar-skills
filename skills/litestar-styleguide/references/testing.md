@@ -11,26 +11,26 @@ import pytest
 
 
 # Function-based tests (preferred over class-based)
-def test_addition():
+def test_addition() -> None:
     assert 1 + 1 == 2
 
 
-def test_division_by_zero():
+def test_division_by_zero() -> None:
     with pytest.raises(ZeroDivisionError):
-        1 / 0
+        _ = 1 / 0
 
 
 # Parametrized tests
 @pytest.mark.parametrize(
-    "input,expected",
+    ("value", "expected"),
     [
         ("hello", 5),
         ("", 0),
         ("world", 5),
     ],
 )
-def test_string_length(input: str, expected: int):
-    assert len(input) == expected
+def test_string_length(value: str, expected: int) -> None:
+    assert len(value) == expected
 ```
 
 ### Python — Async Tests
@@ -53,6 +53,7 @@ Always enter `AsyncTestClient` (`async with`) or `TestClient` (`with`) inside th
 
 ```python
 from collections.abc import AsyncGenerator, Generator
+
 import pytest
 from litestar import Litestar
 from litestar.testing import AsyncTestClient, TestClient

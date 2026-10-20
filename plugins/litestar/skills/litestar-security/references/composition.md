@@ -107,6 +107,11 @@ default.
 | `litestar-asyncapi` | AsyncAPI document and its UI | `^` + configured schema path |
 | `debug-toolbar` | Toolbar panels and assets | `^` + configured toolbar path |
 
+Litestar's built-in OpenAPI routes (`/schema`, `/docs`, etc.) are automatically
+detected by `RouteCompiler._is_openapi_handler` and marked `public()` — **do
+not** add `r"^/docs"` or `r"^/schema"` to `SecurityConfig(exclude=[...])`, or
+startup emits `LitestarWarning: Litestar Security exclusion patterns match no registered route`.
+
 Confirm against the routes the built application actually registers:
 
 ```python
@@ -149,9 +154,11 @@ non-session mechanisms (`required("api-key", "google-iap")` or
 `required(mechanism("api-key"))`) keeps the surface fail-closed while making
 `SecurityPlugin` derive the browser CSRF exemption automatically.
 
-You can pass `route_opt={"auth": required(mechanism("api-key"))}` directly on
-`MCPConfig` (or `opt = {"auth": required(mechanism("api-key"))}` on a dedicated
-MCP controller), or stamp `AUTH_POLICY_OPT_KEY` on `/mcp` handlers via an
+You can pass `route_opt={AUTH_POLICY_OPT_KEY: required("api-key", "google-iap")}`
+directly on `MCPConfig` (or `opt = {"auth": required(mechanism("api-key"))}` on
+a dedicated MCP controller; for `PromptController` / `SkillController` that
+inherit from `litestar.Controller`, set `opt = {"auth": public()}` without
+`ClassVar`), or stamp `AUTH_POLICY_OPT_KEY` on `/mcp` handlers via an
 `InitPluginProtocol` before `SecurityPlugin` compiles routes:
 
 ```python

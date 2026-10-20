@@ -148,8 +148,8 @@ class UserSecret(UUIDAuditBase):
     )
 ```
 
-Always pass `key=` explicitly. In 1.11, omitting it emits a deprecation
-warning and uses a process-random key; data written with that default cannot be
+Always pass `key=` explicitly. Omitting it emits a deprecation
+warning (introduced in 1.11) and uses a process-random key; data written with that default cannot be
 decrypted after restart. Load the stable passphrase from application settings
 or a secrets manager.
 
@@ -440,7 +440,7 @@ Available hashers (each in its own submodule under `advanced_alchemy.types.passw
 
 ## SQLModel Compatibility
 
-Advanced Alchemy 1.11 accepts SQLModel table models directly. Use
+Advanced Alchemy 1.11+ accepts SQLModel table models directly. Use
 `table=True`; a schema-only SQLModel has no SQLAlchemy mapper and is treated as
 an input schema instead.
 

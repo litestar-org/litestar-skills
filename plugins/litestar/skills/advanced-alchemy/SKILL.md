@@ -10,7 +10,7 @@ description: "Auto-activate for advanced_alchemy, alembic/, SQLAlchemyAsyncRepos
 - Use `Mapped[...]` for columns and `T | None` for optional fields.
 - Keep business transformations in service lifecycle hooks.
 - Prefer the inner `Repo` service pattern and `advanced_alchemy.*` imports.
-- Use `from __future__ import annotations` when it matches the project; 1.11
+- Use `from __future__ import annotations` when it matches the project; 1.12
   supports it in model modules.
 
 ## Match-Your-Framework — read first
@@ -96,7 +96,7 @@ Key lifecycle hooks: `to_model_on_create`, `to_model_on_update`, `to_model_on_up
 `SQLAlchemyAsyncRepositoryService` is the primary service base class. Key behaviors:
 
 - **Dict-to-model conversion**: pass raw `dict` to `create()`, `update()`, `upsert()` — the service converts via `to_model_on_create` / `to_model_on_update` lifecycle hooks before persistence
-- **Bulk operations**: `create_many(data)`, `update_many(data)`, `upsert_many(data)`, `delete_many(item_ids)` — batched in a single transaction; `delete_many()` accepts raw primary keys, composite-key tuples/dicts, model instances, or mixed lists
+- **Bulk operations**: `create_many(data)`, `update_many(data)`, `upsert_many(data, match_fields=..., no_merge=False, chunk_size=None)`, `delete_many(item_ids)` — batched in a single transaction; `upsert_many()` dispatches to native dialect primitives (`ON CONFLICT`, `ON DUPLICATE KEY UPDATE`, `MERGE`, Spanner `INSERT OR UPDATE`) via `resolve_upsert_strategy()` when uniqueness is provable, and `delete_many()` accepts raw primary keys, composite-key tuples/dicts, model instances, or mixed lists
 - **Lifecycle hooks**: `to_model_on_create`, `to_model_on_update`, `to_model_on_upsert` — override to transform input data, hash passwords, normalize strings, etc.
 
 ## Mixins
@@ -269,16 +269,16 @@ For detailed guides and code examples, refer to the following documents in `refe
 - **[Storage (obstore)](references/storage.md)**
   FileObject and StoredObject types, ObstoreBackend and FSSpecBackend configuration (S3, GCS, Azure, local), StorageRegistry, presigned URL generation, automatic file lifecycle via session tracker, and Pydantic integration.
 - **[Operations, Listeners, Serialization](references/operations.md)**
-  `OnConflictUpsert` / `MergeStatement` dialect-aware upsert building blocks, session event listeners (FileObject, cache invalidation, `touch_updated_timestamp`), and the msgspec-first `encode_json` / `decode_json` used across the library.
+  `OnConflictUpsert` (single-row + bulk `create_upsert_many` / `create_merge_many` / `create_insert_or_update_many`), `MergeStatement` (PostgreSQL 15+ / Oracle / MSSQL), `resolve_upsert_strategy`, session event listeners (FileObject, cache invalidation, `touch_updated_timestamp`), and the msgspec-first `encode_json` / `decode_json` used across the library.
 
 ---
 
 ## Official References
 
-- <https://github.com/litestar-org/advanced-alchemy/tree/v1.11.0/advanced_alchemy>
-- <https://github.com/litestar-org/advanced-alchemy/blob/v1.11.0/docs/changelog.rst>
-- <https://github.com/litestar-org/advanced-alchemy/tree/v1.11.0/tests>
-- <https://github.com/litestar-org/advanced-alchemy/tree/v1.11.0/docs/usage>
+- <https://github.com/litestar-org/advanced-alchemy/tree/v1.12.0/advanced_alchemy>
+- <https://github.com/litestar-org/advanced-alchemy/blob/v1.12.0/docs/changelog.rst>
+- <https://github.com/litestar-org/advanced-alchemy/tree/v1.12.0/tests>
+- <https://github.com/litestar-org/advanced-alchemy/tree/v1.12.0/docs/usage>
 - <https://docs.litestar.dev/2/release-notes/changelog.html>
 - <https://docs.sqlalchemy.org/en/20/orm/quickstart.html>
 

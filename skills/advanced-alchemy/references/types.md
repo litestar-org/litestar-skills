@@ -127,8 +127,8 @@ class LegacyRecord(UUIDAuditBase):
 
 Transparent encryption at rest for sensitive data. Values are encrypted before writing and decrypted on read. `EncryptedString` is for short values (API keys, tokens). `EncryptedText` is for longer payloads (notes, documents).
 
-Pass a stable `key=` explicitly. Advanced Alchemy 1.11 retains the
-process-random default only as a deprecated compatibility path; values written
+Pass a stable `key=` explicitly. Advanced Alchemy retains the
+process-random default only as a deprecated compatibility path (deprecated in 1.11, removed in 2.0); values written
 with it become undecryptable after process restart.
 
 ```python

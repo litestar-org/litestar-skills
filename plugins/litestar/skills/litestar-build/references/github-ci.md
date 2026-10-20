@@ -342,7 +342,7 @@ Both fullstack reference apps only put services in the **release** workflow (the
 
 ## The "placeholder asset directory" trick
 
-Every CI job that runs `uv sync` fails Hatchling if the asset output dir doesn't exist:
+Every CI job that runs `uv sync` fails Hatchling's `force-include` check if the asset output dir doesn't exist:
 
 ```text
 ValueError: Directory not found: app/domain/web/public
@@ -355,7 +355,7 @@ Even for **lint/typecheck jobs** that don't care about the frontend. Fix:
 - run: uv sync --all-extras --dev
 ```
 
-Or bake it into the composite action (see `setup-python/action.yml` above).
+Or bake it into the composite action (see `setup-python/action.yml` above). If you also register a custom `BuildHookInterface` in `pyproject.toml`, ensure `initialize(version, build_data)` short-circuits `if version == "editable":` (creating the placeholder directory, printing a warning to `sys.stderr`, and returning early instead of raising `ValueError`) so editable `uv sync` installs succeed before `uv run app assets build` runs.
 
 ## Matrix patterns worth knowing
 

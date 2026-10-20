@@ -171,14 +171,14 @@ class AccountRecord:
 
 ## `DTOData[T]` — Validated Payload Helper
 
-When required fields are excluded from a write DTO (e.g. server-generated `id` or `password_hash`) or `partial=True` is set for a `PATCH` route, Litestar cannot instantiate `T` directly from client input. Annotate the `data` parameter as `DTOData[T]`:
+When required fields are excluded from a write DTO (e.g. server-generated `id` or `password_hash`) or `partial=True` is set for a `PATCH` route, Litestar cannot instantiate `T` directly from client input. Annotate the `data` parameter as `JSONBody[DTOData[T]]` (or `RequestBody[DTOData[T]]`):
 
 ```python
 from uuid import UUID, uuid4
 
 from litestar import patch, post
 from litestar.dto import DTOConfig, DTOData, MsgspecDTO
-from litestar.params import FromPath
+from litestar.params import FromPath, JSONBody
 
 
 class UserWriteDTO(MsgspecDTO[User]):
@@ -190,12 +190,12 @@ class UserPatchDTO(MsgspecDTO[User]):
 
 
 @post("/users", dto=UserWriteDTO, return_dto=UserReadDTO)
-async def create_user(data: DTOData[User]) -> User:
+async def create_user(data: JSONBody[DTOData[User]]) -> User:
     return data.create_instance(id=uuid4(), address__country="US")
 
 
 @patch("/users/{user_id:uuid}", dto=UserPatchDTO, return_dto=UserReadDTO)
-async def patch_user(user_id: FromPath[UUID], data: DTOData[User]) -> User:
+async def patch_user(user_id: FromPath[UUID], data: JSONBody[DTOData[User]]) -> User:
     user = await fetch_user(user_id)
     return data.update_instance(user)
 ```
@@ -258,6 +258,7 @@ from typing import Annotated
 
 from litestar import Litestar, post
 from litestar.dto import DTOConfig, DTOField, Mark
+from litestar.params import JSONBody
 from litestar.plugins.pydantic import PydanticDTO, PydanticPlugin
 from pydantic import BaseModel, ConfigDict
 
@@ -275,7 +276,7 @@ class CustomerDTO(PydanticDTO[CustomerModel]):
 
 
 @post("/customers", dto=CustomerDTO, return_dto=CustomerDTO)
-async def create_customer(data: CustomerModel) -> CustomerModel:
+async def create_customer(data: JSONBody[CustomerModel]) -> CustomerModel:
     return data
 
 
@@ -305,21 +306,25 @@ class UserPatch(msgspec.Struct):
 - `display_name` is **required and nullable**. Clients must include `"display_name"` in the payload, and its value may be `null`.
 - `biography` is **optional and nullable**. Clients may omit `"biography"` because it has a default (`None`).
 
-Litestar 2.24 ensures required nullable fields remain in the OpenAPI `required` array across `msgspec.Struct`, dataclasses, `attrs` classes, and Pydantic models.
+Litestar 2.24+ ensures required nullable fields remain in the OpenAPI `required` array across `msgspec.Struct`, dataclasses, `attrs` classes, and Pydantic models.
 
 ## Request Body Markers (Litestar ≥ 2.23)
 
-Declare request body media types with the generic body markers from `litestar.params` instead of `Annotated[T, Body(media_type=RequestEncodingType.…)]`:
+Declare request body media types with the generic body markers from `litestar.params` instead of `Annotated[T, Body(media_type=RequestEncodingType.…)]` (required on `data` in Litestar 2.25+):
 
 ```python
 from typing import Annotated
 
 from litestar import post
-from litestar.params import Body, JSONBody, MsgPackBody, MultipartBody, URLEncodedBody
+from litestar.params import Body, JSONBody, MsgPackBody, MultipartBody, RequestBody, URLEncodedBody
 
 
 @post("/orders")
 async def create_order(data: JSONBody[OrderCreate]) -> Order: ...
+
+
+@post("/orders/default")
+async def create_default_order(data: RequestBody[OrderCreate]) -> Order: ...
 
 
 @post("/events")
@@ -350,7 +355,7 @@ async def bulk_upload(
 
 | Marker | Media Type | Old Form |
 | --- | --- | --- |
-| `JSONBody[T]` | `application/json` (default) | `Annotated[T, Body()]` |
+| `JSONBody[T]` / `RequestBody[T]` | `application/json` (default) | `Annotated[T, Body()]` |
 | `MsgPackBody[T]` | `application/x-msgpack` | `Annotated[T, Body(media_type=RequestEncodingType.MESSAGEPACK)]` |
 | `MultipartBody[T]` | `multipart/form-data` | `Annotated[T, Body(media_type=RequestEncodingType.MULTI_PART)]` |
 | `URLEncodedBody[T]` | `application/x-www-form-urlencoded` | `Annotated[T, Body(media_type=RequestEncodingType.URL_ENCODED)]` |
@@ -366,6 +371,6 @@ Use `Annotated[T, Body(...)]` when you need body constraints or OpenAPI metadata
 
 ## Tagged Source
 
-- [2.24 DTO implementation](https://github.com/litestar-org/litestar/tree/v2.24.0/litestar/dto)
-- [2.24 nullable-required changelog](https://github.com/litestar-org/litestar/blob/v2.24.0/docs/release-notes/changelog.rst)
-- [Advanced Alchemy 1.11 Litestar DTO](https://github.com/litestar-org/advanced-alchemy/blob/v1.11.0/advanced_alchemy/extensions/litestar/dto.py)
+- [2.25 DTO implementation](https://github.com/litestar-org/litestar/tree/v2.25.0/litestar/dto)
+- [2.25 changelog](https://github.com/litestar-org/litestar/blob/v2.25.0/docs/release-notes/changelog.rst)
+- [Advanced Alchemy 1.12 Litestar DTO](https://github.com/litestar-org/advanced-alchemy/blob/v1.12.0/advanced_alchemy/extensions/litestar/dto.py)

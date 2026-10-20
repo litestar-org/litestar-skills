@@ -96,7 +96,7 @@ from advanced_alchemy.config.routing import EngineConfig, ReplicaConfig
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
 | `connection_string` | `str` | required | Database connection URL |
-| `weight` | `int` | `1` | Stored configuration; 1.11 selectors do not apply weights |
+| `weight` | `int` | `1` | Stored configuration; 1.12 selectors do not apply weights |
 | `name` | `str` | `""` | Human-readable label |
 
 ---
@@ -242,6 +242,12 @@ session = maker()
 result = session.execute(select(User))
 maker.close_all()
 ```
+
+### Disposing Session Makers & Listener Caveat
+
+`advanced_alchemy.routing` exports `dispose_session_maker_async(session_maker)` and `dispose_session_maker_sync(session_maker)`, which invoke `close_all()` when given a `RoutingAsyncSessionMaker` / `RoutingSyncSessionMaker` (disposing both primary and replica engines) and are no-ops for standard SQLAlchemy session makers. The Starlette/FastAPI and Sanic extensions call these helpers automatically during shutdown.
+
+> **Session Listeners with `routing_config`**: Because `RoutingAsyncSessionMaker` and `RoutingSyncSessionMaker` are custom callable classes rather than `async_sessionmaker` / `sessionmaker` subclasses, `SQLAlchemyAsyncConfig.create_session_maker()` / `SQLAlchemySyncConfig.create_session_maker()` skips automatic session-scoped event listener registration (`touch_updated_timestamp`, `FileObjectListener`, `CacheListener`) when `routing_config` is enabled. If your routed sessions rely on those listeners, register them on `RoutingSyncSession` or the underlying `Session` class explicitly.
 
 ---
 

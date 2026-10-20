@@ -157,6 +157,7 @@ from litestar import Controller, get
 from litestar.di import NamedDependency, Provide
 from litestar.params import SkipValidation
 from sqlspec import sql
+from sqlspec.adapters.asyncpg import AsyncpgDriver
 from sqlspec.core import FilterTypes, OffsetPagination
 from sqlspec.extensions.litestar.providers import FieldNameType, create_filter_dependencies
 from sqlspec.service import SQLSpecAsyncService
@@ -173,12 +174,17 @@ class UserService(SQLSpecAsyncService):
         return await self.paginate_limit_offset(stmt, *filters, schema_type=User)
 
 
+async def provide_user_service(db_session: NamedDependency[AsyncpgDriver]) -> UserService:
+    """Construct a request-scoped UserService from the SQLSpec driver session."""
+    return UserService(db_session)
+
+
 class UserController(Controller):
     """User endpoints."""
 
     path = "/api/users"
     dependencies = {
-        "users_service": Provide(UserService),
+        "users_service": Provide(provide_user_service),
         **create_filter_dependencies(
             {
                 "id_filter": UUID,
@@ -238,6 +244,7 @@ from litestar import Controller, get
 from litestar.di import NamedDependency, Provide
 from litestar.params import SkipValidation
 from sqlspec import sql
+from sqlspec.adapters.asyncpg import AsyncpgDriver
 from sqlspec.core import CursorKey, CursorPagination, FilterTypes
 from sqlspec.extensions.litestar.providers import create_filter_dependencies
 from sqlspec.service import SQLSpecAsyncService
@@ -255,12 +262,19 @@ class AuditEventService(SQLSpecAsyncService):
         return await self.paginate_cursor(stmt, *filters, schema_type=AuditEvent)
 
 
+async def provide_audit_event_service(
+    db_session: NamedDependency[AsyncpgDriver],
+) -> AuditEventService:
+    """Construct a request-scoped AuditEventService from the SQLSpec driver session."""
+    return AuditEventService(db_session)
+
+
 class AuditEventController(Controller):
     """Audit event endpoints."""
 
     path = "/api/audit-events"
     dependencies = {
-        "events_service": Provide(AuditEventService),
+        "events_service": Provide(provide_audit_event_service),
         **create_filter_dependencies(
             {
                 "pagination_type": "cursor",

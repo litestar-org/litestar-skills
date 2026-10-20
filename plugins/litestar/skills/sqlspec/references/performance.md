@@ -82,7 +82,7 @@ Use `job_retry_deadline=0` for emulators or endpoints where retrying unsupported
 
 ## Spanner Request And Session Controls
 
-Configure defaults through `SpannerSyncConfig.driver_features`:
+Configure defaults through `SpannerSyncConfig.driver_features` or `SpannerAsyncConfig.driver_features`:
 
 - `query_options` -- optimizer version / statistics package options forwarded to `execute_sql()` and `execute_update()`.
 - `request_options` -- forwarded to `execute_sql()`, `execute_update()`, and `batch_update()`.
@@ -90,10 +90,10 @@ Configure defaults through `SpannerSyncConfig.driver_features`:
 - `retry` and `timeout` -- forwarded to statement execution calls.
 - `enable_batch_write_api` -- routes `load_from_arrow()` through Spanner Batch Write API for high-throughput mutation groups when `overwrite=False`.
 
-Per-call overrides use the existing driver methods (including `last_statement=True` for final DML statements in a read-write transaction):
+Per-call overrides use the existing sync or async driver methods (including `last_statement=True` for final DML statements in a read-write transaction):
 
 ```python
-result = driver.execute(
+result = await driver.execute(
     "SELECT id FROM users WHERE id = @id",
     {"id": "u-1"},
     query_options={"optimizer_version": "latest"},
@@ -103,21 +103,27 @@ result = driver.execute(
 )
 ```
 
-Session-scoped controls belong on `provide_session()`:
+Session-scoped controls belong on `provide_session()`, `provide_write_session()`, or `provide_read_session()`:
 
 ```python
-with config.provide_session(
+async with config.provide_session(
     request_options={"transaction_tag": "orders.write"},
     retry=retry,
     timeout=20.0,
 ) as driver:
-    driver.execute(
+    await driver.execute(
         "UPDATE orders SET status = @status WHERE id = @id",
         params,
         last_statement=True,
     )
 ```
 
-Use `provide_read_session()` for single-use snapshot reads. Use `provide_session()` or `provide_write_session()` for DDL, DML, and write-capable transactions.
+Use `provide_read_session()` for multi-use snapshot reads. Use `provide_session()` or `provide_write_session()` for DDL, DML, and write-capable transactions.
 
-SQLSpec does not expose public `execute_with_options()`, `execute_partitioned_dml()`, `apply_mutations()`, or `provide_batch_snapshot()` methods.
+Both `SpannerSyncConfig` / `SpannerAsyncConfig` and `SpannerSyncDriver` / `SpannerAsyncDriver` also expose:
+
+- `run_in_transaction(fn, *args, **kwargs)` -- executes `fn(driver, ...)` inside Spanner's retryable transaction runner, automatically unwrapping `Aborted` (`DeadlockError`) so the runner retries and raising `DeadlockError` only on terminal abort.
+- `execute_partitioned_dml(sql, params=None, param_types=None, **kwargs)` -- executes Partitioned DML against the Spanner database and returns the lower-bound affected row count.
+- `write_insert()`, `write_upsert()`, `write_update()`, and `write_delete()` -- buffer native Spanner table mutations on the active transaction.
+
+SQLSpec does not expose `execute_with_options()`, `apply_mutations()`, or `provide_batch_snapshot()` methods.

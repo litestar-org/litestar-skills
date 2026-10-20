@@ -8,6 +8,7 @@ This reference covers similarity search for semantic retrieval and intent classi
 | --- | --- | --- | --- |
 | Oracle | `VECTOR_DISTANCE(:a, :b, COSINE)` | `1 - VECTOR_DISTANCE(...)` | `FETCH FIRST :n ROWS ONLY` |
 | PostgreSQL + pgvector | `:a <=> :b` | `1 - (:a <=> :b)` | `LIMIT :n` |
+| Cloud Spanner | `COSINE_DISTANCE(@a, @b)` / `APPROX_COSINE_DISTANCE(@a, @b, options => ...)` | `1 - COSINE_DISTANCE(...)` | `LIMIT @n` |
 | SQLite + sqlite-vec | `vec_distance_cosine(:a, :b)` | `1 - vec_distance_cosine(...)` | `LIMIT :n` |
 
 This reference documents the **Oracle** path in full (sourced from `oracledb-vertexai-demo`). See [pgvector & PostgreSQL Search Dialects](#pgvector--postgresql-search-dialects-pgvector-pgtextsearch-paradedb) for the PostgreSQL equivalent; full pgvector coverage will land when a canonical pgvector reference app is available.
@@ -216,6 +217,10 @@ SQLSpec registers three PostgreSQL search dialects in `sqlspec.dialects` and pro
 - **`PGVector` (`dialect="pgvector"`)**: `<->` (L2), `<=>` (cosine), `<#>` (negative inner product), `<+>` (L1), `<~>` (Hamming), `<%>` (Jaccard).
 - **`PGTextSearch` (`dialect="pg_textsearch"`)**: adds the `<@>` BM25 relevance ranking operator (`content <@> 'search terms'` or `content <@> to_bm25query('terms', 'idx_name')`) on top of all `PGVector` distance operators for hybrid vector + BM25 search.
 - **`ParadeDB` (`dialect="paradedb"`)**: adds ParadeDB `pg_search` operators (`@@@`, `&&&`, `|||`, `###`) alongside `PGVector` distance operators.
+
+## Cloud Spanner Vector, Search & Property Graph Dialect (`Spanner`, `Spangres`)
+
+`sqlspec.dialects.spanner` exports native AST expressions and builder helpers for Cloud Spanner vector similarity, full-text search, and Property Graph queries (`Spanner`, `Spangres`, `SpannerPropertyGraph`, `SpannerGraphTable`, `ApproxCosineDistance`, `CosineDistance`, `DotProduct`, `EuclideanDistance`, `Score`, `ScoreNgrams`, `Search`, `SearchSubstring`, `Snippet`, `TokenizeFulltext`, `TokenizeNgrams`, `TokenizeSubstring`, and builder functions `approx_cosine_distance`, `cosine_distance`, `dot_product`, `euclidean_distance`, `score`, `score_ngrams`, `search`, `search_substring`, `snippet`, `tokenize_fulltext`, `tokenize_ngrams`, `tokenize_substring`, `graph_table`), as well as `CREATE/DROP VECTOR INDEX` (`IF NOT EXISTS`, `STORING`), `DROP SEARCH INDEX`, and `CREATE/DROP PROPERTY GRAPH` DDL parsing and transpilation.
 
 ## Cross-references
 

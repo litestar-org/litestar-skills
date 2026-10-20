@@ -38,9 +38,11 @@ if TYPE_CHECKING:
 
 **Rules:**
 
+- Requires Python `>=3.11` (`<4.0,>=3.11`)
 - ALL imports at module level by default
 - ONLY nest imports for circular import prevention
 - Third-party packages may be nested for optional dependencies only
+- **PEP 562 lazy barrel exports**: public barrel `__init__.py` modules (`sqlspec`, `sqlspec.dialects`, `sqlspec.extensions.events`, `sqlspec.extensions.adk`, `sqlspec.storage`, `sqlspec.storage.backends`) use PEP 562 `__getattr__`, `__dir__`, and an `_EXPORTS` table (and `sqlspec.utils` ships an empty barrel) so optional dependencies and heavy submodules are loaded on first attribute access rather than at package import time.
 
 ### Function Length & Style
 

@@ -50,7 +50,11 @@ ENV GRPC_PYTHON_BUILD_WITH_CYTHON=1 \
     PYTHONFAULTHANDLER=1 \
     PYTHONHASHSEED=random \
     LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8
+    LC_ALL=C.UTF-8 \
+    # Prevent connection attempts during build
+    DATABASE_POOL_DISABLED=true \
+    SAQ_USE_SERVER_LIFESPAN=false \
+    SAQ_WEB_ENABLED=false
 
 RUN --mount=type=cache,id=apt-cache-builder,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=apt-lib-builder,target=/var/lib/apt,sharing=locked \
@@ -85,7 +89,7 @@ COPY src/ ./src/
 RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
     uv run app assets build \
     && uv sync ${UV_INSTALL_ARGS} --frozen --no-editable \
-    && uv build
+    && uv build --wheel --clear
 
 # =============================================================================
 # Stage 3: Runtime
@@ -94,7 +98,9 @@ FROM python-base AS runtime
 
 ARG LITESTAR_APP="app.server.asgi:create_app"
 
-ENV PATH="/workspace/app/.venv/bin:/usr/local/bin:$PATH" \
+ENV UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    PATH="/workspace/app/.venv/bin:/usr/local/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONFAULTHANDLER=1 \
@@ -109,13 +115,16 @@ RUN groupadd --system --gid 65532 nonroot \
     && mkdir -p /workspace/app \
     && chown -R nonroot:nonroot /workspace
 
-# Install wheel from builder
+# Install locked dependencies + wheel from builder into a dedicated venv
+COPY --from=builder --chown=65532:65532 /workspace/app/requirements.txt /tmp/requirements.txt
 COPY --from=builder --chown=65532:65532 /workspace/app/dist/*.whl /tmp/
 
 WORKDIR /workspace/app
 
 RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
-    uv pip install --quiet --no-cache-dir /tmp/*.whl \
+    uv venv /workspace/app/.venv \
+    && uv pip install --quiet --no-cache-dir --no-deps --requirement=/tmp/requirements.txt \
+    && uv pip install --quiet --no-cache-dir --no-deps /tmp/*.whl \
     && rm -rf /tmp/* \
     && chown -R nonroot:nonroot /workspace/app
 

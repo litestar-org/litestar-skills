@@ -64,9 +64,9 @@ db_manager.update_cache_config(cache_config)
 
 - **Global configuration**: `update_cache_config()` replaces the process-global configuration and clears existing caches.
 - **LRU + TTL**: the built-in namespaces use bounded, locked LRU caches with a one-hour default TTL.
-- **Template isolation**: builder and optimized-expression cache hits return isolated expressions; current values and statement configuration are rebound on each call.
+- **Template isolation & zero-copy AST sharing**: builder and optimized-expression cache hits return isolated expressions; current values and statement configuration are rebound on each call. Compiled `ProcessedState` instances share cached SQLGlot ASTs (`expression_is_shared=True`) across executions without eager deep copies; public `SQL.expression` and `SQL.statement_expression` properties copy lazily on first access via `ProcessedState.ensure_owned_expression()`, while internal read-only paths inspect `SQL._peek_expression()`.
 - **File validation**: `SQLFileLoader` compares an MD5 content checksum before reusing a tracked file.
-- **Driver-local fast path**: `driver_features={"sqlspec_statement_cache_size": N}` controls a separate per-driver raw-statement cache. Set `N=0` to disable it.
+- **Shared per-config `StatementCacheHolder` & fast path**: every database config creates a single `StatementCacheHolder` (`sqlspec.driver._query_cache.StatementCacheHolder`) shared across all sessions spawned from that config. It holds the raw-statement `QueryCache` (controlled by `driver_features={"sqlspec_statement_cache_size": N}`; set `N=0` to disable), the compiled `_statement_cache`, a shared `rebind_processor` (`ParameterProcessor`), `_row_count_hints`, and `_bulk_insert_sql`. The driver fast path (`_cached_execution` -> `_execute_cache_hit`) executes parameterless (`()`) and scalar-positional (`(v1, v2, ...)`) cache hits directly and remains active when observability spans, observers, or lifecycle hooks are enabled.
 
 ### Cache Hit/Miss Monitoring
 

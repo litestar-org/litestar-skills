@@ -53,7 +53,7 @@ The factory provides validation-passing data; the test focuses on the request/re
 
 | Litestar use site | Model backend | Factory base |
 | --- | --- | --- |
-| Handler input DTO via `data: MyDTO` | usually `msgspec.Struct` (fastest path) | `MsgspecFactory` |
+| Handler input DTO via `data: JSONBody[MyDTO]` | usually `msgspec.Struct` (fastest path) | `MsgspecFactory` |
 | Pydantic input DTO | `pydantic.BaseModel` | `ModelFactory` |
 | Response model with attrs (legacy) | `@attrs.define` | `AttrsFactory` |
 | Domain model → SQLAlchemy via `advanced-alchemy` | declarative `Base` | `SQLAlchemyFactory` |

@@ -222,7 +222,7 @@ class ShortLink(NanoIDAuditBase):
 | `updated_at` | `DateTimeUTC` | Set on insert and update (audit bases only) |
 
 - Shorter and more URL-friendly than UUIDs
-- Install `fastnanoid` for NanoID generation. Without it, 1.11 logs a warning and falls back to UUIDv4 generation.
+- Install `fastnanoid` (`advanced-alchemy[nanoid]`) for NanoID generation. Without it, Advanced Alchemy logs a warning and falls back to UUIDv4 generation.
 
 ---
 

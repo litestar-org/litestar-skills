@@ -19,7 +19,7 @@ description: "Auto-activate for litestar_saq, SAQPlugin, SAQConfig, QueueConfig,
 - Async all I/O — task bodies and enqueue calls are `async def`.
 - First positional arg of every task is `ctx: Context` (from `saq.types`, not `litestar_saq.typing.Context` which is the OpenTelemetry context) or `ctx: dict[str, Any]`.
 - Pass job payload as keyword arguments so task signatures and enqueue calls stay explicit.
-- Use `NamedDependency[TaskQueues]` for handler injection. `TaskQueues` is registered under the `task_queues` dependency key, and Litestar 2.24 deprecates implicit DI.
+- Use `NamedDependency[TaskQueues]` for handler injection. `TaskQueues` is registered under the `task_queues` dependency key, and Litestar ≥ 2.24 deprecates implicit DI.
 
 ## Quick Reference
 

@@ -233,13 +233,14 @@ The query parameters produced by that config:
 | --- | --- | --- |
 | `id_filter` (+ `id_field`) | `CollectionFilter` | `?ids=...` |
 | `pagination_type="limit_offset"` (+ `pagination_size`) | `LimitOffset` | `?currentPage=1&pageSize=25` |
-| `search` (+ `search_ignore_case`) | `SearchFilter` | `?searchString=...&searchIgnoreCase=true` |
-| `sort_field` + `sort_order` | `OrderBy` | `?orderBy=created_at&sortOrder=desc` |
+| `search` (+ `search_ignore_case`, `search_escape_wildcards`) | `SearchFilter` | `?searchString=...&searchIgnoreCase=true` |
+| `sort_field` + `sort_order` (+ `sort_nulls`) | `OrderBy` | `?orderBy=created_at&sortOrder=desc&nulls=last` |
 | `created_at: True` | `BeforeAfter` | `?createdBefore=...&createdAfter=...` |
 | `updated_at: True` | `BeforeAfter` | `?updatedBefore=...&updatedAfter=...` |
 | `in_fields` / `not_in_fields` | `CollectionFilter` / `NotInCollectionFilter` | `?<field>In=...` / `?<field>NotIn=...` |
 | `boolean_fields` | `BooleanFilter` | `?<field>=true` |
 | `choice_fields` | `ChoicesFilter` | `?<field>=...` (`ChoiceField(name, choices)`) |
+| `alias_generator` | Column alias map | Resolves public query parameter names to ORM columns |
 
 Results are returned in `orders.to_schema(results, total, filters=applied_filters, schema_type=Order)` as an `OffsetPagination[Order]`. The `OffsetPagination` type (from `advanced_alchemy.service`) is framework-agnostic and is the recommended response shape for paginated endpoints.
 

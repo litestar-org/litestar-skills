@@ -17,7 +17,7 @@ An execution backend decides **where a claimed task runs**. It never owns queue 
 
 `"local"` is the default: workers claim records and run them in-process, honoring `WorkerConfig.max_concurrency`, `WorkerConfig.queue_concurrency`, and the bounded sync thread pool.
 
-`"immediate"` runs the task inline at enqueue time and is intended for tests and scripts. It requires `placement="external"`, because no worker owns the record.
+`"immediate"` runs the task inline at enqueue time and is intended for tests, scripts, and foreground CLI commands. When configured as the queue default (`QueueConfig(execution_backend="immediate", worker=WorkerConfig(placement="external"))`), it requires `placement="external"`, because no worker owns the record. You can also pass `execution_backend="immediate"` per call (`await queue_service.enqueue(task, ..., execution_backend="immediate")`) from CLI commands so the configured queue backend persists, claims, executes inline in the foreground via `ImmediateExecutionBackend`, and records terminal state and events through a single unified pipeline.
 
 ## Google Cloud Run Jobs
 

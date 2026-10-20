@@ -47,6 +47,14 @@ CMD ["litestar", "workers", "run"]
 # Background worker — Option B: litestar-queues (separate container)
 ENTRYPOINT ["tini", "--"]
 CMD ["litestar", "queues", "run", "--max-concurrency", "10", "--drain-timeout", "30.0"]
+
+# Database migrator — Option A: advanced-alchemy (one-off job / init container)
+ENTRYPOINT ["tini", "--"]
+CMD ["litestar", "database", "upgrade", "--no-prompt"]
+
+# Database migrator — Option B: sqlspec (one-off job / init container)
+ENTRYPOINT ["tini", "--"]
+CMD ["litestar", "db", "upgrade", "--no-prompt"]
 ```
 
 ### Environment variables (required in every target)
@@ -73,14 +81,14 @@ Start from `Dockerfile.distroless` for production (preferred). Use standard mult
 
 ### Step 3: Build frontend assets inside Docker
 
-Copy Bun lockfiles first (layer caching), install JS deps, then `bun run build` and `uv run app assets build`. Assets must be in the wheel before `uv build --wheel --clear`.
+Copy Bun lockfiles first (layer caching), install JS deps, then `bun run build` and `uv run litestar assets build` (or `uv run app assets build` when a custom `[project.scripts]` CLI entry point is defined). Assets must be in the wheel before `uv build --wheel --clear`.
 
 ### Step 4: Create separate worker image (Match-Your-Stack)
 
 Background workers use the same build stages as the web image but a different `CMD`, no exposed HTTP port, and a longer termination grace period (`120s`):
 
 - **`litestar-saq`**: run `litestar workers run` (or `app workers run`) with `SAQ_USE_SERVER_LIFESPAN=false`.
-- **`litestar-queues`**: run `litestar queues run --max-concurrency 10 --drain-timeout 30.0` for persistent task queues (SQLSpec, Advanced Alchemy, Redis/Valkey), `litestar queues run-consumer --backend <kafka|pubsub|rabbitmq|sqs>` for stream consumers, or `litestar queues run-task` inside serverless Cloud Run Jobs.
+- **`litestar-queues`**: run `litestar queues run --max-concurrency 10 --drain-timeout 30.0` for persistent task queues (SQLSpec, Advanced Alchemy, Redis/Valkey), `litestar queues run-consumer --backend <kafka|pubsub|rabbitmq|sqs>` for stream consumers, `CloudTasksExecutionConfig` (`WorkerConfig(placement="external")`) for zero-worker serverless push delivery on Cloud Run Services, or `litestar queues run-task` inside isolated Cloud Run Jobs (`CloudRunExecutionConfig`).
 
 ### Step 5: Set up CI/CD
 
@@ -110,6 +118,8 @@ Expose `/health` on the API container. K8s uses startupProbe + livenessProbe + r
 - **Never run as root.** `USER nonroot` in Dockerfile. `runAsNonRoot: true` in K8s pod security context.
 - **Pin Python version.** `ARG PYTHON_VERSION=3.13` at the top. Never use `python:latest`.
 - **Separate worker containers from web containers.** `litestar-saq` (`litestar workers run`) and `litestar-queues` (`litestar queues run` / `run-consumer`) poll queues or brokers, not HTTP. They need a dedicated CMD, separate scaling, and no exposed port.
+- **Match-your-stack migration CLI commands.** `advanced-alchemy` registers `litestar database` (`litestar database upgrade --no-prompt` or `alchemy --config <path> upgrade --no-prompt`), whereas `sqlspec` (`SQLSpecPlugin`) registers `litestar db` (`litestar db upgrade --no-prompt` or `sqlspec upgrade --no-prompt`). Never pass `litestar database` to a `sqlspec`-backed app.
+- **Proxy header trust behind load balancers.** `LITESTAR_TRUSTED_PROXIES` configures `litestar-vite`'s `ProxyHeadersMiddleware`. For API-only Granian deployments without `litestar-vite`, register `partial(wrap_asgi_with_proxy_headers, trusted_hosts=["*"])` from `granian.utils.proxies` in `Litestar(middleware=[...])`.
 - **Build-time env vars to prevent connection attempts.** Set `DATABASE_POOL_DISABLED=true`, `SAQ_USE_SERVER_LIFESPAN=false`, `SAQ_WEB_ENABLED=false` during build to prevent the app from trying to connect to databases during asset compilation.
 
 </guardrails>

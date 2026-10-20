@@ -7,13 +7,13 @@ description: "Auto-activate for Litestar, Controller, Router, @get/@post, FromPa
 
 Use this skill for all core **Litestar** framework subsystems (application composition, routing, controllers, parameters, DTOs, OpenAPI, dependency injection, Dishka integration, authentication/guards, middleware, exception handling, plugin protocols, WebSockets, Channels/SSE, typed settings, and CRUD data services/pagination) and to route to standalone Litestar ecosystem skills.
 
-This guidance targets the released Litestar 2.24.0 contract. Do not copy unreleased `main` APIs into consumer examples.
+This guidance targets the released Litestar 2.25.0 contract. Do not copy unreleased `main` APIs into consumer examples.
 
 ## Code Style Rules
 
 - Prefer first-party Litestar ecosystem packages (`litestar-granian`, `advanced-alchemy`, `sqlspec`, `msgspec`, `litestar-saq`, `litestar-queues`, `litestar-vite`, `litestar-autowire`, `litestar-security`, `litestar-email`, `litestar-mcp`, `litestar-htmx`) and match the project's existing stack for data access (`advanced-alchemy` vs `sqlspec`), DI (`Provide` vs `Dishka`), settings (`dataclass` vs `pydantic-settings`), background jobs (`litestar-saq` vs `litestar-queues`), and Channels backend (`Memory`, `Redis`, `AsyncPg`/`PsycoPg`, `SQLSpec`).
 - Keep `Litestar(...)` app setup and route handlers thin: group domain routes into `Controller` / `Router` hierarchies (`urls.py` + `controllers/` + `services.py` + `schemas.py` + `dependencies.py` + `guards.py`), and centralize multi-domain wiring in `ApplicationCore(InitPluginProtocol, CLIPluginProtocol)` + `create_app() -> Litestar` (`litestar-fullstack` / `litestar-sqlstack` pattern).
-- Use Litestar 2.22–2.24 explicit annotations: `FromPath[T]`, `FromQuery[T]`, `FromHeader[T]`, `FromCookie[T]` (or `PathParameter`, `QueryParameter`, `HeaderParameter`, `CookieParameter` when constraints or wire names are needed), `JSONBody[T]`, `MsgPackBody[T]`, `MultipartBody[T]`, `URLEncodedBody[T]`, `NamedDependency[T]`, and `SkipValidation[T]`. Never introduce implicit dependencies or deprecated `litestar.params.Dependency`.
+- Use Litestar 2.22–2.25 explicit annotations: `FromPath[T]`, `FromQuery[T]`, `FromHeader[T]`, `FromCookie[T]` (or `PathParameter`, `QueryParameter`, `HeaderParameter`, `CookieParameter` when constraints or wire names are needed), `JSONBody[T]`, `RequestBody[T]`, `MsgPackBody[T]`, `MultipartBody[T]`, `URLEncodedBody[T]`, `RawBody`, `QueryParams`, `RequestCookies`, `NamedDependency[T]`, and `SkipValidation[T]`. Never introduce implicit dependencies, untyped reserved kwargs (`data: MyDTO` without a body marker or `body: bytes`), or deprecated `litestar.params.Dependency`.
 - Define explicit `msgspec.Struct` (camelCase wire format via `rename="camel"`) or `MsgspecDTO` / `SQLAlchemyDTO` / `DataclassDTO` boundary contracts (`dto` and `return_dto`) on routes and controllers; never expose raw ORM models directly without a write-safe DTO.
 - Enforce authentication via `AbstractAuthenticationMiddleware` or first-party `JWTAuth` / `JWTCookieAuth` / `SessionAuth`, and enforce authorization in `Guard` functions `(connection: ASGIConnection, route_handler: BaseRouteHandler) -> None | Awaitable[None]` or [`litestar-security`](../litestar-security/SKILL.md) decorators — never inside route handler bodies.
 - Prefer built-in middleware configs (`CORSConfig`, `CSRFConfig`, `AllowedHostsConfig`, `CompressionConfig`, `RateLimitConfig`, `ResponseCacheConfig`, `LoggingMiddlewareConfig`) over custom middleware, and subclass `ASGIMiddleware` (`litestar.middleware.ASGIMiddleware`) with `scopes` and `exclude` filters for custom cross-cutting concerns.
@@ -26,10 +26,10 @@ This guidance targets the released Litestar 2.24.0 contract. Do not copy unrelea
 
 | Subsystem | Key Symbols / Patterns | Reference |
 | --- | --- | --- |
-| App Composition & Lifecycle | `Litestar(...)`, `AppConfig`, `ApplicationCore`, `lifespan`, `State`, `ImmutableState`, 2.22–2.24 contracts | [app-and-lifecycle.md](references/app-and-lifecycle.md) |
+| App Composition & Lifecycle | `Litestar(...)`, `AppConfig`, `ApplicationCore`, `lifespan`, `State`, `ImmutableState`, 2.22–2.25 contracts | [app-and-lifecycle.md](references/app-and-lifecycle.md) |
 | CLI & Project Config | Autodiscovery, `LITESTAR_*` env vars, `litestar run`/`info`/`routes`/`schema`/`sessions`, `CLIPlugin`, `litestar.toml` | [cli-and-config.md](references/cli-and-config.md) |
 | Route Handlers & Controllers | `@get`/`@post`/`@put`/`@patch`/`@delete`, `Controller`, `Router`, layered config inheritance | [handlers.md](references/handlers.md) |
-| Parameters & Request Bodies | `FromPath`, `FromQuery`, `FromHeader`, `FromCookie`, `JSONBody`, `MsgPackBody`, `MultipartBody`, `URLEncodedBody`, `UploadFile` | [parameters.md](references/parameters.md) |
+| Parameters & Request Bodies | `FromPath`, `FromQuery`, `FromHeader`, `FromCookie`, `JSONBody`, `RequestBody`, `MsgPackBody`, `MultipartBody`, `URLEncodedBody`, `RawBody`, `QueryParams`, `RequestCookies`, `UploadFile` | [parameters.md](references/parameters.md) |
 | Domain Package Layout | `domains/<name>/` structure, sub-controllers, full-stack domain wiring | [layout.md](references/layout.md) |
 | DTOs & Boundary Contracts | `MsgspecDTO`, `SQLAlchemyDTO`, `DataclassDTO`, `PydanticDTO`, `DTOConfig`, `DTOData[T]`, `DTOField`, `Mark` | [dtos.md](references/dtos.md) |
 | OpenAPI & Schema UI | `OpenAPIConfig`, Scalar/Swagger/Redoc/Stoplight/RapiDoc plugins, `ResponseSpec`, `Operation`, security schemes | [openapi.md](references/openapi.md) |
@@ -104,7 +104,7 @@ This guidance targets the released Litestar 2.24.0 contract. Do not copy unrelea
 
 ## Validation Checkpoint
 
-- [ ] Route handlers use explicit Litestar 2.24 parameter, body, and dependency markers (`FromPath[T]`, `FromQuery[T]`, `JSONBody[T]`, `NamedDependency[T]`, `SkipValidation[T]`).
+- [ ] Route handlers use explicit Litestar 2.25 parameter, body, reserved-kwarg, and dependency markers (`FromPath[T]`, `FromQuery[T]`, `JSONBody[T]`/`RequestBody[T]`, `RawBody`, `QueryParams`, `RequestCookies`, `NamedDependency[T]`, `SkipValidation[T]`).
 - [ ] Request and response contracts use `msgspec.Struct` or `MsgspecDTO` / `SQLAlchemyDTO` with explicit field exclusions and `status_code` declarations.
 - [ ] Authorization checks live in `Guard` functions (`ASGIConnection`, `BaseRouteHandler`) or `litestar-security` decorators, and domain exceptions map cleanly through `exception_handlers`.
 - [ ] Built-in config objects (`CORSConfig`, `CSRFConfig`, `AllowedHostsConfig`, `CompressionConfig`, `LoggingConfig`, `OpenAPIConfig`, `ResponseCacheConfig`) are wired through `Litestar(...)` or `ApplicationCore.on_app_init`.
@@ -265,7 +265,7 @@ class ApplicationCore(InitPluginProtocol, CLIPluginProtocol):
 
 
 def create_app() -> Litestar:
-    """Compose the Litestar 2.24 application via ApplicationCore."""
+    """Compose the Litestar 2.25 application via ApplicationCore."""
     return Litestar(plugins=[ApplicationCore()])
 ```
 
@@ -298,7 +298,7 @@ def create_app() -> Litestar:
 - <https://docs.litestar.dev/> - Litestar documentation
 - <https://docs.litestar.dev/latest/reference/> - Litestar API reference
 - <https://docs.litestar.dev/latest/release-notes/changelog.html> - Litestar 2.x changelog
-- <https://github.com/litestar-org/litestar/tree/v2.24.0> - Audited Litestar 2.24.0 source
+- <https://github.com/litestar-org/litestar/tree/v2.25.0> - Audited Litestar 2.25.0 source
 - <https://dishka.readthedocs.io/en/stable/integrations/litestar.html> - Dishka Litestar integration
 
 ## Shared Styleguide Baseline

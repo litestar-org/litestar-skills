@@ -56,9 +56,17 @@ authentication or Origin validation.
 Browser sessions require native CSRF coverage, derived automatically for
 session-capable policies.
 
-- `auth=public()` excludes a stateless route from native CSRF.
+- `auth=public()` (including `PublicController`) excludes a stateless route from
+  native CSRF (`exclude_from_csrf=True`). Setting `opt={"exclude_from_csrf": False}`
+  on a handler under `public()` raises
+  `ImproperlyConfiguredException: Native CSRF exclusions must be exactly True`.
+- To keep a public controller's cookie-session `POST` routes protected by native
+  Litestar CSRF, subclass `SecureController` with
+  `auth: ClassVar[AuthenticationPolicy] = exclude()` on the controller and set
+  `opt={"exclude_from_csrf": False}` on the `POST` handlers (or declare
+  `opt={"csrf_required": True}` on individual HTTP handlers under `public()`).
 - A public handler that establishes cookie-authenticated state must declare
-  `csrf_required=True` (HTTP-only).
+  `csrf_required=True` (`CSRF_REQUIRED_OPT_KEY`, HTTP-only).
 - `auth=exclude()` derives no CSRF demand from default mechanisms and writes no
   native CSRF exclusion, leaving the route to Litestar's own CSRF middleware
   unless `csrf_required=True` is declared.

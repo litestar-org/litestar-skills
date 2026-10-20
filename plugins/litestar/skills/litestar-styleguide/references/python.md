@@ -8,7 +8,7 @@ Modern Python development standards with async-first patterns.
 
 ```python
 # Use PEP 604 union syntax
-def get_user(id: int) -> User | None: ...
+def get_user(user_id: int) -> User | None: ...
 
 
 # Avoid typing.Optional — prefer PEP 604
@@ -20,8 +20,15 @@ def get_user(id: int) -> User | None: ...
 # types (msgspec.Struct, SQLAlchemy 2.0 `Mapped[...]`, Dishka `@provide`,
 # SAQ `@task`, ADK tool registries) — those decorators/metaclasses read
 # annotations at class-creation time and need the real types, not strings.
+#
+# In Litestar route/controller modules using `from __future__ import annotations`,
+# keep runtime-inspected handler signature imports (`Request`, `NamedDependency`,
+# `FromDishka`, `FromPath`, `FromQuery`, `JSONBody`, request/response DTOs) at
+# module top-level with `# noqa: TC001, TC002` (never inside `if TYPE_CHECKING:`),
+# or configure `"**/controllers.py" = ["TC001", "TC002", "TC003"]` under
+# `[tool.ruff.lint.per-file-ignores]`.
 
-# Use generic syntax for collections
+# Use generic syntax for collections (PEP 585)
 items: list[str] = []
 mapping: dict[str, int] = {}
 ```
@@ -30,7 +37,7 @@ mapping: dict[str, int] = {}
 
 ```python
 # All I/O operations should be async
-async def fetch_data(url: str) -> dict:
+async def fetch_data(url: str) -> dict[str, object]:
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
         return response.json()
@@ -79,6 +86,7 @@ Prefer `msgspec.Struct` for wire schemas / DTOs in Litestar applications (match 
 ```python
 from dataclasses import dataclass
 from uuid import UUID
+
 import msgspec
 
 
@@ -180,20 +188,26 @@ class UserService:
 
 ## Import Organization
 
+Group imports in standard library, third-party, and local application order. When `from __future__ import annotations` and Ruff `flake8-type-checking` (`TC`) are enabled in Litestar controller/handler modules, keep runtime-inspected route signature annotations (`Request`, `NamedDependency`, `FromDishka`, `FromPath`, `FromQuery`, `JSONBody`, request/response DTOs) at module top-level with `# noqa: TC001, TC002` — never inside `if TYPE_CHECKING:`:
+
 ```python
-# Standard library
+from __future__ import annotations
+
 from collections.abc import AsyncIterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-# Third-party
 import httpx
+from litestar import Request  # noqa: TC002
+from litestar.di import NamedDependency  # noqa: TC002
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Local
-from app.domain.users.models import User
-from app.domain.users.service import UserService
+from app.domain.users.models import User  # noqa: TC001
+from app.domain.users.service import UserService  # noqa: TC001
+
+if TYPE_CHECKING:
+    from app.config import AppSettings
 ```
 
 ## Testing
@@ -286,12 +300,12 @@ def good(x: str | None) -> int | None: ...
 
 
 # Bad: Mutable default arguments
-def bad(items: list = []): ...
+def bad(items: list[str] = []): ...
 
 
 # Good: Use None and create inside
-def good(items: list | None = None):
-    items = items or []
+def good(items: list[str] | None = None) -> list[str]:
+    return items or []
 
 
 # Bad: Bare except
@@ -374,20 +388,20 @@ ruff check . --fix
 import pytest
 
 
-def test_function_success():
+def test_function_success() -> None:
     """Test the happy path."""
     result = my_function(valid_input)
     assert result == expected_output
 
 
-def test_function_error():
+def test_function_error() -> None:
     """Test error handling."""
     with pytest.raises(ValueError, match="Invalid input"):
         my_function(invalid_input)
 
 
 @pytest.fixture
-def sample_data():
+def sample_data() -> dict[str, str]:
     """Fixture providing test data."""
     return {"key": "value"}
 ```
@@ -400,7 +414,7 @@ config = {}  # Modified by multiple functions
 
 
 # Good: Pass configuration explicitly
-def process(data: dict, config: Config) -> Result: ...
+def process(data: dict[str, object], config: Config) -> Result: ...
 
 
 # Bad: Hardcoded configuration

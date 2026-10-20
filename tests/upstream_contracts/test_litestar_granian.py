@@ -1,11 +1,14 @@
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from functools import partial
 from importlib.metadata import version
+from pathlib import Path
 from typing import Any, cast, get_args
 
 import pytest
 from granian import Granian
+from granian.cli import cli as granian_cli
 from granian.constants import HTTPModes, Interfaces, Loops, RuntimeModes, SSLProtocols, TaskImpl
 from granian.http import HTTP1Settings, HTTP2Settings
 from granian.log import LogLevels
@@ -16,10 +19,41 @@ from litestar.logging import LoggingConfig
 from litestar.plugins import CLIPluginProtocol, InitPlugin
 from litestar.testing import TestClient
 from litestar_granian import GranianPlugin, __project__, __version__
+from litestar_granian import static as granian_static
 from litestar_granian._runner import main as runner_main
 from litestar_granian.cli import run_command
 from litestar_granian.logging import build_logging_config, load_serialized_formatter
 from litestar_granian.plugin import StaticMode
+
+
+@dataclass
+class _DummyStaticMount:
+    """Stub static mount definition for provider contract testing."""
+
+    route: str
+    directory: Path
+    directory_index: str | None = None
+
+
+@dataclass
+class _DummyStaticConfig:
+    """Stub static server configuration returned by a static provider plugin."""
+
+    mounts: tuple[_DummyStaticMount, ...]
+    placement: str | None = "native"
+    reason: str | None = None
+    fallback_reason: str | None = None
+
+
+class _DummyStaticProvider(InitPlugin):
+    """Stub Litestar plugin implementing get_static_server_config()."""
+
+    def __init__(self, config: _DummyStaticConfig) -> None:
+        self._config = config
+
+    def get_static_server_config(self) -> _DummyStaticConfig:
+        """Return configured static mount metadata."""
+        return self._config
 
 
 def test_litestar_granian_and_granian_versions() -> None:
@@ -313,3 +347,73 @@ def test_logging_bridge_builds_config() -> None:
         assert reconstructed.format(record) == "INFO: hello"
     finally:
         app_logger.removeHandler(handler)
+
+
+def test_standalone_granian_cli_contract() -> None:
+    """Verify standalone granian CLI option names that differ from litestar run."""
+    options = {option for parameter in granian_cli.params for option in (*parameter.opts, *parameter.secondary_opts)}
+    expected_standalone_options = {
+        "--interface",
+        "--factory",
+        "--no-factory",
+        "--log",
+        "--no-log",
+        "--log-level",
+        "--access-log",
+        "--no-access-log",
+        "--access-log-fmt",
+        "--blocking-threads",
+        "--runtime-threads",
+        "--runtime-blocking-threads",
+        "--runtime-mode",
+        "--ssl-certificate",
+        "--ssl-keyfile",
+    }
+    assert expected_standalone_options <= options
+
+
+def test_static_provider_discovery_contract(tmp_path: Path) -> None:
+    """Verify static provider placement resolution and explicit CLI mount precedence."""
+    static_mod: Any = granian_static
+    resolve_static_mounts = cast("Callable[..., Any]", static_mod._resolve_static_mounts)
+    static_dir = tmp_path / "dist"
+    static_dir.mkdir()
+    (static_dir / "app.js").write_text("console.log('ok');", encoding="utf-8")
+
+    native_provider = _DummyStaticProvider(
+        _DummyStaticConfig(
+            mounts=(_DummyStaticMount(route="/static", directory=static_dir, directory_index="index.html"),),
+            placement="native",
+        )
+    )
+    app_native = Litestar(route_handlers=[], plugins=[GranianPlugin(static="auto"), native_provider])
+
+    assert resolve_static_mounts(app_native, static_mode="off") is None
+
+    resolved_native = resolve_static_mounts(app_native, static_mode="auto")
+    assert resolved_native is not None
+    assert resolved_native.routes == ("/static",)
+    assert resolved_native.mounts == (static_dir.resolve(),)
+    assert resolved_native.directory_index == "index.html"
+
+    explicit = resolve_static_mounts(
+        app_native,
+        static_mode="off",
+        explicit_routes=("/assets",),
+        explicit_mounts=(static_dir,),
+        explicit_directory_index=None,
+    )
+    assert explicit is not None
+    assert explicit.routes == ("/assets",)
+    assert explicit.mounts == (static_dir.resolve(),)
+    assert explicit.directory_index is None
+
+    asgi_provider = _DummyStaticProvider(
+        _DummyStaticConfig(
+            mounts=(_DummyStaticMount(route="/static", directory=static_dir),),
+            placement="asgi",
+            reason="dev server active",
+        )
+    )
+    app_asgi = Litestar(route_handlers=[], plugins=[GranianPlugin(static="auto"), asgi_provider])
+    assert resolve_static_mounts(app_asgi, static_mode="auto") is None

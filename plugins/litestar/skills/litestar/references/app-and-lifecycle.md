@@ -1,4 +1,4 @@
-# App Composition, Lifecycle, State, and 2.22–2.24 Contracts
+# App Composition, Lifecycle, State, and 2.22–2.25 Contracts
 
 ## `Litestar(...)` Constructor and `AppConfig`
 
@@ -144,9 +144,9 @@ Use direct `Litestar(...)` keyword arguments for compact services or tests, and 
   - `State.immutable_copy() -> ImmutableState`
   - `ImmutableState.mutable_copy() -> State`
 
-## Litestar 2.22–2.24 Explicit Declaration Contracts
+## Litestar 2.22–2.25 Explicit Declaration Contracts
 
-Litestar 2.22 through 2.24 standardize explicit parameter, body, and dependency annotations in preparation for Litestar 3.0:
+Litestar 2.22 through 2.25 standardize explicit parameter, body, reserved-kwarg, and dependency annotations in preparation for Litestar 3.0:
 
 ```python
 from typing import Annotated
@@ -166,6 +166,10 @@ from litestar.params import (
     MultipartBody,
     PathParameter,
     QueryParameter,
+    QueryParams,
+    RawBody,
+    RequestBody,
+    RequestCookies,
     SkipValidation,
     URLEncodedBody,
 )
@@ -211,8 +215,26 @@ class ItemController(Controller):
         self,
         data: JSONBody[CreateItemPayload],
     ) -> CreateItemPayload:
-        """Accept an explicit JSON request body via JSONBody[T]."""
+        """Accept an explicit JSON request body via JSONBody[T] (or RequestBody[T])."""
         return data
+
+    @post("/default-body")
+    async def create_default_body_item(
+        self,
+        data: RequestBody[CreateItemPayload],
+    ) -> CreateItemPayload:
+        """Accept a default JSON request body via RequestBody[T]."""
+        return data
+
+    @post("/raw")
+    async def create_raw_item(
+        self,
+        body: RawBody,
+        query: QueryParams,
+        cookies: RequestCookies,
+    ) -> dict[str, int]:
+        """Accept explicit reserved kwargs RawBody, QueryParams, and RequestCookies."""
+        return {"bytes": len(body), "query_keys": len(query), "cookies": len(cookies)}
 
     @post("/msgpack")
     async def create_msgpack_item(
@@ -239,7 +261,7 @@ class ItemController(Controller):
         return data
 ```
 
-### Summary of 2.22–2.24 Changes
+### Summary of 2.22–2.25 Changes
 
 | Release | Contract Change | Preferred Pattern |
 | --- | --- | --- |
@@ -251,3 +273,4 @@ class ItemController(Controller):
 | **2.23.0** | Strict `Host` header validation enforced. | Requests with malformed `Host` headers are rejected with `400 Bad Request`. |
 | **2.24.0** | Implicitly declared dependencies deprecated. | Annotate injected dependencies with `NamedDependency[T]` (or `NamedDependency[SkipValidation[T]]` when skipping validation). |
 | **2.24.0** | OpenAPI 3.1 required vs nullable semantics and dependency-owned `data` parameters fixed. | Nullable fields (`T \| None`) without a default value are marked `required` in OpenAPI 3.1; give optional fields an explicit `= None` default. `data` declared inside a dependency function is now included in the route's OpenAPI schema. |
+| **2.25.0** | `RequestBody[T]`, `RawBody`, `QueryParams`, and `RequestCookies` added to `litestar.params`; untyped reserved kwargs (`data`, `body`, `headers`, `query`, `cookies`, `scope`, `request`, `socket`) emit `LitestarDeprecationWarning`. | Annotate `data` with a body marker (`JSONBody[T]`, `RequestBody[T]`, `MsgPackBody[T]`, `MultipartBody[T]`, `URLEncodedBody[T]`, or `Annotated[T, Body(...)]`), `body` as `RawBody`, `query` as `QueryParams`, `cookies` as `RequestCookies`, `headers` as `Headers`, and `scope` as `Scope` (or read `request.headers` / `request.query_params` / `request.cookies` / `request.scope` inside route handlers). |
