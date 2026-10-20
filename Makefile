@@ -60,7 +60,7 @@ install-prek:                                       ## Install prek (Rust pre-co
 .PHONY: install
 install: destroy clean                              ## Install the project, dependencies, and pre-commit hooks
 	@echo "${INFO} Starting fresh installation... 🚀"
-	@uv python pin 3.10 >/dev/null 2>&1
+	@uv python pin 3.11 >/dev/null 2>&1
 	@uv venv >/dev/null 2>&1
 	@uv sync --extra dev
 	@bun install
