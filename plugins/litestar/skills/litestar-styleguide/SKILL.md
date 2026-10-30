@@ -27,6 +27,7 @@ This is the **shared style baseline** that every other skill in this plugin refe
 | CI/CD conventions | [`references/ci-cd.md`](references/ci-cd.md) | GitHub Actions with `setup-uv`, `prek` / `.pre-commit-config.yaml`, matrix builds |
 | Canonical reference apps | [`references/canonical-apps.md`](references/canonical-apps.md) | `litestar-fullstack-inertia`, `litestar-fullstack`, `litestar-sqlstack`, `oracledb-vertexai-demo` |
 | Google Developer Knowledge MCP | [`references/google-developer-knowledge-mcp.md`](references/google-developer-knowledge-mcp.md) | Opt-in MCP setup for fresh GCP / Firebase / Maps documentation |
+| Documentation architecture | [`../litestar-docs/SKILL.md`](../litestar-docs/SKILL.md) | Zensical Free (`zensical.toml`), `mkdocstrings-python` (Griffe), `TypedDict` inline docstrings, `objects.inv`, `llms.txt` |
 
 ### How sibling skills consume this
 

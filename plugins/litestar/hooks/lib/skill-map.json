@@ -8,10 +8,22 @@
       "own_package": "litestar",
       "priority": 100,
       "signals": [
-        { "type": "pyproject_dep", "name": "litestar" },
-        { "type": "python_import", "module": "litestar" },
-        { "type": "pyproject_section", "section": "tool.litestar" },
-        { "type": "file_glob", "pattern": "litestar.toml" }
+        {
+          "type": "pyproject_dep",
+          "name": "litestar"
+        },
+        {
+          "type": "python_import",
+          "module": "litestar"
+        },
+        {
+          "type": "pyproject_section",
+          "section": "tool.litestar"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "litestar.toml"
+        }
       ],
       "reminder": "Use `litestar:litestar` for core app wiring, routing, DTO/OpenAPI, guards/auth, DI, data services, settings, exceptions, middleware, plugins, and realtime channels."
     },
@@ -20,9 +32,18 @@
       "own_package": "litestar-security",
       "priority": 95,
       "signals": [
-        { "type": "pyproject_dep", "name": "litestar-security" },
-        { "type": "python_import", "module": "litestar_security" },
-        { "type": "python_regex", "pattern": "\\b(?:SecurityPlugin|SecurityConfig|SecurityContext|AuthorizationSnapshot|CurrentUser|SecureController|PublicController|WebSocketSecurityConfig|SecurityHeadersConfig)\\b|\\brequires_(?:role|scope|tenant|tenant_role|capability|authenticated|assurance|all_of|any_of|at_least|one_of)\\b" }
+        {
+          "type": "pyproject_dep",
+          "name": "litestar-security"
+        },
+        {
+          "type": "python_import",
+          "module": "litestar_security"
+        },
+        {
+          "type": "python_regex",
+          "pattern": "\\b(?:SecurityPlugin|SecurityConfig|SecurityContext|AuthorizationSnapshot|CurrentUser|SecureController|PublicController|WebSocketSecurityConfig|SecurityHeadersConfig)\\b|\\brequires_(?:role|scope|tenant|tenant_role|capability|authenticated|assurance|all_of|any_of|at_least|one_of)\\b"
+        }
       ],
       "reminder": "Use `litestar:litestar-security` for SecurityPlugin, Principal/CurrentUser injection, AuthorizationSnapshot resolvers, and composable `requires_*` guards."
     },
@@ -31,9 +52,18 @@
       "own_package": "litestar-autowire",
       "priority": 95,
       "signals": [
-        { "type": "pyproject_dep", "name": "litestar-autowire" },
-        { "type": "python_import", "module": "litestar_autowire" },
-        { "type": "python_regex", "pattern": "\\b(?:AutowirePlugin|AutowireConfig|AutowireIntegration|AutowireLoader|clear_autowire_cache)\\b" }
+        {
+          "type": "pyproject_dep",
+          "name": "litestar-autowire"
+        },
+        {
+          "type": "python_import",
+          "module": "litestar_autowire"
+        },
+        {
+          "type": "python_regex",
+          "pattern": "\\b(?:AutowirePlugin|AutowireConfig|AutowireIntegration|AutowireLoader|clear_autowire_cache)\\b"
+        }
       ],
       "reminder": "Use `litestar:litestar-autowire` for domain-package controller/listener/task discovery, router wrapping, and Dishka or Queues integrations."
     },
@@ -41,11 +71,26 @@
       "skill": "litestar-ai",
       "priority": 95,
       "signals": [
-        { "type": "pyproject_dep", "name": "google-adk" },
-        { "type": "pyproject_dep", "name": "google-genai" },
-        { "type": "python_import", "module": "google.adk" },
-        { "type": "python_import", "module": "google.genai" },
-        { "type": "python_regex", "pattern": "\\b(?:LlmAgent|Runner|SQLSpecSessionService|VertexAI|ModelArmor|AgentEngine|DynamicWorkflow|SpecTree)\\b" }
+        {
+          "type": "pyproject_dep",
+          "name": "google-adk"
+        },
+        {
+          "type": "pyproject_dep",
+          "name": "google-genai"
+        },
+        {
+          "type": "python_import",
+          "module": "google.adk"
+        },
+        {
+          "type": "python_import",
+          "module": "google.genai"
+        },
+        {
+          "type": "python_regex",
+          "pattern": "\\b(?:LlmAgent|Runner|SQLSpecSessionService|VertexAI|ModelArmor|AgentEngine|DynamicWorkflow|SpecTree)\\b"
+        }
       ],
       "reminder": "Use `litestar:litestar-ai` for serving Google ADK agents and dynamic workflows from Litestar with sqlspec-backed sessions and SSE streaming."
     },
@@ -54,9 +99,18 @@
       "own_package": "sqlspec",
       "priority": 90,
       "signals": [
-        { "type": "pyproject_dep", "name": "sqlspec" },
-        { "type": "python_import", "module": "sqlspec" },
-        { "type": "pyproject_section", "section": "tool.sqlspec" }
+        {
+          "type": "pyproject_dep",
+          "name": "sqlspec"
+        },
+        {
+          "type": "python_import",
+          "module": "sqlspec"
+        },
+        {
+          "type": "pyproject_section",
+          "section": "tool.sqlspec"
+        }
       ],
       "reminder": "Use `litestar:sqlspec` for raw-SQL adapters, query builders, named SQL loaders, filters, pagination, and framework extensions."
     },
@@ -65,9 +119,18 @@
       "own_package": "advanced-alchemy",
       "priority": 90,
       "signals": [
-        { "type": "pyproject_dep", "name": "advanced-alchemy" },
-        { "type": "python_import", "module": "advanced_alchemy" },
-        { "type": "python_regex", "pattern": "\\b(?:SQLAlchemyAsyncRepositoryService|SQLAlchemyAsyncConfig|SQLAlchemyPlugin)\\b" }
+        {
+          "type": "pyproject_dep",
+          "name": "advanced-alchemy"
+        },
+        {
+          "type": "python_import",
+          "module": "advanced_alchemy"
+        },
+        {
+          "type": "python_regex",
+          "pattern": "\\b(?:SQLAlchemyAsyncRepositoryService|SQLAlchemyAsyncConfig|SQLAlchemyPlugin)\\b"
+        }
       ],
       "reminder": "Use `litestar:advanced-alchemy` for declarative SQLAlchemy models, async repository services, filters, storage, and Alembic migrations."
     },
@@ -76,8 +139,14 @@
       "own_package": "msgspec",
       "priority": 80,
       "signals": [
-        { "type": "pyproject_dep", "name": "msgspec" },
-        { "type": "python_import", "module": "msgspec" }
+        {
+          "type": "pyproject_dep",
+          "name": "msgspec"
+        },
+        {
+          "type": "python_import",
+          "module": "msgspec"
+        }
       ],
       "reminder": "Use `litestar:msgspec` for `Struct` definitions, `Meta` constraints, tagged unions, enc_hook/dec_hook patterns, and JSON/MessagePack serialization."
     },
@@ -86,9 +155,18 @@
       "own_package": "litestar-granian",
       "priority": 70,
       "signals": [
-        { "type": "pyproject_dep", "name": "litestar-granian" },
-        { "type": "python_import", "module": "litestar_granian" },
-        { "type": "python_regex", "pattern": "\\bGranianPlugin\\b" }
+        {
+          "type": "pyproject_dep",
+          "name": "litestar-granian"
+        },
+        {
+          "type": "python_import",
+          "module": "litestar_granian"
+        },
+        {
+          "type": "python_regex",
+          "pattern": "\\bGranianPlugin\\b"
+        }
       ],
       "reminder": "Use `litestar:litestar-granian` for GranianPlugin runtime configuration, workers, threads, HTTP/2, TLS, and `litestar run` options."
     },
@@ -97,9 +175,18 @@
       "own_package": "litestar-saq",
       "priority": 70,
       "signals": [
-        { "type": "pyproject_dep", "name": "litestar-saq" },
-        { "type": "python_import", "module": "litestar_saq" },
-        { "type": "python_regex", "pattern": "\\b(?:SAQPlugin|SAQConfig|TaskQueues|monitored_job)\\b" }
+        {
+          "type": "pyproject_dep",
+          "name": "litestar-saq"
+        },
+        {
+          "type": "python_import",
+          "module": "litestar_saq"
+        },
+        {
+          "type": "python_regex",
+          "pattern": "\\b(?:SAQPlugin|SAQConfig|TaskQueues|monitored_job)\\b"
+        }
       ],
       "reminder": "Use `litestar:litestar-saq` for SAQPlugin, SAQConfig, QueueConfig, background tasks, cron jobs, and the `litestar workers run` CLI."
     },
@@ -108,9 +195,18 @@
       "own_package": "litestar-queues",
       "priority": 70,
       "signals": [
-        { "type": "pyproject_dep", "name": "litestar-queues" },
-        { "type": "python_import", "module": "litestar_queues" },
-        { "type": "python_regex", "pattern": "\\b(?:QueuePlugin|QueueService|QueuedBackgroundTask|QueueEventsConfig|SQLSpecBackendConfig|SQLAlchemyBackendConfig)\\b" }
+        {
+          "type": "pyproject_dep",
+          "name": "litestar-queues"
+        },
+        {
+          "type": "python_import",
+          "module": "litestar_queues"
+        },
+        {
+          "type": "python_regex",
+          "pattern": "\\b(?:QueuePlugin|QueueService|QueuedBackgroundTask|QueueEventsConfig|SQLSpecBackendConfig|SQLAlchemyBackendConfig)\\b"
+        }
       ],
       "reminder": "Use `litestar:litestar-queues` for QueuePlugin wiring, SQLSpec/SQLAlchemy/Redis/memory backends, workers, `@task` definitions, and schedules."
     },
@@ -119,13 +215,34 @@
       "own_package": "litestar-vite",
       "priority": 70,
       "signals": [
-        { "type": "pyproject_dep", "name": "litestar-vite" },
-        { "type": "python_import", "module": "litestar_vite" },
-        { "type": "python_import", "module": "litestar_vite.inertia" },
-        { "type": "python_regex", "pattern": "\\b(?:VitePlugin|ViteConfig|PathConfig|RuntimeConfig|TypeGenConfig|InertiaConfig|InertiaSSRConfig|InertiaPlugin|InertiaResponse|InertiaRequest|PrecognitionResponse)\\b|\\bcomponent\\s*=\\s*[\"']" },
-        { "type": "file_glob", "pattern": "vite.config.ts" },
-        { "type": "file_glob", "pattern": "vite.config.mts" },
-        { "type": "file_glob", "pattern": "vite.config.js" }
+        {
+          "type": "pyproject_dep",
+          "name": "litestar-vite"
+        },
+        {
+          "type": "python_import",
+          "module": "litestar_vite"
+        },
+        {
+          "type": "python_import",
+          "module": "litestar_vite.inertia"
+        },
+        {
+          "type": "python_regex",
+          "pattern": "\\b(?:VitePlugin|ViteConfig|PathConfig|RuntimeConfig|TypeGenConfig|InertiaConfig|InertiaSSRConfig|InertiaPlugin|InertiaResponse|InertiaRequest|PrecognitionResponse)\\b|\\bcomponent\\s*=\\s*[\"']"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "vite.config.ts"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "vite.config.mts"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "vite.config.js"
+        }
       ],
       "reminder": "Use `litestar:litestar-vite` for VitePlugin, ViteConfig, PathConfig, RuntimeConfig, TypeGenConfig, InertiaConfig (`component=` routes), and the `litestar assets` CLI."
     },
@@ -134,9 +251,18 @@
       "own_package": "litestar-htmx",
       "priority": 60,
       "signals": [
-        { "type": "pyproject_dep", "name": "litestar-htmx" },
-        { "type": "python_import", "module": "litestar_htmx" },
-        { "type": "python_regex", "pattern": "\\b(?:HTMXPlugin|HTMXConfig|HTMXRequest|HTMXTemplate|HXLocation|ReplaceUrl|TriggerEvent|HXStopPolling)\\b" }
+        {
+          "type": "pyproject_dep",
+          "name": "litestar-htmx"
+        },
+        {
+          "type": "python_import",
+          "module": "litestar_htmx"
+        },
+        {
+          "type": "python_regex",
+          "pattern": "\\b(?:HTMXPlugin|HTMXConfig|HTMXRequest|HTMXTemplate|HXLocation|ReplaceUrl|TriggerEvent|HXStopPolling)\\b"
+        }
       ],
       "reminder": "Use `litestar:litestar-htmx` for HTMXPlugin, HTMXRequest, HTMXTemplate, HX-* response helpers, and partial-template patterns."
     },
@@ -145,9 +271,18 @@
       "own_package": "litestar-mcp",
       "priority": 60,
       "signals": [
-        { "type": "pyproject_dep", "name": "litestar-mcp" },
-        { "type": "python_import", "module": "litestar_mcp" },
-        { "type": "python_regex", "pattern": "\\b(?:LitestarMCP|MCPConfig|MCPSkillsConfig|MCPTaskConfig|LitestarA2A|A2AConfig|mcp_tool|mcp_resource|mcp_prompt)\\b" }
+        {
+          "type": "pyproject_dep",
+          "name": "litestar-mcp"
+        },
+        {
+          "type": "python_import",
+          "module": "litestar_mcp"
+        },
+        {
+          "type": "python_regex",
+          "pattern": "\\b(?:LitestarMCP|MCPConfig|MCPSkillsConfig|MCPTaskConfig|LitestarA2A|A2AConfig|mcp_tool|mcp_resource|mcp_prompt)\\b"
+        }
       ],
       "reminder": "Use `litestar:litestar-mcp` for LitestarMCP, MCPConfig, MCPSkillsConfig, LitestarA2A, `@mcp.tool`/`@mcp.resource`/`@mcp.prompt` or route kwargs, and Streamable HTTP or stdio endpoints."
     },
@@ -156,9 +291,18 @@
       "own_package": "litestar-email",
       "priority": 60,
       "signals": [
-        { "type": "pyproject_dep", "name": "litestar-email" },
-        { "type": "python_import", "module": "litestar_email" },
-        { "type": "python_regex", "pattern": "\\b(?:EmailPlugin|EmailConfig|EmailService|EmailMessage|EmailMultiAlternatives)\\b" }
+        {
+          "type": "pyproject_dep",
+          "name": "litestar-email"
+        },
+        {
+          "type": "python_import",
+          "module": "litestar_email"
+        },
+        {
+          "type": "python_regex",
+          "pattern": "\\b(?:EmailPlugin|EmailConfig|EmailService|EmailMessage|EmailMultiAlternatives)\\b"
+        }
       ],
       "reminder": "Use `litestar:litestar-email` for EmailPlugin, EmailConfig, EmailService, and SMTP/Resend/SendGrid/Mailgun/SES/InMemory backends."
     },
@@ -166,10 +310,22 @@
       "skill": "litestar-testing",
       "priority": 50,
       "signals": [
-        { "type": "python_import", "module": "litestar.testing" },
-        { "type": "python_regex", "pattern": "\\b(?:create_test_client|create_async_test_client|AsyncTestClient|TestClient)\\b" },
-        { "type": "file_glob", "pattern": "tests/conftest.py" },
-        { "type": "file_glob", "pattern": "conftest.py" }
+        {
+          "type": "python_import",
+          "module": "litestar.testing"
+        },
+        {
+          "type": "python_regex",
+          "pattern": "\\b(?:create_test_client|create_async_test_client|AsyncTestClient|TestClient)\\b"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "tests/conftest.py"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "conftest.py"
+        }
       ],
       "reminder": "Use `litestar:litestar-testing` for TestClient vs AsyncTestClient, `@pytest.mark.anyio`, lifespan fixtures, and DI/guard overrides."
     },
@@ -178,8 +334,14 @@
       "own_package": "pytest-databases",
       "priority": 50,
       "signals": [
-        { "type": "pyproject_dep", "name": "pytest-databases" },
-        { "type": "python_import", "module": "pytest_databases" }
+        {
+          "type": "pyproject_dep",
+          "name": "pytest-databases"
+        },
+        {
+          "type": "python_import",
+          "module": "pytest_databases"
+        }
       ],
       "reminder": "Use `litestar:pytest-databases` for container-backed database, cache, and object-storage pytest fixtures."
     },
@@ -188,8 +350,14 @@
       "own_package": "polyfactory",
       "priority": 50,
       "signals": [
-        { "type": "pyproject_dep", "name": "polyfactory" },
-        { "type": "python_import", "module": "polyfactory" }
+        {
+          "type": "pyproject_dep",
+          "name": "polyfactory"
+        },
+        {
+          "type": "python_import",
+          "module": "polyfactory"
+        }
       ],
       "reminder": "Use `litestar:polyfactory` for typed mock-data factories (`MsgspecFactory`, `DataclassFactory`, `ModelFactory`, `SQLAlchemyFactory`) and `Use(...)` customization."
     },
@@ -197,10 +365,22 @@
       "skill": "litestar-build",
       "priority": 40,
       "signals": [
-        { "type": "pyproject_section", "section": "tool.hatch.build.targets.binary" },
-        { "type": "pyproject_section", "section": "tool.hatch.build.targets.wheel.force-include" },
-        { "type": "file_glob", "pattern": "pyapp/Cargo.toml" },
-        { "type": "file_glob", "pattern": "tools/bundler.py" }
+        {
+          "type": "pyproject_section",
+          "section": "tool.hatch.build.targets.binary"
+        },
+        {
+          "type": "pyproject_section",
+          "section": "tool.hatch.build.targets.wheel.force-include"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "pyapp/Cargo.toml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "tools/bundler.py"
+        }
       ],
       "reminder": "Use `litestar:litestar-build` for `uv build`, Hatchling `force-include` wheel assets, PyApp binaries, and release matrix workflows."
     },
@@ -208,39 +388,160 @@
       "skill": "litestar-deployment",
       "priority": 40,
       "signals": [
-        { "type": "file_glob", "pattern": "Dockerfile" },
-        { "type": "file_glob", "pattern": "Containerfile" },
-        { "type": "file_glob", "pattern": "docker-compose.yml" },
-        { "type": "file_glob", "pattern": "docker-compose.yaml" },
-        { "type": "file_glob", "pattern": "compose.yml" },
-        { "type": "file_glob", "pattern": "compose.yaml" },
-        { "type": "file_glob", "pattern": "railway.json" },
-        { "type": "file_glob", "pattern": "railway.toml" },
-        { "type": "file_glob", "pattern": "Procfile" },
-        { "type": "file_glob", "pattern": "cloudbuild.yaml" },
-        { "type": "file_glob", "pattern": "app.yaml" },
-        { "type": "file_glob", "pattern": "service.yaml" },
-        { "type": "file_glob", "pattern": "kustomization.yaml" },
-        { "type": "file_glob", "pattern": "kustomization.yml" },
-        { "type": "file_glob", "pattern": "Chart.yaml" },
-        { "type": "file_glob", "pattern": "values.yaml" },
-        { "type": "file_glob", "pattern": "helmfile.yaml" },
-        { "type": "file_glob", "pattern": "skaffold.yaml" },
-        { "type": "file_glob", "pattern": "k8s/*.yaml" },
-        { "type": "file_glob", "pattern": "deploy/*.yaml" },
-        { "type": "file_glob", "pattern": "manifests/*.yaml" },
-        { "type": "file_glob", "pattern": "main.tf" },
-        { "type": "file_glob", "pattern": "*.tf" },
-        { "type": "file_glob", "pattern": "terragrunt.hcl" },
-        { "type": "file_glob", "pattern": ".terraform.lock.hcl" }
+        {
+          "type": "file_glob",
+          "pattern": "Dockerfile"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "Containerfile"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "docker-compose.yml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "docker-compose.yaml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "compose.yml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "compose.yaml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "railway.json"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "railway.toml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "Procfile"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "cloudbuild.yaml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "app.yaml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "service.yaml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "kustomization.yaml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "kustomization.yml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "Chart.yaml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "values.yaml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "helmfile.yaml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "skaffold.yaml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "k8s/*.yaml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "deploy/*.yaml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "manifests/*.yaml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "main.tf"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "*.tf"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "terragrunt.hcl"
+        },
+        {
+          "type": "file_glob",
+          "pattern": ".terraform.lock.hcl"
+        }
       ],
       "reminder": "Use `litestar:litestar-deployment` for Granian-first containers, systemd units, Kubernetes manifests, Terraform IaC, and Cloud Run/Railway/GKE deployments."
+    },
+    {
+      "skill": "litestar-docs",
+      "priority": 45,
+      "signals": [
+        {
+          "type": "file_glob",
+          "pattern": "zensical.toml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "mkdocs.yml"
+        },
+        {
+          "type": "file_glob",
+          "pattern": "docs/conf.py"
+        },
+        {
+          "type": "pyproject_dep",
+          "name": "zensical"
+        },
+        {
+          "type": "pyproject_dep",
+          "name": "mkdocstrings"
+        },
+        {
+          "type": "pyproject_dep",
+          "name": "mkdocstrings-python"
+        },
+        {
+          "type": "pyproject_dep",
+          "name": "mkdocstrings-typescript"
+        },
+        {
+          "type": "pyproject_dep",
+          "name": "shibuya"
+        },
+        {
+          "type": "pyproject_dep",
+          "name": "litestar-sphinx-theme"
+        }
+      ],
+      "reminder": "Use `litestar:litestar-docs` for Zensical Free (`zensical.toml`), `mkdocstrings-python` (Griffe), `TypedDict` inline docstrings, `llms.txt`, `objects.inv`, and Sphinx/Shibuya migrations."
     },
     {
       "skill": "litestar-styleguide",
       "priority": 30,
       "signals": [
-        { "type": "file_glob", "pattern": "skills/*/SKILL.md" }
+        {
+          "type": "file_glob",
+          "pattern": "skills/*/SKILL.md"
+        }
       ],
       "reminder": "Use `litestar:litestar-styleguide` for PEP 604 typing, async I/O, Google docstrings, ruff/mypy/pyright, TypeScript, testing, and CI/CD conventions."
     }

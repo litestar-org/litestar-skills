@@ -10,7 +10,7 @@ When a workspace uses Litestar or its first-party ecosystem, activate the matchi
 - Core framework (app setup, routing, Controllers/Routers, DTOs/OpenAPI, guards/auth, DI/Dishka, data services/pagination, settings, exceptions/RFC 9457, middleware, plugins, WebSockets/SSE/Channels): `litestar`
 - First-party plugins & runtime: `litestar-security`, `litestar-autowire`, `litestar-ai`, `litestar-granian`, `litestar-saq`, `litestar-queues`, `litestar-vite`, `litestar-htmx`, `litestar-mcp`, `litestar-email`
 - Data & serialization: `sqlspec`, `advanced-alchemy`, `msgspec`
-- Testing, build, deployment & style: `litestar-testing`, `pytest-databases`, `polyfactory`, `litestar-build`, `litestar-deployment`, `litestar-styleguide`
+- Testing, build, deployment, docs & style: `litestar-testing`, `pytest-databases`, `polyfactory`, `litestar-build`, `litestar-deployment`, `litestar-docs`, `litestar-styleguide`
 - Workflow skills: `configure`, `new-app`, `new-domain`, `review`
 
 ## Defaults

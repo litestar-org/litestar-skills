@@ -62,7 +62,7 @@ def test_skill_map_covers_all_shipped_skills() -> None:
     matcher_skills = {entry["skill"] for entry in skill_map["matchers"]}
     rule_text = (REPO_ROOT / "rules" / "litestar-antigravity.md").read_text(encoding="utf-8")
 
-    assert len(skill_dirs) == 20
+    assert len(skill_dirs) == 21
     assert matcher_skills == skill_dirs
     for skill in sorted(skill_dirs):
         assert f"`{skill}`" in rule_text
