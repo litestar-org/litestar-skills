@@ -80,15 +80,17 @@ packages = ["tools"]
 include = [
   "tools",
   "skills",
-  "commands",
   "agents",
+  "rules",
   "mcp-servers",
   "templates",
   "hooks",
+  "hooks.json",
   "plugin.json",
   ".claude-plugin",
   ".codex-plugin",
   ".cursor-plugin",
+  ".opencode",
   "AGENTS.md",
   "README.md",
   "LICENSE",
@@ -100,7 +102,7 @@ include = [
 [tool.ruff]
 target-version = "py310"
 line-length = 120
-extend-exclude = [".agents", ".beads", "node_modules", "plugins/litestar"]
+extend-exclude = [".agents", ".beads", "node_modules"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "N", "UP", "B", "A", "S", "C4", "T20", "RET", "SIM", "ARG"]
@@ -192,6 +194,11 @@ search = '"version": "{current_version}"'
 replace = '"version": "{new_version}"'
 
 [[tool.bumpversion.files]]
+filename = "plugin.json"
+search = '"version": "{current_version}"'
+replace = '"version": "{new_version}"'
+
+[[tool.bumpversion.files]]
 filename = ".claude-plugin/plugin.json"
 search = '"version": "{current_version}"'
 replace = '"version": "{new_version}"'
@@ -207,11 +214,6 @@ search = '"version": "{current_version}"'
 replace = '"version": "{new_version}"'
 
 [[tool.bumpversion.files]]
-filename = "plugins/litestar/.codex-plugin/plugin.json"
-search = '"version": "{current_version}"'
-replace = '"version": "{new_version}"'
-
-[[tool.bumpversion.files]]
 filename = ".cursor-plugin/plugin.json"
 search = '"version": "{current_version}"'
 replace = '"version": "{new_version}"'
@@ -220,28 +222,3 @@ replace = '"version": "{new_version}"'
 filename = ".agents/plugins/marketplace.json"
 search = '"version": "{current_version}"'
 replace = '"version": "{new_version}"'
-
-[[tool.bumpversion.files]]
-filename = "tools/install.sh"
-search = 'VERSION="{current_version}"'
-replace = 'VERSION="{new_version}"'
-
-[[tool.bumpversion.files]]
-filename = "tools/uninstall.sh"
-search = 'VERSION="{current_version}"'
-replace = 'VERSION="{new_version}"'
-
-[[tool.bumpversion.files]]
-filename = "tools/install.ps1"
-search = "$script:Version = '{current_version}'"
-replace = "$script:Version = '{new_version}'"
-
-[[tool.bumpversion.files]]
-filename = "tools/install.sh"
-search = "litestar-skills/v{current_version}/"
-replace = "litestar-skills/v{new_version}/"
-
-[[tool.bumpversion.files]]
-filename = "README.md"
-search = "**v{current_version} — early access.**"
-replace = "**v{new_version} — early access.**"

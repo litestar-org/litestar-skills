@@ -1,6 +1,6 @@
 ---
 name: msgspec
-description: "Auto-activate for msgspec, Struct, Meta, msgspec.json, msgspec.msgpack, tagged unions, enc_hook, dec_hook, convert(), or Litestar DTO shapes. Not for Pydantic or ORM models — use their stack-specific skill."
+description: "Use when working with msgspec, Struct, Meta, msgspec.json, msgspec.msgpack, tagged unions, enc_hook, dec_hook, convert(), or Litestar DTO shapes. Not for Pydantic or ORM models — use their stack-specific skill."
 ---
 
 # msgspec Skill

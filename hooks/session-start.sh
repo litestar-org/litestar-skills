@@ -1,128 +1,183 @@
-#!/usr/bin/env bash
-# hooks/session-start.sh
-# SessionStart / PreInvocation hook for litestar-skills. Detects host via env
-# vars and emits the host-correct JSON shape with project-aware skill reminders.
-#
-# Hosts:
-#   CLAUDE_PLUGIN_ROOT      -> Claude Code     -> hookSpecificOutput.additionalContext
-#   CODEX_PLUGIN_ROOT       -> Codex CLI       -> hookSpecificOutput.additionalContext
-#   ANTIGRAVITY_PLUGIN_ROOT -> Antigravity CLI -> injectSteps[].ephemeralMessage
-#   CURSOR_PLUGIN_ROOT      -> Cursor          -> additional_context
-#   (none of the above)     -> Unknown         -> additional_context (Cursor-shape fallback)
+#!/bin/sh
+# Litestar SessionStart context hook — 100% POSIX sh + awk (zero Python/jq dependencies).
+# Supports: --harness <agy|claude|cursor|opencode|json> --project <dir>
 
-set -euo pipefail
+set -eu
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# shellcheck source=hooks/lib/detect-env.sh
-source "${SCRIPT_DIR}/lib/detect-env.sh"
-
-host="unknown"
-if [[ -n "${CLAUDE_PLUGIN_ROOT:-}" ]]; then
-    host="claude"
-elif [[ -n "${CODEX_PLUGIN_ROOT:-}" ]]; then
-    host="codex"
-elif [[ -n "${ANTIGRAVITY_PLUGIN_ROOT:-}" || -n "${AGY_PLUGIN_ROOT:-}" ]]; then
-    host="antigravity"
-elif [[ -n "${CURSOR_PLUGIN_ROOT:-}" ]]; then
-    host="cursor"
+if [ "${LITESTAR_SKILLS_HOOK_DISABLE:-0}" = "1" ] || [ "${LITESTAR_SKILLS_HOOK_DISABLE:-}" = "true" ]; then
+  printf '{}\n'
+  exit 0
 fi
 
-_session_python=""
-if _resolve_python >/dev/null 2>&1; then
-    _session_python="$(_resolve_python)"
+HARNESS="claude"
+PROJECT_DIR=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --harness)
+      HARNESS="${2:-claude}"
+      shift 2
+      ;;
+    --project)
+      PROJECT_DIR="${2:-}"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+# Suppress duplicate Claude hook execution when running inside Cursor IDE.
+if [ "$HARNESS" = "claude" ] && [ -n "${CURSOR_VERSION:-}" ]; then
+  printf '{}\n'
+  exit 0
 fi
 
-stdin_payload=""
-if [[ ! -t 0 ]]; then
-    if (( BASH_VERSINFO[0] >= 4 )); then
-        IFS= read -r -t 0.05 -d '' stdin_payload || true
-    else
-        IFS= read -r -t 1 -d '' stdin_payload || true
-    fi
+STDIN_JSON=""
+if [ ! -t 0 ]; then
+  STDIN_JSON=$(cat || true)
 fi
 
-has_stdin="0"
-if [[ -n "${stdin_payload//[[:space:]]/}" ]]; then
-    has_stdin="1"
+if [ -z "$PROJECT_DIR" ] && [ -n "$STDIN_JSON" ]; then
+  PROJECT_DIR=$(printf '%s' "$STDIN_JSON" | awk '
+    {
+      if (match($0, /"workspacePaths"[[:space:]]*:[[:space:]]*\[[[:space:]]*"[^"]+"/)) {
+        s = substr($0, RSTART, RLENGTH)
+        sub(/^.*"workspacePaths"[[:space:]]*:[[:space:]]*\[[[:space:]]*"/, "", s)
+        sub(/"$/, "", s)
+        print s
+        exit
+      }
+      if (match($0, /"cwd"[[:space:]]*:[[:space:]]*"[^"]+"/)) {
+        s = substr($0, RSTART, RLENGTH)
+        sub(/^.*"cwd"[[:space:]]*:[[:space:]]*"/, "", s)
+        sub(/"$/, "", s)
+        print s
+        exit
+      }
+      if (match($0, /"workspace_roots"[[:space:]]*:[[:space:]]*\[[[:space:]]*"[^"]+"/)) {
+        s = substr($0, RSTART, RLENGTH)
+        sub(/^.*"workspace_roots"[[:space:]]*:[[:space:]]*\[[[:space:]]*"/, "", s)
+        sub(/"$/, "", s)
+        print s
+        exit
+      }
+    }
+  ')
 fi
 
-# Determine project root: prefer workspacePaths[0] from stdin JSON when present, else cwd.
-project_root="${PWD}"
-
-if [[ "$has_stdin" == "1" && -n "$_session_python" ]]; then
-    stdin_info="$("$_session_python" - "$host" "$stdin_payload" <<'PY'
-import json, sys
-host = sys.argv[1]
-raw = sys.argv[2]
-try:
-    payload = json.loads(raw)
-except Exception:
-    payload = {}
-if not isinstance(payload, dict):
-    payload = {}
-
-inv = payload.get("invocationNum", 1)
-try:
-    inv_num = int(inv)
-except Exception:
-    inv_num = 1
-
-if host == "antigravity" and inv_num > 1:
-    print("SKIP")
-    sys.exit(0)
-
-ws = payload.get("workspacePaths")
-if isinstance(ws, list) and ws and isinstance(ws[0], str) and ws[0].strip():
-    print(ws[0].strip())
-PY
-)"
-    if [[ "$stdin_info" == "SKIP" ]]; then
-        echo "{}"
-        exit 0
-    elif [[ -n "$stdin_info" && -d "$stdin_info" ]]; then
-        project_root="$stdin_info"
-    fi
+if [ -z "$PROJECT_DIR" ]; then
+  PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${CURSOR_PROJECT_DIR:-$(pwd)}}"
 fi
 
-# Run detection -> JSON ({"detected_skills": [...], "context": "...", "project_root": "..."}).
-detector_output="$(detect_env "$project_root")"
+json_escape() {
+  awk '
+    BEGIN { ORS = "" }
+    {
+      gsub(/\\/, "\\\\")
+      gsub(/"/, "\\\"")
+      gsub(/\r/, "")
+      gsub(/\t/, "\\t")
+      if (NR > 1) printf "\\n"
+      printf "%s", $0
+    }
+  '
+}
 
-# Short-circuit if disabled (detector returned "{}").
-if [[ "$detector_output" == "{}" ]]; then
-    echo "{}"
-    exit 0
+SKILLS=""
+SKILLS_JSON=""
+
+add_skill() {
+  skill_name="$1"
+  case " $SKILLS " in
+    *" $skill_name "*) return ;;
+  esac
+  if [ -z "$SKILLS" ]; then
+    SKILLS="$skill_name"
+    SKILLS_JSON="\"$skill_name\""
+  else
+    SKILLS="$SKILLS $skill_name"
+    SKILLS_JSON="$SKILLS_JSON, \"$skill_name\""
+  fi
+}
+
+PYPROJECT="$PROJECT_DIR/pyproject.toml"
+OWN_PACKAGE=""
+if [ -f "$PYPROJECT" ]; then
+  OWN_PACKAGE=$(awk '
+    /^\[project\]/ { in_proj=1; next }
+    /^\[/ { in_proj=0 }
+    in_proj && /^[[:space:]]*name[[:space:]]*=/ {
+      line = $0
+      sub(/^[^=]*=[[:space:]]*"/, "", line)
+      sub(/".*$/, "", line)
+      gsub(/_/, "-", line)
+      print tolower(line)
+      exit
+    }
+  ' "$PYPROJECT" 2>/dev/null || true)
+
+  grep -qi "litestar" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar" ] && add_skill "litestar"
+  grep -Eq "advanced[-_]alchemy" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "advanced-alchemy" ] && add_skill "advanced-alchemy"
+  grep -qi "sqlspec" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "sqlspec" ] && add_skill "sqlspec"
+  grep -qi "msgspec" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "msgspec" ] && add_skill "msgspec"
+  grep -Eq "litestar[-_]granian|granian" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar-granian" ] && add_skill "litestar-granian"
+  grep -Eq "litestar[-_]saq" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar-saq" ] && add_skill "litestar-saq"
+  grep -Eq "litestar[-_]queues" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar-queues" ] && add_skill "litestar-queues"
+  grep -Eq "litestar[-_]security" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar-security" ] && add_skill "litestar-security"
+  grep -Eq "litestar[-_]autowire" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar-autowire" ] && add_skill "litestar-autowire"
+  grep -Eq "litestar[-_]vite" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar-vite" ] && add_skill "litestar-vite"
+  grep -Eq "litestar[-_]htmx" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar-htmx" ] && add_skill "litestar-htmx"
+  grep -Eq "litestar[-_]mcp" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar-mcp" ] && add_skill "litestar-mcp"
+  grep -Eq "litestar[-_]email" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar-email" ] && add_skill "litestar-email"
+  grep -Eq "google[-_]adk|google[-_]genai" "$PYPROJECT" 2>/dev/null && add_skill "litestar-ai"
+  grep -qi "pytest" "$PYPROJECT" 2>/dev/null && add_skill "litestar-testing"
+  grep -Eq "pytest[-_]databases" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "pytest-databases" ] && add_skill "pytest-databases"
+  grep -qi "polyfactory" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "polyfactory" ] && add_skill "polyfactory"
+  grep -Eq "zensical|mkdocstrings|shibuya|litestar[-_]sphinx[-_]theme" "$PYPROJECT" 2>/dev/null && add_skill "litestar-docs"
 fi
 
-if [[ -n "$_session_python" ]]; then
-    "$_session_python" - "$host" "$detector_output" "$has_stdin" <<'PY'
-import json, sys
-host = sys.argv[1]
-data = json.loads(sys.argv[2])
-has_stdin = sys.argv[3] == "1"
-context = data.get("context", "")
-detected_skills = data.get("detected_skills") or []
-suppressed_own = data.get("suppressed_own_skill")
+if [ -f "$PROJECT_DIR/zensical.toml" ] || [ -f "$PROJECT_DIR/docs/conf.py" ]; then
+  add_skill "litestar-docs"
+fi
+if [ -f "$PROJECT_DIR/vite.config.ts" ] && [ "$OWN_PACKAGE" != "litestar-vite" ]; then
+  add_skill "litestar-vite"
+fi
+if [ -f "$PROJECT_DIR/Dockerfile" ]; then
+  add_skill "litestar-deployment"
+fi
 
-if host in ("claude", "codex"):
-    out = {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context}}
-elif host == "antigravity":
-    if has_stdin and not detected_skills and not suppressed_own:
-        out = {}
-    else:
-        out = {"injectSteps": [{"ephemeralMessage": context}]}
-else:
-    out = {"additional_context": context}
-
-print(json.dumps(out, ensure_ascii=False))
-PY
+if [ -n "$SKILLS" ]; then
+  SKILL_SUMMARY="Detected Litestar stack skills for this workspace: ${SKILLS}."
 else
-    # Pure-bash fallback (Python should be present, but stay safe).
-    case "$host" in
-        claude|codex)
-            printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":""}}\n' ;;
-        antigravity)
-            printf '{"injectSteps":[{"ephemeralMessage":""}]}\n' ;;
-        *)
-            printf '{"additional_context":""}\n' ;;
-    esac
+  SKILL_SUMMARY="Available Litestar skills: litestar, sqlspec, advanced-alchemy, msgspec, litestar-granian, litestar-saq, litestar-queues, litestar-security, litestar-autowire, litestar-vite, litestar-htmx, litestar-mcp, litestar-email, litestar-ai, litestar-testing, pytest-databases, polyfactory, litestar-docs, litestar-build, litestar-deployment, litestar-styleguide."
 fi
+
+CONTEXT="<EXTREMELY_IMPORTANT>
+Litestar Framework Ecosystem Active (v0.10.0)
+${SKILL_SUMMARY}
+- Activate the matching Litestar skill before writing, refactoring, or reviewing Litestar application or library code.
+- Match the project's existing stack (SQLSpec vs Advanced Alchemy, Provide vs Dishka, msgspec vs Pydantic, Zensical vs Sphinx).
+- Keep all route handlers, guards, dependencies, and I/O async; enforce PEP 604 unions (T | None).
+</EXTREMELY_IMPORTANT>"
+
+ESCAPED=$(printf '%s' "$CONTEXT" | json_escape)
+
+case "$HARNESS" in
+  agy)
+    printf '{"injectSteps":[{"systemMessage":{"systemMessage":"%s"}}]}\n' "$ESCAPED"
+    ;;
+  cursor)
+    printf '{"additional_context":"%s"}\n' "$ESCAPED"
+    ;;
+  opencode)
+    printf '%s\n' "$CONTEXT"
+    ;;
+  json)
+    printf '{"detected_skills":[%s],"context":"%s"}\n' "$SKILLS_JSON" "$ESCAPED"
+    ;;
+  claude|*)
+    printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"},"systemMessage":"%s"}\n' "$ESCAPED" "$ESCAPED"
+    ;;
+esac

@@ -1,6 +1,6 @@
 ---
 name: litestar-deployment
-description: "Auto-activate for Dockerfile, compose, Railway, Cloud Run, GKE, systemd, Kubernetes, Terraform, deploy scripts, or granian/litestar run at runtime. Not for packaging artifacts."
+description: "Use when working with Dockerfile, compose, Railway, Cloud Run, GKE, systemd, Kubernetes, Terraform, deploy scripts, or granian/litestar run at runtime. Not for packaging artifacts."
 ---
 
 # Litestar Deployment

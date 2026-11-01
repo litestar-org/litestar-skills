@@ -1,6 +1,6 @@
 ---
 name: polyfactory
-description: "Auto-activate for polyfactory, ModelFactory, DataclassFactory, MsgspecFactory, AttrsFactory, Use, register_fixture, pytest plugin, __random_seed__, or coverage(). Not for production seeding."
+description: "Use when working with polyfactory, ModelFactory, DataclassFactory, MsgspecFactory, AttrsFactory, Use, register_fixture, pytest plugin, __random_seed__, or coverage(). Not for production seeding."
 ---
 
 # polyfactory

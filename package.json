@@ -32,6 +32,6 @@
   },
   "scripts": {
     "lint:js": "oxlint",
-    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.agents\" \"#.beads\" \"#plugins/litestar\""
+    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.agents\" \"#.beads\""
   }
 }

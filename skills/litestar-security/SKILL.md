@@ -1,6 +1,6 @@
 ---
 name: litestar-security
-description: "Auto-activate for litestar_security, SecurityPlugin, SecurityConfig, SecureController, CurrentUser, Principal, SecurityContext, or requires_role/scope/tenant/capability/assurance. Not for basic Litestar Guards."
+description: "Use when working with litestar_security, SecurityPlugin, SecurityConfig, SecureController, CurrentUser, Principal, SecurityContext, or requires_role/scope/tenant/capability/assurance. Not for basic Litestar Guards."
 ---
 
 # Litestar Security

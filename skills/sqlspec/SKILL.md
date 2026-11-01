@@ -1,6 +1,6 @@
 ---
 name: sqlspec
-description: "Auto-activate for sqlspec, SQLSpec, SQLFileLoader, drivers, query builders, named SQL, filters, pagination, Arrow, framework extensions, ADK stores, or observers. Not for ORM repositories — use advanced-alchemy."
+description: "Use when working with sqlspec, SQLSpec, SQLFileLoader, drivers, query builders, named SQL, filters, pagination, Arrow, framework extensions, ADK stores, or observers. Not for ORM repositories — use advanced-alchemy."
 ---
 
 # SQLSpec Skill

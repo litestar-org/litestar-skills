@@ -1,6 +1,6 @@
 ---
 name: litestar
-description: "Auto-activate for Litestar, Controller, Router, @get/@post, FromPath, MsgspecDTO, OpenAPIConfig, Provide, FromDishka, Guard, ASGIMiddleware, HTTPException, ChannelsPlugin, or WebSocket. Not for standalone libs."
+description: "Use when working with Litestar, Controller, Router, @get/@post, FromPath, MsgspecDTO, OpenAPIConfig, Provide, FromDishka, Guard, ASGIMiddleware, HTTPException, ChannelsPlugin, or WebSocket. Not for standalone libs."
 ---
 
 # Litestar Core Framework & Ecosystem Hub

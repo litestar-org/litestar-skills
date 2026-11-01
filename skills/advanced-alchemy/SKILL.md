@@ -1,6 +1,6 @@
 ---
 name: advanced-alchemy
-description: "Auto-activate for advanced_alchemy, alembic/, SQLAlchemyAsyncRepositoryService, SQLAlchemyAsyncConfig, repository_type, service_class, filters, or storage. Not for raw SQLAlchemy — use sqlspec."
+description: "Use when working with advanced_alchemy, alembic/, SQLAlchemyAsyncRepositoryService, SQLAlchemyAsyncConfig, repository_type, service_class, filters, or storage. Not for raw SQLAlchemy — use sqlspec."
 ---
 
 # Advanced Alchemy

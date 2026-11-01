@@ -1,6 +1,6 @@
 ---
 name: litestar-vite
-description: "Auto-activate for litestar_vite, VitePlugin, ViteConfig, PathConfig, TypeGenConfig, vite.config.ts, InertiaConfig, component=, or @inertiajs/*. Not for plain Vite or server-only HTMX."
+description: "Use when working with litestar_vite, VitePlugin, ViteConfig, PathConfig, TypeGenConfig, vite.config.ts, InertiaConfig, component=, or @inertiajs/*. Not for plain Vite or server-only HTMX."
 ---
 
 # litestar-vite
@@ -206,50 +206,7 @@ Minimal base template:
 </html>
 ```
 
-For programmatic asset loading or resolving secondary Vite HTML entries (`0.30.0+`):
-
-```python
-from pathlib import Path
-from litestar import get
-from litestar.response import Response, Template
-from litestar_vite import HTMLEntryResolutionError, ViteAssetLoader
-
-loader = ViteAssetLoader(config=vite_config)
-
-
-@get("/")
-async def index() -> Template:
-    return Template("index.html", context={"vite": loader})
-
-
-@get("/embed", media_type="text/html")
-async def embed() -> Response[str]:
-    try:
-        html = await loader.resolve_html_entry(
-            "resources/embed.html",
-            production_path=Path("public/embed.html"),
-            absolute_dev_asset_urls=True,
-        )
-    except HTMLEntryResolutionError as exc:
-        return Response(content=str(exc), status_code=503)
-    return Response(content=html, media_type="text/html")
-```
-
-For server-rendered UI component fragments and interactive `<litestar-island>` hydration (`0.32.0+`):
-
-```python
-from litestar import get
-from litestar_vite import ComponentResponse
-
-
-@get("/fragments/counter")
-async def counter_fragment() -> ComponentResponse:
-    return ComponentResponse(
-        "resources/components/Counter.tsx",
-        props={"initial": 5},
-        mode="island",
-    )
-```
+For programmatic asset loading (`ViteAssetLoader`, `resolve_html_entry`) or server-rendered `<litestar-island>` UI component fragments (`ComponentResponse(..., mode="island")`), see [Modes](references/modes.md) and [Config](references/config.md).
 
 ### CLI
 
@@ -257,7 +214,6 @@ async def counter_fragment() -> ComponentResponse:
 litestar assets init             # Scaffold vite.config.ts and package.json
 litestar assets install          # Run npm/pnpm/bun install
 litestar assets update           # Update within package.json semver ranges
-litestar assets update --latest  # Ignore semver ranges
 litestar assets serve            # Start Vite dev server (also auto-started when `dev_mode=True`)
 litestar assets build            # Production build (emits manifest.json + hashed bundles)
 litestar assets deploy --dry-run # Build and preview an fsspec-backed deployment
@@ -268,246 +224,29 @@ litestar assets doctor           # Diagnose integration health
 litestar assets status           # Read-only status summary
 ```
 
-`assets init --template` accepts `react`, `react-router`,
-`react-tanstack`, `react-inertia`, `react-inertia-jinja`, `vue`,
-`vue-inertia`, `vue-inertia-ssr`, `vue-inertia-jinja`,
-`vue-inertia-jinja-ssr`, `svelte`, `svelte-inertia`,
-`svelte-inertia-jinja`, `sveltekit`, `nuxt`, `astro`, `htmx`,
-`jinja-htmx`, `htmx-no-jinja`, `angular`, and `angular-cli`.
+`assets init --template` accepts `react`, `react-router`, `react-tanstack`, `react-inertia`, `react-inertia-jinja`, `vue`, `vue-inertia`, `vue-inertia-ssr`, `vue-inertia-jinja`, `vue-inertia-jinja-ssr`, `svelte`, `svelte-inertia`, `svelte-inertia-jinja`, `sveltekit`, `nuxt`, `astro`, `htmx`, `jinja-htmx`, `htmx-no-jinja`, `angular`, and `angular-cli`.
 
-### HMR
+### HMR & Production Build
 
-In dev mode:
+- **Dev Mode (Single-Port Proxy)**: Vite runs on `runtime.port` and writes `paths.hot_file`; Litestar proxies asset HTTP and the HMR WebSocket (`/static/vite-hmr`) so the browser uses a single public origin. In Vite 8.1+, place explicit HMR network overrides under `server.ws` (not `server.hmr`). See [HMR Reference](references/hmr.md).
+- **Production Build**: Run `litestar assets build` (or `litestar assets deploy`) with `dev_mode=False`. Asset loading checks `<bundle_dir>/<manifest_name>` then `<bundle_dir>/.vite/<manifest_name>`. See [Deployment Reference](references/deployment.md).
 
-1. Vite dev server runs on `runtime.port` (e.g., `5173`).
-2. Plugin writes a "hot file" (path = `hot_file`) signaling dev-mode is active.
-3. The browser uses the Litestar origin for dev assets and HMR.
-4. `vite_hmr()` injects the HMR client script.
-5. Litestar proxies asset HTTP and the HMR WebSocket to the hot-file target.
-6. On rebuild, Vite pushes updates over the proxied WebSocket.
+### Inertia & HTMX Integration
 
-Common HMR gotchas:
-
-- **Hot file mismatch**: remove JS `hotFile` overrides or align them with `ViteConfig.paths.hot_file`. Mismatch ⇒ stale prod URLs in dev.
-- **CORS errors**: remove direct-origin overrides. The supported dev contract keeps Litestar as the public origin.
-- **Port conflict**: let Vite choose its internal port and let the hot file update the proxy target.
-- **Vite 8.1 HMR deprecation**: put HMR network fields under `server.ws`, not `server.hmr`. Keep `server.hmr=false` only when disabling HMR. Use `server.hmr` network fields only when the project is pinned to Vite 7 or 8.0.
-- **Browsers cache `manifest.json`**: cache-bust by hash; never serve manifest.json from a CDN with long TTL.
-
-Vite 8.1+ explicit HMR network override:
-
-```ts
-export default defineConfig({
-  server: {
-    ws: {
-      host: "localhost",
-      path: "vite-hmr",
-      clientPort: 8000,
-    },
-  },
-})
-```
-
-Prefer no explicit HMR network override. `litestar-vite-plugin` routes the
-browser to the Litestar port and emits the version-correct configuration from
-`.litestar.json`.
-
-### Production Build & Deploy
-
-```bash
-# Build for production
-litestar assets build
-
-# Outputs:
-#   <bundle_dir>/manifest.json or .vite/manifest.json
-#   <bundle_dir>/assets/*.js       ← hashed JS bundles
-#   <bundle_dir>/assets/*.css      ← hashed CSS bundles
-#   <bundle_dir>/<public files>    ← copied from publicDir
-```
-
-In production:
-
-- Set `dev_mode=False` (env-toggled).
-- Litestar serves `bundle_dir` as static files OR a CDN serves them and `base` (Vite) / `assetUrl` (plugin) points at the CDN.
-- Asset loading first checks `<bundle_dir>/<manifest_name>`, then
-  `<bundle_dir>/.vite/<manifest_name>`.
-- HMR helpers become no-ops.
-
-CDN pattern:
-
-```ts
-// vite.config.ts
-export default defineConfig({
-  base: process.env.ASSET_URL ?? "/static/",   // CDN URL in prod, /static/ in dev
-  ...
-})
-```
-
-### Inertia integration
-
-```python
-import msgspec
-from litestar import Controller, Litestar, Request, get, post
-from litestar_vite import InertiaSSRConfig, PathConfig, TypeGenConfig, ViteConfig, VitePlugin
-from litestar_vite.config import InertiaTypeGenConfig
-from litestar_vite.inertia import InertiaBack, InertiaConfig, defer, error, flash, share
-from litestar_vite.inertia.helpers import DeferredProp
-
-
-class DashboardProps(msgspec.Struct, rename="camel"):
-    """Typed page props for the dashboard route."""
-
-    can_export: bool
-    stats: DeferredProp[dict[str, int]]
-
-
-class DashboardController(Controller):
-    path = "/dashboard"
-
-    @get("/", component="dashboard/Index")
-    async def index(self, request: Request, stats_service) -> DashboardProps:
-        share(request, "auth", {"user": request.user})
-        return DashboardProps(
-            can_export=True,
-            stats=defer("stats", stats_service.compute_summary, group="analytics"),
-        )
-
-    @post("/projects")
-    async def create_project(self, request: Request, data: ProjectCreate, project_service) -> InertiaBack:
-        if await project_service.exists(name=data.name):
-            error(request, "name", "Project name already exists.")
-            return InertiaBack(request)
-        await project_service.create(data)
-        flash(request, "Project created.", category="success")
-        return InertiaBack(request)
-
-
-vite = VitePlugin(
-    config=ViteConfig(
-        mode="hybrid",
-        paths=PathConfig(resource_dir="resources"),
-        inertia=InertiaConfig(
-            root_template="base.html",
-            extra_static_page_props={"appName": "Acme"},
-            extra_session_page_props={"currentUser": CurrentUser},
-            shared_page_prop_types={"auth": AuthContext},
-            use_script_element=True,
-            precognition=True,
-            type_gen=InertiaTypeGenConfig(include_default_auth=True, include_default_flash=True),
-            ssr=InertiaSSRConfig(enabled=True),
-        ),
-        types=TypeGenConfig(output="resources/generated"),
-    )
-)
-
-app = Litestar(route_handlers=[DashboardController], plugins=[vite], middleware=[session_backend.middleware])
-```
-
-Client entrypoint (`resources/app.tsx`) and page component (`usePage().flash` + `useForm`):
-
-```tsx
-import { createInertiaApp, useForm, usePage } from "@inertiajs/react"
-import { createRoot, hydrateRoot } from "react-dom/client"
-import { csrfHeaders } from "litestar-vite-plugin/helpers"
-import { resolvePageComponent } from "litestar-vite-plugin/inertia-helpers"
-
-createInertiaApp({
-  resolve: (name) => resolvePageComponent(`./pages/${name}.tsx`, import.meta.glob("./pages/**/*.tsx")),
-  defaults: {
-    visitOptions: (_href, options) => ({
-      headers: csrfHeaders(options.headers ?? {}),
-    }),
-  },
-  setup({ el, App, props }) {
-    el.hasChildNodes() ? hydrateRoot(el, <App {...props} />) : createRoot(el).render(<App {...props} />)
-  },
-})
-
-export function DashboardIndex() {
-  const { props: { canExport }, flash } = usePage<{ canExport: boolean }>()
-  const { data, setData, post, processing, errors } = useForm({ name: "" })
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); post("/dashboard/projects") }}>
-      {flash.success?.map((msg, i) => <div key={i}>{msg}</div>)}
-      <input value={data.name} onChange={(e) => setData("name", e.target.value)} />
-      {errors.name && <span>{errors.name}</span>}
-      <button type="submit" disabled={processing || !canExport}>Create</button>
-    </form>
-  )
-}
-```
-
-Current Inertia behavior:
-
-- Initial non-Inertia visits return an HTML bootstrap (`<script type="application/json" id="app_page" data-page="app">` when `use_script_element=True`). Inertia visits (`X-Inertia: true`) return JSON with top-level `flash: {}`.
-- Handler returns shaped like prop bags (`dict`, `msgspec.Struct`, dataclass instance, Pydantic model, or pagination container) become top-level page props. Direct `msgspec.Struct` returns preserve serialized field renames (`rename=` and `msgspec.field(name=...)` aliases, `0.30.0+`). They are not nested under `content`.
-- Direct `InertiaResponse` renders stage `share()`, `flash()`, `error()`, and `clear_history()` in request-local `InertiaTransientState` (with global or per-response `encrypt_history` support); session middleware is required only for `extra_session_page_props` or persisting state across `InertiaRedirect` / `InertiaBack` / `InertiaExternalRedirect`.
-- Special prop wrappers (`always`, `once`, `defer`, `optional`, `lazy`, `merge` with `strategy="append" | "prepend" | "deep"`, and `scroll_props`) are evaluated inside Litestar's DI lifespan frame. Initial responses advertise deferred props; partial responses omit `deferredProps`, including unrequested groups.
-- `X-Inertia-Partial-Data` includes requested keys; `X-Inertia-Partial-Except`
-  excludes keys and wins on overlap.
-- Asset-version mismatch returns `409` plus `X-Inertia-Location` for stale
-  `GET` visits only. Non-`GET` submissions continue to the handler.
-- Use `litestar-vite-plugin` as the bridge owner. Do not add `@inertiajs/vite` to generated Litestar scaffolds by default.
-
-See [Inertia Reference](references/inertia.md), [Deferred, Partial & Merge Props](references/inertia-deferred-and-merge-props.md), and [Advanced Inertia Patterns](references/inertia-advanced-patterns.md) for full details.
-
-### HTMX integration
-
-For HTMX + Jinja, use `ViteConfig(mode="template", ...)`, Litestar
-`TemplateConfig`, and `HTMXPlugin()`. The `htmx` alias normalizes to
-`template`; it does not create a separate runtime mode.
+- **Inertia (`mode="hybrid"`)**: Configure `ViteConfig(mode="hybrid", inertia=InertiaConfig(...))` on a single `VitePlugin`. Return `msgspec.Struct(..., rename="camel")` prop bags from `@get(..., component="...")` handlers (field renames are preserved at top level). Stage `share()`, `flash()`, `error()`, and `clear_history()` in `InertiaTransientState`, wire `csrfHeaders()` into `createInertiaApp({ defaults: { visitOptions } })`, read flash messages from top-level `usePage().flash`, and pass uninvoked callables to `defer` / `lazy` / `optional` / `once`. See [Inertia Reference](references/inertia.md), [Deferred & Merge Props](references/inertia-deferred-and-merge-props.md), and [Advanced Inertia Patterns](references/inertia-advanced-patterns.md).
+- **HTMX (`mode="template"`)**: Pair `ViteConfig(mode="template")` with `TemplateConfig` and `HTMXPlugin()`.
 
 <workflow>
 
 ## Workflow
 
-### Step 1: Pick the Mode
-
-Run the decision tree above. Most apps want `spa`, `template`, `hybrid`, or
-`framework`. Lock the canonical choice before configuring; aliases do not create
-separate runtime modes.
-
-### Step 2: Install
-
-```bash
-pip install litestar-vite
-npm install -D vite litestar-vite-plugin
-# Plus a framework adapter, e.g.:
-npm install -D @vitejs/plugin-react   # or @vitejs/plugin-vue, etc.
-```
-
-Optional bootstrap: `litestar assets init --template <name>` generates a
-transactional scaffold. Use `--no-prompt` in automation and `--overwrite` only
-after reviewing collisions.
-
-### Step 3: Wire ViteConfig (Python)
-
-Define `ViteConfig` with `paths=PathConfig(...)`, optional `runtime=RuntimeConfig(...)`, optional `inertia=InertiaConfig(...)` (for `hybrid` mode), and optional `types=True` / `types=TypeGenConfig(...)`. Toggle `dev_mode` from an env var. Add to `Litestar(plugins=[VitePlugin(config=...)])`.
-
-### Step 4: Wire vite.config.ts (JS)
-
-Add `litestar()` with `input`. Let the `.litestar.json` bridge provide `bundleDir`, `hotFile`, typegen paths, and asset URL unless you are deliberately overriding Python config. Set `base` for prod CDN if needed.
-
-### Step 5: Enable Type Generation (optional)
-
-For SPA / Inertia projects, set `types=TypeGenConfig(...)`. Re-run `litestar assets generate-types` whenever DTOs or `component=` routes change. CI should fail if generated files are out of date.
-
-### Step 6: Wire Templates or Inertia Pages (`template` / `htmx` / `hybrid`)
-
-- **Template / HTMX**: Use `vite_hmr()` and `vite()` in your base template; register `HTMXPlugin()` when using HTMX.
-- **Hybrid (Inertia)**: Call `createInertiaApp()` with `resolvePageComponent()` (or `resolvePageModule()` for Svelte 5) and `defaults: { visitOptions: (_href, options) => ({ headers: csrfHeaders(options.headers ?? {}) }) }`. Return structured prop bags from `@get(..., component="...")` handlers, stage flash messages with `flash(request, ...)` (read from `usePage().flash`), and return `InertiaBack(request)` / `InertiaRedirect(request, ...)` on form submissions.
-
-### Step 7: Verify HMR
-
-Run `litestar run`, load the Litestar URL, and verify asset HTTP plus the HMR
-WebSocket stay on that public origin. The internal Vite port is discovered
-through the hot file.
-
-### Step 8: Build & Deploy
-
-Run `litestar assets update` deliberately when refreshing frontend dependencies.
-Run `litestar assets build` in CI, or configure `DeployConfig` and use
-`litestar assets deploy`. Set `dev_mode=False` in production.
+1. **Pick the Mode**: Select `spa`, `template`, `hybrid` (Inertia), or `framework`.
+2. **Install**: Run `pip install litestar-vite` and `npm install -D vite litestar-vite-plugin` (or scaffold with `litestar assets init --template <name>`).
+3. **Wire `ViteConfig` (Python)**: Configure `PathConfig`, optional `RuntimeConfig`, optional `InertiaConfig` (for `hybrid`), and optional `TypeGenConfig`. Toggle `dev_mode` from an environment variable and register `VitePlugin(config=...)`.
+4. **Wire `vite.config.ts` (JS)**: Add `litestar({ input: [...] })` and let `.litestar.json` supply `bundleDir`, `hotFile`, typegen paths, and `assetUrl`.
+5. **Enable TypeGen (Optional)**: Set `types=TypeGenConfig(...)` and run `litestar assets generate-types` when DTOs or `component=` routes change.
+6. **Wire Templates or Inertia Pages**: Use `vite_hmr()` + `vite()` in templates (with `HTMXPlugin()` for HTMX), or `createInertiaApp()` with `csrfHeaders()` and `usePage().flash` in `hybrid` mode.
+7. **Verify HMR & Build**: Run `litestar run` in dev (single-port proxy) and `litestar assets build` (or `litestar assets deploy`) with `dev_mode=False` in production.
 
 </workflow>
 

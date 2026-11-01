@@ -1,6 +1,6 @@
 ---
 name: litestar-saq
-description: "Auto-activate for litestar_saq, SAQPlugin, SAQConfig, QueueConfig, TaskQueues, CronJob, litestar workers run, background jobs, schedules, or SAQ UI. Not for litestar-queues, Celery, RQ, or Dramatiq."
+description: "Use when working with litestar_saq, SAQPlugin, SAQConfig, QueueConfig, TaskQueues, CronJob, litestar workers run, background jobs, schedules, or SAQ UI. Not for litestar-queues, Celery, RQ, or Dramatiq."
 ---
 
 # litestar-saq

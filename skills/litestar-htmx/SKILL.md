@@ -1,6 +1,6 @@
 ---
 name: litestar-htmx
-description: "Auto-activate for litestar_htmx, HTMXPlugin, HTMXConfig, HTMXRequest, HTMXTemplate, HXLocation, ReplaceUrl, TriggerEvent, or HX-* headers. Not for client-only HTMX — use litestar-vite."
+description: "Use when working with litestar_htmx, HTMXPlugin, HTMXConfig, HTMXRequest, HTMXTemplate, HXLocation, ReplaceUrl, TriggerEvent, or HX-* headers. Not for client-only HTMX — use litestar-vite."
 ---
 
 # litestar-htmx
