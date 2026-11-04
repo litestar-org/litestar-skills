@@ -179,35 +179,97 @@ Maintain documentation quality and compact asset budgets using the following com
 ## Theme CSS Invariants (`docs/stylesheets/extra.css`)
 
 ```css
-/* 1. Cap reading width at 46rem (68-75ch) */
-.md-content__inner {
-  max-width: 46rem;
+/* 1. Wide 86rem grid with compact left & right sidebars */
+.md-grid {
+  max-width: 86rem;
 }
 
-/* 2. Persistent left & right sidebars */
-.md-sidebar {
-  display: block !important;
+@media screen and (min-width: 76.25em) {
+  .md-sidebar--primary {
+    width: 11rem;
+  }
+
+  /* Hide left sidebar automatically on single-page tab sections (e.g. Home) */
+  .md-sidebar--primary:has(
+      > .md-sidebar__scrollwrap
+        > .md-sidebar__inner
+        > .md-nav--primary
+        > .md-nav__list
+        > .md-nav__item--active.md-nav__item--section
+        > .md-nav
+        > .md-nav__list
+        > .md-nav__item:only-child:not(.md-nav__item--nested)
+    ) {
+    display: none;
+  }
+
+  .md-sidebar--secondary {
+    width: 10.5rem;
+  }
+
+  .md-sidebar--secondary:not([hidden]) {
+    display: block;
+  }
 }
 
-/* 3. High-contrast link affordance */
-.md-typeset a:not(.md-button):not(.headerlink) {
+/* 2. Suppress redundant H1 above the Home hero banner & switch light/dark banners via [data-md-color-scheme] */
+.md-typeset:has(.lv-home-hero) > h1:first-of-type {
+  display: none;
+}
+
+:root:not([data-md-color-scheme="slate"]) .lv-hero-banner--dark,
+[data-md-color-scheme="default"] .lv-hero-banner--dark {
+  display: none !important;
+}
+
+[data-md-color-scheme="slate"] .lv-hero-banner--light {
+  display: none !important;
+}
+
+/* 3. Subtle borderless non-link inline code vs. accented pill on clickable code links */
+.md-typeset :not(pre) > code {
+  background-color: var(--lv-inline-code-bg);
+  color: var(--lv-inline-code-fg);
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 0.08em 0.32em;
+}
+
+.md-typeset a > code,
+.md-typeset :not(pre) > code:has(> a:only-child) {
+  background-color: var(--lv-link-code-bg);
+  color: var(--lv-link-code-fg);
+  border-color: var(--lv-link-code-border);
+}
+
+/* 4. High-contrast link affordance */
+.md-typeset a:not(.md-button):not(.headerlink):not(:has(> code:only-child)):not(code a) {
   color: #1d4ed8;
   text-decoration: underline;
   text-underline-offset: 0.18em;
 }
 
-[data-md-color-scheme="slate"] .md-typeset a:not(.md-button):not(.headerlink) {
+[data-md-color-scheme="slate"] .md-typeset a:not(.md-button):not(.headerlink):not(:has(> code:only-child)):not(code a) {
   color: #60a5fa;
   text-decoration: underline;
   text-underline-offset: 0.18em;
 }
 
-/* 4. Match top header bar with main background */
+/* 5. Match top header bar with main background */
 .md-header,
 .md-tabs {
   background-color: var(--md-default-bg-color);
 }
 ```
+
+## Animated Terminal Blocks (`docs/javascripts/termynal.js` + `.lv-termynal`) & Interactive SVG Diagrams
+
+1. **Theme-Aware Termynal Plugin (`docs/javascripts/termynal.js`)**:
+   - Because third-party MkDocs plugins (`termynal`) do not run on Zensical `0.0.71`, register `extra_javascript = ["javascripts/termynal.js"]` in `zensical.toml` and style `.lv-termynal` in `docs/stylesheets/extra.css` using `--md-*` variables and `[data-md-color-scheme="slate"]`.
+   - Place `<!-- termynal -->` immediately before any ```` ```console ```` or ```` ```bash ```` fence. The script animates command lines, comments, progress bars, and output lines on scroll via `IntersectionObserver` (respecting reduced motion preferences), provides replay and copy buttons, and rebinds on page navigation.
+2. **Interactive SVG Architecture Diagrams (`tools/docs/includes/diagram-*.html`)**:
+   - Store reusable SVG/CSS diagrams in `tools/docs/includes/diagram-*.html` and embed them via `--8<--`.
+   - Keep node labels unnumbered and concise (at most 3 short lines per box), and keep mode/tab switcher strips on a single horizontal row (`flex-wrap: nowrap; white-space: nowrap`) without redundant `(mode="...")` parentheticals.
 
 ## Building and Verification Commands
 

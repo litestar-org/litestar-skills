@@ -111,7 +111,7 @@ To prevent this:
 
 By default, `mkdocstrings-python` renders every `TypedDict` field as an individual `<h4>` card with deep permalinks, causing 60-field configuration schemas to inflate HTML pages past 200 KB.
 
-Custom Jinja templates in `tools/docs/templates/python/material/` (`children.html.jinja` and `attribute.html.jinja`) detect classes subclassing `TypedDict` or `msgspec.Struct` and render their fields in a single compact 3-column table (`Parameter` | `Type` | `Description`):
+Custom Jinja templates in `tools/docs/templates/python/material/` (`children.html.jinja` and `attribute.html.jinja`) detect classes subclassing `TypedDict` or `msgspec.Struct` (without requiring `griffe-fieldz`) and render their fields in a single compact 3-column table (`Parameter` | `Type` | `Description`):
 
 - Keeps Reference pages well within the `<= 120 KB` HTML cap.
 - Prevents field permalinks from overwhelming the `<= 14` secondary TOC budget.

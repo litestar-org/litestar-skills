@@ -30,6 +30,8 @@ Dual-engine documentation architecture for `litestar-org` and ecosystem reposito
 - **Document every public `TypedDict` and `msgspec.Struct` field with a PEP 257 inline docstring immediately below the field.** Reason: Sphinx `autoclass` renders zero fields without inline attribute docstrings, and Griffe requires them to build structured parameter tables.
 - **Never write docstrings on `@overload` stubs or leak internal compiler notes (`mypyc`, `PyCapsule`) into public docstrings.** Reason: Both engines render overload docstrings ahead of the implementation docstring.
 - **Execute standalone `docs/examples/**/*.py` modules in `pytest`.** Reason: Standalone modules checked by `ruff`, `pyright`, and `pytest` stay runnable and prevent snippet rot.
+- **Use `[data-md-color-scheme]` CSS classes (not `<picture><source media="(prefers-color-scheme: dark)">`) for light/dark hero banners on Zensical pages, hide single-page left sidebars on `Home`, and omit redundant `<h1>` titles above hero logos.** Reason: `<picture>` media queries only respond to OS-level dark mode and fail when toggling Zensical's theme button (`[data-md-color-scheme="slate"]`).
+- **Keep headings unnumbered and free of inline `` `code` `` pills, reserve bordered code pills strictly for clickable links (`a > code`), keep tab labels short (`white-space: nowrap`), and never write `\|` inside backticked code in Markdown tables.** Reason: Python-Markdown splits table cells on `|` before backticks are parsed (leaving literal `\|` in `<code>`), and bordered pills on every non-link code span create visual noise.
 
 ## Quick Reference
 
@@ -83,6 +85,8 @@ Group API directives (`.. autoclass::` in Sphinx or `:::` in Zensical) under `2â
 - **Never enable inherited members on leaf adapter or plugin classes.** Reason: Repeating 40+ base methods across adapter pages inflates HTML past `400 KB` and duplicates search results.
 - **Never use `mkdocs-click` on Click `>= 8.3` in Zensical.** Reason: `mkdocs-click` renders literal `Sentinel.UNSET` defaults and drops positional argument tables; use `tools/docs/generate_cli_docs.py`.
 - **Never map `"path/foo.md" = "path/foo/index.md"` in Zensical `redirect_maps` when `use_directory_urls = true`.** Reason: Both resolve to `site/path/foo/index.html` and create a self-redirect loop; emit flat `site/path/foo.html` stubs in `postbuild.py`.
+- **Never use `<picture><source media="(prefers-color-scheme: dark)">` for hero banners inside Zensical Markdown pages.** Reason: Zensical switches themes via `[data-md-color-scheme="default"|"slate"]` without altering the browser's OS media query, causing the light-mode dark-ink banner to render invisibly on the dark slate canvas.
+- **Never style non-link inline `` `code` `` spans with heavy border pills or place inline `` `code` `` / numbering in `##`/`###` headings.** Reason: Bordered pills on every identifier clutter prose and tables, and code spans in headings wrap awkwardly in both the main column and the right-hand TOC.
 
 </guardrails>
 

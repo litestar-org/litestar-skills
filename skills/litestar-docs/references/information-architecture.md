@@ -15,14 +15,21 @@ Organize navigation into 5–6 task-oriented top-level tabs rather than exposing
 | `Playground` | Embedded Pyodide + CodeMirror browser sandbox with prebuilt examples and instant execution | Full-bleed responsive 2-column layout (`max-width: 84rem`) |
 | `Project` | Contributor Guide, Creating Adapters, Releases, and Changelog | Standard prose measure |
 
-## Reading Measure & Sidebar Ergonomics
+## Reading Measure, Headings, Tables & Sidebar Ergonomics
 
-- **Prose Measure (`68–75ch`)**:
-  - In Zensical (`docs/stylesheets/extra.css`): Cap `.md-content__inner` at `max-width: 46rem`.
-  - In Sphinx (`docs/_static/custom.css`): Cap `.sy-content` at `max-width: 46rem`.
-  - Reason: Uncapped prose columns stretch across ultrawide monitors and degrade reading comprehension.
+- **Wide Grid & Compact Sidebars**:
+  - In Zensical (`docs/stylesheets/extra.css`): Set `.md-grid { max-width: 86rem; }`, `.md-sidebar--primary { width: 11rem; }`, and `.md-sidebar--secondary { width: 10.5rem; }` so code blocks, diagrams, and tables have generous horizontal room without cramping.
+  - Hide `.md-sidebar--primary` automatically on single-page tab sections (`Home` / `docs/index.md` with `hide: [navigation]`) while keeping the right-hand `"On this page"` outline visible.
+- **Home Hero Banner (`[data-md-color-scheme]` vs `<picture>`)**:
+  - Never use `<picture><source media="(prefers-color-scheme: dark)">` inside `docs/index.md` (it only responds to OS-level dark mode, leaving dark-ink text invisible when Zensical's theme toggle switches to `[data-md-color-scheme="slate"]`). Render dual `.lv-hero-banner--light` and `.lv-hero-banner--dark` `<img>` tags toggled by `[data-md-color-scheme]`, omit redundant `# Project Name` `<h1>` headings above the banner logo, avoid buzzword headings (`60-Second Quick Start` -> `Installation and Setup`), and leave optional third-party server plugins out of the hero summary.
+- **Heading, Code Pill & Table Discipline**:
+  - Keep `##` and `###` headings unnumbered and free of inline `` `code` `` spans or parenthesized module paths (`## Browser Stream Primitives`, not `## 1. Browser Stream Primitives (\`litestar-vite-plugin/helpers\`)`).
+  - Style plain inline `` `code` `` with a subtle borderless fill and reserve accented border pills strictly for clickable code links (`a > code`).
+  - Keep Markdown tables to `2–4` columns (`Helper | Purpose` or `Symbol | Type | Description`).
+  - Never write `\|` inside backticked code in Markdown table cells (Python-Markdown splits table cells on `|` before tokenizing backticks, rendering literal `\|` in `<code>`); write union values with `or` (`` `"open"` or `"closed"` ``) or a named type alias.
+  - Keep tab switcher labels short (`white-space: nowrap`, no `(mode="...")` suffixes) so tab bars always fit on a single horizontal line.
 - **Persistent Left & Right Sidebars**:
-  - Keep both primary (left section tree) and secondary (right `"On this page"` outline) sidebars visible on desktop viewports.
+  - Keep both primary (left section tree on multi-page tabs) and secondary (right `"On this page"` outline) sidebars visible on desktop viewports.
   - Never set `.sy-rside { display: none; }` (Sphinx/Shibuya) or hide `.md-sidebar--secondary` (Zensical).
 - **Bounded Secondary TOC (`<= 14` items)**:
   - Group API reference directives under `2–5` H2 (`##`) category headings so classes render at H3 (`###`) and methods render at H4 (`<h4>`), keeping individual methods out of the secondary TOC while preserving deep-link anchors.

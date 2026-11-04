@@ -1,13 +1,17 @@
 # Polyglot TypeScript, Rust, and Click CLI Documentation
 
-Patterns for documenting Python + TypeScript packages (`litestar-vite`, `litestar-mcp`), Rust + PyO3 extensions (`vertebra`, `fast-query-parsers`, `bunfun`), and Click / `rich-click` CLIs (`sqlspec`, `litestar`) across both **Zensical** and **Sphinx**.
+Patterns for documenting Python + TypeScript packages (`litestar-vite`, `litestar-mcp`), Rust + PyO3 extensions, and Click / `rich-click` CLIs (`sqlspec`, `litestar`) across both **Zensical** and **Sphinx**.
 
 ## Python + TypeScript Packages
 
-### Zensical (`mkdocstrings-typescript`)
+### Zensical (`tools/docs/generate_ts_docs.py` or `mkdocstrings-typescript`)
 
-1. Add `mkdocstrings-typescript` to `[dependency-groups] doc` and `typedoc` to `package.json`.
-2. Register both `python` and `typescript` handlers in `zensical.toml`:
+1. **Deterministic `.d.ts` Subpath Generator (`tools/docs/generate_ts_docs.py` — Recommended for multi-subpath npm packages like `litestar-vite-plugin`)**:
+   - Build TypeScript declarations first (`npm run build` -> `dist/js/*.d.ts`).
+   - Introspect `package.json["exports"]` and compiled `.d.ts` files in `tools/docs/generate_ts_docs.py` to generate structured Markdown reference pages (`docs/reference/typescript/*.md`) with 3-column summary tables (`Symbol | Kind | Summary`), fenced TypeScript signatures, and JSDoc prose.
+   - Escape bare `|` inside Markdown table cells (or format unions with `or`) and enforce 100% subpath export coverage in CI via `python tools/docs/generate_ts_docs.py --check`.
+2. **`mkdocstrings-typescript` Handler**:
+   - Alternatively, register `python` and `typescript` handlers in `zensical.toml` when using TypeDoc JSON extraction:
 
    ```toml
    [project.plugins.mkdocstrings]
@@ -19,8 +23,6 @@ Patterns for documenting Python + TypeScript packages (`litestar-vite`, `litesta
    [project.plugins.mkdocstrings.handlers.typescript]
    paths = ["src/js"]
    ```
-
-3. Render TypeScript symbols in `docs/reference/frontend/*.md` using `::: symbol_name` with `handler: typescript` so Python and TypeScript APIs share one unified search index.
 
 ### Sphinx (`TypeDoc` + `myst-parser`)
 
