@@ -138,7 +138,9 @@ def test_session_start_sh_emits_valid_envelopes(tmp_path: Path) -> None:
         text=True,
     )
     payload_claude = json.loads(res_claude.stdout)
+    assert payload_claude["continue"] is True
     assert payload_claude["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert "sqlspec" in payload_claude["systemMessage"]
 
     res_cursor = subprocess.run(
         [str(script), "--harness", "cursor", "--project", str(tmp_path)],
@@ -148,7 +150,18 @@ def test_session_start_sh_emits_valid_envelopes(tmp_path: Path) -> None:
         text=True,
     )
     payload_cursor = json.loads(res_cursor.stdout)
+    assert payload_cursor["continue"] is True
     assert "sqlspec" in payload_cursor["additional_context"]
+
+    res_cursor_guard = subprocess.run(
+        [str(script), "--harness", "claude", "--project", str(tmp_path)],
+        cwd=REPO_ROOT,
+        env={"PATH": "/usr/bin:/bin", "CURSOR_VERSION": "0.48.0"},
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert json.loads(res_cursor_guard.stdout) == {"continue": True}
 
 
 def _write_minimal_repo(root: Path, version: str = "0.10.0") -> None:
@@ -165,13 +178,19 @@ def _write_minimal_repo(root: Path, version: str = "0.10.0") -> None:
         encoding="utf-8",
     )
     (root / "package.json").write_text(
-        json.dumps({"name": "litestar-skills", "version": version}),
+        json.dumps(
+            {
+                "name": "litestar-skills",
+                "version": version,
+                "main": ".opencode/plugins/litestar.js",
+            }
+        ),
         encoding="utf-8",
     )
     (root / "plugin.json").write_text(
         json.dumps(
             {
-                "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/.claude-plugin/plugin.schema.json",
+                "$schema": "https://antigravity.google/schemas/v1/plugin.json",
                 "name": PLUGIN_ID,
                 "displayName": "Litestar",
                 "version": version,
@@ -182,7 +201,13 @@ def _write_minimal_repo(root: Path, version: str = "0.10.0") -> None:
     )
     (root / ".claude-plugin").mkdir(parents=True)
     (root / ".claude-plugin" / "plugin.json").write_text(
-        json.dumps({"name": PLUGIN_ID, "version": version}),
+        json.dumps(
+            {
+                "name": PLUGIN_ID,
+                "version": version,
+                "hooks": "./hooks/hooks-claude.json",
+            }
+        ),
         encoding="utf-8",
     )
     (root / ".claude-plugin" / "marketplace.json").write_text(
@@ -196,7 +221,14 @@ def _write_minimal_repo(root: Path, version: str = "0.10.0") -> None:
     )
     (root / ".codex-plugin").mkdir(parents=True)
     (root / ".codex-plugin" / "plugin.json").write_text(
-        json.dumps({"name": PLUGIN_ID, "version": version, "skills": "./skills/"}),
+        json.dumps(
+            {
+                "name": PLUGIN_ID,
+                "version": version,
+                "skills": "./skills/",
+                "hooks": "./hooks/hooks-claude.json",
+            }
+        ),
         encoding="utf-8",
     )
     (root / ".cursor-plugin").mkdir(parents=True)
@@ -286,7 +318,8 @@ def _write_minimal_repo(root: Path, version: str = "0.10.0") -> None:
     (root / "hooks" / "session-start.ps1").write_text("exit 0\n", encoding="utf-8")
     (root / ".opencode" / "plugins").mkdir(parents=True)
     (root / ".opencode" / "plugins" / "litestar.js").write_text(
-        'import fs from "node:fs";\nimport path from "node:path";\n',
+        'import fs from "node:fs";\nimport path from "node:path";\n'
+        'export default { id: "litestar", async setup(ctx) {} };\n',
         encoding="utf-8",
     )
     (root / "rules").mkdir(parents=True)
@@ -323,6 +356,7 @@ def _write_minimal_repo(root: Path, version: str = "0.10.0") -> None:
     (root / ".codex" / "agents" / "litestar-reviewer.toml").write_text(
         'name = "litestar-reviewer"\n'
         'description = "Use when reviewing Litestar code."\n'
+        'sandbox_mode = "read-only"\n'
         'developer_instructions = """# Role"""\n',
         encoding="utf-8",
     )

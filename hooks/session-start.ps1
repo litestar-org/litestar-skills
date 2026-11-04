@@ -1,10 +1,11 @@
+#!/usr/bin/env pwsh
 # Litestar SessionStart context hook — Native PowerShell 5.1+ / 7+.
 # Supports: --harness <agy|claude|cursor|opencode|json> --project <dir>
 
 $ErrorActionPreference = "Stop"
 
 if ($env:LITESTAR_SKILLS_HOOK_DISABLE -eq "1" -or $env:LITESTAR_SKILLS_HOOK_DISABLE -eq "true") {
-    Write-Output "{}"
+    [Console]::Out.WriteLine("{}")
     exit 0
 }
 
@@ -12,18 +13,30 @@ $Harness = "claude"
 $ProjectDir = ""
 
 for ($i = 0; $i -lt $args.Count; $i++) {
-    switch ($args[$i]) {
-        "--harness" {
-            if ($i + 1 -lt $args.Count) { $Harness = $args[$i + 1]; $i++ }
+    $arg = [string]$args[$i]
+    if ($arg -eq "--harness" -or $arg -eq "-Harness") {
+        if ($i + 1 -lt $args.Count) {
+            $Harness = [string]$args[$i + 1]
+            $i++
         }
-        "--project" {
-            if ($i + 1 -lt $args.Count) { $ProjectDir = $args[$i + 1]; $i++ }
+    } elseif ($arg -like "--harness=*") {
+        $Harness = $arg.Substring(10)
+    } elseif ($arg -like "-Harness=*") {
+        $Harness = $arg.Substring(9)
+    } elseif ($arg -eq "--project" -or $arg -eq "-Project") {
+        if ($i + 1 -lt $args.Count) {
+            $ProjectDir = [string]$args[$i + 1]
+            $i++
         }
+    } elseif ($arg -like "--project=*") {
+        $ProjectDir = $arg.Substring(10)
+    } elseif ($arg -like "-Project=*") {
+        $ProjectDir = $arg.Substring(9)
     }
 }
 
-if ($Harness -eq "claude" -and $env:CURSOR_VERSION) {
-    Write-Output "{}"
+if ($Harness -eq "claude" -and -not [string]::IsNullOrEmpty($env:CURSOR_VERSION)) {
+    [Console]::Out.WriteLine('{"continue":true}')
     exit 0
 }
 
@@ -31,13 +44,17 @@ if (-not $ProjectDir -and [Console]::IsInputRedirected) {
     try {
         $StdinText = [Console]::In.ReadToEnd()
         if ($StdinText) {
-            $Payload = $StdinText | ConvertFrom-Json -ErrorAction SilentlyContinue
-            if ($Payload.workspacePaths -and $Payload.workspacePaths.Count -gt 0) {
-                $ProjectDir = $Payload.workspacePaths[0]
-            } elseif ($Payload.cwd) {
-                $ProjectDir = $Payload.cwd
-            } elseif ($Payload.workspace_roots -and $Payload.workspace_roots.Count -gt 0) {
-                $ProjectDir = $Payload.workspace_roots[0]
+            foreach ($pattern in @(
+                '"workspacePaths"\s*:\s*\[\s*"([^"]+)"',
+                '"workspace_roots"\s*:\s*\[\s*"([^"]+)"',
+                '"cwd"\s*:\s*"([^"]+)"',
+                '"workspaceRoot"\s*:\s*"([^"]+)"'
+            )) {
+                $m = [regex]::Match($StdinText, $pattern)
+                if ($m.Success) {
+                    $ProjectDir = $m.Groups[1].Value -replace '\\\\', '/'
+                    break
+                }
             }
         }
     } catch {
@@ -46,10 +63,10 @@ if (-not $ProjectDir -and [Console]::IsInputRedirected) {
 }
 
 if (-not $ProjectDir) {
-    if ($env:CLAUDE_PROJECT_DIR) {
-        $ProjectDir = $env:CLAUDE_PROJECT_DIR
-    } elseif ($env:CURSOR_PROJECT_DIR) {
+    if ($env:CURSOR_PROJECT_DIR) {
         $ProjectDir = $env:CURSOR_PROJECT_DIR
+    } elseif ($env:CLAUDE_PROJECT_DIR) {
+        $ProjectDir = $env:CLAUDE_PROJECT_DIR
     } else {
         $ProjectDir = (Get-Location).Path
     }
@@ -80,7 +97,7 @@ if (Test-Path -LiteralPath $PyprojectPath) {
     if ($Content -match '(?i)litestar[-_]autowire' -and $OwnPackage -ne 'litestar-autowire') { Add-Skill 'litestar-autowire' }
     if ($Content -match '(?i)litestar[-_]vite' -and $OwnPackage -ne 'litestar-vite') { Add-Skill 'litestar-vite' }
     if ($Content -match '(?i)litestar[-_]htmx' -and $OwnPackage -ne 'litestar-htmx') { Add-Skill 'litestar-htmx' }
-    if ($Content -match '(?i)litestar[-_]mcp' -and $OwnPackage -ne 'litestar-mcp') { Add-Skill 'litestar-mcp' }
+    if ($Content -match '(?i)litestar[-_]mcp|google[-_]adk|google[-_]genai' -and $OwnPackage -ne 'litestar-mcp') { Add-Skill 'litestar-mcp' }
     if ($Content -match '(?i)litestar[-_]email' -and $OwnPackage -ne 'litestar-email') { Add-Skill 'litestar-email' }
     if ($Content -match '(?i)pytest') { Add-Skill 'litestar-testing' }
     if ($Content -match '(?i)pytest[-_]databases' -and $OwnPackage -ne 'pytest-databases') { Add-Skill 'pytest-databases' }
@@ -120,7 +137,10 @@ switch ($Harness) {
         $Out | ConvertTo-Json -Compress -Depth 5
     }
     "cursor" {
-        $Out = @{ additional_context = $Context }
+        $Out = [ordered]@{
+            continue = $true
+            additional_context = $Context
+        }
         $Out | ConvertTo-Json -Compress -Depth 5
     }
     "opencode" {
@@ -131,12 +151,13 @@ switch ($Harness) {
         $Out | ConvertTo-Json -Compress -Depth 5
     }
     default {
-        $Out = @{
-            hookSpecificOutput = @{
+        $Out = [ordered]@{
+            continue = $true
+            systemMessage = $Context
+            hookSpecificOutput = [ordered]@{
                 hookEventName = "SessionStart"
                 additionalContext = $Context
             }
-            systemMessage = $Context
         }
         $Out | ConvertTo-Json -Compress -Depth 5
     }

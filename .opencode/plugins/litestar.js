@@ -1,5 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 function detectSkills(projectDir) {
   const skills = [];
@@ -64,15 +67,27 @@ function buildContext(projectDir) {
 export default {
   id: "litestar",
   async setup(ctx) {
-    const projectDir = ctx.directory || ctx.worktree || process.cwd();
-    const context = buildContext(projectDir);
-    if (!context) return;
+    if (ctx?.agent?.transform) {
+      ctx.agent.transform((agents) => {
+        agents["litestar-reviewer"] = {
+          name: "litestar-reviewer",
+          description:
+            "Use when reviewing Litestar PRs/code for stack-aware DTOs, guards, DI, data services, pagination, settings, async I/O, plugins, and wire format. Not for non-Litestar reviews.",
+          promptFile: resolve(PLUGIN_ROOT, "agents/litestar-reviewer.md"),
+          mode: "subagent",
+          permissions: {
+            edit: "deny",
+            terminal: "deny",
+            web: "deny",
+          },
+        };
+      });
+    }
 
-    if (ctx.session?.hook) {
-      ctx.session.hook("context", async (input) => {
-        if (Array.isArray(input.messages)) {
-          input.messages.unshift({ role: "system", content: context });
-        }
+    if (ctx?.session?.hook) {
+      ctx.session.hook("context", async () => {
+        const projectDir = ctx?.project?.path || ctx?.directory || ctx?.worktree || process.cwd();
+        return buildContext(projectDir);
       });
     }
   },

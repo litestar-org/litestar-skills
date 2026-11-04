@@ -18,9 +18,17 @@ while [ $# -gt 0 ]; do
       HARNESS="${2:-claude}"
       shift 2
       ;;
+    --harness=*)
+      HARNESS="${1#*=}"
+      shift 1
+      ;;
     --project)
       PROJECT_DIR="${2:-}"
       shift 2
+      ;;
+    --project=*)
+      PROJECT_DIR="${1#*=}"
+      shift 1
       ;;
     *)
       shift
@@ -30,7 +38,7 @@ done
 
 # Suppress duplicate Claude hook execution when running inside Cursor IDE.
 if [ "$HARNESS" = "claude" ] && [ -n "${CURSOR_VERSION:-}" ]; then
-  printf '{}\n'
+  printf '{"continue":true}\n'
   exit 0
 fi
 
@@ -40,26 +48,40 @@ if [ ! -t 0 ]; then
 fi
 
 if [ -z "$PROJECT_DIR" ] && [ -n "$STDIN_JSON" ]; then
-  PROJECT_DIR=$(printf '%s' "$STDIN_JSON" | awk '
+  PROJECT_DIR=$(printf '%s\n' "$STDIN_JSON" | awk '
     {
-      if (match($0, /"workspacePaths"[[:space:]]*:[[:space:]]*\[[[:space:]]*"[^"]+"/)) {
-        s = substr($0, RSTART, RLENGTH)
+      buf = buf " " $0
+    }
+    END {
+      if (match(buf, /"workspacePaths"[[:space:]]*:[[:space:]]*\[[[:space:]]*"[^"]+"/)) {
+        s = substr(buf, RSTART, RLENGTH)
         sub(/^.*"workspacePaths"[[:space:]]*:[[:space:]]*\[[[:space:]]*"/, "", s)
         sub(/"$/, "", s)
+        gsub(/\\\\/, "/", s)
         print s
         exit
       }
-      if (match($0, /"cwd"[[:space:]]*:[[:space:]]*"[^"]+"/)) {
-        s = substr($0, RSTART, RLENGTH)
-        sub(/^.*"cwd"[[:space:]]*:[[:space:]]*"/, "", s)
-        sub(/"$/, "", s)
-        print s
-        exit
-      }
-      if (match($0, /"workspace_roots"[[:space:]]*:[[:space:]]*\[[[:space:]]*"[^"]+"/)) {
-        s = substr($0, RSTART, RLENGTH)
+      if (match(buf, /"workspace_roots"[[:space:]]*:[[:space:]]*\[[[:space:]]*"[^"]+"/)) {
+        s = substr(buf, RSTART, RLENGTH)
         sub(/^.*"workspace_roots"[[:space:]]*:[[:space:]]*\[[[:space:]]*"/, "", s)
         sub(/"$/, "", s)
+        gsub(/\\\\/, "/", s)
+        print s
+        exit
+      }
+      if (match(buf, /"cwd"[[:space:]]*:[[:space:]]*"[^"]+"/)) {
+        s = substr(buf, RSTART, RLENGTH)
+        sub(/^.*"cwd"[[:space:]]*:[[:space:]]*"/, "", s)
+        sub(/"$/, "", s)
+        gsub(/\\\\/, "/", s)
+        print s
+        exit
+      }
+      if (match(buf, /"workspaceRoot"[[:space:]]*:[[:space:]]*"[^"]+"/)) {
+        s = substr(buf, RSTART, RLENGTH)
+        sub(/^.*"workspaceRoot"[[:space:]]*:[[:space:]]*"/, "", s)
+        sub(/"$/, "", s)
+        gsub(/\\\\/, "/", s)
         print s
         exit
       }
@@ -68,7 +90,7 @@ if [ -z "$PROJECT_DIR" ] && [ -n "$STDIN_JSON" ]; then
 fi
 
 if [ -z "$PROJECT_DIR" ]; then
-  PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${CURSOR_PROJECT_DIR:-$(pwd)}}"
+  PROJECT_DIR="${CURSOR_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$(pwd)}}"
 fi
 
 json_escape() {
@@ -164,11 +186,11 @@ ${SKILL_SUMMARY}
 ESCAPED=$(printf '%s' "$CONTEXT" | json_escape)
 
 case "$HARNESS" in
-  agy)
+  agy|antigravity)
     printf '{"injectSteps":[{"systemMessage":{"systemMessage":"%s"}}]}\n' "$ESCAPED"
     ;;
   cursor)
-    printf '{"additional_context":"%s"}\n' "$ESCAPED"
+    printf '{"continue":true,"additional_context":"%s"}\n' "$ESCAPED"
     ;;
   opencode)
     printf '%s\n' "$CONTEXT"
@@ -176,7 +198,7 @@ case "$HARNESS" in
   json)
     printf '{"detected_skills":[%s],"context":"%s"}\n' "$SKILLS_JSON" "$ESCAPED"
     ;;
-  claude|*)
-    printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"},"systemMessage":"%s"}\n' "$ESCAPED" "$ESCAPED"
+  claude|vscode|*)
+    printf '{"continue":true,"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$ESCAPED" "$ESCAPED"
     ;;
 esac

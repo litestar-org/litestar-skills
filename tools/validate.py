@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, TypeGuard
 
 __all__ = [
+    "ALLOWED_ANTIGRAVITY_PLUGIN_KEYS",
     "BUMPVERSION_EXPECTED_FILES",
     "FENCED_BLOCK_RE",
     "FORBIDDEN_DESCRIPTION_TERMS",
@@ -40,6 +41,22 @@ PLUGIN_ID = "litestar"
 REPO_NAME = "litestar-skills"
 MAX_SKILL_BYTES = 24_000
 MAX_DESCRIPTION_CHARS = 500
+ALLOWED_ANTIGRAVITY_PLUGIN_KEYS: frozenset[str] = frozenset(
+    {
+        "$schema",
+        "name",
+        "displayName",
+        "version",
+        "description",
+        "contextFileName",
+        "excludeTools",
+        "skills",
+        "agents",
+        "rules",
+        "mcpServers",
+        "apps",
+    }
+)
 FORBIDDEN_DESCRIPTION_TERMS = (
     "Auto-activate",
     "Produces",
@@ -57,6 +74,9 @@ REQUIRED_SKILL_XML_TAGS = (
     "</example>",
 )
 RETIRED_SPRAWL_PATHS = (
+    "CLAUDE.md",
+    "GEMINI.md",
+    ".github/agents",
     "plugins",
     "commands",
     "agents/claude",
@@ -182,6 +202,8 @@ def validate_manifests(repo_root: Path, errors: list[str]) -> None:
             errors.append(f"package.json name must be {REPO_NAME!r}")
         if pkg_data.get("version") != expected_version:
             errors.append(f"package.json version {pkg_data.get('version')!r} != {expected_version!r}")
+        if pkg_data.get("main") != f".opencode/plugins/{PLUGIN_ID}.js":
+            errors.append(f"package.json main must be '.opencode/plugins/{PLUGIN_ID}.js'")
 
     agy_plugin = _load_json(repo_root / "plugin.json", errors)
     if agy_plugin is not None:
@@ -192,6 +214,9 @@ def validate_manifests(repo_root: Path, errors: list[str]) -> None:
         for required_key in ("$schema", "displayName", "description"):
             if not agy_plugin.get(required_key):
                 errors.append(f"plugin.json missing required field {required_key!r}")
+        disallowed_keys = sorted(set(agy_plugin.keys()) - ALLOWED_ANTIGRAVITY_PLUGIN_KEYS)
+        if disallowed_keys:
+            errors.append(f"plugin.json disallowed Antigravity manifest keys: {disallowed_keys}")
 
     claude_plugin = _load_json(repo_root / ".claude-plugin" / "plugin.json", errors)
     if claude_plugin is not None:
@@ -201,6 +226,8 @@ def validate_manifests(repo_root: Path, errors: list[str]) -> None:
             errors.append(
                 f".claude-plugin/plugin.json version {claude_plugin.get('version')!r} != {expected_version!r}"
             )
+        if claude_plugin.get("hooks") != "./hooks/hooks-claude.json":
+            errors.append(".claude-plugin/plugin.json hooks must be './hooks/hooks-claude.json'")
         for forbidden_key in ("skills", "commands"):
             if forbidden_key in claude_plugin:
                 errors.append(f".claude-plugin/plugin.json must not declare {forbidden_key!r}")
@@ -231,6 +258,8 @@ def validate_manifests(repo_root: Path, errors: list[str]) -> None:
             errors.append(f".codex-plugin/plugin.json version {codex_plugin.get('version')!r} != {expected_version!r}")
         if codex_plugin.get("skills") not in ("./skills", "./skills/"):
             errors.append(".codex-plugin/plugin.json skills must be './skills/'")
+        if codex_plugin.get("hooks") != "./hooks/hooks-claude.json":
+            errors.append(".codex-plugin/plugin.json hooks must be './hooks/hooks-claude.json'")
 
     cursor_plugin = _load_json(repo_root / ".cursor-plugin" / "plugin.json", errors)
     if cursor_plugin is not None:
@@ -328,6 +357,10 @@ def validate_hooks(repo_root: Path, errors: list[str]) -> None:
         js_text = opencode_plugin.read_text(encoding="utf-8")
         if "node:fs" not in js_text or "node:path" not in js_text:
             errors.append(f".opencode/plugins/{PLUGIN_ID}.js must use in-process node:fs and node:path")
+        if f'id: "{PLUGIN_ID}"' not in js_text or "async setup(ctx)" not in js_text:
+            errors.append(
+                f".opencode/plugins/{PLUGIN_ID}.js must export OpenCode V2 {{ id: '{PLUGIN_ID}', async setup(ctx) }}"
+            )
 
     agy_rule = repo_root / "rules" / f"{PLUGIN_ID}-antigravity.md"
     if not agy_rule.is_file():
@@ -406,6 +439,8 @@ def validate_subagents(repo_root: Path, errors: list[str]) -> None:
             errors.append(f"{toml_path}: missing developer_instructions")
         if "tools" in toml_data:
             errors.append(f"{toml_path}: must not declare top-level 'tools'")
+        if toml_data.get("sandbox_mode") != "read-only":
+            errors.append(f"{toml_path}: read-only subagent must set sandbox_mode = 'read-only'")
 
 
 def validate_skills(repo_root: Path, errors: list[str]) -> None:
@@ -492,6 +527,11 @@ def validate_anti_sprawl(repo_root: Path, errors: list[str]) -> None:
         candidate = repo_root / rel_path
         if candidate.exists():
             errors.append(f"Retired sprawl path must not exist: {rel_path}")
+
+    skills_dir = repo_root / "skills"
+    if skills_dir.is_dir():
+        for legacy_openai in sorted(skills_dir.glob("*/agents/openai.yaml")):
+            errors.append(f"Retired sprawl path must not exist: {legacy_openai.relative_to(repo_root)}")
 
     uv_lock = repo_root / "uv.lock"
     if uv_lock.is_file():

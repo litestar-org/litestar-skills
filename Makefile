@@ -14,6 +14,12 @@ SHELL := /bin/bash
 .EXPORT_ALL_VARIABLES:
 MAKEFLAGS += --no-print-directory
 
+ifneq ($(shell grep -s -q "rodete" /etc/os-release && echo "yes"),)
+export NPM_CONFIG_REGISTRY=https://registry.npmjs.org
+export PIP_INDEX_URL=https://pypi.org/simple
+export UV_INDEX_URL=https://pypi.org/simple
+endif
+
 # -----------------------------------------------------------------------------
 # Display Formatting and Colors
 # -----------------------------------------------------------------------------
@@ -57,8 +63,12 @@ install-prek:                                       ## Install prek (Rust pre-co
 	@uv tool install prek --quiet
 	@echo "${OK} prek installed successfully"
 
+.PHONY: setup-env
+setup-env:                                          ## Configure local package manager overrides for internal environment
+	@bash tools/scripts/setup-env.sh
+
 .PHONY: install
-install: destroy clean                              ## Install the project, dependencies, and pre-commit hooks
+install: destroy clean setup-env                    ## Install the project, dependencies, and pre-commit hooks
 	@echo "${INFO} Starting fresh installation... 🚀"
 	@uv python pin 3.11 >/dev/null 2>&1
 	@uv venv >/dev/null 2>&1
@@ -79,7 +89,7 @@ destroy:                                            ## Destroy the virtual envir
 # =============================================================================
 
 .PHONY: upgrade
-upgrade:                                            ## Upgrade all dependencies to latest stable versions
+upgrade: setup-env                                  ## Upgrade all dependencies to latest stable versions
 	@echo "${INFO} Updating all dependencies... 🔄"
 	@uv lock --upgrade
 	@bun update
@@ -88,7 +98,7 @@ upgrade:                                            ## Upgrade all dependencies 
 	@echo "${OK} Updated pre-commit hooks 🔄"
 
 .PHONY: lock
-lock:                                               ## Rebuild lockfiles from scratch
+lock: setup-env                                     ## Rebuild lockfiles from scratch
 	@echo "${INFO} Rebuilding lockfiles... 🔄"
 	@uv lock --upgrade >/dev/null 2>&1
 	@bun install >/dev/null 2>&1

@@ -1,10 +1,10 @@
 # Default: all text files use LF regardless of checkout OS
 * text=auto eol=lf
 
-# Windows-only scripts — must keep CRLF for correct execution
-*.ps1 text eol=crlf
-*.cmd text eol=crlf
-*.bat text eol=crlf
+# Shell, PowerShell, and Markdown files must use LF line endings across platforms
+*.sh text eol=lf
+*.ps1 text eol=lf
+*.md text eol=lf
 
 # Binary files (explicit for safety)
 *.png binary
