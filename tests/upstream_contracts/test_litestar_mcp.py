@@ -132,9 +132,9 @@ class _CustomInjectMarker:
 
 
 def test_litestar_mcp_0160_upstream_contract() -> None:
-    """Verify litestar-mcp 0.16.0 public API surface, config defaults, skills, A2A, signatures, and wire aliases."""
-    assert version("litestar-mcp") == "0.16.0"
-    assert version("a2a-sdk") == "1.2.1"
+    """Verify litestar-mcp 0.18.0 public API surface, config defaults, skills, A2A, signatures, and wire aliases."""
+    assert version("litestar-mcp") == "0.18.0"
+    assert version("a2a-sdk") == "1.3.0"
 
     config = MCPConfig()
     assert config.base_path == "/mcp"

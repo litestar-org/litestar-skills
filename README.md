@@ -115,7 +115,7 @@ Full reference: [`skills/litestar-styleguide/references/google-developer-knowled
 
 ## Skill Catalog
 
-21 skills with focused reference guides:
+20 skills with focused reference guides:
 
 | Category | Skills |
 | --- | --- |
@@ -126,7 +126,7 @@ Full reference: [`skills/litestar-styleguide/references/google-developer-knowled
 | **Tasks & Queues** | `litestar-queues`, `litestar-saq` |
 | **Frontend** | `litestar-vite` (Vite + Inertia), `litestar-htmx` |
 | **Server** | `litestar-granian` |
-| **Integrations & AI** | `litestar-mcp`, `litestar-email`, `litestar-autowire`, `litestar-ai` |
+| **Integrations & Protocols** | `litestar-mcp`, `litestar-email`, `litestar-autowire` |
 | **Documentation** | `litestar-docs` (Sphinx & Zensical) |
 | **Packaging & Deployment** | `litestar-build`, `litestar-deployment` |
 | **Testing** | `litestar-testing`, `pytest-databases`, `polyfactory` |

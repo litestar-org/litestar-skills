@@ -82,7 +82,6 @@ if (Test-Path -LiteralPath $PyprojectPath) {
     if ($Content -match '(?i)litestar[-_]htmx' -and $OwnPackage -ne 'litestar-htmx') { Add-Skill 'litestar-htmx' }
     if ($Content -match '(?i)litestar[-_]mcp' -and $OwnPackage -ne 'litestar-mcp') { Add-Skill 'litestar-mcp' }
     if ($Content -match '(?i)litestar[-_]email' -and $OwnPackage -ne 'litestar-email') { Add-Skill 'litestar-email' }
-    if ($Content -match '(?i)google[-_]adk|google[-_]genai') { Add-Skill 'litestar-ai' }
     if ($Content -match '(?i)pytest') { Add-Skill 'litestar-testing' }
     if ($Content -match '(?i)pytest[-_]databases' -and $OwnPackage -ne 'pytest-databases') { Add-Skill 'pytest-databases' }
     if ($Content -match '(?i)polyfactory' -and $OwnPackage -ne 'polyfactory') { Add-Skill 'polyfactory' }
@@ -102,12 +101,12 @@ if (Test-Path -LiteralPath (Join-Path $ProjectDir "Dockerfile")) {
 if ($DetectedSkills.Count -gt 0) {
     $SkillSummary = "Detected Litestar stack skills for this workspace: $($DetectedSkills -join ' ')."
 } else {
-    $SkillSummary = "Available Litestar skills: litestar, sqlspec, advanced-alchemy, msgspec, litestar-granian, litestar-saq, litestar-queues, litestar-security, litestar-autowire, litestar-vite, litestar-htmx, litestar-mcp, litestar-email, litestar-ai, litestar-testing, pytest-databases, polyfactory, litestar-docs, litestar-build, litestar-deployment, litestar-styleguide."
+    $SkillSummary = "Available Litestar skills: litestar, sqlspec, advanced-alchemy, msgspec, litestar-granian, litestar-saq, litestar-queues, litestar-security, litestar-autowire, litestar-vite, litestar-htmx, litestar-mcp, litestar-email, litestar-testing, pytest-databases, polyfactory, litestar-docs, litestar-build, litestar-deployment, litestar-styleguide."
 }
 
 $Context = @"
 <EXTREMELY_IMPORTANT>
-Litestar Framework Ecosystem Active (v0.10.0)
+Litestar Framework Ecosystem Active
 $SkillSummary
 - Activate the matching Litestar skill before writing, refactoring, or reviewing Litestar application or library code.
 - Match the project's existing stack (SQLSpec vs Advanced Alchemy, Provide vs Dishka, msgspec vs Pydantic, Zensical vs Sphinx).

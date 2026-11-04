@@ -60,8 +60,7 @@ This guidance targets the released Litestar 2.25.0 contract. Do not copy unrelea
 | Redis-backed background workers, queues, cron schedules (`litestar-saq`) | [litestar-saq](../litestar-saq/SKILL.md) |
 | SQL/memory task queues, `@task`, `QueueService`, workers (`litestar-queues`) | [litestar-queues](../litestar-queues/SKILL.md) |
 | Transactional email (`EmailPlugin`, SMTP/Resend/SendGrid/Mailgun/SES backends) | [litestar-email](../litestar-email/SKILL.md) |
-| Model Context Protocol servers (`LitestarMCP`, `@mcp.tool`/`@mcp.resource`/`@mcp.prompt`) | [litestar-mcp](../litestar-mcp/SKILL.md) |
-| Google ADK / LLM agent HTTP and SSE serving, tool calls, session services | [litestar-ai](../litestar-ai/SKILL.md) |
+| Model Context Protocol servers and agent runtimes (`LitestarMCP`, `SkillController`, `AgentRuntime`) | [litestar-mcp](../litestar-mcp/SKILL.md) |
 | Granian ASGI server plugin, runtime threads, HTTP/2, TLS, static mounts | [litestar-granian](../litestar-granian/SKILL.md) |
 | `TestClient`, `AsyncTestClient`, `create_async_test_client`, handler/DI/Guard tests | [litestar-testing](../litestar-testing/SKILL.md) |
 | Typed test data factories (`MsgspecFactory`, `ModelFactory`, `DataclassFactory`) | [polyfactory](../polyfactory/SKILL.md) |
@@ -82,7 +81,7 @@ This guidance targets the released Litestar 2.25.0 contract. Do not copy unrelea
    - Auth backends, guards, middleware, or exception handlers -> [auth-and-guards.md](references/auth-and-guards.md), [middleware.md](references/middleware.md), [exceptions.md](references/exceptions.md)
    - Plugins, WebSockets, Channels/SSE, settings, or CRUD services/filters -> [plugins.md](references/plugins.md), [websockets.md](references/websockets.md), [channels-and-sse.md](references/channels-and-sse.md), [settings.md](references/settings.md), [filters-and-pagination.md](references/filters-and-pagination.md), [services-and-repos.md](references/services-and-repos.md)
    - App composition, CLI, logging/metrics/tracing, or stores/caching -> [app-and-lifecycle.md](references/app-and-lifecycle.md), [cli-and-config.md](references/cli-and-config.md), [logging-and-observability.md](references/logging-and-observability.md), [stores-and-caching.md](references/stores-and-caching.md)
-3. **Open standalone ecosystem skills** when working on dedicated first-party packages (`advanced-alchemy`, `sqlspec`, `msgspec`, `litestar-vite`, `litestar-htmx`, `litestar-saq`, `litestar-queues`, `litestar-security`, `litestar-autowire`, `litestar-email`, `litestar-mcp`, `litestar-ai`, `litestar-granian`, `litestar-testing`, `polyfactory`, `pytest-databases`, `litestar-build`, `litestar-deployment`).
+3. **Open standalone ecosystem skills** when working on dedicated first-party packages (`advanced-alchemy`, `sqlspec`, `msgspec`, `litestar-vite`, `litestar-htmx`, `litestar-saq`, `litestar-queues`, `litestar-security`, `litestar-autowire`, `litestar-email`, `litestar-mcp`, `litestar-granian`, `litestar-testing`, `polyfactory`, `pytest-databases`, `litestar-build`, `litestar-deployment`).
 4. **Keep the stack consistent** across the feature: never mix two persistence layers, two DI containers, or two settings paradigms unless the repository already bridges them intentionally.
 
 </workflow>

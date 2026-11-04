@@ -60,6 +60,6 @@ def test_rule_covers_all_shipped_skills() -> None:
     skill_dirs = {path.parent.name for path in (REPO_ROOT / "skills").glob("*/SKILL.md")}
     rule_text = (REPO_ROOT / "rules" / "litestar-antigravity.md").read_text(encoding="utf-8")
 
-    assert len(skill_dirs) == 21
+    assert len(skill_dirs) == 20
     for skill in sorted(skill_dirs):
         assert f"`{skill}`" in rule_text

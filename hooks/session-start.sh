@@ -129,9 +129,8 @@ if [ -f "$PYPROJECT" ]; then
   grep -Eq "litestar[-_]autowire" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar-autowire" ] && add_skill "litestar-autowire"
   grep -Eq "litestar[-_]vite" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar-vite" ] && add_skill "litestar-vite"
   grep -Eq "litestar[-_]htmx" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar-htmx" ] && add_skill "litestar-htmx"
-  grep -Eq "litestar[-_]mcp" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar-mcp" ] && add_skill "litestar-mcp"
+  grep -Eq "litestar[-_]mcp|google[-_]adk|google[-_]genai" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar-mcp" ] && add_skill "litestar-mcp"
   grep -Eq "litestar[-_]email" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "litestar-email" ] && add_skill "litestar-email"
-  grep -Eq "google[-_]adk|google[-_]genai" "$PYPROJECT" 2>/dev/null && add_skill "litestar-ai"
   grep -qi "pytest" "$PYPROJECT" 2>/dev/null && add_skill "litestar-testing"
   grep -Eq "pytest[-_]databases" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "pytest-databases" ] && add_skill "pytest-databases"
   grep -qi "polyfactory" "$PYPROJECT" 2>/dev/null && [ "$OWN_PACKAGE" != "polyfactory" ] && add_skill "polyfactory"
@@ -151,11 +150,11 @@ fi
 if [ -n "$SKILLS" ]; then
   SKILL_SUMMARY="Detected Litestar stack skills for this workspace: ${SKILLS}."
 else
-  SKILL_SUMMARY="Available Litestar skills: litestar, sqlspec, advanced-alchemy, msgspec, litestar-granian, litestar-saq, litestar-queues, litestar-security, litestar-autowire, litestar-vite, litestar-htmx, litestar-mcp, litestar-email, litestar-ai, litestar-testing, pytest-databases, polyfactory, litestar-docs, litestar-build, litestar-deployment, litestar-styleguide."
+  SKILL_SUMMARY="Available Litestar skills: litestar, sqlspec, advanced-alchemy, msgspec, litestar-granian, litestar-saq, litestar-queues, litestar-security, litestar-autowire, litestar-vite, litestar-htmx, litestar-mcp, litestar-email, litestar-testing, pytest-databases, polyfactory, litestar-docs, litestar-build, litestar-deployment, litestar-styleguide."
 fi
 
 CONTEXT="<EXTREMELY_IMPORTANT>
-Litestar Framework Ecosystem Active (v0.10.0)
+Litestar Framework Ecosystem Active
 ${SKILL_SUMMARY}
 - Activate the matching Litestar skill before writing, refactoring, or reviewing Litestar application or library code.
 - Match the project's existing stack (SQLSpec vs Advanced Alchemy, Provide vs Dishka, msgspec vs Pydantic, Zensical vs Sphinx).

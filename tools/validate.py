@@ -6,13 +6,9 @@ import json
 import os
 import re
 import sys
+import tomllib as _tomllib
 from pathlib import Path
 from typing import Any, TypeGuard
-
-if sys.version_info >= (3, 11):
-    import tomllib as _tomllib
-else:
-    import tomli as _tomllib
 
 __all__ = [
     "BUMPVERSION_EXPECTED_FILES",

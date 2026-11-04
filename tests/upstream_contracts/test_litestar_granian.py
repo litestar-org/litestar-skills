@@ -58,10 +58,10 @@ class _DummyStaticProvider(InitPlugin):
 
 def test_litestar_granian_and_granian_versions() -> None:
     """Verify exact audited upstream versions for litestar-granian and granian."""
-    assert version("litestar-granian") == "0.16.0"
-    assert __version__ == "0.16.0"
+    assert version("litestar-granian") == "0.17.0"
+    assert __version__ == "0.17.0"
     assert __project__ == "litestar-granian"
-    assert version("granian") == "2.8.4"
+    assert version("granian") == "2.8.7"
 
 
 def test_granian_plugin_contract() -> None:

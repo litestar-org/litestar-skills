@@ -7,7 +7,7 @@ name = "litestar-skills"
 version = "0.11.0"
 description = "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
   { name = "Cody Fincher", email = "cofin@litestar.dev" },
@@ -18,7 +18,6 @@ classifiers = [
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -35,7 +34,6 @@ dev = [
   "bump-my-version>=0.28",
   "pyyaml>=6.0",
   "types-pyyaml>=6.0",
-  "tomli>=2.0 ; python_version < '3.11'",
   "litestar-skills[validation]",
 ]
 # Libraries shipped guidance for. `tools/check-upstream-imports.py` verifies that
@@ -52,20 +50,19 @@ validation = [
   "litestar[jinja,jwt]>=2.25.0",
   "litestar-autowire>=0.2.0",
   "litestar-email>=0.4.0",
-  "litestar-granian>=0.16.0",
+  "litestar-granian>=0.17.0",
   "litestar-htmx>=0.5.0",
-  "litestar-mcp[a2a]>=0.16.0",
-  "litestar-queues[advanced-alchemy]>=0.12.0 ; python_version < '3.11'",
-  "litestar-queues[advanced-alchemy,sqlspec]>=0.12.0 ; python_version >= '3.11'",
+  "litestar-mcp[a2a]>=0.18.0",
+  "litestar-queues[advanced-alchemy,sqlspec]>=0.14.0",
   "litestar-saq[psycopg]>=0.8.0",
-  "litestar-security>=0.6.0",
-  "litestar-vite>=0.32.0",
+  "litestar-security>=0.7.1",
+  "litestar-vite>=0.33.0",
   "msgspec>=0.22.0",
-  "polyfactory[beanie,sqlalchemy]>=3.3.0",
+  "polyfactory[beanie,sqlalchemy]>=3.5.0",
   "pytest-databases>=0.19.0",
   "sanic[ext]>=24.6",  # advanced_alchemy.extensions.flask/sanic imports sanic_ext at module load
   "sqlmodel>=0.0.27",
-  "sqlspec[adk,asyncpg,duckdb,oracledb,performance,psycopg]>=0.67.0 ; python_version >= '3.11'",
+  "sqlspec[adk,asyncpg,duckdb,oracledb,performance,psycopg]>=0.70.1",
 ]
 
 [project.urls]
@@ -100,7 +97,7 @@ include = [
 # Ruff — linting + formatting
 # ============================================================
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 120
 extend-exclude = [".agents", ".beads", "node_modules"]
 
@@ -112,7 +109,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "ARG", "T201", "S603", "S607"]
-"tools/**" = ["T201", "S310"]
+"tools/**" = ["T201", "S310", "N999"]
 "hooks/**" = ["T201"]
 
 [tool.ruff.format]
@@ -123,7 +120,7 @@ indent-style = "space"
 # mypy — strict type checking
 # ============================================================
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
@@ -134,7 +131,7 @@ exclude = ["\\.agents/", "\\.beads/", "node_modules/"]
 # pyright — secondary strict type checking
 # ============================================================
 [tool.pyright]
-pythonVersion = "3.10"
+pythonVersion = "3.11"
 typeCheckingMode = "strict"
 include = ["tools", "tests"]
 exclude = [".agents", ".beads", "node_modules", "**/__pycache__"]

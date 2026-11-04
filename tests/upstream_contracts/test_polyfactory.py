@@ -5,7 +5,7 @@ import inspect
 from dataclasses import dataclass, field
 from importlib.metadata import version
 from pathlib import Path
-from typing import Annotated, Any, TypedDict, cast
+from typing import Annotated, Any, NotRequired, Required, TypedDict, cast
 
 import msgspec
 import polyfactory
@@ -41,12 +41,11 @@ from polyfactory.factories.typed_dict_factory import TypedDictFactory
 from polyfactory.pytest_plugin import register_fixture
 from sqlalchemy import Computed, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column
-from typing_extensions import NotRequired, Required
 
 
 def test_polyfactory_330_public_exports_and_factory_bases() -> None:
-    """Verify polyfactory 3.3.0 version, top-level exports, submodule export boundaries, and all 8 factory bases."""
-    assert version("polyfactory") == "3.3.0"
+    """Verify polyfactory 3.5.0 version, top-level exports, submodule export boundaries, and all 8 factory bases."""
+    assert version("polyfactory") == "3.5.0"
     assert polyfactory.factories.__all__ == ("BaseFactory", "DataclassFactory", "TypedDictFactory")
     assert not hasattr(polyfactory.factories, "ModelFactory")
     assert not hasattr(polyfactory.factories, "MsgspecFactory")

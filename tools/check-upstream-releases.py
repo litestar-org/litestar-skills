@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 import time
+import tomllib as _tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -15,11 +16,6 @@ from urllib.request import urlopen
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 from packaging.version import Version
-
-if sys.version_info >= (3, 11):
-    import tomllib as _tomllib
-else:  # pragma: no cover - py310 fallback path
-    import tomli as _tomllib  # type: ignore[import-not-found,unused-ignore]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = REPO_ROOT / "tools" / "upstream-releases.toml"

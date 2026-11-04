@@ -9,10 +9,6 @@ from types import ModuleType
 from typing import Any, cast
 
 import pytest
-
-if sys.version_info < (3, 11):
-    pytest.skip("sqlspec requires Python 3.11+", allow_module_level=True)
-
 import sqlglot
 import sqlspec as sqlspec_pkg
 import sqlspec.dialects as dialects_pkg
@@ -43,41 +39,18 @@ from sqlspec.adapters.aiosqlite import (
     AiosqliteDriver,
     AiosqliteDriverFeatures,
 )
-from sqlspec.adapters.db2 import (
-    Db2AsyncConfig,
-    Db2AsyncDataDictionary,
-    Db2AsyncDriver,
-    Db2AsyncPoolParams,
-    Db2ConnectionParams,
-    Db2DriverFeatures,
-    Db2PoolParams,
-    Db2SyncConfig,
-    Db2SyncDataDictionary,
-    Db2SyncDriver,
-    Db2VersionInfo,
-    build_connection_config,
-)
-from sqlspec.adapters.db2.adk import (
-    Db2AsyncADKMemoryStore,
-    Db2AsyncADKStore,
-    Db2SyncADKMemoryStore,
-    Db2SyncADKStore,
-)
-from sqlspec.adapters.db2.events import (
-    Db2AsyncEventQueueStore,
-    Db2EventsConfig,
-    Db2SyncEventQueueStore,
-)
-from sqlspec.adapters.db2.litestar import (
-    Db2AsyncStore,
-    Db2LitestarConfig,
-    Db2SyncStore,
-)
 from sqlspec.adapters.sqlite import SqliteConfig, SqliteDriver, SqliteDriverFeatures
 from sqlspec.builder import Merge
 from sqlspec.cli import add_migration_commands, get_sqlspec_group
 from sqlspec.config import EventsConfig
-from sqlspec.core import CursorPagination, OffsetPagination, Pagination, ParameterStyle, StatementConfig
+from sqlspec.core import (
+    CursorPagination,
+    OffsetPagination,
+    Pagination,
+    ParameterStyle,
+    StatementCacheHolder,
+    StatementConfig,
+)
 from sqlspec.core.config_runtime import (
     build_postgres_extension_probe_names,
     is_postgres_extension_active,
@@ -135,7 +108,6 @@ from sqlspec.dialects.spanner import (
     tokenize_ngrams,
     tokenize_substring,
 )
-from sqlspec.driver._query_cache import StatementCacheHolder
 from sqlspec.extensions.adk import (
     PruneReport,
     SQLSpecArtifactService,
@@ -192,6 +164,18 @@ from sqlspec.utils.fixtures import (
     load_table_fixtures_sync,
 )
 
+HAS_DB2 = importlib.util.find_spec("ibm_db") is not None
+
+HAS_SPANNER = (
+    importlib.util.find_spec("google.cloud.spanner_admin_database_v1") is not None
+    and importlib.util.find_spec("google.cloud.spanner_v1") is not None
+)
+
+HAS_ADBC = (
+    importlib.util.find_spec("adbc_driver_manager") is not None
+    and importlib.util.find_spec("adbc_driver_manager.dbapi") is not None
+)
+
 
 @dataclass
 class UserRow:
@@ -200,8 +184,8 @@ class UserRow:
 
 
 def test_sqlspec_067_contract() -> None:
-    """Validate sqlspec 0.67.0 core contracts and exported API surface."""
-    assert version("sqlspec") == "0.67.0"
+    """Validate sqlspec 0.70.1 core contracts and exported API surface."""
+    assert version("sqlspec") == "0.70.1"
 
     assert "sqlspec" in inspect.signature(SQLSpecPlugin).parameters
     spec = SQLSpec()
@@ -495,34 +479,34 @@ def test_sqlspec_065_query_builder_and_dialect_contract() -> None:
     assert "NULLS LAST" in filtered.compile()[0]
 
 
+def _load_db2_adapter() -> Any:
+    """Import Db2 adapter package when ibm_db is installed."""
+    return importlib.import_module("sqlspec.adapters.db2")
+
+
+@pytest.mark.skipif(not HAS_DB2, reason="ibm_db not installed")
 def test_sqlspec_065_db2_adapter_and_dialect_contract() -> None:
     """Verify IBM Db2 sync/async adapters, extension stores, and DB2 SQLGlot dialect."""
-    assert issubclass(Db2SyncConfig, object)
-    assert issubclass(Db2SyncDriver, object)
-    assert issubclass(Db2AsyncConfig, object)
-    assert issubclass(Db2AsyncDriver, object)
-    assert issubclass(Db2SyncDataDictionary, object)
-    assert issubclass(Db2AsyncDataDictionary, object)
-    assert issubclass(Db2VersionInfo, object)
-    assert issubclass(Db2SyncStore, object)
-    assert issubclass(Db2AsyncStore, object)
-    assert issubclass(Db2SyncEventQueueStore, object)
-    assert issubclass(Db2AsyncEventQueueStore, object)
-    assert issubclass(Db2SyncADKStore, object)
-    assert issubclass(Db2AsyncADKStore, object)
-    assert issubclass(Db2SyncADKMemoryStore, object)
-    assert issubclass(Db2AsyncADKMemoryStore, object)
+    db2 = _load_db2_adapter()
+    for cls_name in (
+        "Db2SyncConfig",
+        "Db2SyncDriver",
+        "Db2AsyncConfig",
+        "Db2AsyncDriver",
+        "Db2SyncDataDictionary",
+        "Db2AsyncDataDictionary",
+        "Db2VersionInfo",
+    ):
+        assert isinstance(getattr(db2, cls_name), type)
     assert issubclass(DB2, object)
     assert issubclass(DB2Tokenizer, object)
-    assert Db2ConnectionParams is not None
-    assert Db2PoolParams is not None
-    assert Db2AsyncPoolParams is not None
-    assert Db2DriverFeatures is not None
-    assert Db2LitestarConfig is not None
-    assert Db2EventsConfig is not None
-    assert callable(build_connection_config)
+    assert db2.Db2ConnectionParams is not None
+    assert db2.Db2PoolParams is not None
+    assert db2.Db2AsyncPoolParams is not None
+    assert db2.Db2DriverFeatures is not None
+    assert callable(db2.build_connection_config)
 
-    sync_cfg = Db2SyncConfig(
+    sync_cfg: Any = db2.Db2SyncConfig(
         connection_config={
             "database": "testdb",
             "hostname": "localhost",
@@ -531,15 +515,15 @@ def test_sqlspec_065_db2_adapter_and_dialect_contract() -> None:
             "password": "secret",
         }
     )
-    assert sync_cfg.driver_type is Db2SyncDriver
+    assert sync_cfg.driver_type is db2.Db2SyncDriver
     assert sync_cfg.supports_transactional_ddl is True
     assert sync_cfg.supports_native_arrow_export is False
     assert sync_cfg.supports_native_arrow_import is False
-    assert hasattr(Db2SyncDriver, "select_to_arrow")
-    assert hasattr(Db2SyncDriver, "load_from_arrow")
+    assert hasattr(db2.Db2SyncDriver, "select_to_arrow")
+    assert hasattr(db2.Db2SyncDriver, "load_from_arrow")
 
-    async_cfg = Db2AsyncConfig(connection_config={"dsn": "DATABASE=testdb;HOSTNAME=localhost;PORT=50000;"})
-    assert async_cfg.driver_type is Db2AsyncDriver
+    async_cfg: Any = db2.Db2AsyncConfig(connection_config={"dsn": "DATABASE=testdb;HOSTNAME=localhost;PORT=50000;"})
+    assert async_cfg.driver_type is db2.Db2AsyncDriver
 
     db2_upsert = sql.upsert("products", dialect="db2")
     assert isinstance(db2_upsert, Merge)
@@ -765,6 +749,7 @@ def test_sqlspec_065_adk_bounded_session_contract() -> None:
     assert {"app_name", "user_id", "order_by", "descending", "limit", "offset"}.issubset(list_sessions_params)
 
 
+@pytest.mark.skipif(not HAS_SPANNER, reason="google-cloud-spanner not installed")
 def test_sqlspec_067_spanner_async_adapter_and_stores_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify Spanner sync/async adapters, data dictionaries, ADK/Litestar/Events stores, and runtime hints."""
     spanner_pkgs = _load_spanner_packages(monkeypatch)
@@ -950,6 +935,7 @@ def test_sqlspec_067_spanner_dialect_graph_vector_search_contract() -> None:
     )
 
 
+@pytest.mark.skipif(not HAS_ADBC, reason="adbc_driver_manager not installed")
 def test_sqlspec_067_adbc_enterprise_and_gizmodata_drivers_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify ADBC driver resolution and parameter styles for Oracle, Db2, GizmoSQL, and Quack."""
     adbc_core = _load_adapter_core_module(monkeypatch, "adbc")

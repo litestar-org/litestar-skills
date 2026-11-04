@@ -37,9 +37,9 @@ from saq.types import Context, PartialTimersDict, TimersDict
 
 
 def test_litestar_saq_080_contract() -> None:
-    """Verify litestar-saq 0.8.0 and saq 0.26.4 metadata, exports, configs, CLI, and decorators."""
+    """Verify litestar-saq 0.8.0 and saq 0.26.5 metadata, exports, configs, CLI, and decorators."""
     assert version("litestar-saq") == "0.8.0"
-    assert version("saq") == "0.26.4"
+    assert version("saq") == "0.26.5"
 
     expected_exports = {
         "OPENTELEMETRY_INSTALLED",

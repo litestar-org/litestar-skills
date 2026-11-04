@@ -23,9 +23,8 @@ function detectSkills(projectDir) {
     if (/litestar[-_]autowire/i.test(content) && ownPkg !== "litestar-autowire") add("litestar-autowire");
     if (/litestar[-_]vite/i.test(content) && ownPkg !== "litestar-vite") add("litestar-vite");
     if (/litestar[-_]htmx/i.test(content) && ownPkg !== "litestar-htmx") add("litestar-htmx");
-    if (/litestar[-_]mcp/i.test(content) && ownPkg !== "litestar-mcp") add("litestar-mcp");
+    if (/litestar[-_]mcp|google[-_]adk|google[-_]genai/i.test(content) && ownPkg !== "litestar-mcp") add("litestar-mcp");
     if (/litestar[-_]email/i.test(content) && ownPkg !== "litestar-email") add("litestar-email");
-    if (/google[-_]adk|google[-_]genai/i.test(content)) add("litestar-ai");
     if (/pytest/i.test(content)) add("litestar-testing");
     if (/pytest[-_]databases/i.test(content) && ownPkg !== "pytest-databases") add("pytest-databases");
     if (/polyfactory/i.test(content) && ownPkg !== "polyfactory") add("polyfactory");
@@ -49,11 +48,11 @@ function buildContext(projectDir) {
   const summary =
     skills.length > 0
       ? `Detected Litestar stack skills for this workspace: ${skills.join(" ")}.`
-      : "Available Litestar skills: litestar, sqlspec, advanced-alchemy, msgspec, litestar-granian, litestar-saq, litestar-queues, litestar-security, litestar-autowire, litestar-vite, litestar-htmx, litestar-mcp, litestar-email, litestar-ai, litestar-testing, pytest-databases, polyfactory, litestar-docs, litestar-build, litestar-deployment, litestar-styleguide.";
+      : "Available Litestar skills: litestar, sqlspec, advanced-alchemy, msgspec, litestar-granian, litestar-saq, litestar-queues, litestar-security, litestar-autowire, litestar-vite, litestar-htmx, litestar-mcp, litestar-email, litestar-testing, pytest-databases, polyfactory, litestar-docs, litestar-build, litestar-deployment, litestar-styleguide.";
 
   return [
     "<EXTREMELY_IMPORTANT>",
-    "Litestar Framework Ecosystem Active (v0.10.0)",
+    "Litestar Framework Ecosystem Active",
     summary,
     "- Activate the matching Litestar skill before writing, refactoring, or reviewing Litestar application or library code.",
     "- Match the project's existing stack (SQLSpec vs Advanced Alchemy, Provide vs Dishka, msgspec vs Pydantic, Zensical vs Sphinx).",

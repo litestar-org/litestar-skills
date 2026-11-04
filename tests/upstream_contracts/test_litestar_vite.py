@@ -82,8 +82,8 @@ from litestar_vite.scaffolding.templates import FrameworkType, get_template
 
 
 def test_litestar_vite_032_config_contract() -> None:
-    """Verify litestar-vite 0.32.0 version and config contracts."""
-    assert version("litestar-vite") == "0.32.0"
+    """Verify litestar-vite 0.33.0 version and config contracts."""
+    assert version("litestar-vite") == "0.33.0"
     config = ViteConfig()
     assert config.mode == "template"
     assert config.enabled is None

@@ -31,7 +31,7 @@ Evaluate each file strictly against the detected stack. Do not flag `SQLSpecAsyn
 7. **Settings**: Single consistent pattern (`@dataclass(frozen=True)` + `get_env()` + `@lru_cache` or `pydantic_settings.BaseSettings`). Flag `msgspec.Struct` used as an environment loader.
 8. **Async & background work**: All I/O handlers are `async def`. Flag `asyncio.create_task()` used for fire-and-forget work inside handlers; require `litestar-queues` or `litestar-saq` matching the project's queue choice.
 9. **Controllers**: Domain-clustered (`/api/accounts`, `/api/teams`), not HTTP-method-clustered.
-10. **Plugins**: First-party plugins aligned with the chosen stack (`litestar-granian`, `litestar-queues` / `litestar-saq`, `litestar-vite`, `litestar-htmx`, `litestar-security`, `litestar-autowire`, `litestar-mcp`, `litestar-email`, `ChannelsPlugin`, `litestar-ai`).
+10. **Plugins**: First-party plugins aligned with the chosen stack (`litestar-granian`, `litestar-queues` / `litestar-saq`, `litestar-vite`, `litestar-htmx`, `litestar-security`, `litestar-autowire`, `litestar-mcp`, `litestar-email`, `ChannelsPlugin`).
 11. **Return types**: Explicit return type annotations on all route handlers.
 12. **`from __future__ import annotations`**: Absent from modules whose runtime registries inspect annotations without resolving postponed types (`msgspec.Struct` bases, Dishka `@provide` / `FromDishka`, `litestar-queues` `@task`, `litestar-saq` `QueueConfig`, Google ADK `FunctionTool`, Litestar `Provide()` factories and DTOs).
 
@@ -70,6 +70,6 @@ Errors: N | Warnings: N | Info: N
 - `skills/advanced-alchemy/SKILL.md` and `skills/sqlspec/SKILL.md`
 - `skills/msgspec/SKILL.md` and `skills/litestar-security/SKILL.md`
 - `skills/litestar-queues/SKILL.md` and `skills/litestar-saq/SKILL.md`
-- `skills/litestar-vite/SKILL.md`, `skills/litestar-htmx/SKILL.md`, `skills/litestar-mcp/SKILL.md`, `skills/litestar-email/SKILL.md`, `skills/litestar-ai/SKILL.md`, `skills/litestar-granian/SKILL.md`, `skills/litestar-autowire/SKILL.md`
+- `skills/litestar-vite/SKILL.md`, `skills/litestar-htmx/SKILL.md`, `skills/litestar-mcp/SKILL.md`, `skills/litestar-email/SKILL.md`, `skills/litestar-granian/SKILL.md`, `skills/litestar-autowire/SKILL.md`
 - `skills/litestar-testing/SKILL.md`, `skills/pytest-databases/SKILL.md`, `skills/polyfactory/SKILL.md`, `skills/litestar-build/SKILL.md`, `skills/litestar-deployment/SKILL.md`, `skills/litestar-docs/SKILL.md`
 """

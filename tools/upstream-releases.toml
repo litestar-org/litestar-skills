@@ -16,33 +16,33 @@ imports = ["advanced_alchemy"]
 
 [[package]]
 pypi = "sqlspec"
-version = "0.67.0"
-date = "2026-10-14"
-tag = "v0.67.0"
+version = "0.70.1"
+date = "2026-11-02"
+tag = "v0.70.1"
 skills = ["skills/sqlspec"]
 imports = ["sqlspec"]
 
 [[package]]
 pypi = "litestar-queues"
-version = "0.12.0"
-date = "2026-09-17"
-tag = "v0.12.0"
+version = "0.14.0"
+date = "2026-11-01"
+tag = "v0.14.0"
 skills = ["skills/litestar-queues"]
 imports = ["litestar_queues"]
 
 [[package]]
 pypi = "litestar-vite"
-version = "0.32.0"
-date = "2026-09-28"
-tag = "v0.32.0"
+version = "0.33.0"
+date = "2026-11-02"
+tag = "v0.33.0"
 skills = ["skills/litestar-vite"]
 imports = ["litestar_vite"]
 
 [[package]]
 pypi = "litestar-mcp"
-version = "0.16.0"
-date = "2026-10-19"
-tag = "v0.16.0"
+version = "0.18.0"
+date = "2026-11-03"
+tag = "v0.18.0"
 skills = ["skills/litestar-mcp"]
 imports = ["litestar_mcp"]
 
@@ -56,9 +56,9 @@ imports = ["litestar_saq"]
 
 [[package]]
 pypi = "litestar-granian"
-version = "0.16.0"
-date = "2026-08-05"
-tag = "v0.16.0"
+version = "0.17.0"
+date = "2026-11-01"
+tag = "v0.17.0"
 skills = ["skills/litestar-granian"]
 imports = ["litestar_granian"]
 
@@ -88,9 +88,9 @@ imports = ["pytest_databases"]
 
 [[package]]
 pypi = "polyfactory"
-version = "3.3.0"
-date = "2026-02-22"
-tag = "v3.3.0"
+version = "3.5.0"
+date = "2026-10-31"
+tag = "v3.5.0"
 skills = ["skills/polyfactory"]
 imports = ["polyfactory"]
 
@@ -112,8 +112,8 @@ imports = ["litestar_autowire"]
 
 [[package]]
 pypi = "litestar-security"
-version = "0.6.0"
-date = "2026-08-19"
-tag = "v0.6.0"
+version = "0.7.1"
+date = "2026-11-02"
+tag = "v0.7.1"
 skills = ["skills/litestar-security"]
 imports = ["litestar_security"]
