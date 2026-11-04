@@ -7,7 +7,7 @@ description: "Use when working with litestar_mcp, LitestarMCP, MCP, MCPConfig, M
 
 `litestar-mcp` exposes explicitly marked Litestar route handlers as [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools, resources, and prompts over JSON-RPC 2.0, and provides an optional [A2A 1.0](https://a2a-protocol.org/) adapter (`LitestarA2A`) backed by the official `a2a-sdk`.
 
-Version `0.14.0` follows the stateless MCP specification (protocol `2026-07-28`). The MCP transport is **POST-only and request-scoped**: the legacy `initialize` handshake, sessions and `Mcp-Session-Id`, `ping`, `GET` and `DELETE` transport handlers, replay, and `/.well-known/mcp-server.json` are removed. Each request supplies protocol version, method, and client capabilities; named calls also supply matching name or URI metadata. Call `server/discover` for capabilities. Version `0.14.0` also adds the `io.modelcontextprotocol/skills` catalog (`MCPSkillsConfig`), folds the stdio-to-HTTP bridge into core (`httpx2`), adds the standards-backed `LitestarA2A` / `A2AConfig` plugin (`litestar-mcp[a2a]`), and delegates route authentication policies and RFC 9728 `/.well-known/oauth-protected-resource` discovery to `litestar-security`. See [Stateless Protocol](references/stateless-protocol.md).
+`litestar-mcp` follows the stateless MCP specification (protocol `2026-07-28` with backward compatibility for `2025-06-18` and `2025-03-26`). The MCP transport is POST-only and request-scoped: each request supplies protocol version, method, and capabilities. Call `server/discover` for capabilities. Features include the `io.modelcontextprotocol/skills` catalog (`MCPSkillsConfig`), durable task execution over `litestar-queues` (`QueueTaskExecutor`, `DurableWorkflowEngine`), the stdio-to-HTTP bridge (`httpx2`), standards-backed `LitestarA2A` (`litestar-mcp[a2a]`), and route authentication integration with `litestar-security`. See [Stateless Protocol](references/stateless-protocol.md).
 
 Mark routes by passing `mcp_tool="name"`, `mcp_resource="name"`, or `mcp_prompt="name"` directly to the Litestar route decorator — Litestar funnels unknown kwargs into `handler.opt`, so no `opt={...}` wrapper is needed. Use the decorator forms for structured metadata: `@mcp_tool` adds schemas, annotations, scopes, and task policy; `@mcp_prompt` adds title, arguments, and icons. Route description keys are `mcp_description`, `mcp_resource_description`, and `mcp_prompt_description`; `MCPOptKeys` can rename every key the plugin reads. There is no `opt={"mcp_tool_name": ...}` form or `mcp_exclude` key. To hide a route, leave it unmarked.
 
@@ -205,7 +205,7 @@ async def record_session(note: str) -> dict[str, str]:
 - **Skills Over MCP (`MCPSkillsConfig`)**: Pass `skills=MCPSkillsConfig(paths=[Path("skills")], directory_read=True)` to `MCPConfig` to expose `<path>/<name>/SKILL.md` directories over the `io.modelcontextprotocol/skills` extension (`skills/list`, `skills/get`, `resources/directory/read`, and `resources/read` with SHA-256 integrity checks).
 - **A2A 1.0 Adapter (`LitestarA2A`)**: Install `litestar-mcp[a2a]` and mount `LitestarA2A(agent_card=card, request_handler=handler, config=A2AConfig(path="/a2a", agent_card_path="/.well-known/agent-card.json"))` to expose `POST /a2a` (JSON-RPC 2.0 + SSE streaming) and `GET /.well-known/agent-card.json`.
 - **Binary Resources & Multi-Round-Trip Inputs**: Return `MCPResourceLink(name=..., uri=..., mime_type=..., size=...)` from tools to link binary resources fetched via `resources/read` (or `MCPBlobResource` for inline base64 blobs bounded by `MCPConfig.max_blob_bytes`). Return `MCPInputRequiredResult(input_requests={...}, request_state=...)` when a tool requires interactive client confirmation (`ctx.input_responses`).
-- **Authentication (`litestar-security`)**: `litestar_mcp.auth` was removed in `0.14.0`. Attach auth policies via `MCPConfig(route_opt={AUTH_POLICY_OPT_KEY: required("oidc")})` and publish RFC 9728 metadata (`GET /.well-known/oauth-protected-resource`) via `SecurityConfig(protected_resource=ProtectedResourceConfig(...))`.
+- **Authentication (`litestar-security`)**: Attach auth policies via `MCPConfig(route_opt={AUTH_POLICY_OPT_KEY: required("oidc")})` and publish RFC 9728 metadata (`GET /.well-known/oauth-protected-resource`) via `SecurityConfig(protected_resource=ProtectedResourceConfig(...))`.
 
 See [Standalone MCP, Skills, A2A, Binary Resources, and Auth](references/advanced-patterns.md) for complete code patterns.
 
@@ -270,7 +270,7 @@ Every HTTP `POST /mcp` request requires `params._meta` (`io.modelcontextprotocol
 - **Never expose admin or destructive routes by default** - require a human-confirmation workflow or multi-round-trip verification (`MCPInputRequiredResult`) before any irreversible operation.
 - **Prefer resources for read-only reference data** - agents may read resources speculatively.
 - **Keep DTOs precise** - loose `dict[str, Any]` request schemas produce weak tool contracts.
-- **Delegate auth and RFC 9728 metadata to `litestar-security`** - `litestar_mcp.auth` was removed in `0.14.0`; use `MCPConfig(route_opt={AUTH_POLICY_OPT_KEY: required(...)})` and `SecurityConfig(protected_resource=ProtectedResourceConfig(...))`.
+- **Delegate auth and RFC 9728 metadata to `litestar-security`** - use `MCPConfig(route_opt={AUTH_POLICY_OPT_KEY: required(...)})` and `SecurityConfig(protected_resource=ProtectedResourceConfig(...))`.
 - **Set `allowed_origins` for browser-accessible MCP clients** - leave it `None` only for trusted server-to-server deployments.
 - **Prefer `MCPResourceLink` over inline blobs** - linked resources avoid base64 expansion and let the application enforce authorization when the client reads the resource.
 - **Keep `max_blob_bytes` bounded** - base64 embedding increases memory and wire size; disable the cap only behind a stricter application-owned limit.
@@ -365,9 +365,8 @@ app = Litestar(
 
 ## Official References
 
-- <https://github.com/cofin/litestar-mcp/releases/tag/v0.14.0> — audited v0.14.0 release
-- <https://cofin.github.io/litestar-mcp/>
 - <https://github.com/cofin/litestar-mcp>
+- <https://pypi.org/project/litestar-mcp/>
 - <https://modelcontextprotocol.io/>
 - <https://spec.modelcontextprotocol.io/>
 - <https://a2a-protocol.org/>

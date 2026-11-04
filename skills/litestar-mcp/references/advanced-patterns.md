@@ -219,7 +219,7 @@ async def deploy_service(environment: str) -> MCPInputRequiredResult | dict[str,
 
 ## Authentication (`litestar-security`)
 
-`litestar-mcp` `0.14.0` removes `litestar_mcp.auth` and `MCPConfig.auth`. Delegate route authentication and RFC 9728 OAuth 2.1 protected-resource discovery to `litestar-security`:
+Delegate route authentication and RFC 9728 OAuth 2.1 protected-resource discovery to `litestar-security`:
 
 ```python
 from litestar import Litestar

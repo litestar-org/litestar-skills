@@ -194,5 +194,5 @@ contract using `litestar_security.testing`:
 
 ## Official References
 
-- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/hardening.rst>
-- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/rate-limiting.rst>
+- <https://github.com/cofin/litestar-security/blob/main/docs/hardening.rst>
+- <https://github.com/cofin/litestar-security/blob/main/docs/rate-limiting.rst>

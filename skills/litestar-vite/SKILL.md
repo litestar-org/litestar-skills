@@ -13,7 +13,7 @@ The runtime has four canonical modes: `spa`, `template`, `hybrid`, and `framewor
 
 The plugin pairs with the npm package [`litestar-vite-plugin`](https://www.npmjs.com/package/litestar-vite-plugin) on the JS side. Python `ViteConfig` is the source of truth; the generated `.litestar.json` bridge lets JS config normally keep only `litestar({ input: [...] })`.
 
-This guidance targets `litestar-vite` `0.32.0`. Releases `0.26.0` through `0.31.0` hardened Inertia protocol behavior, `msgspec.Struct` field-rename preservation, secondary HTML entry resolution (`resolve_html_entry`), handler-level static auth exclusion (`exclude_static_from_auth`), CSRF constant emission in `routes.ts`, Precognition validation, scaffolds, type generation, single-port HMR routing, manifest fallback, deployment, plugin activation, and lifecycle logging. `0.32.0` adds server-rendered UI component fragments (`ComponentResponse`, `FragmentEngine`, `vite_fragment`, `render_fragment`, `<litestar-island>`), persistent IPC SSR transports (`TCPStreamIPCTransport` to `/__litestar_ssr__` in dev, `StdioIPCTransport` over stdin/stdout in prod) with circuit-breaker fallback (`SSRCircuitBreaker`), AsyncAPI 3.0 typed channel generation (`AsyncAPIPlugin` + `TypeGenConfig(generate_channels=True)` + `createTypedChannels`), a Vite `>=7.0.0` peer dependency floor, and the single-port AnyIO streaming proxy (`ViteProxyMiddleware` + `/static/vite-hmr`). See [Release Updates](references/release-updates.md).
+This guidance targets `litestar-vite` 0.33.0. Features include server-rendered UI component fragments, persistent IPC SSR transports with circuit-breaker fallback, AsyncAPI 3.0 typed channel generation, Vite 7+ support, and single-port development proxying. See [Release Updates](references/release-updates.md).
 
 ## Code Style Rules
 
@@ -413,9 +413,8 @@ For deep-dives on specific surfaces, see:
 - <https://vite.dev/guide/>
 - <https://vite.dev/config/>
 - <https://inertiajs.com/docs/v3>
-- <https://github.com/litestar-org/litestar-vite/tree/v0.32.0>
-- <https://github.com/litestar-org/litestar-vite/tree/v0.32.0/docs>
-- <https://github.com/litestar-org/litestar-vite/tree/v0.32.0/src/py/tests>
+- <https://github.com/litestar-org/litestar-vite>
+- <https://pypi.org/project/litestar-vite/>
 - <https://www.npmjs.com/package/litestar-vite-plugin>
 
 ## Shared Styleguide Baseline

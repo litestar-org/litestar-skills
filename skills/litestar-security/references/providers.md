@@ -299,7 +299,7 @@ the intersection of what each carries.
 
 ## Official References
 
-- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/providers.rst>
-- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/jwt-and-jwks.rst>
-- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/accounts.rst>
-- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/resource-server.rst>
+- <https://github.com/cofin/litestar-security/blob/main/docs/providers.rst>
+- <https://github.com/cofin/litestar-security/blob/main/docs/jwt-and-jwks.rst>
+- <https://github.com/cofin/litestar-security/blob/main/docs/accounts.rst>
+- <https://github.com/cofin/litestar-security/blob/main/docs/resource-server.rst>

@@ -5,10 +5,9 @@ description: "Use when working with litestar_granian, GranianPlugin, litestar ru
 
 # litestar-granian
 
-`litestar-granian` 0.16.0 replaces Litestar's `run` command with a
+`litestar-granian` replaces Litestar's `run` command with a
 supervised Granian command and bridges Litestar's active log formatter into
-Granian worker processes. It requires Granian 2.7.9 or later (the current
-lock uses 2.8.4).
+Granian worker processes. It requires Granian 2.8.0 or later (using Granian 2.8.7).
 
 ## Code Style Rules
 
@@ -50,7 +49,7 @@ JSON `dictConfig` (`--log-config`), and reconstructs matching `generic`
 (`_granian`) and `access` (`granian.access`) formatters inside Granian worker
 processes.
 
-### Defaults in 0.16.0 / Granian 2.8.4
+### Defaults in 0.17.0 / Granian 2.8.7
 
 | Concern | Default |
 | --- | --- |
@@ -202,7 +201,7 @@ release instead of copying `litestar run` options.
 ### Step 2: Install and register
 
 ```bash
-pip install "litestar-granian==0.16.0"
+pip install "litestar-granian>=0.17.0"
 ```
 
 Add `GranianPlugin()` to `Litestar(plugins=[...])`, then run the application
@@ -210,8 +209,8 @@ through `litestar --app <module>:<app> run`.
 
 ### Step 3: Configure logging
 
-0.16.0 always uses supervised execution and matches Granian's formatter to
-Litestar's automatically. There is no mode to choose:
+Supervised execution is standard and matches Granian's formatter to
+Litestar's automatically:
 
 ```bash
 litestar --app app:app run
@@ -264,10 +263,10 @@ WebSocket endpoints, and load-test production capacity settings.
 
 ## Guardrails
 
-- **Use the runtime-specific thread controls.** The 0.16.0 command exposes
-  `--runtime-threads`, `--runtime-blocking-threads`, `--blocking-threads`, and `--runtime-mode`.
-- **Use the namespaced access-log controls.** The 0.16.0 command exposes
-  `--granian-access-log` and `--granian-access-log-fmt`.
+- **Use runtime thread controls.** Configure `--runtime-threads`,
+  `--runtime-blocking-threads`, `--blocking-threads`, and `--runtime-mode`.
+- **Use namespaced access logs.** Pass `--granian-access-log` and
+  `--granian-access-log-fmt` rather than bare `--access-log`.
 - **Do not treat the plugin CLI as the bare Granian CLI.** The option names
   overlap but are not identical (e.g. `--granian-access-log` vs `--access-log`).
 - **Do not claim that registering the plugin changes every deployment.**
@@ -275,13 +274,12 @@ WebSocket endpoints, and load-test production capacity settings.
   still controls its own server lifecycle.
 - **Do not force Granian into an established deployment stack.** Match the
   server to the project's platform and operational requirements.
-- **Do not enable HTTP/2-only mode for a WebSocket endpoint.** The 0.16.0
-  launcher disables WebSockets when `--http 2` is selected.
+- **Do not enable HTTP/2-only mode for a WebSocket endpoint.** The launcher
+  disables WebSockets when `--http 2` is selected.
 - **Do not rely on an implicit static route.** Pair every repeatable
   `--static-path-route` with a `--static-path-mount`.
-- **Do not pass the deprecated compatibility flags.** `--in-subprocess` /
-  `--no-subprocess` and `--use-litestar-logger` / `--no-litestar-logger` are
-  ignored in 0.16.0 and emit warnings.
+- **Do not pass deprecated compatibility flags.** Flags like `--in-subprocess`
+  and `--use-litestar-logger` are ignored and emit warnings.
 - **Do not expect `--metrics` to export request metrics.** It exposes Granian
   server and worker metrics only; register Litestar's `PrometheusPlugin` for
   application-level request metrics.
@@ -374,13 +372,13 @@ application-level request metrics.
 
 ## Official References
 
-- [litestar-granian v0.16.0 source](https://github.com/cofin/litestar-granian/tree/v0.16.0)
-- [v0.16.0 CLI implementation](https://github.com/cofin/litestar-granian/blob/v0.16.0/litestar_granian/cli.py)
-- [v0.16.0 plugin implementation](https://github.com/cofin/litestar-granian/blob/v0.16.0/litestar_granian/plugin.py)
-- [v0.16.0 changelog](https://github.com/cofin/litestar-granian/blob/v0.16.0/docs/changelog.rst)
-- [litestar-granian 0.16.0 on PyPI](https://pypi.org/project/litestar-granian/0.16.0/)
-- [granian v2.8.4 repository](https://github.com/emmett-framework/granian/tree/v2.8.4)
-- [granian documentation](https://granian.readthedocs.io/)
+- [litestar-granian repository](https://github.com/cofin/litestar-granian)
+- [CLI implementation](https://github.com/cofin/litestar-granian/blob/main/litestar_granian/cli.py)
+- [Plugin implementation](https://github.com/cofin/litestar-granian/blob/main/litestar_granian/plugin.py)
+- [Changelog](https://github.com/cofin/litestar-granian/blob/main/docs/changelog.rst)
+- [litestar-granian on PyPI](https://pypi.org/project/litestar-granian/)
+- [Granian repository](https://github.com/emmett-framework/granian)
+- [Granian documentation](https://granian.readthedocs.io/)
 
 ## Shared Styleguide Baseline
 

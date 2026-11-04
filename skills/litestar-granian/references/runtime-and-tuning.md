@@ -1,6 +1,6 @@
 # Granian Runtime Architecture and Tuning Guide
 
-Deep-dive into concurrency models, thread architectures, HTTP protocol tuning, memory recycling, and runtime optimization with `litestar-granian` 0.16.0 and `granian` 2.8.4.
+Deep-dive into concurrency models, thread architectures, HTTP protocol tuning, memory recycling, and runtime optimization with `litestar-granian` and `granian`.
 
 ## Concurrency and Process Model
 
@@ -55,7 +55,7 @@ Granian provides three distinct thread tuning knobs:
 
 ### Runtime Modes (`--runtime-mode`)
 
-- **`auto` (default in 0.16.0):** Granian selects the runtime mode automatically. Because Litestar runs over `Interfaces.ASGI` (`!= Interfaces.RSGI`), `auto` always resolves to `mt` on ASGI (as well as whenever `runtime_threads > 1` or `http == "2"`).
+- **`auto` (default):** Granian selects the runtime mode automatically. Because Litestar runs over `Interfaces.ASGI` (`!= Interfaces.RSGI`), `auto` always resolves to `mt` on ASGI (as well as whenever `runtime_threads > 1` or `http == "2"`).
 - **`mt` (Multi-Threaded):** Configures multi-threaded Rust runtime execution across configured runtime threads.
 - **`st` (Single-Threaded):** Pins single-threaded Rust runtime execution. Use when third-party native extensions require strict thread affinity.
 
@@ -101,7 +101,7 @@ This prevents memory exhaustion and event loop starvation under sudden traffic s
 - `--http auto` (default): Negotiates HTTP/1.1 and HTTP/2 via ALPN during TLS handshake; accepts HTTP/1.1 on cleartext TCP.
 - `--http 1`: Forces HTTP/1.1 only.
 - `--http 2`: Forces HTTP/2 only. **Note:** WebSockets are automatically disabled in HTTP/2-only mode.
-- *Note on HTTP/3:* Granian 2.8.4 does not support HTTP/3 / QUIC. Deploy an edge reverse proxy (such as Cloudflare, NGINX, or Envoy) in front of Granian for HTTP/3 termination.
+- *Note on HTTP/3:* Granian does not support HTTP/3 / QUIC. Deploy an edge reverse proxy (such as Cloudflare, NGINX, or Envoy) in front of Granian for HTTP/3 termination.
 
 ### HTTP/1 Performance Knobs
 

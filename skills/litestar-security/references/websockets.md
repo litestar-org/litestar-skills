@@ -102,4 +102,4 @@ The runtime maps security outcomes to standard and application close codes (`Web
 
 ## Official References
 
-- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/websockets.rst>
+- <https://github.com/cofin/litestar-security/blob/main/docs/websockets.rst>

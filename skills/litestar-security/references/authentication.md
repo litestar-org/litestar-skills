@@ -212,4 +212,4 @@ the OpenAPI base path, so `path="/api"` on `OpenAPIConfig` never relaxes
 
 ## Official References
 
-- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/authentication.rst>
+- <https://github.com/cofin/litestar-security/blob/main/docs/authentication.rst>

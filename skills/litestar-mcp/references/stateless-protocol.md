@@ -167,5 +167,6 @@ The stdio bridge handles MCP transport headers transparently and forwards indepe
 
 ## Official References
 
-- <https://github.com/cofin/litestar-mcp/releases/tag/v0.16.0>
+- <https://github.com/cofin/litestar-mcp>
+- <https://pypi.org/project/litestar-mcp/>
 - <https://cofin.github.io/litestar-mcp/>

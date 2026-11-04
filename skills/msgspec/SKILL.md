@@ -397,27 +397,12 @@ All Struct variants in a multi-Struct union must be tagged, use the same `tag_fi
 tag values, and use one tag type (`str` or `int`) consistently. A union may contain non-Struct
 types, but it may contain at most one untagged Struct.
 
-### Validation and 0.20–0.22 Behavior
+### Validation Rules
 
-- Direct Struct construction trusts the caller and does not enforce field annotations.
-  Typed `decode()` and `convert()` perform runtime type and `Meta` constraint validation.
-- `msgspec.StructMeta` is publicly exposed, and `msgspec.inspect.is_struct()` /
-  `msgspec.inspect.is_struct_type()` provide `TypeIs` checks for Struct instances and classes (0.20.0+).
-- `msgspec.structs.replace()` and Python's `copy.replace()` call `__post_init__` (0.21.0+).
-- `ValidationError` and `DecodeError` raised inside `dec_hook` propagate directly without
-  being double-wrapped in another `ValidationError` (0.21.1+).
-- In 0.22.0, setting `gc=False` on a Struct with `weakref=True` (or an inherited `__weakref__` slot)
-  raises `ValueError` (matching `gc=False` + `dict=True`).
-- In 0.22.0, `msgspec.json.Encoder` and `msgspec.msgpack.Encoder` accept a callable for
-  `decimal_format` (`Callable[[Decimal], Any]`) in addition to `"string"` and `"number"`.
-- In 0.22.0, `Literal[True]`/`Literal[False]`, mixed-type `Literal`s (such as `Literal[1, None]`),
-  PEP 695 generic classes (`class Box[T](msgspec.Struct): ...`), `dict` keys using plain
-  `str`-valued `Enum`s in JSON, overriding an inherited field alias back to its own name, and
-  Python 3.15+ `frozendict` (`msgspec.inspect.FrozenDictType`) are supported.
-- `msgspec.json.schema()` and `schema_components()` accept `ref_template="#/$defs/{name}"`, mark
-  `set` and `frozenset` fields with `uniqueItems: True`, emit JSON-compatible `[]`/`""` defaults
-  for `default_factory=set`/`bytearray`, place `{"type": "null"}` last in optional union `anyOf`,
-  and preserve `Meta` constraints/metadata in `propertyNames` for annotated `dict` keys (0.21–0.22).
+- Struct instantiation (`User(...)`) does not enforce field types at runtime. Use `decode()` or `convert()` when validating external inputs.
+- `msgspec.inspect.is_struct()` and `is_struct_type()` provide runtime type inspection.
+- When `frozen=True`, use `msgspec.structs.replace()` or `copy.replace()` to create updated copies.
+- `gc=False` cannot be combined with `weakref=True` or `dict=True`.
 
 <workflow>
 

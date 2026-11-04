@@ -538,7 +538,7 @@ async def test_create_account_validation(async_client, payload, expected_status)
 ## Official References
 
 - <https://docs.litestar.dev/2/usage/testing.html>
-- <https://github.com/litestar-org/litestar/tree/v2.24.0>
+- <https://github.com/litestar-org/litestar>
 - <https://docs.pytest.org/en/stable/>
 - <https://anyio.readthedocs.io/en/stable/testing.html>
 

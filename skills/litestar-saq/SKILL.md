@@ -509,9 +509,9 @@ litestar --app app:app workers run --workers 4
 
 ## Official References
 
-- <https://github.com/litestar-org/litestar-saq/tree/v0.8.0>
-- <https://pypi.org/project/litestar-saq/0.8.0/>
-- <https://github.com/tobymao/saq/tree/v0.26.4>
+- <https://github.com/litestar-org/litestar-saq>
+- <https://pypi.org/project/litestar-saq/>
+- <https://github.com/tobymao/saq>
 
 ## Shared Styleguide Baseline
 

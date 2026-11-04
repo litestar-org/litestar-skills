@@ -5,7 +5,7 @@ description: "Use when working with litestar_queues, QueuePlugin, QueueConfig, W
 
 # litestar-queues
 
-`litestar-queues` 0.12.0 is the first-party Litestar worker abstraction for task registration, durable queue state, worker lifecycle, schedules, uniqueness, bounded maintenance, execution dispatch, and application-facing task events.
+`litestar-queues` is the first-party Litestar worker abstraction for task registration, durable queue state, worker lifecycle, schedules, uniqueness, bounded maintenance, execution dispatch, and application-facing task events.
 
 Keep persistence and placement separate:
 
@@ -221,7 +221,7 @@ Do not delete the reservation table during ordinary task or event retention. For
 ## Guardrails
 
 - **Use `SQLAlchemyBackendConfig` for Advanced Alchemy persistence.** Import it from `litestar_queues.backends.advanced_alchemy` (do not look for `AdvancedAlchemyAsyncBackendConfig` or `AdvancedAlchemySyncBackendConfig`).
-- **Use current 0.12.0 config and status types.** Use `CloudRunExecutionConfig` (not `CloudRunExecutorConfig`), `TaskStatus` (not `JobStatus`), `RetryBackoff` (not `BackoffStrategy`), `ScheduleConfig` (not `Schedule`), and integer `priority` (not `TaskPriority`); do not look for removed `ConcurrencyLock` or `RateLimit` classes.
+- **Use current config and status types.** Use `CloudRunExecutionConfig` (not `CloudRunExecutorConfig`), `TaskStatus` (not `JobStatus`), `RetryBackoff` (not `BackoffStrategy`), `ScheduleConfig` (not `Schedule`), and integer `priority` (not `TaskPriority`); do not look for removed `ConcurrencyLock` or `RateLimit` classes.
 - **Use `queue_table_name` on `SQLSpecBackendConfig`.** Do not pass the removed `table_name` parameter.
 - **Configure events with `QueueEventsConfig`.** Add `EventDeliveryConfig`, `EventStreamConfig`, and/or `EventHistoryConfig` for the required capabilities.
 - **Do not pass flat worker fields to `QueueConfig`.** Use `QueueConfig(worker=WorkerConfig(...))`.
@@ -243,7 +243,7 @@ Do not delete the reservation table during ordinary task or event retention. For
 
 ## Validation Checkpoint
 
-- [ ] The dependency floor is `litestar-queues>=0.12.0`
+- [ ] The dependency floor is `litestar-queues>=0.14.0`
 - [ ] `QueuePlugin` receives one `QueueConfig`
 - [ ] Worker options live under `QueueConfig.worker`
 - [ ] `WorkerConfig.placement` matches the deployment topology
@@ -355,8 +355,8 @@ LITESTAR_APP=app:app litestar queues run-maintenance --json
 
 ## Official References
 
-- <https://github.com/cofin/litestar-queues/tree/v0.12.0>
-- <https://github.com/cofin/litestar-queues/releases/tag/v0.12.0>
+- <https://github.com/cofin/litestar-queues>
+- <https://pypi.org/project/litestar-queues/>
 
 ## Shared Styleguide Baseline
 
