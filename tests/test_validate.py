@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 from tools.validate import (
     MAX_SKILL_BYTES,
@@ -100,68 +104,96 @@ def test_hooks_validation_catches_nested_agy_hooks(tmp_path: Path) -> None:
     assert any("top-level 'hooks' key" in err for err in errors)
 
 
-def test_session_start_sh_emits_valid_envelopes(tmp_path: Path) -> None:
-    """Verify that hooks/session-start.sh detects Litestar signals and emits per-harness JSON."""
+@pytest.mark.parametrize("use_pwsh", [False, True], ids=["sh", "pwsh"])
+def test_session_start_sh_emits_valid_envelopes(tmp_path: Path, use_pwsh: bool) -> None:
+    """Verify that SessionStart hooks detect Litestar signals and emit per-harness JSON."""
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "demo"\ndependencies = ["litestar", "sqlspec", "litestar-vite"]\n',
         encoding="utf-8",
     )
-    script = REPO_ROOT / "hooks" / "session-start.sh"
 
-    res_json = subprocess.run(
-        [str(script), "--harness", "json", "--project", str(tmp_path)],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    res_json = _run_session_hook("json", tmp_path, use_pwsh=use_pwsh)
     payload_json = json.loads(res_json.stdout)
     assert "litestar" in payload_json["detected_skills"]
     assert "sqlspec" in payload_json["detected_skills"]
     assert "litestar-vite" in payload_json["detected_skills"]
 
-    res_agy = subprocess.run(
-        [str(script), "--harness", "agy", "--project", str(tmp_path)],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    res_agy = _run_session_hook("agy", tmp_path, use_pwsh=use_pwsh)
     payload_agy = json.loads(res_agy.stdout)
     assert "systemMessage" in payload_agy["injectSteps"][0]
 
-    res_claude = subprocess.run(
-        [str(script), "--harness", "claude", "--project", str(tmp_path)],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    res_claude = _run_session_hook("claude", tmp_path, use_pwsh=use_pwsh)
     payload_claude = json.loads(res_claude.stdout)
     assert payload_claude["continue"] is True
     assert payload_claude["hookSpecificOutput"]["hookEventName"] == "SessionStart"
     assert "sqlspec" in payload_claude["systemMessage"]
 
-    res_cursor = subprocess.run(
-        [str(script), "--harness", "cursor", "--project", str(tmp_path)],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    res_cursor = _run_session_hook("cursor", tmp_path, use_pwsh=use_pwsh)
     payload_cursor = json.loads(res_cursor.stdout)
     assert payload_cursor["continue"] is True
     assert "sqlspec" in payload_cursor["additional_context"]
 
-    res_cursor_guard = subprocess.run(
-        [str(script), "--harness", "claude", "--project", str(tmp_path)],
+    res_cursor_guard = _run_session_hook(
+        "claude",
+        tmp_path,
+        env_overrides={"CURSOR_VERSION": "0.48.0"},
+        use_pwsh=use_pwsh,
+    )
+    assert json.loads(res_cursor_guard.stdout) == {"continue": True}
+
+
+def _run_session_hook(
+    harness: str,
+    project_dir: Path,
+    *,
+    env_overrides: dict[str, str] | None = None,
+    use_pwsh: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    """Execute the POSIX sh or PowerShell SessionStart hook with a clean environment."""
+    env = os.environ.copy()
+    env.pop("CURSOR_VERSION", None)
+    env.pop("LITESTAR_SKILLS_HOOK_DISABLE", None)
+    if env_overrides:
+        env.update(env_overrides)
+
+    if use_pwsh:
+        pwsh_bin = shutil.which("pwsh") or shutil.which("powershell")
+        if pwsh_bin is None:
+            pytest.skip("PowerShell is not available on this host")
+        cmd = [
+            pwsh_bin,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(REPO_ROOT / "hooks" / "session-start.ps1"),
+            "--harness",
+            harness,
+            "--project",
+            str(project_dir),
+        ]
+    else:
+        sh_bin = shutil.which("sh")
+        if sh_bin is None:
+            pytest.skip("POSIX sh is not available on this host")
+        cmd = [
+            sh_bin,
+            str(REPO_ROOT / "hooks" / "session-start.sh"),
+            "--harness",
+            harness,
+            "--project",
+            str(project_dir),
+        ]
+
+    return subprocess.run(
+        cmd,
         cwd=REPO_ROOT,
-        env={"PATH": "/usr/bin:/bin", "CURSOR_VERSION": "0.48.0"},
+        env=env,
         check=True,
         capture_output=True,
         text=True,
     )
-    assert json.loads(res_cursor_guard.stdout) == {"continue": True}
 
 
 def _write_minimal_repo(root: Path, version: str = "0.10.0") -> None:

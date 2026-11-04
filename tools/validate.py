@@ -381,7 +381,7 @@ def validate_subagents(repo_root: Path, errors: list[str]) -> None:
         return
 
     for md_path in md_agents:
-        raw = md_path.read_text(encoding="utf-8")
+        raw = md_path.read_text(encoding="utf-8").replace("\r\n", "\n")
         parsed = parse_simple_frontmatter(raw)
         if parsed is None:
             errors.append(f"{md_path}: invalid or missing YAML frontmatter")
@@ -460,7 +460,7 @@ def validate_skills(repo_root: Path, errors: list[str]) -> None:
         if not skill_md.is_file():
             errors.append(f"Missing SKILL.md in {skill_dir}")
             continue
-        raw_bytes = skill_md.read_bytes()
+        raw_bytes = skill_md.read_bytes().replace(b"\r\n", b"\n")
         if len(raw_bytes) >= MAX_SKILL_BYTES:
             errors.append(f"{skill_md}: size {len(raw_bytes)} bytes exceeds {MAX_SKILL_BYTES} byte limit")
         raw_text = raw_bytes.decode("utf-8")
@@ -502,7 +502,7 @@ def validate_markdown_links(repo_root: Path, errors: list[str]) -> None:
 
     resolved_root = repo_root.resolve()
     for md_file in md_files:
-        text = md_file.read_text(encoding="utf-8")
+        text = md_file.read_text(encoding="utf-8").replace("\r\n", "\n")
         scrubbed = INLINE_CODE_RE.sub("", FENCED_BLOCK_RE.sub("", text))
         for match in MD_LINK_RE.finditer(scrubbed):
             raw_target = match.group(1).strip()
@@ -531,7 +531,7 @@ def validate_anti_sprawl(repo_root: Path, errors: list[str]) -> None:
     skills_dir = repo_root / "skills"
     if skills_dir.is_dir():
         for legacy_openai in sorted(skills_dir.glob("*/agents/openai.yaml")):
-            errors.append(f"Retired sprawl path must not exist: {legacy_openai.relative_to(repo_root)}")
+            errors.append(f"Retired sprawl path must not exist: {legacy_openai.relative_to(repo_root).as_posix()}")
 
     uv_lock = repo_root / "uv.lock"
     if uv_lock.is_file():
