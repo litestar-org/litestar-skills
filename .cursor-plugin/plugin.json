@@ -1,8 +1,8 @@
 {
   "name": "litestar",
   "displayName": "Litestar",
-  "description": "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem",
-  "version": "0.11.0",
+  "description": "Opinionated first-party agent skills, plugins, subagents, and MCP servers for the Litestar framework ecosystem",
+  "version": "0.12.0",
   "author": {
     "name": "Cody Fincher",
     "email": "cofin@litestar.dev"
@@ -11,8 +11,6 @@
   "repository": "https://github.com/litestar-org/litestar-skills",
   "license": "MIT",
   "keywords": ["litestar", "skills", "agent", "ai", "sqlspec", "advanced-alchemy"],
-  "skills": "./skills/",
-  "commands": "./commands/",
   "hooks": "./hooks/hooks-cursor.json",
   "interface": {
     "displayName": "Litestar",

@@ -1,6 +1,6 @@
 ---
 name: pytest-databases
-description: "Auto-activate for pytest_databases, Docker DB fixtures, PostgreSQL/pgvector/ParadeDB, MySQL/MariaDB, Oracle/SQL Server, CockroachDB, MongoDB, Redis/Valkey, BigQuery/Spanner, MinIO, or RustFS. Not for mocked DBs."
+description: "Use when working with pytest_databases, Docker DB fixtures, PostgreSQL/pgvector/ParadeDB, MySQL/MariaDB, Oracle/SQL Server, CockroachDB, MongoDB, Redis/Valkey, BigQuery/Spanner, MinIO, or RustFS. Not for mocked DBs."
 ---
 
 # pytest-databases

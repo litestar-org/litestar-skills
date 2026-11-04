@@ -1,11 +1,11 @@
 ---
 name: litestar-security
-description: "Auto-activate for litestar_security, SecurityPlugin, SecurityConfig, SecureController, CurrentUser, Principal, SecurityContext, or requires_role/scope/tenant/capability/assurance. Not for basic Litestar Guards."
+description: "Use when working with litestar_security, SecurityPlugin, SecurityConfig, SecureController, CurrentUser, Principal, SecurityContext, or requires_role/scope/tenant/capability/assurance. Not for basic Litestar Guards."
 ---
 
 # Litestar Security
 
-`litestar-security` 0.6.0 is a declarative authentication and authorization framework for Litestar. It provides credential slots and mechanisms, unified session management, local accounts, MFA, WebAuthn passkeys, OAuth/OIDC, API keys, workload JWTs, and browser hardening.
+`litestar-security` is a declarative authentication and authorization framework for Litestar. It provides credential slots and mechanisms, unified session management, local accounts, MFA, WebAuthn passkeys, OAuth/OIDC, API keys, workload JWTs, and browser hardening.
 
 Two separate axes, wired through two separate Litestar keywords:
 
@@ -324,8 +324,7 @@ app = Litestar(
 ## Official References
 
 - <https://github.com/cofin/litestar-security>
-- <https://github.com/cofin/litestar-security/tree/v0.6.0/docs>
-- <https://github.com/cofin/litestar-security/tree/v0.6.0/examples>
+- <https://pypi.org/project/litestar-security/>
 
 ## Shared Styleguide Baseline
 

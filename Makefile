@@ -14,6 +14,12 @@ SHELL := /bin/bash
 .EXPORT_ALL_VARIABLES:
 MAKEFLAGS += --no-print-directory
 
+ifneq ($(shell grep -s -q "rodete" /etc/os-release && echo "yes"),)
+export NPM_CONFIG_REGISTRY=https://registry.npmjs.org
+export PIP_INDEX_URL=https://pypi.org/simple
+export UV_INDEX_URL=https://pypi.org/simple
+endif
+
 # -----------------------------------------------------------------------------
 # Display Formatting and Colors
 # -----------------------------------------------------------------------------
@@ -57,8 +63,12 @@ install-prek:                                       ## Install prek (Rust pre-co
 	@uv tool install prek --quiet
 	@echo "${OK} prek installed successfully"
 
+.PHONY: setup-env
+setup-env:                                          ## Configure local package manager overrides for internal environment
+	@bash tools/scripts/setup-env.sh
+
 .PHONY: install
-install: destroy clean                              ## Install the project, dependencies, and pre-commit hooks
+install: destroy clean setup-env                    ## Install the project, dependencies, and pre-commit hooks
 	@echo "${INFO} Starting fresh installation... 🚀"
 	@uv python pin 3.11 >/dev/null 2>&1
 	@uv venv >/dev/null 2>&1
@@ -79,7 +89,7 @@ destroy:                                            ## Destroy the virtual envir
 # =============================================================================
 
 .PHONY: upgrade
-upgrade:                                            ## Upgrade all dependencies to latest stable versions
+upgrade: setup-env                                  ## Upgrade all dependencies to latest stable versions
 	@echo "${INFO} Updating all dependencies... 🔄"
 	@uv lock --upgrade
 	@bun update
@@ -88,7 +98,7 @@ upgrade:                                            ## Upgrade all dependencies 
 	@echo "${OK} Updated pre-commit hooks 🔄"
 
 .PHONY: lock
-lock:                                               ## Rebuild lockfiles from scratch
+lock: setup-env                                     ## Rebuild lockfiles from scratch
 	@echo "${INFO} Rebuilding lockfiles... 🔄"
 	@uv lock --upgrade >/dev/null 2>&1
 	@bun install >/dev/null 2>&1
@@ -119,22 +129,10 @@ test:                                               ## Run Python and JavaScript
 	@echo "${OK} Tests complete ✨"
 
 .PHONY: test-hooks
-test-hooks:                                         ## Run hooks subset only (detect-env + session-start)
+test-hooks:                                         ## Run hook tests
 	@echo "${INFO} Running hook tests... 🪝"
-	@uv run pytest tests/hooks -v
+	@uv run pytest tests/test_validate.py -k session_start -v
 	@echo "${OK} Hook tests complete"
-
-.PHONY: agents
-agents:                                             ## Regenerate per-host agent dialects from canonical YAML sources
-	@echo "${INFO} Regenerating agent dialects... 🤖"
-	@uv run python tools/generate-agents.py
-	@echo "${OK} Agents regenerated"
-
-.PHONY: agents-check
-agents-check:                                       ## CI drift gate — fail if generated output differs from on-disk
-	@echo "${INFO} Checking agent dialect drift... 🔎"
-	@uv run python tools/generate-agents.py --check
-	@echo "${OK} No agent dialect drift"
 
 .PHONY: coverage
 coverage:                                           ## Run tests with coverage report
@@ -161,12 +159,15 @@ pyright:                                            ## Run pyright
 .PHONY: type-check
 type-check: mypy pyright                            ## Run all type checking
 
+.PHONY: typecheck
+typecheck: type-check                               ## Alias for type-check
+
 # -----------------------------------------------------------------------------
 # Linting and Formatting
 # -----------------------------------------------------------------------------
 
 .PHONY: fix
-fix: agents sync-codex-package                      ## Regenerate agents, sync Codex package, and run formatters
+fix:                                                ## Run code formatters
 	@echo "${INFO} Running code formatters... 🔧"
 	@uv run ruff check --fix --unsafe-fixes
 	@uv run ruff format
@@ -194,31 +195,25 @@ oxlint:                                             ## Run oxlint on JavaScript 
 .PHONY: markdownlint
 markdownlint:                                       ## Run markdownlint on all markdown files
 	@echo "${INFO} Running markdownlint... 🔍"
-	@bunx markdownlint-cli2 "**/*.md" "#node_modules" "#.agents" "#.beads" "#plugins/litestar"
+	@bunx markdownlint-cli2 "**/*.md" "#node_modules" "#.agents" "#.beads"
 	@echo "${OK} markdownlint checks passed ✨"
 
 .PHONY: lint
-lint: ruff oxlint markdownlint codex-package-check  ## Run all linters
+lint: ruff oxlint markdownlint                      ## Run all linters
 	@echo "${OK} All linting checks passed ✨"
 
 # -----------------------------------------------------------------------------
-# Skills Validation
+# Skills and Repository Validation
 # -----------------------------------------------------------------------------
 
 .PHONY: validate-skills
-validate-skills:                                    ## Validate SKILL.md + commands + agents frontmatter, XML tags, cross-links
-	@echo "${INFO} Validating skills... 🔍"
-	@uv run python tools/validate-skills.py
-	@echo "${OK} Skills validation complete ✨"
-
-.PHONY: sync-manifests
-sync-manifests:                                     ## Verify all bump-my-version tracked files are in sync
-	@echo "${INFO} Checking manifest version sync... 🔍"
-	@uv run python tools/sync-manifests.py
-	@echo "${OK} Manifests in sync ✨"
+validate-skills:                                    ## Validate manifests, hooks, subagents, skills, and links
+	@echo "${INFO} Validating repository... 🔍"
+	@uv run python tools/validate.py
+	@echo "${OK} Repository validation complete ✨"
 
 .PHONY: check-upstream-imports
-check-upstream-imports:                             ## Verify every Python import in skill code samples resolves against installed upstream library versions (requires .[validation] extras)
+check-upstream-imports:                             ## Verify every Python import in skill code samples resolves against installed upstream library versions
 	@echo "${INFO} Checking upstream API imports in skill code samples... 🔍"
 	@uv run python tools/check-upstream-imports.py
 	@echo "${OK} Upstream imports verified ✨"
@@ -247,26 +242,8 @@ upstream-contracts:                                 ## Run tagged package contra
 	@uv run pytest tests/upstream_contracts tests/test_upstream_stale_tokens.py -q
 	@echo "${OK} Upstream package contracts passed ✨"
 
-.PHONY: sync-codex-package
-sync-codex-package:                                 ## Assemble the committed Codex plugin package at plugins/litestar/
-	@echo "${INFO} Syncing Codex package payload... 🔗"
-	@uv run python tools/sync-codex-package.py
-	@echo "${OK} Codex package assembled"
-
-.PHONY: codex-package-check
-codex-package-check:                                ## Verify plugins/litestar/ matches generated Codex package payload
-	@echo "${INFO} Checking Codex package payload... 🔍"
-	@uv run python tools/sync-codex-package.py --check
-	@echo "${OK} Codex package payload is current"
-
-.PHONY: validate-codex-manifest
-validate-codex-manifest:                            ## Validate Codex marketplace + plugin manifests for Codex CLI 0.125+
-	@echo "${INFO} Validating Codex manifests... 🔍"
-	@uv run python tools/validate-codex-manifest.py
-	@echo "${OK} Codex manifests valid"
-
 .PHONY: validate
-validate: agents-check validate-skills sync-manifests validate-codex-manifest check-upstream-imports check-sample-kwargs  ## Run all repo-integrity validators
+validate: validate-skills check-upstream-imports check-sample-kwargs  ## Run all repo-integrity validators
 	@echo "${OK} All validators passed ✨"
 
 # -----------------------------------------------------------------------------
@@ -303,13 +280,6 @@ release:                                            ## Bump version and create r
 pre-release:                                        ## Start/advance a pre-release (e.g. make pre-release version=0.1.0a1)
 	@if [ -z "$(version)" ]; then \
 		echo "${ERROR} Usage: make pre-release version=X.Y.Z{a|b|rc}N"; \
-		echo ""; \
-		echo "Pre-release workflow:"; \
-		echo "  1. Start alpha:     make pre-release version=0.1.0a1"; \
-		echo "  2. Next alpha:      make pre-release version=0.1.0a2"; \
-		echo "  3. Move to beta:    make pre-release version=0.1.0b1"; \
-		echo "  4. Move to rc:      make pre-release version=0.1.0rc1"; \
-		echo "  5. Final release:   make release bump=patch (from rc) OR bump=minor (from stable)"; \
 		exit 1; \
 	fi
 	@echo "${INFO} Preparing pre-release $(version)... 🧪"
@@ -317,11 +287,3 @@ pre-release:                                        ## Start/advance a pre-relea
 	@uv run bump-my-version bump --new-version $(version) pre_l
 	@make build
 	@echo "${OK} Pre-release $(version) complete 🧪"
-	@echo ""
-	@echo "${INFO} Next steps:"
-	@echo "  1. Push: git push origin HEAD --tags"
-	@echo "  2. Create a GitHub pre-release: gh release create v$(version) --prerelease --generate-notes --title 'v$(version)'"
-
-# =============================================================================
-# End of Makefile
-# =============================================================================

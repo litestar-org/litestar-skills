@@ -1,6 +1,6 @@
 ---
 name: polyfactory
-description: "Auto-activate for polyfactory, ModelFactory, DataclassFactory, MsgspecFactory, AttrsFactory, Use, register_fixture, pytest plugin, __random_seed__, or coverage(). Not for production seeding."
+description: "Use when working with polyfactory, ModelFactory, DataclassFactory, MsgspecFactory, AttrsFactory, Use, register_fixture, pytest plugin, __random_seed__, or coverage(). Not for production seeding."
 ---
 
 # polyfactory
@@ -318,9 +318,8 @@ For detailed guides, refer to the following documents in `references/`:
 
 ## Official References
 
-- <https://github.com/litestar-org/polyfactory/tree/v3.3.0/polyfactory> — immutable v3.3.0 source
-- <https://github.com/litestar-org/polyfactory/tree/v3.3.0/tests> — immutable v3.3.0 contract tests
-- <https://github.com/litestar-org/polyfactory/releases/tag/v3.3.0> — v3.3.0 release
+- <https://github.com/litestar-org/polyfactory>
+- <https://pypi.org/project/polyfactory/>
 - <https://polyfactory.litestar.dev/>
 - <https://polyfactory.litestar.dev/usage/index.html>
 - <https://polyfactory.litestar.dev/usage/library_factories/index.html>

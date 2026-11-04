@@ -1,6 +1,6 @@
 # Vector search with sqlspec
 
-This reference covers similarity search for semantic retrieval and intent classification against embeddings stored in the same transactional database as the application's data. It documents the Oracle `VECTOR_DISTANCE(..., COSINE)` pattern in full (sourced from [oracledb-vertexai-demo](https://github.com/cofin/oracledb-vertexai-demo)) with pgvector cross-reference for PostgreSQL stacks. For the Litestar handler and ADK runner that consume these services, see [`../../litestar-ai/references/adk-and-serving.md`](../../litestar-ai/references/adk-and-serving.md).
+This reference covers similarity search for semantic retrieval and intent classification against embeddings stored in the same transactional database as the application's data. It documents the Oracle `VECTOR_DISTANCE(..., COSINE)` pattern in full (sourced from [oracledb-vertexai-demo](https://github.com/cofin/oracledb-vertexai-demo)) with pgvector cross-reference for PostgreSQL stacks. For agent execution and serving, see [`../../litestar-mcp/references/advanced-patterns.md`](../../litestar-mcp/references/advanced-patterns.md).
 
 ## Backend support matrix
 
@@ -220,11 +220,11 @@ SQLSpec registers three PostgreSQL search dialects in `sqlspec.dialects` and pro
 
 ## Cloud Spanner Vector, Search & Property Graph Dialect (`Spanner`, `Spangres`)
 
-`sqlspec.dialects.spanner` exports native AST expressions and builder helpers for Cloud Spanner vector similarity, full-text search, and Property Graph queries (`Spanner`, `Spangres`, `SpannerPropertyGraph`, `SpannerGraphTable`, `ApproxCosineDistance`, `CosineDistance`, `DotProduct`, `EuclideanDistance`, `Score`, `ScoreNgrams`, `Search`, `SearchSubstring`, `Snippet`, `TokenizeFulltext`, `TokenizeNgrams`, `TokenizeSubstring`, and builder functions `approx_cosine_distance`, `cosine_distance`, `dot_product`, `euclidean_distance`, `score`, `score_ngrams`, `search`, `search_substring`, `snippet`, `tokenize_fulltext`, `tokenize_ngrams`, `tokenize_substring`, `graph_table`), as well as `CREATE/DROP VECTOR INDEX` (`IF NOT EXISTS`, `STORING`), `DROP SEARCH INDEX`, and `CREATE/DROP PROPERTY GRAPH` DDL parsing and transpilation.
+`sqlspec.dialects.spanner` exports AST expressions and query builders for Cloud Spanner vector similarity, search, and Property Graph queries, as well as vector index and property graph DDL management.
 
 ## Cross-references
 
-- [`../../litestar-ai/references/adk-and-serving.md`](../../litestar-ai/references/adk-and-serving.md) — Litestar handler, ADK Runner wiring, Dishka provider chain, persona-augmented prompts
+- [`../../litestar-mcp/references/advanced-patterns.md`](../../litestar-mcp/references/advanced-patterns.md) — Model Context Protocol and agent execution patterns
 - [`./service-patterns.md`](./service-patterns.md) — `SQLSpecAsyncService` base, named SQL templates, driver API
 - [`./observability.md`](./observability.md) — SQL broadcast telemetry (applies to embedding inserts if observability is needed)
 

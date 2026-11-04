@@ -108,21 +108,27 @@ Run `/status` in a Claude Code session to inspect the active layers.
 
 ---
 
-## Antigravity CLI
+## Google Antigravity
 
-**Mechanism:** host-owned permission engine. The `litestar` plugin does not ship a policy file or legacy `excludeTools` denylist.
-
-**Plugin-controlled scope:** static reviewer subagent templates live under top-level `agents/` and declare the Antigravity tool names they need:
+**Mechanism:** host-owned permission engine. The `litestar` plugin uses root `plugin.json` and `agents/litestar-reviewer.md` with `readonly: true` and `disallowedTools` frontmatter lists:
 
 ```yaml
+readonly: true
 tools:
-  - view_file
+  - read_file
+  - view_file_outline
+  - view_code_item
   - grep_search
   - find_by_name
   - run_command
+disallowedTools:
+  - write_file
+  - edit_file
+  - replace_file_content
+  - multi_replace_file_content
 ```
 
-**To restrict `litestar` on Antigravity CLI:** disable or uninstall the plugin with `agy plugin disable litestar` or `agy plugin uninstall litestar`, and use Antigravity's host permission prompts/settings for per-action control. Do not add a legacy extension manifest; fresh Antigravity CLI plugins use root `plugin.json`.
+**To restrict `litestar` on Google Antigravity:** remove `~/.gemini/config/plugins/litestar` or use host permission settings for per-action control.
 
 ---
 

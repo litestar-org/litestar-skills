@@ -395,8 +395,8 @@ def test_litestar_htmx_050_types_and_headers_enum_contract() -> None:
 
 
 def test_litestar_htmx_and_litestar_vite_0320_template_integration(tmp_path: Any) -> None:
-    """Verify litestar-vite 0.32.0 template/htmx mode and Jinja integration alongside HTMXPlugin."""
-    assert version("litestar-vite") == "0.32.0"
+    """Verify litestar-vite 0.33.0 template/htmx mode and Jinja integration alongside HTMXPlugin."""
+    assert version("litestar-vite") == "0.33.0"
     assert render_fragment is vite_fragment
 
     htmx_alias_config = ViteConfig(mode="htmx")

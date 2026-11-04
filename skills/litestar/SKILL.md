@@ -1,6 +1,6 @@
 ---
 name: litestar
-description: "Auto-activate for Litestar, Controller, Router, @get/@post, FromPath, MsgspecDTO, OpenAPIConfig, Provide, FromDishka, Guard, ASGIMiddleware, HTTPException, ChannelsPlugin, or WebSocket. Not for standalone libs."
+description: "Use when working with Litestar, Controller, Router, @get/@post, FromPath, MsgspecDTO, OpenAPIConfig, Provide, FromDishka, Guard, ASGIMiddleware, HTTPException, ChannelsPlugin, or WebSocket. Not for standalone libs."
 ---
 
 # Litestar Core Framework & Ecosystem Hub
@@ -11,14 +11,14 @@ This guidance targets the released Litestar 2.25.0 contract. Do not copy unrelea
 
 ## Code Style Rules
 
-- Prefer first-party Litestar ecosystem packages (`litestar-granian`, `advanced-alchemy`, `sqlspec`, `msgspec`, `litestar-saq`, `litestar-queues`, `litestar-vite`, `litestar-autowire`, `litestar-security`, `litestar-email`, `litestar-mcp`, `litestar-htmx`) and match the project's existing stack for data access (`advanced-alchemy` vs `sqlspec`), DI (`Provide` vs `Dishka`), settings (`dataclass` vs `pydantic-settings`), background jobs (`litestar-saq` vs `litestar-queues`), and Channels backend (`Memory`, `Redis`, `AsyncPg`/`PsycoPg`, `SQLSpec`).
-- Keep `Litestar(...)` app setup and route handlers thin: group domain routes into `Controller` / `Router` hierarchies (`urls.py` + `controllers/` + `services.py` + `schemas.py` + `dependencies.py` + `guards.py`), and centralize multi-domain wiring in `ApplicationCore(InitPluginProtocol, CLIPluginProtocol)` + `create_app() -> Litestar` (`litestar-fullstack` / `litestar-sqlstack` pattern).
-- Use Litestar 2.22–2.25 explicit annotations: `FromPath[T]`, `FromQuery[T]`, `FromHeader[T]`, `FromCookie[T]` (or `PathParameter`, `QueryParameter`, `HeaderParameter`, `CookieParameter` when constraints or wire names are needed), `JSONBody[T]`, `RequestBody[T]`, `MsgPackBody[T]`, `MultipartBody[T]`, `URLEncodedBody[T]`, `RawBody`, `QueryParams`, `RequestCookies`, `NamedDependency[T]`, and `SkipValidation[T]`. Never introduce implicit dependencies, untyped reserved kwargs (`data: MyDTO` without a body marker or `body: bytes`), or deprecated `litestar.params.Dependency`.
-- Define explicit `msgspec.Struct` (camelCase wire format via `rename="camel"`) or `MsgspecDTO` / `SQLAlchemyDTO` / `DataclassDTO` boundary contracts (`dto` and `return_dto`) on routes and controllers; never expose raw ORM models directly without a write-safe DTO.
-- Enforce authentication via `AbstractAuthenticationMiddleware` or first-party `JWTAuth` / `JWTCookieAuth` / `SessionAuth`, and enforce authorization in `Guard` functions `(connection: ASGIConnection, route_handler: BaseRouteHandler) -> None | Awaitable[None]` or [`litestar-security`](../litestar-security/SKILL.md) decorators — never inside route handler bodies.
-- Prefer built-in middleware configs (`CORSConfig`, `CSRFConfig`, `AllowedHostsConfig`, `CompressionConfig`, `RateLimitConfig`, `ResponseCacheConfig`, `LoggingMiddlewareConfig`) over custom middleware, and subclass `ASGIMiddleware` (`litestar.middleware.ASGIMiddleware`) with `scopes` and `exclude` filters for custom cross-cutting concerns.
-- Raise domain-specific `ApplicationError` subclasses in services and map them to HTTP responses (or RFC 9457 Problem Details) in `exception_handlers`; import OpenTelemetry, Prometheus, Structlog, and template plugins from `litestar.plugins.*` (never deprecated `litestar.contrib.*`).
-- Use async I/O for all request handlers, WebSocket/SSE streams, service/repository methods, stores, and external clients.
+- Prefer first-party Litestar ecosystem packages (`litestar-granian`, `advanced-alchemy`, `sqlspec`, `msgspec`, `litestar-saq`, `litestar-queues`, `litestar-vite`, `litestar-autowire`, `litestar-security`, `litestar-email`, `litestar-mcp`, `litestar-htmx`) and match the project's existing stack.
+- Keep `Litestar(...)` app setup and route handlers thin: group domain routes into `Controller` / `Router` hierarchies, and centralize application wiring in `create_app() -> Litestar`.
+- Use explicit parameter and body annotations (`FromPath`, `FromQuery`, `JSONBody`, `NamedDependency`). Avoid untyped reserved kwargs (such as `data: MyDTO` without a body marker) and deprecated `litestar.params.Dependency`.
+- Define explicit `msgspec.Struct` (camelCase wire format via `rename="camel"`) or DTO boundary contracts (`dto` and `return_dto`) on routes and controllers; never expose raw ORM models directly without a write-safe DTO.
+- Enforce authentication via middleware or `litestar-security`, and enforce authorization in `Guard` functions or security decorators — never inside route handler bodies.
+- Prefer built-in middleware configs (`CORSConfig`, `CSRFConfig`, `AllowedHostsConfig`, `RateLimitConfig`, `CompressionConfig`) over custom middleware.
+- Raise domain-specific exceptions in services and map them to HTTP responses in `exception_handlers`.
+- Use async I/O for all request handlers, WebSocket/SSE streams, service methods, stores, and external clients.
 
 ## Quick Reference
 
@@ -60,8 +60,7 @@ This guidance targets the released Litestar 2.25.0 contract. Do not copy unrelea
 | Redis-backed background workers, queues, cron schedules (`litestar-saq`) | [litestar-saq](../litestar-saq/SKILL.md) |
 | SQL/memory task queues, `@task`, `QueueService`, workers (`litestar-queues`) | [litestar-queues](../litestar-queues/SKILL.md) |
 | Transactional email (`EmailPlugin`, SMTP/Resend/SendGrid/Mailgun/SES backends) | [litestar-email](../litestar-email/SKILL.md) |
-| Model Context Protocol servers (`LitestarMCP`, `@mcp.tool`/`@mcp.resource`/`@mcp.prompt`) | [litestar-mcp](../litestar-mcp/SKILL.md) |
-| Google ADK / LLM agent HTTP and SSE serving, tool calls, session services | [litestar-ai](../litestar-ai/SKILL.md) |
+| Model Context Protocol servers and agent runtimes (`LitestarMCP`, `SkillController`, `AgentRuntime`) | [litestar-mcp](../litestar-mcp/SKILL.md) |
 | Granian ASGI server plugin, runtime threads, HTTP/2, TLS, static mounts | [litestar-granian](../litestar-granian/SKILL.md) |
 | `TestClient`, `AsyncTestClient`, `create_async_test_client`, handler/DI/Guard tests | [litestar-testing](../litestar-testing/SKILL.md) |
 | Typed test data factories (`MsgspecFactory`, `ModelFactory`, `DataclassFactory`) | [polyfactory](../polyfactory/SKILL.md) |
@@ -82,7 +81,7 @@ This guidance targets the released Litestar 2.25.0 contract. Do not copy unrelea
    - Auth backends, guards, middleware, or exception handlers -> [auth-and-guards.md](references/auth-and-guards.md), [middleware.md](references/middleware.md), [exceptions.md](references/exceptions.md)
    - Plugins, WebSockets, Channels/SSE, settings, or CRUD services/filters -> [plugins.md](references/plugins.md), [websockets.md](references/websockets.md), [channels-and-sse.md](references/channels-and-sse.md), [settings.md](references/settings.md), [filters-and-pagination.md](references/filters-and-pagination.md), [services-and-repos.md](references/services-and-repos.md)
    - App composition, CLI, logging/metrics/tracing, or stores/caching -> [app-and-lifecycle.md](references/app-and-lifecycle.md), [cli-and-config.md](references/cli-and-config.md), [logging-and-observability.md](references/logging-and-observability.md), [stores-and-caching.md](references/stores-and-caching.md)
-3. **Open standalone ecosystem skills** when working on dedicated first-party packages (`advanced-alchemy`, `sqlspec`, `msgspec`, `litestar-vite`, `litestar-htmx`, `litestar-saq`, `litestar-queues`, `litestar-security`, `litestar-autowire`, `litestar-email`, `litestar-mcp`, `litestar-ai`, `litestar-granian`, `litestar-testing`, `polyfactory`, `pytest-databases`, `litestar-build`, `litestar-deployment`).
+3. **Open standalone ecosystem skills** when working on dedicated first-party packages (`advanced-alchemy`, `sqlspec`, `msgspec`, `litestar-vite`, `litestar-htmx`, `litestar-saq`, `litestar-queues`, `litestar-security`, `litestar-autowire`, `litestar-email`, `litestar-mcp`, `litestar-granian`, `litestar-testing`, `polyfactory`, `pytest-databases`, `litestar-build`, `litestar-deployment`).
 4. **Keep the stack consistent** across the feature: never mix two persistence layers, two DI containers, or two settings paradigms unless the repository already bridges them intentionally.
 
 </workflow>

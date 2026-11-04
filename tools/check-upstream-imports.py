@@ -41,14 +41,10 @@ import ast
 import importlib
 import re
 import sys
+import tomllib as _tomllib
 from collections.abc import Iterator
 from pathlib import Path
 from typing import NamedTuple
-
-if sys.version_info >= (3, 11):
-    import tomllib as _tomllib
-else:  # pragma: no cover - py310 fallback path
-    import tomli as _tomllib  # type: ignore[import-not-found,unused-ignore]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILLS_DIR = REPO_ROOT / "skills"

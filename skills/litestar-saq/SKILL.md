@@ -1,6 +1,6 @@
 ---
 name: litestar-saq
-description: "Auto-activate for litestar_saq, SAQPlugin, SAQConfig, QueueConfig, TaskQueues, CronJob, litestar workers run, background jobs, schedules, or SAQ UI. Not for litestar-queues, Celery, RQ, or Dramatiq."
+description: "Use when working with litestar_saq, SAQPlugin, SAQConfig, QueueConfig, TaskQueues, CronJob, litestar workers run, background jobs, schedules, or SAQ UI. Not for litestar-queues, Celery, RQ, or Dramatiq."
 ---
 
 # litestar-saq
@@ -509,9 +509,9 @@ litestar --app app:app workers run --workers 4
 
 ## Official References
 
-- <https://github.com/litestar-org/litestar-saq/tree/v0.8.0>
-- <https://pypi.org/project/litestar-saq/0.8.0/>
-- <https://github.com/tobymao/saq/tree/v0.26.4>
+- <https://github.com/litestar-org/litestar-saq>
+- <https://pypi.org/project/litestar-saq/>
+- <https://github.com/tobymao/saq>
 
 ## Shared Styleguide Baseline
 

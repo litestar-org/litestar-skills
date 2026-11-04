@@ -1,6 +1,6 @@
 ---
 name: litestar-email
-description: "Auto-activate for litestar_email, EmailPlugin, EmailConfig, EmailService, EmailMessage, SMTPConfig, ResendConfig, SendGridConfig, MailgunConfig, SESConfig. Not for marketing APIs — use vendor SDKs."
+description: "Use when working with litestar_email, EmailPlugin, EmailConfig, EmailService, EmailMessage, SMTPConfig, ResendConfig, SendGridConfig, MailgunConfig, SESConfig. Not for marketing APIs — use vendor SDKs."
 ---
 
 # litestar-email

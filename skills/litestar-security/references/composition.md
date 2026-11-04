@@ -237,4 +237,4 @@ protected_resource = ProtectedResourceConfig(
 
 ## Official References
 
-- <https://github.com/cofin/litestar-security/blob/v0.6.0/docs/composition.rst>
+- <https://github.com/cofin/litestar-security/blob/main/docs/composition.rst>

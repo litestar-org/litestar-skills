@@ -1,6 +1,6 @@
 ---
 name: litestar-testing
-description: "Auto-activate for test_*.py, conftest.py, litestar.testing, TestClient, AsyncTestClient, create_test_client, create_async_test_client, anyio, Guard mocks, or DI overrides. Not for generic pytest."
+description: "Use when working with test_*.py, conftest.py, litestar.testing, TestClient, AsyncTestClient, create_test_client, create_async_test_client, anyio, Guard mocks, or DI overrides. Not for generic pytest."
 ---
 
 # litestar-testing
@@ -80,10 +80,7 @@ def test_index(client: TestClient) -> None:
 
 ### `create_test_client` and `create_async_test_client`
 
-For isolated route handler, controller, or router tests without bootstrapping the full application factory, use `create_async_test_client` (or `create_test_client` for sync tests). Both build a `Litestar` instance and return a configured test client.
-
-- First positional argument `route_handlers`: a single handler, `Controller` subclass, `Router`, a sequence of them, or `None`.
-- Keyword-only arguments forward `Litestar(...)` settings (`dependencies`, `guards`, `middleware`, `plugins`, `stores`, `state`, `on_startup`, `on_shutdown`, `lifespan`, `exception_handlers`, `dto`, `return_dto`, `template_config`, `static_files_config`, `cors_config`, `csrf_config`, `compression_config`, `allowed_hosts`, `response_cache_config`, `logging_config`, `openapi_config`, `opt`, `parameters`, `path`, `security`, `tags`, `signature_namespace`, `signature_types`, `type_encoders`, `request_class`, `response_class`, `websocket_class`, `response_cookies`, `response_headers`, `before_request`, `after_request`, `after_response`, `before_send`, `after_exception`, `on_app_init`, `listeners`, `event_emitter_backend`, `cache_control`, `etag`, `include_in_schema`, `multipart_form_part_limit=1000`, `pdb_on_exception`, `experimental_features`, `debug=True`) plus client parameters (`backend="asyncio"`, `backend_options=None`, `base_url="http://testserver.local"`, `raise_server_exceptions=True`, `root_path=""`, `session_config=None`, `timeout=None`). Note: `request_max_body_size`, `type_decoders`, and `debugger_module` are only accepted on `Litestar(...)` directly — construct `Litestar(...)` and wrap it in `AsyncTestClient(app=app)` / `TestClient(app=app)` when testing those options.
+For isolated route handler, controller, or router tests without bootstrapping the full application factory, use `create_async_test_client(route_handlers=..., **litestar_and_client_kwargs)` (or `create_test_client` for sync tests). Both build a `Litestar` instance and return a configured test client.
 
 ```python
 import pytest
@@ -116,16 +113,7 @@ def anyio_backend() -> str:
     return "asyncio"
 ```
 
-```python
-# tests/test_x.py
-import pytest
-
-
-@pytest.mark.anyio
-async def test_something() -> None: ...
-```
-
-Prefer `@pytest.mark.anyio` because Litestar's internal concurrency model is built on AnyIO. If a project already standardizes on `pytest-asyncio`, keep its mode explicit and do not enable both AnyIO and `pytest-asyncio` automatic modes or mix `@pytest.mark.anyio` and `@pytest.mark.asyncio` in the same test module.
+Prefer `@pytest.mark.anyio` because Litestar's internal concurrency model is built on AnyIO. Do not mix `@pytest.mark.anyio` and `@pytest.mark.asyncio` in the same test module.
 
 ### App + Lifespan Fixture
 
@@ -152,40 +140,12 @@ async def async_client(app: Litestar) -> AsyncGenerator[AsyncTestClient[Litestar
 
 `async with AsyncTestClient(...)` enters `LifeSpanHandler`, firing `on_startup` / `on_shutdown` hooks and plugin `lifespan` context managers (Vite, SAQ, SQLAlchemy, Channels, etc.). Without the context manager, implicit startup emits a `DeprecationWarning` and shutdown hooks never run.
 
-### Mocking Guards
+### Mocking Guards & Overriding DI Dependencies (Match Your Stack)
 
 Guards are functions of `(connection: ASGIConnection, route_handler: BaseRouteHandler) -> None | Awaitable[None]`. Test the real guard with fake identity or authorization providers, or unit-test the guard directly with `RequestFactory`. Build a fresh app with replacement providers; Litestar has no mutable `app.dependency_overrides` registry.
 
-> **Gotcha (`exclude_from_auth` vs `guards`):** Setting `exclude_from_auth=True` (or `opt={"exclude_from_auth": True}`) only bypasses `AbstractAuthenticationMiddleware`, leaving `"user"` and `"auth"` unset in `connection.scope`. Any guard attached at the `Litestar`, `Router`, or `Controller` layer still executes, and reading `connection.user` or `connection.auth` directly raises `ImproperlyConfiguredException` (`500`). App/Controller-wide guards must check `route_handler.opt.get("exclude_from_auth")` or `connection.scope.get("user")`.
-
-```python
-from collections.abc import AsyncGenerator
-import pytest
-from litestar.di import Provide
-from litestar.testing import AsyncTestClient
-
-
-@pytest.fixture
-async def async_client() -> AsyncGenerator[AsyncTestClient, None]:
-    fake_users_service = FakeUserService()
-
-    async def provide_fake_users_service() -> UserService:
-        return fake_users_service
-
-    test_app = create_app(
-        dependencies={
-            "users_service": Provide(provide_fake_users_service),
-        },
-    )
-    async with AsyncTestClient(app=test_app) as client:
-        yield client
-```
-
-### Overriding DI Dependencies (Match Your Stack)
-
-#### Option A: Litestar Built-in DI (`Provide` + `NamedDependency`)
-
-Pass replacement `Provide` entries to `create_app(dependencies=...)` or `create_async_test_client(..., dependencies=...)`. Handler parameters resolved by name must use `NamedDependency[T]` (from `litestar.di`). For synchronous test providers, always specify `sync_to_thread=False` (or `True`) to avoid `LitestarWarning`.
+- **Option A — Litestar Built-in DI (`Provide` + `NamedDependency`)**: Pass replacement `Provide` entries to `create_app(dependencies=...)` or `create_async_test_client(..., dependencies=...)`. Handler parameters resolved by name must use `NamedDependency[T]`. For synchronous test providers, always specify `sync_to_thread=False` (or `True`) to avoid `LitestarWarning`.
+- **Option B — Dishka DI (`Provider` + `make_async_container`)**: Subclass `Provider` in tests and pass the test provider *after* `LitestarProvider()` and production providers in `make_async_container(LitestarProvider(), AppProvider(), FakeEmailProvider(mock_email))` — later providers override earlier ones for matching return types. Route handlers using `FromDishka[T]` must be decorated with `@inject` (or `@inject_websocket`, or registered on a `DishkaRouter`) before calling `setup_dishka(container=container, app=app)`. See [Async Testing](references/async_testing.md) for full `FakeEmailProvider` and `dishka_client` fixture patterns.
 
 ```python
 from collections.abc import AsyncGenerator
@@ -215,86 +175,9 @@ async def client_with_email() -> AsyncGenerator[tuple[AsyncTestClient, AsyncMock
         yield client, fake_email
 ```
 
-#### Option B: Dishka DI (`Provider` + `make_async_container`)
-
-When the project uses Dishka, subclass `Provider` in tests and pass the test provider *after* `LitestarProvider()` and production providers in `make_async_container(LitestarProvider(), AppProvider(), TestProvider())` — later providers override earlier ones for matching return types. Route handlers using `FromDishka[T]` must be decorated with `@inject` (or `@inject_websocket` for WebSocket handlers, or registered on a `DishkaRouter`) before calling `setup_dishka(container=container, app=app)`.
-
-```python
-from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock
-
-import pytest
-from dishka import Provider, Scope, make_async_container, provide
-from dishka.integrations.litestar import (
-    FromDishka,
-    LitestarProvider,
-    inject,
-    setup_dishka,
-)
-from litestar import Litestar, post
-from litestar.testing import AsyncTestClient
-
-
-class FakeEmailProvider(Provider):
-    scope = Scope.REQUEST
-
-    def __init__(self, mock_email: AsyncMock) -> None:
-        super().__init__()
-        self._mock_email = mock_email
-
-    @provide
-    def email_service(self) -> EmailService:
-        return self._mock_email
-
-
-@post("/notify")
-@inject
-async def notify_dishka(email_service: FromDishka[EmailService]) -> dict[str, bool]:
-    await email_service.send("user@example.com")
-    return {"sent": True}
-
-
-@pytest.fixture
-async def dishka_client() -> AsyncGenerator[tuple[AsyncTestClient[Litestar], AsyncMock], None]:
-    mock_email = AsyncMock(spec=EmailService)
-    container = make_async_container(
-        LitestarProvider(),
-        AppProvider(),
-        FakeEmailProvider(mock_email),
-    )
-    app = Litestar(route_handlers=[notify_dishka])
-    setup_dishka(container=container, app=app)
-    async with AsyncTestClient(app=app) as client:
-        yield client, mock_email
-    await container.close()
-```
-
-- **`DishkaRouter` controller monkey-patching isolation in tests**: `DishkaRouter.register()` (used directly or via `AutowirePlugin(AutowireConfig(..., integrations=["dishka"]))`) mutates `ControllerSubclass.get_route_handlers` in-place on the controller class (`ControllerSubclass.__dict__["get_route_handlers"] = _inject_route_handlers(...)`). If an earlier test in the pytest session registers a `Controller` subclass on a `DishkaRouter` (e.g., via `create_app()`), any subsequent isolated unit test mounting that same `Controller` class on a plain `Litestar` or `create_async_test_client` *without* `setup_dishka(...)` fails at request time with `AttributeError: 'State' object has no attribute 'dishka_container'` (or `KeyError: 'dishka_container'`). Isolate by snapshotting `get_route_handlers` with `monkeypatch.setattr(MyController, "get_route_handlers", MyController.get_route_handlers)` before `DishkaRouter` registration, or wire a test Dishka container with `setup_dishka(container=container, app=app)`.
-- **Runtime type hints with `from __future__ import annotations`**: `@inject`, `@inject_websocket`, and `DishkaRouter.register` call `typing.get_type_hints(func)` at decoration/registration time. Keep `FromDishka[...]` and injected service types at module top-level (`func.__globals__`), never inside `if TYPE_CHECKING:` or local test-function scopes when `from __future__ import annotations` is active.
-
-#### Autowire Cache Isolation (`clear_autowire_cache()`)
-
-When testing applications that use `litestar-autowire` (`AutowirePlugin` / `AutowireConfig`), discovery caches imported domain modules and optional-module misses in process-local caches. Use an `autouse` fixture that calls `clear_autowire_cache()` before and after each test (and evicts temporary module names from `sys.modules` when generating packages under `tmp_path`):
-
-```python
-from collections.abc import Iterator
-import pytest
-from litestar_autowire import clear_autowire_cache
-
-
-@pytest.fixture(autouse=True)
-def isolate_autowire_cache() -> Iterator[None]:
-    clear_autowire_cache()
-    yield
-    clear_autowire_cache()
-```
-
 ### Session Testing (`set_session_data` and `get_session_data`)
 
-To seed or inspect session data in tests, pass the same `session_config` (`ServerSideSessionConfig` from `litestar.middleware.session.server_side` or `CookieBackendConfig` from `litestar.middleware.session.client_side`) to both the app's `middleware=[session_config.middleware]` and the test client's `session_config=session_config`. Omitting `session_config` on the client raises `ImproperlyConfiguredException`.
-
-- On `AsyncTestClient`: `await client.set_session_data(data)` and `await client.get_session_data()` are **async**.
-- On `TestClient`: `client.set_session_data(data)` and `client.get_session_data()` are **sync**.
+Pass the same `session_config` (`ServerSideSessionConfig` or `CookieBackendConfig`) to both `middleware=[session_config.middleware]` and `session_config=session_config` on the test client (omitting `session_config` on the client raises `ImproperlyConfiguredException`). On `AsyncTestClient`, `await client.set_session_data(data)` and `await client.get_session_data()` are **async**; on `TestClient`, they are **sync**.
 
 ```python
 import pytest
@@ -323,55 +206,30 @@ async def test_session_roundtrip() -> None:
         session_config=session_config,
     ) as client:
         await client.set_session_data({"user_id": "u-123"})
-        resp = await client.get("/me")
-        assert resp.json() == {"user_id": "u-123"}
-
+        assert (await client.get("/me")).json() == {"user_id": "u-123"}
         await client.post("/login", json={"user_id": "u-456"})
         assert await client.get_session_data() == {"user_id": "u-456"}
 ```
 
-### WebSocket Testing (`websocket_connect` and `WebSocketTestSession`)
+### WebSocket, SSE (`ServerSentEvent`), and `ChannelsPlugin` Testing
 
-Both `TestClient` and `AsyncTestClient` expose `websocket_connect(url, subprotocols=None, params=None, headers=None, cookies=None, auth=..., follow_redirects=..., timeout=..., extensions=None) -> WebSocketTestSession`.
-
-- **Critical distinction**: On `AsyncTestClient`, `websocket_connect` is `async def` (must be awaited), while the returned `WebSocketTestSession` is always a **synchronous** context manager (`with await client.websocket_connect(...) as ws:`) with synchronous send/receive methods:
-  - Send: `ws.send(data, mode="text", encoding="utf-8")`, `ws.send_text(data, encoding="utf-8")`, `ws.send_bytes(data, encoding="utf-8")`, `ws.send_json(data, mode="text")`, `ws.send_msgpack(data)`
-  - Receive: `ws.receive(block=True, timeout=None)`, `ws.receive_text(block=True, timeout=None)`, `ws.receive_bytes(block=True, timeout=None)`, `ws.receive_json(mode="text", block=True, timeout=None)`, `ws.receive_msgpack(block=True, timeout=None)`
-  - Close / Disconnect: `ws.close(code=WS_1000_NORMAL_CLOSURE)`; server-initiated close causes `ws.receive*()` to raise `litestar.exceptions.WebSocketDisconnect` (inspect `.code` and `.detail`).
-  - Metadata attributes: `ws.accepted_subprotocol`, `ws.extra_headers`, `ws.scope`.
+- **WebSockets (`websocket_connect`)**: On `AsyncTestClient`, `websocket_connect` is `async def` (must be awaited), while the returned `WebSocketTestSession` is always a **synchronous** context manager (`with await client.websocket_connect(...) as ws:`) with synchronous methods (`ws.send_json(...)`, `ws.receive_json(...)`, `ws.close(...)`). Server-initiated close causes `ws.receive*()` to raise `litestar.exceptions.WebSocketDisconnect`.
+- **SSE (`ServerSentEvent`)**: Stream events with `async with client.stream("GET", "/sse") as resp:` and iterate `resp.aiter_lines()`.
+- **`ChannelsPlugin`**: Configure `ChannelsPlugin(backend=MemoryChannelsBackend(), channels=["alerts"], create_ws_route_handlers=True)` and enter `async with create_async_test_client(plugins=[channels_plugin]) as client:`. Publish via `channels_plugin.publish(data, channels=["alerts"])` and consume via `websocket_connect`.
 
 ```python
+from collections.abc import AsyncGenerator
 import pytest
-from litestar import websocket_listener
+from litestar import get, websocket_listener
+from litestar.channels import ChannelsPlugin
+from litestar.channels.backends.memory import MemoryChannelsBackend
+from litestar.response.sse import ServerSentEvent, ServerSentEventMessage
 from litestar.testing import create_async_test_client
 
 
 @websocket_listener("/ws")
 async def echo_ws(data: dict[str, str]) -> dict[str, str]:
     return {"echo": data["msg"]}
-
-
-@pytest.mark.anyio
-async def test_websocket_echo() -> None:
-    async with create_async_test_client(route_handlers=[echo_ws]) as client:
-        with await client.websocket_connect("/ws") as ws:
-            ws.send_json({"msg": "hello"})
-            assert ws.receive_json() == {"echo": "hello"}
-```
-
-### SSE (`ServerSentEvent`) and `ChannelsPlugin` Testing
-
-- **SSE (`ServerSentEvent`)**: Stream events with `async with client.stream("GET", "/sse") as resp:` and iterate `resp.aiter_lines()` (or `resp.iter_lines()` on `TestClient`).
-- **`ChannelsPlugin`**: Configure `ChannelsPlugin(backend=MemoryChannelsBackend(), channels=[...], create_ws_route_handlers=True)` and enter `async with AsyncTestClient(app=app) as client:` so the plugin lifespan starts the backend. Publish via `channels_plugin.publish(data, channels=[...])` (or `await channels_plugin.wait_published(data, channels=[...])`) and consume via `websocket_connect` or `async with channels_plugin.start_subscription([...]) as subscriber:`.
-
-```python
-from collections.abc import AsyncGenerator
-import pytest
-from litestar import get
-from litestar.channels import ChannelsPlugin
-from litestar.channels.backends.memory import MemoryChannelsBackend
-from litestar.response.sse import ServerSentEvent, ServerSentEventMessage
-from litestar.testing import create_async_test_client
 
 
 @get("/events")
@@ -383,82 +241,26 @@ async def stream_events() -> ServerSentEvent:
 
 
 @pytest.mark.anyio
-async def test_sse_stream() -> None:
-    async with create_async_test_client(route_handlers=[stream_events]) as client:
+async def test_ws_sse_and_channels() -> None:
+    channels = ChannelsPlugin(backend=MemoryChannelsBackend(), channels=["alerts"], create_ws_route_handlers=True)
+    async with create_async_test_client(route_handlers=[echo_ws, stream_events], plugins=[channels]) as client:
+        with await client.websocket_connect("/ws") as ws:
+            ws.send_json({"msg": "hello"})
+            assert ws.receive_json() == {"echo": "hello"}
+
         async with client.stream("GET", "/events") as resp:
-            assert resp.status_code == 200
             lines = [line async for line in resp.aiter_lines() if line]
             assert lines == ["event: status", "data: ready"]
 
-
-@pytest.mark.anyio
-async def test_channels_websocket() -> None:
-    channels_plugin = ChannelsPlugin(
-        backend=MemoryChannelsBackend(),
-        channels=["alerts"],
-        create_ws_route_handlers=True,
-    )
-    async with create_async_test_client(plugins=[channels_plugin]) as client:
         with await client.websocket_connect("/alerts") as ws:
-            channels_plugin.publish({"msg": "fired"}, channels=["alerts"])
+            channels.publish({"msg": "fired"}, channels=["alerts"])
             assert ws.receive_json() == {"msg": "fired"}
 ```
 
-### Unit Testing with `RequestFactory`
+### Unit Testing with `RequestFactory` & Live Subprocess Clients
 
-Use `RequestFactory` to construct real `litestar.connection.Request` instances for unit-testing Guards, dependencies, or request helpers without spinning up an ASGI transport.
-
-- Constructor: `RequestFactory(app=None, server="test.org", port=3000, root_path="", scheme="http", handler_kwargs=None)`
-- Methods: `.get()`, `.post()`, `.put()`, `.patch()`, `.delete()` accepting `path="/"`, `headers=None`, `cookies=None`, `session=None`, `user=None`, `auth=None`, `query_params=None`, `state=None`, `path_params=None`, `http_version="1.1"`, `route_handler=None`, plus `data=None` and `request_media_type=RequestEncodingType.JSON` on `.post()` / `.put()` / `.patch()`.
-- **Synthetic `Request` scope rule**: In Litestar, `connection.app` / `request.app` reads `request.scope["litestar_app"]` (not `request.scope["app"]`). `RequestFactory(app=app)` automatically sets `scope["litestar_app"] = app` (or a default `Litestar` instance when `app=None`). If constructing a synthetic `Request(scope={...})` or `ASGIConnection(scope={...})` directly without `RequestFactory`, always include `"litestar_app": app` in the scope dict or accessing `.app` raises `KeyError: 'litestar_app'`.
-
-```python
-import pytest
-from litestar.connection import ASGIConnection
-from litestar.exceptions import PermissionDeniedException
-from litestar.handlers import BaseRouteHandler
-from litestar.testing import RequestFactory
-
-
-def requires_admin(connection: ASGIConnection, _: BaseRouteHandler) -> None:
-    if not connection.user or connection.user.get("role") != "admin":
-        raise PermissionDeniedException("Admin required")
-
-
-def test_requires_admin_guard() -> None:
-    factory = RequestFactory()
-    denied_req = factory.get("/admin", user={"role": "viewer"})
-    with pytest.raises(PermissionDeniedException):
-        requires_admin(denied_req, denied_req.route_handler)
-
-    allowed_req = factory.get("/admin", user={"role": "admin"})
-    requires_admin(allowed_req, allowed_req.route_handler)
-```
-
-### Live Subprocess Clients (`subprocess_async_client` / `subprocess_sync_client`)
-
-For end-to-end smoke tests that verify `litestar --app <app> run` CLI startup and real socket binding, use `subprocess_async_client(workdir, app, capture_output=True)` (yields `httpx.AsyncClient`) or `subprocess_sync_client(workdir, app, capture_output=True)` (yields `httpx.Client`).
-
-```python
-from pathlib import Path
-import pytest
-from litestar.testing import subprocess_async_client
-
-
-@pytest.mark.anyio
-async def test_live_subprocess_server(tmp_path: Path) -> None:
-    app_file = tmp_path / "main.py"
-    app_file.write_text(
-        "from litestar import Litestar, get\n"
-        "@get('/ping')\n"
-        "def ping() -> dict[str, str]: return {'pong': 'ok'}\n"
-        "app = Litestar([ping])\n",
-        encoding="utf-8",
-    )
-    async with subprocess_async_client(workdir=tmp_path, app="main:app") as client:
-        resp = await client.get("/ping")
-        assert resp.status_code == 200
-```
+- **`RequestFactory`**: Construct real `litestar.connection.Request` instances for unit-testing Guards or dependencies without an ASGI transport (`factory = RequestFactory(); req = factory.get("/admin", user={"role": "viewer"})`). In Litestar, `connection.app` reads `request.scope["litestar_app"]` (not `request.scope["app"]`); `RequestFactory` populates `scope["litestar_app"]` automatically.
+- **`subprocess_async_client` / `subprocess_sync_client`**: Verify `litestar --app <app> run` CLI startup and real socket binding via `async with subprocess_async_client(workdir=tmp_path, app="main:app") as client:`. See [Async Testing](references/async_testing.md) for complete examples.
 
 ### Integration with pytest-databases
 
@@ -503,47 +305,17 @@ async def test_create_user(async_client: AsyncTestClient) -> None:
     assert body["name"] == "Alice"
 ```
 
-### Headers, Cookies, Auth
+### Headers, Cookies, Auth, HTMX, and Response Assertions
 
 ```python
-# Header
-resp = await async_client.get("/", headers={"Authorization": "Bearer token"})
-
-# Cookie
-async_client.cookies.set("session", "abc123")
-resp = await async_client.get("/")
-
-# Per-request cookies
-resp = await async_client.get("/", cookies={"session": "abc123"})
-```
-
-### HTMX Requests
-
-```python
-async def test_htmx_partial(async_client: AsyncTestClient) -> None:
-    resp = await async_client.get(
-        "/items/list",
-        headers={"HX-Request": "true", "HX-Target": "#item-list"},
-    )
-    assert resp.status_code == 200
-    assert "<ul" in resp.text
-```
-
-### Response Assertions
-
-```python
-# Status
+resp = await async_client.get(
+    "/items/list",
+    headers={"Authorization": "Bearer token", "HX-Request": "true", "HX-Target": "#item-list"},
+    cookies={"session": "abc123"},
+)
 assert resp.status_code == 200
-
-# Body
-assert resp.json() == {"id": 1, "name": "Alice"}
-
-# Headers
-assert resp.headers["content-type"].startswith("application/json")
 assert "HX-Trigger" in resp.headers
-
-# Cookies (set by server)
-assert "session" in resp.cookies
+assert "<ul" in resp.text
 ```
 
 ### Parametrize
@@ -766,7 +538,7 @@ async def test_create_account_validation(async_client, payload, expected_status)
 ## Official References
 
 - <https://docs.litestar.dev/2/usage/testing.html>
-- <https://github.com/litestar-org/litestar/tree/v2.25.0>
+- <https://github.com/litestar-org/litestar>
 - <https://docs.pytest.org/en/stable/>
 - <https://anyio.readthedocs.io/en/stable/testing.html>
 

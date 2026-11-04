@@ -92,8 +92,8 @@ from litestar_queues.task import clear_task_registry, get_default_service
 
 
 def test_litestar_queues_0120_contract() -> None:
-    """Verify litestar-queues 0.12.0 package metadata, configs, and CLI contract."""
-    assert version("litestar-queues") == "0.12.0"
+    """Verify litestar-queues 0.14.0 package metadata, configs, and CLI contract."""
+    assert version("litestar-queues") == "0.14.0"
 
     config = QueueConfig()
     assert config.worker == WorkerConfig()

@@ -1,7 +1,7 @@
 # Granian & litestar-granian CLI Reference
 
 Complete reference for CLI options available in `litestar run` (provided by
-`litestar-granian` 0.16.0). The standalone `granian` CLI is a separate surface.
+`litestar-granian`). The standalone `granian` CLI is a separate surface.
 
 ## `litestar run` Options Matrix
 
@@ -128,7 +128,7 @@ When `GranianPlugin` is registered, Litestar's `run` command provides the follow
 
 ### Deprecated and Retired Flags
 
-- **Deprecated in 0.16.0 (Ignored with Warning):**
+- **Deprecated Flags (Ignored with Warning):**
   - `--in-subprocess` / `--no-subprocess` (`LITESTAR_GRANIAN_IN_SUBPROCESS` / `GRANIAN_IN_SUBPROCESS`): Supervised execution is always used.
   - `--use-litestar-logger` / `--no-litestar-logger` (`LITESTAR_GRANIAN_USE_LITESTAR_LOGGER` / `GRANIAN_USE_LITESTAR_LOGGER`): Formatter matching is automatic.
 - **Retired Upstream (Do Not Use):**
@@ -138,9 +138,9 @@ When `GranianPlugin` is registered, Litestar's `run` command provides the follow
 
 ## Standalone `granian` CLI Differences
 
-When invoking the standalone `granian` CLI directly (`granian --interface asgi app:app`) instead of `litestar run`, note these surface differences in `granian` 2.8.4:
+When invoking the standalone `granian` CLI directly (`granian --interface asgi app:app`) instead of `litestar run`, note these surface differences:
 
-| Concern | `litestar run` (`litestar-granian` 0.16.0) | Standalone `granian` (`granian` 2.8.4) |
+| Concern | `litestar run` (`litestar-granian`) | Standalone `granian` |
 | --- | --- | --- |
 | Target & interface | `litestar --app app:app run` (always passes `--interface=asgi` and auto-detects `--factory`) | `granian --interface asgi app:app` (defaults to `--interface rsgi`; pass `--factory` / `--no-factory` explicitly) |
 | Server logging | `--granian-log` / `--granian-no-log`, `--granian-log-level` | `--log` / `--no-log`, `--log-level` |

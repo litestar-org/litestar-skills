@@ -1,6 +1,6 @@
 ---
 name: litestar-autowire
-description: "Auto-activate for litestar_autowire, AutowirePlugin, AutowireConfig, domain_packages, AutowireIntegration, AutowireLoader, or clear_autowire_cache. Not for manual Router composition — use explicit routes."
+description: "Use when working with litestar_autowire, AutowirePlugin, AutowireConfig, domain_packages, AutowireIntegration, AutowireLoader, or clear_autowire_cache. Not for manual Router composition — use explicit routes."
 ---
 
 # litestar-autowire

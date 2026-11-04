@@ -161,11 +161,12 @@ The stdio bridge handles MCP transport headers transparently and forwards indepe
 ## Cross-References
 
 - **[Litestar Channels & SSE](../../litestar/references/channels-and-sse.md)** — Channels backends for `subscription_channels` and `QueuedAgentChatController`.
-- **[litestar-ai](../../litestar-ai/SKILL.md)** — `Agent`, `AgentGroup`, `AgentRuntime`, `DynamicWorkflow`, and `QueuedAgentChatController` orchestration patterns.
+- **[advanced-patterns.md](advanced-patterns.md)** — `Agent`, `AgentGroup`, `AgentRuntime`, `DynamicWorkflow`, and `QueuedAgentChatController` orchestration patterns.
 - **[litestar-security](../../litestar-security/SKILL.md)** — `SecurityPlugin`, `ProtectedResourceConfig`, and `AUTH_POLICY_OPT_KEY` / `required(...)` route policies.
 - **[Litestar Auth & Guards](../../litestar/references/auth-and-guards.md)** — guards applied to the MCP router.
 
 ## Official References
 
-- <https://github.com/cofin/litestar-mcp/releases/tag/v0.16.0>
+- <https://github.com/cofin/litestar-mcp>
+- <https://pypi.org/project/litestar-mcp/>
 - <https://cofin.github.io/litestar-mcp/>

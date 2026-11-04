@@ -229,6 +229,5 @@ Queue backends must implement `clear_execution_ref` and `replace_execution_ref`,
 
 ## Official References
 
-- <https://github.com/cofin/litestar-queues/blob/v0.12.0/docs/usage/deployment/sqs.rst>
-- <https://github.com/cofin/litestar-queues/blob/v0.12.0/docs/usage/deployment/cloud-tasks.rst>
-- <https://github.com/cofin/litestar-queues/tree/v0.12.0/src/litestar_queues/execution>
+- <https://github.com/cofin/litestar-queues>
+- <https://pypi.org/project/litestar-queues/>

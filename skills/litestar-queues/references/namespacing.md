@@ -62,5 +62,5 @@ Set `replay_limit > 0` (the default is `0`) when browser clients must recover mi
 
 ## Official References
 
-- <https://github.com/cofin/litestar-queues/blob/v0.12.0/docs/changelog.rst>
-- <https://github.com/cofin/litestar-queues/blob/v0.12.0/src/litestar_queues/config.py>
+- <https://github.com/cofin/litestar-queues>
+- <https://pypi.org/project/litestar-queues/>
