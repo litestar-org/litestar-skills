@@ -92,9 +92,11 @@ destroy:                                            ## Destroy the virtual envir
 upgrade: setup-env                                  ## Upgrade all dependencies to latest stable versions
 	@echo "${INFO} Updating all dependencies... 🔄"
 	@uv lock --upgrade
+	@uv sync --extra dev
 	@bun update
 	@echo "${OK} Dependencies updated 🔄"
 	@uv run prek autoupdate || true
+	@uv run prek install-hooks || true
 	@echo "${OK} Updated pre-commit hooks 🔄"
 
 .PHONY: lock

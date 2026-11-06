@@ -66,7 +66,7 @@ Configure BigQuery job behavior through `BigQueryConfig.driver_features`.
 | `job_retry_deadline` | Total seconds for retry construction; `<= 0` disables the BigQuery job retry wrapper |
 | `job_result_timeout` | Bounds waits on `QueryJob.result()` and load-job completion |
 | `request_timeout` | Bounds the initial BigQuery API request; defaults from `job_result_timeout` when numeric |
-| `use_query_and_wait` | Uses `Client.query_and_wait()` for simple query execution |
+| `enable_query_and_wait` | Uses `Client.query_and_wait()` for simple query execution |
 | `query_page_size` | Passed to `QueryJob.result()` for SELECT result fetching |
 | `query_max_results` | Total row cap passed to `QueryJob.result()` for SELECT result fetching |
 | `enable_storage_write_api` | Uses Storage Write API for `load_from_arrow(..., overwrite=False)` appends when available |

@@ -117,21 +117,27 @@ def test_session_start_sh_emits_valid_envelopes(tmp_path: Path, use_pwsh: bool) 
     assert "litestar" in payload_json["detected_skills"]
     assert "sqlspec" in payload_json["detected_skills"]
     assert "litestar-vite" in payload_json["detected_skills"]
+    assert "litestar-styleguide" in payload_json["detected_skills"]
+    assert "EXTREMELY_IMPORTANT" not in payload_json["context"]
 
     res_agy = _run_session_hook("agy", tmp_path, use_pwsh=use_pwsh)
     payload_agy = json.loads(res_agy.stdout)
     assert "systemMessage" in payload_agy["injectSteps"][0]
+    assert "EXTREMELY_IMPORTANT" not in payload_agy["injectSteps"][0]["systemMessage"]["systemMessage"]
 
     res_claude = _run_session_hook("claude", tmp_path, use_pwsh=use_pwsh)
     payload_claude = json.loads(res_claude.stdout)
     assert payload_claude["continue"] is True
+    assert "systemMessage" not in payload_claude
     assert payload_claude["hookSpecificOutput"]["hookEventName"] == "SessionStart"
-    assert "sqlspec" in payload_claude["systemMessage"]
+    assert "sqlspec" in payload_claude["hookSpecificOutput"]["additionalContext"]
+    assert "EXTREMELY_IMPORTANT" not in payload_claude["hookSpecificOutput"]["additionalContext"]
 
     res_cursor = _run_session_hook("cursor", tmp_path, use_pwsh=use_pwsh)
     payload_cursor = json.loads(res_cursor.stdout)
     assert payload_cursor["continue"] is True
     assert "sqlspec" in payload_cursor["additional_context"]
+    assert "EXTREMELY_IMPORTANT" not in payload_cursor["additional_context"]
 
     res_cursor_guard = _run_session_hook(
         "claude",
@@ -140,6 +146,52 @@ def test_session_start_sh_emits_valid_envelopes(tmp_path: Path, use_pwsh: bool) 
         use_pwsh=use_pwsh,
     )
     assert json.loads(res_cursor_guard.stdout) == {"continue": True}
+
+
+@pytest.mark.parametrize("use_pwsh", [False, True], ids=["sh", "pwsh"])
+def test_session_start_quiet_in_non_litestar_workspace_and_upstream_aware(tmp_path: Path, use_pwsh: bool) -> None:
+    """Verify non-Litestar workspaces emit quiet no-ops and upstream packages emit authority guidance."""
+    non_litestar = tmp_path / "generic-app"
+    non_litestar.mkdir()
+    (non_litestar / "pyproject.toml").write_text(
+        '[project]\nname = "generic-app"\ndependencies = ["pytest", "mkdocstrings"]\n',
+        encoding="utf-8",
+    )
+    (non_litestar / "Dockerfile").write_text("FROM python:3.12\n", encoding="utf-8")
+    (non_litestar / "vite.config.ts").write_text("export default {}\n", encoding="utf-8")
+    (non_litestar / "zensical.toml").write_text("[project]\n", encoding="utf-8")
+
+    assert json.loads(_run_session_hook("json", non_litestar, use_pwsh=use_pwsh).stdout) == {
+        "detected_skills": [],
+        "context": "",
+    }
+    assert json.loads(_run_session_hook("agy", non_litestar, use_pwsh=use_pwsh).stdout) == {}
+    assert json.loads(_run_session_hook("claude", non_litestar, use_pwsh=use_pwsh).stdout) == {"continue": True}
+    assert json.loads(_run_session_hook("cursor", non_litestar, use_pwsh=use_pwsh).stdout) == {"continue": True}
+    assert _run_session_hook("opencode", non_litestar, use_pwsh=use_pwsh).stdout.strip() == ""
+
+    upstream_dir = tmp_path / "sqlspec-checkout"
+    upstream_dir.mkdir()
+    (upstream_dir / "pyproject.toml").write_text(
+        '[project]\nname = "sqlspec"\ndependencies = ["msgspec", "pytest"]\n',
+        encoding="utf-8",
+    )
+    upstream_json = json.loads(_run_session_hook("json", upstream_dir, use_pwsh=use_pwsh).stdout)
+    assert "sqlspec" not in upstream_json["detected_skills"]
+    assert "msgspec" in upstream_json["detected_skills"]
+    assert "litestar-testing" in upstream_json["detected_skills"]
+    assert "Litestar upstream package workspace ('sqlspec'" in upstream_json["context"]
+    assert "authority over its consumer skill" in upstream_json["context"]
+
+    plugin_dir = tmp_path / "plugin-checkout"
+    plugin_dir.mkdir()
+    (plugin_dir / "pyproject.toml").write_text(
+        '[project]\nname = "litestar-skills"\n[project.optional-dependencies]\nvalidation = ["litestar", "sqlspec"]\n',
+        encoding="utf-8",
+    )
+    plugin_json = json.loads(_run_session_hook("json", plugin_dir, use_pwsh=use_pwsh).stdout)
+    assert plugin_json["detected_skills"] == ["litestar-styleguide"]
+    assert "Litestar skills plugin workspace" in plugin_json["context"]
 
 
 def _run_session_hook(

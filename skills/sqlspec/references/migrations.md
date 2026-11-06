@@ -19,7 +19,8 @@ The canonical command group is `sqlspec` (wired up in `sqlspec/cli.py`). When Li
 | `sqlspec show-current-revision` | Print the applied head version |
 | `sqlspec stamp <revision>` | Mark the DB at a revision without running SQL |
 | `sqlspec fix` | Convert timestamp migrations to sequential |
-| `sqlspec squash START:END -m "msg"` | Collapse a range of migrations into one |
+| `sqlspec squash START:END -m "msg"` | Collapse a range of migrations into one (`--canonical` folds canonical DDL via `MigrationSquasher.fold_canonical_ddl`) |
+| `sqlspec dump-schema` | Introspect live schema via the data dictionary and emit canonical `CreateTable` / `CreateIndex` DDL (`MigrationCommands.dump_schema`) |
 | `sqlspec show-config` | List all configs with migrations enabled |
 
 ```bash

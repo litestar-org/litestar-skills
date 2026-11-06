@@ -16,16 +16,16 @@ imports = ["advanced_alchemy"]
 
 [[package]]
 pypi = "sqlspec"
-version = "0.70.1"
-date = "2026-11-02"
-tag = "v0.70.1"
+version = "0.71.1"
+date = "2026-11-06"
+tag = "v0.71.1"
 skills = ["skills/sqlspec"]
 imports = ["sqlspec"]
 
 [[package]]
 pypi = "litestar-queues"
 version = "0.14.0"
-date = "2026-11-01"
+date = "2026-11-03"
 tag = "v0.14.0"
 skills = ["skills/litestar-queues"]
 imports = ["litestar_queues"]
@@ -33,7 +33,7 @@ imports = ["litestar_queues"]
 [[package]]
 pypi = "litestar-vite"
 version = "0.33.0"
-date = "2026-11-02"
+date = "2026-11-03"
 tag = "v0.33.0"
 skills = ["skills/litestar-vite"]
 imports = ["litestar_vite"]

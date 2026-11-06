@@ -95,7 +95,8 @@ Branch on the domain capability before execution, then branch on the returned re
 
 ## Adapter Boundaries
 
-- PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, SQLite, DuckDB, BigQuery, and Spanner use database-specific catalog/query packs.
+- PostgreSQL, CockroachDB, MySQL/MariaDB, Oracle, SQL Server, Sybase ASE, SAP SQL Anywhere, IBM Db2, SQLite, DuckDB, BigQuery, and Spanner use database-specific catalog/query packs.
+- Dialect configurations in `sqlspec.data_dictionary` (`get_dialect_config`) also expose `supports_vectors` capability metadata via `get_feature_flag("supports_vectors")` / `get_feature_version("supports_vectors")` (plus extension-probed `supports_vectors` on PostgreSQL data dictionaries).
 - ADBC metadata can be a transport fallback. Treat transport-fallback or lossy output as inspection data, not lossless export.
 - BigQuery operational metadata can be region-scoped or billed.
 - Oracle diagnostics can require privileges or licensed packs.
