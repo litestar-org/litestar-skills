@@ -87,6 +87,10 @@ store = AsyncpgStore(config)
 
 Configure expiry in Litestar's session middleware. SQLSpec's extension block controls the table name, additive schema lifecycle, and adapter-specific table options.
 
+### Extension Adapter Name & Store Resolution (`sqlspec.utils.adapters`)
+
+Adapter configs (`SyncDatabaseConfig`, `AsyncDatabaseConfig`, `DatabaseConfigProtocol`) and extension base stores declare `ClassVar` metadata (`adapter_name`, `litestar_store_class`, `events_store_class`, `adk_store_class`, `adk_memory_store_class`). Framework and extension integrations resolve adapter names and concrete store classes via `resolve_adapter_name(config)` and `resolve_extension_store_class(config, extension=..., store_attr=..., store_suffix=...)` in `sqlspec.utils.adapters`.
+
 ### Correlation Header & Lifespan Control
 
 ```python

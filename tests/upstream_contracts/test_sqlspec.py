@@ -40,7 +40,7 @@ from sqlspec.adapters.aiosqlite import (
     AiosqliteDriverFeatures,
 )
 from sqlspec.adapters.sqlite import SqliteConfig, SqliteDriver, SqliteDriverFeatures
-from sqlspec.builder import Merge
+from sqlspec.builder import CreateIndex, CreateTable, Merge, compile_table_ddl_results
 from sqlspec.cli import add_migration_commands, get_sqlspec_group
 from sqlspec.config import EventsConfig
 from sqlspec.core import (
@@ -72,6 +72,7 @@ from sqlspec.core.filters import (
 )
 from sqlspec.core.result import SQLResult
 from sqlspec.core.statement import ProcessedState
+from sqlspec.data_dictionary import get_dialect_config
 from sqlspec.dialects import DB2
 from sqlspec.dialects.db2 import DB2Tokenizer
 from sqlspec.dialects.postgres import ParadeDB, PGTextSearch, PGVector
@@ -108,6 +109,8 @@ from sqlspec.dialects.spanner import (
     tokenize_ngrams,
     tokenize_substring,
 )
+from sqlspec.dialects.sybase import SQLAnywhere, Sybase
+from sqlspec.exceptions import SQLBuilderError
 from sqlspec.extensions.adk import (
     PruneReport,
     SQLSpecArtifactService,
@@ -151,6 +154,7 @@ from sqlspec.storage import (
     resolve_storage_path,
     storage_registry,
 )
+from sqlspec.utils.adapters import resolve_adapter_name, resolve_extension_store_class
 from sqlspec.utils.config_tools import (
     normalize_connection_config,
     parse_mysql_dsn,
@@ -184,8 +188,8 @@ class UserRow:
 
 
 def test_sqlspec_067_contract() -> None:
-    """Validate sqlspec 0.70.1 core contracts and exported API surface."""
-    assert version("sqlspec") == "0.70.1"
+    """Validate sqlspec 0.71.1 core contracts and exported API surface."""
+    assert version("sqlspec") == "0.71.1"
 
     assert "sqlspec" in inspect.signature(SQLSpecPlugin).parameters
     spec = SQLSpec()
@@ -1023,6 +1027,67 @@ def test_sqlspec_067_statement_cache_holder_and_duckdb_type_contract(monkeypatch
     assert (
         duckdb_core.description_has_arrow_divergent_types([("big_id", "HUGEINT", None, None, None, None, None)]) is True
     )
+
+
+def test_sqlspec_071_query_builder_data_dictionary_and_extensions_contract() -> None:
+    """Validate sqlspec 0.70.0-0.71.1 query builder, data dictionary, dialects, and extension helpers."""
+    null_eq = sql.select("*").from_("users").where_eq("deleted_at", None).build(dialect="postgres")
+    assert "IS NULL" in null_eq.sql.upper()
+    assert not null_eq.parameters
+
+    null_neq = sql.select("*").from_("users").where_neq("deleted_at", None).build(dialect="postgres")
+    assert "IS NULL" in null_neq.sql.upper()
+    assert "NOT" in null_neq.sql.upper()
+    assert not null_neq.parameters
+
+    not_any_built = (
+        sql.select("*").from_("users").where(sql.not_any_("status", ["suspended", "banned"])).build(dialect="postgres")
+    )
+    assert "<> ALL" in not_any_built.sql.upper() or "NOT" in not_any_built.sql.upper()
+    assert len(not_any_built.parameters) == 2
+
+    subq = sql.select("user_id").from_("blocks").where_eq("reason", "spam")
+    exists_built = sql.select("*").from_("users").where(sql.exists_(subq)).build(dialect="postgres")
+    assert "spam" in exists_built.parameters.values()
+
+    any_built = sql.select("*").from_("users").where(sql.column("id") == sql.any_(subq)).build(dialect="postgres")
+    assert "spam" in any_built.parameters.values()
+
+    with pytest.raises(SQLBuilderError):
+        sql.select("*").from_("users").where(sql.in_([1, 2, 3]))
+
+    for vector_flag_dialect in ("bigquery", "spanner"):
+        assert get_dialect_config(vector_flag_dialect).get_feature_flag("supports_vectors") is True
+    for vector_version_dialect in ("cockroachdb", "duckdb", "oracle"):
+        assert get_dialect_config(vector_version_dialect).get_feature_version("supports_vectors") is not None
+
+    sqlite_cfg = SqliteConfig(connection_config={"database": ":memory:"})
+    assert resolve_adapter_name(sqlite_cfg) == "sqlite"
+    assert (
+        resolve_extension_store_class(
+            sqlite_cfg,
+            extension="litestar",
+            store_attr="litestar_store_class",
+            store_suffix="Store",
+        )
+        is not None
+    )
+    assert hasattr(SqliteConfig, "adapter_name")
+    assert hasattr(SqliteConfig, "litestar_store_class")
+
+    assert issubclass(Sybase, sqlglot.Dialect)
+    assert issubclass(SQLAnywhere, sqlglot.Dialect)
+    assert "Sybase" in dialects_pkg.__all__
+    assert "SQLAnywhere" in dialects_pkg.__all__
+
+    assert callable(CreateTable.from_metadata)
+    assert callable(CreateTable.from_arrow_schema)
+    assert callable(CreateTable.from_records)
+    assert callable(CreateIndex.from_metadata)
+    assert callable(compile_table_ddl_results)
+
+    cli_group = add_migration_commands(get_sqlspec_group())
+    assert "dump-schema" in cli_group.commands
 
 
 def _load_adapter_core_module(monkeypatch: pytest.MonkeyPatch, adapter_name: str) -> Any:

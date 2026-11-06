@@ -22,8 +22,10 @@
 | Psycopg | `"psycopg"` | `postgres` | PYFORMAT (`%s`) | `helper` | Both | psycopg adapt |
 | PyMSSQL | `"pymssql"` | `tsql` | PYFORMAT (`%s`) input, positional execution | `helper` | No | SQL Server native |
 | PyMySQL | `"pymysql"` | `mysql` | PYFORMAT (`%s`) | `helper` | No | MySQL native |
+| SAP SQL Anywhere | `"sqlanywhere"` | `sqlanywhere` | QMARK (`?`) | `helper` | No | SQL Anywhere DB-API |
 | Spanner | `"spanner"` | `spanner` | NAMED_AT (`@name`) | `helper` | Both | Spanner proto |
 | SQLite | `"sqlite"` | `sqlite` | QMARK (`?`) | `helper` | No | Python stdlib |
+| Sybase ASE | `"sybase"` | `sybase` | PYFORMAT (`%s`) | `helper` | No | Sybase TDS / DB-API |
 
 ### JSON Strategy
 
@@ -80,6 +82,7 @@ Check the adapter config flags before building generic tooling:
 
 - **oracledb**: Thin/Thick sync + async Oracle Database adapter with native JSON/OSON, LOB materialization defaults, and AQ/TxEventQ event transports.
 - **db2**: Sync (`Db2SyncConfig`) and async (`Db2AsyncConfig`) IBM Db2 LUW 11.5+ adapter built on `ibm_db` (`ibm_db_dbi`). Pair with `arrow_odbc` when columnar Arrow reads are required.
+- **sybase / sqlanywhere**: Sync adapters for SAP Adaptive Server Enterprise (`SybaseSyncConfig`, `SybaseSyncDriver` in `sqlspec.adapters.sybase`) and SAP SQL Anywhere (`SqlAnywhereSyncConfig`, `SqlAnywhereSyncDriver` in `sqlspec.adapters.sqlanywhere`), paired with first-party `Sybase` and `SQLAnywhere` SQLGlot dialects (`sqlspec.dialects.sybase`) and Litestar, Events, and ADK extension stores.
 
 ### SQLite
 
@@ -118,7 +121,7 @@ Check the adapter config flags before building generic tooling:
 - Zero-copy JSON with `driver` strategy (no serialization overhead).
 - Native pgvector support, custom codecs, per-query timeouts, and Cloud SQL / AlloyDB connector integration (`psycopg` also exposes null pools and JSON codecs; `psqlpy` supports dense-vector conversion).
 - **Modular PostgreSQL extension probing**: on first connection, PostgreSQL adapters (`asyncpg`, `psycopg`, `psqlpy`) probe `pg_extension` for enabled extensions (`enable_pgvector=True` -> `"vector"`, `enable_paradedb=True` -> `"pg_search"`, `enable_pg_textsearch=True` -> `"pg_textsearch"`) via `build_postgres_extension_probe_names()` and `resolve_postgres_extension_state()`.
-- When detected, the statement dialect promotes automatically from `"postgres"` to `"paradedb"` (`ParadeDB`), `"pg_textsearch"` (`PGTextSearch`, supporting the `<@>` BM25 ranking operator and pgvector operators), or `"pgvector"` (`PGVector`). All custom dialects are exported from `sqlspec.dialects` (`DB2`, `PGTextSearch`, `PGVector`, `ParadeDB`, `Spangres`, `Spanner`).
+- When detected, the statement dialect promotes automatically from `"postgres"` to `"paradedb"` (`ParadeDB`), `"pg_textsearch"` (`PGTextSearch`, supporting the `<@>` BM25 ranking operator and pgvector operators), or `"pgvector"` (`PGVector`). All custom dialects are exported from `sqlspec.dialects` (`DB2`, `PGTextSearch`, `PGVector`, `ParadeDB`, `SQLAnywhere`, `Spangres`, `Spanner`, `Sybase`).
 
 ### Connection Parameter Aliases & DSN Normalization
 

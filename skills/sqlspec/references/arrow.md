@@ -31,7 +31,7 @@ Supported `return_format` values:
 | `"batches"` | Iterator of `RecordBatch` objects |
 | `"reader"` | `pyarrow.RecordBatchReader` |
 
-Use `batch_size=` for batch and reader shapes. Use `arrow_schema=` to cast or stabilize schema. Set `native_only=True` when conversion fallback would hide a performance or memory bug.
+Use `batch_size=` for batch and reader shapes. Use `arrow_schema=` to cast or stabilize schema. Empty row-based `table`, `batch`, and `reader` results preserve cursor column names and explicit `arrow_schema` field types instead of returning zero-column tables. Set `native_only=True` when conversion fallback would hide a performance or memory bug.
 
 ### Native Export Paths
 

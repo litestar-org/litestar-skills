@@ -81,58 +81,167 @@ function Add-Skill([string]$Name) {
 
 $PyprojectPath = Join-Path $ProjectDir "pyproject.toml"
 $OwnPackage = ""
+$IsPluginRepo = $false
+$IsUpstream = $false
+$HasCore = $false
+$UpstreamPackages = @(
+    "litestar",
+    "advanced-alchemy",
+    "sqlspec",
+    "msgspec",
+    "litestar-granian",
+    "litestar-saq",
+    "litestar-queues",
+    "litestar-security",
+    "litestar-autowire",
+    "litestar-vite",
+    "litestar-htmx",
+    "litestar-mcp",
+    "litestar-email",
+    "pytest-databases",
+    "polyfactory"
+)
+
 if (Test-Path -LiteralPath $PyprojectPath) {
     $Content = Get-Content -LiteralPath $PyprojectPath -Raw -ErrorAction SilentlyContinue
     if ($Content -match '(?ms)^\[project\].*?^\s*name\s*=\s*"([^"]+)"') {
         $OwnPackage = $Matches[1].ToLowerInvariant().Replace("_", "-")
     }
-    if ($Content -match '(?i)litestar' -and $OwnPackage -ne 'litestar') { Add-Skill 'litestar' }
-    if ($Content -match '(?i)advanced[-_]alchemy' -and $OwnPackage -ne 'advanced-alchemy') { Add-Skill 'advanced-alchemy' }
-    if ($Content -match '(?i)sqlspec' -and $OwnPackage -ne 'sqlspec') { Add-Skill 'sqlspec' }
-    if ($Content -match '(?i)msgspec' -and $OwnPackage -ne 'msgspec') { Add-Skill 'msgspec' }
-    if ($Content -match '(?i)litestar[-_]granian|granian' -and $OwnPackage -ne 'litestar-granian') { Add-Skill 'litestar-granian' }
-    if ($Content -match '(?i)litestar[-_]saq' -and $OwnPackage -ne 'litestar-saq') { Add-Skill 'litestar-saq' }
-    if ($Content -match '(?i)litestar[-_]queues' -and $OwnPackage -ne 'litestar-queues') { Add-Skill 'litestar-queues' }
-    if ($Content -match '(?i)litestar[-_]security' -and $OwnPackage -ne 'litestar-security') { Add-Skill 'litestar-security' }
-    if ($Content -match '(?i)litestar[-_]autowire' -and $OwnPackage -ne 'litestar-autowire') { Add-Skill 'litestar-autowire' }
-    if ($Content -match '(?i)litestar[-_]vite' -and $OwnPackage -ne 'litestar-vite') { Add-Skill 'litestar-vite' }
-    if ($Content -match '(?i)litestar[-_]htmx' -and $OwnPackage -ne 'litestar-htmx') { Add-Skill 'litestar-htmx' }
-    if ($Content -match '(?i)litestar[-_]mcp|google[-_]adk|google[-_]genai' -and $OwnPackage -ne 'litestar-mcp') { Add-Skill 'litestar-mcp' }
-    if ($Content -match '(?i)litestar[-_]email' -and $OwnPackage -ne 'litestar-email') { Add-Skill 'litestar-email' }
-    if ($Content -match '(?i)pytest') { Add-Skill 'litestar-testing' }
-    if ($Content -match '(?i)pytest[-_]databases' -and $OwnPackage -ne 'pytest-databases') { Add-Skill 'pytest-databases' }
-    if ($Content -match '(?i)polyfactory' -and $OwnPackage -ne 'polyfactory') { Add-Skill 'polyfactory' }
-    if ($Content -match '(?i)zensical|mkdocstrings|shibuya|litestar[-_]sphinx[-_]theme') { Add-Skill 'litestar-docs' }
+    if ($OwnPackage -eq "litestar-skills") {
+        $IsPluginRepo = $true
+        Add-Skill 'litestar-styleguide'
+    } else {
+        if ($UpstreamPackages -contains $OwnPackage) {
+            $IsUpstream = $true
+            $HasCore = $true
+        }
+        if ($Content -match '(?i)litestar') {
+            $HasCore = $true
+            if ($OwnPackage -ne 'litestar') { Add-Skill 'litestar' }
+        }
+        if ($Content -match '(?i)advanced[-_]alchemy') {
+            $HasCore = $true
+            if ($OwnPackage -ne 'advanced-alchemy') { Add-Skill 'advanced-alchemy' }
+        }
+        if ($Content -match '(?i)sqlspec') {
+            $HasCore = $true
+            if ($OwnPackage -ne 'sqlspec') { Add-Skill 'sqlspec' }
+        }
+        if ($Content -match '(?i)msgspec') {
+            $HasCore = $true
+            if ($OwnPackage -ne 'msgspec') { Add-Skill 'msgspec' }
+        }
+        if ($Content -match '(?i)litestar[-_]granian') {
+            $HasCore = $true
+            if ($OwnPackage -ne 'litestar-granian') { Add-Skill 'litestar-granian' }
+        }
+        if ($Content -match '(?i)litestar[-_]saq') {
+            $HasCore = $true
+            if ($OwnPackage -ne 'litestar-saq') { Add-Skill 'litestar-saq' }
+        }
+        if ($Content -match '(?i)litestar[-_]queues') {
+            $HasCore = $true
+            if ($OwnPackage -ne 'litestar-queues') { Add-Skill 'litestar-queues' }
+        }
+        if ($Content -match '(?i)litestar[-_]security') {
+            $HasCore = $true
+            if ($OwnPackage -ne 'litestar-security') { Add-Skill 'litestar-security' }
+        }
+        if ($Content -match '(?i)litestar[-_]autowire') {
+            $HasCore = $true
+            if ($OwnPackage -ne 'litestar-autowire') { Add-Skill 'litestar-autowire' }
+        }
+        if ($Content -match '(?i)litestar[-_]vite') {
+            $HasCore = $true
+            if ($OwnPackage -ne 'litestar-vite') { Add-Skill 'litestar-vite' }
+        }
+        if ($Content -match '(?i)litestar[-_]htmx') {
+            $HasCore = $true
+            if ($OwnPackage -ne 'litestar-htmx') { Add-Skill 'litestar-htmx' }
+        }
+        if ($Content -match '(?i)litestar[-_]mcp') {
+            $HasCore = $true
+            if ($OwnPackage -ne 'litestar-mcp') { Add-Skill 'litestar-mcp' }
+        }
+        if ($Content -match '(?i)litestar[-_]email') {
+            $HasCore = $true
+            if ($OwnPackage -ne 'litestar-email') { Add-Skill 'litestar-email' }
+        }
+        if ($Content -match '(?i)pytest[-_]databases') {
+            $HasCore = $true
+            if ($OwnPackage -ne 'pytest-databases') { Add-Skill 'pytest-databases' }
+        }
+        if ($Content -match '(?i)polyfactory') {
+            $HasCore = $true
+            if ($OwnPackage -ne 'polyfactory') { Add-Skill 'polyfactory' }
+        }
+        if ($Content -match '(?i)litestar[-_]sphinx[-_]theme') {
+            $HasCore = $true
+            Add-Skill 'litestar-docs'
+        }
+        if ($HasCore) {
+            if ($Content -match '(?i)granian' -and $OwnPackage -ne 'litestar-granian') { Add-Skill 'litestar-granian' }
+            if ($Content -match '(?i)google[-_]adk|google[-_]genai' -and $OwnPackage -ne 'litestar-mcp') { Add-Skill 'litestar-mcp' }
+            if ($Content -match '(?i)pytest') { Add-Skill 'litestar-testing' }
+            if ($Content -match '(?i)zensical|mkdocstrings|shibuya') { Add-Skill 'litestar-docs' }
+        }
+    }
 }
 
-if ((Test-Path -LiteralPath (Join-Path $ProjectDir "zensical.toml")) -or (Test-Path -LiteralPath (Join-Path $ProjectDir "docs/conf.py"))) {
-    Add-Skill 'litestar-docs'
-}
-if ((Test-Path -LiteralPath (Join-Path $ProjectDir "vite.config.ts")) -and $OwnPackage -ne 'litestar-vite') {
-    Add-Skill 'litestar-vite'
-}
-if (Test-Path -LiteralPath (Join-Path $ProjectDir "Dockerfile")) {
-    Add-Skill 'litestar-deployment'
+if ($HasCore -and -not $IsPluginRepo) {
+    if ((Test-Path -LiteralPath (Join-Path $ProjectDir "zensical.toml")) -or (Test-Path -LiteralPath (Join-Path $ProjectDir "docs/conf.py"))) {
+        Add-Skill 'litestar-docs'
+    }
+    if (((Test-Path -LiteralPath (Join-Path $ProjectDir "vite.config.ts")) -or (Test-Path -LiteralPath (Join-Path $ProjectDir "vite.config.js")) -or (Test-Path -LiteralPath (Join-Path $ProjectDir "vite.config.mjs"))) -and $OwnPackage -ne 'litestar-vite') {
+        Add-Skill 'litestar-vite'
+    }
+    if ((Test-Path -LiteralPath (Join-Path $ProjectDir "alembic.ini")) -and $OwnPackage -ne 'advanced-alchemy' -and $OwnPackage -ne 'sqlspec') {
+        Add-Skill 'advanced-alchemy'
+    }
+    if ((Test-Path -LiteralPath (Join-Path $ProjectDir "Dockerfile")) -or (Test-Path -LiteralPath (Join-Path $ProjectDir "Containerfile"))) {
+        Add-Skill 'litestar-deployment'
+    }
+    Add-Skill 'litestar-styleguide'
 }
 
-if ($DetectedSkills.Count -gt 0) {
-    $SkillSummary = "Detected Litestar stack skills for this workspace: $($DetectedSkills -join ' ')."
+if ($DetectedSkills.Count -eq 0 -and -not $IsUpstream -and -not $IsPluginRepo) {
+    switch ($Harness) {
+        "agy" {
+            [Console]::Out.WriteLine("{}")
+        }
+        "antigravity" {
+            [Console]::Out.WriteLine("{}")
+        }
+        "cursor" {
+            [Console]::Out.WriteLine('{"continue":true}')
+        }
+        "opencode" {
+        }
+        "json" {
+            [Console]::Out.WriteLine('{"detected_skills":[],"context":""}')
+        }
+        default {
+            [Console]::Out.WriteLine('{"continue":true}')
+        }
+    }
+    exit 0
+}
+
+$SkillList = $DetectedSkills -join ' '
+if ($IsPluginRepo) {
+    $Context = "Litestar skills plugin workspace (skills: $SkillList). Follow skills/litestar-styleguide and validate all changes with make check."
+} elseif ($IsUpstream) {
+    $Context = "Litestar upstream package workspace ('$OwnPackage'; companion skills: $SkillList). Treat this repository's own source code and tests as the authority over its consumer skill; keep async I/O and PEP 604 unions (T | None)."
 } else {
-    $SkillSummary = "Available Litestar skills: litestar, sqlspec, advanced-alchemy, msgspec, litestar-granian, litestar-saq, litestar-queues, litestar-security, litestar-autowire, litestar-vite, litestar-htmx, litestar-mcp, litestar-email, litestar-testing, pytest-databases, polyfactory, litestar-docs, litestar-build, litestar-deployment, litestar-styleguide."
+    $Context = "Litestar ecosystem detected in workspace (skills: $SkillList). Load the matching skill before writing, refactoring, or reviewing code; match the project's existing stack (SQLSpec vs Advanced Alchemy, Provide vs Dishka, msgspec vs Pydantic, Zensical vs Sphinx); keep handlers, guards, dependencies, and I/O async with PEP 604 unions (T | None)."
 }
-
-$Context = @"
-<EXTREMELY_IMPORTANT>
-Litestar Framework Ecosystem Active
-$SkillSummary
-- Activate the matching Litestar skill before writing, refactoring, or reviewing Litestar application or library code.
-- Match the project's existing stack (SQLSpec vs Advanced Alchemy, Provide vs Dishka, msgspec vs Pydantic, Zensical vs Sphinx).
-- Keep all route handlers, guards, dependencies, and I/O async; enforce PEP 604 unions (T | None).
-</EXTREMELY_IMPORTANT>
-"@ -replace "`r`n", "`n"
 
 switch ($Harness) {
     "agy" {
+        $Out = @{ injectSteps = @(@{ systemMessage = @{ systemMessage = $Context } }) }
+        $Out | ConvertTo-Json -Compress -Depth 5
+    }
+    "antigravity" {
         $Out = @{ injectSteps = @(@{ systemMessage = @{ systemMessage = $Context } }) }
         $Out | ConvertTo-Json -Compress -Depth 5
     }
@@ -153,7 +262,6 @@ switch ($Harness) {
     default {
         $Out = [ordered]@{
             continue = $true
-            systemMessage = $Context
             hookSpecificOutput = [ordered]@{
                 hookEventName = "SessionStart"
                 additionalContext = $Context

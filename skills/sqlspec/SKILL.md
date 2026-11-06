@@ -5,7 +5,7 @@ description: "Use when working with sqlspec, SQLSpec, SQLFileLoader, drivers, qu
 
 # SQLSpec Skill
 
-SQLSpec is a **type-safe SQL query mapper for Python** -- NOT an ORM. It provides flexible connectivity with consistent interfaces across 20 database adapter packages. Write raw SQL, use the builder API, or load SQL from files. Statements pass through a sqlglot-powered AST pipeline for validation, parameter handling, and dialect conversion.
+SQLSpec is a **type-safe SQL query mapper for Python** -- NOT an ORM. It provides flexible connectivity with consistent interfaces across its database adapter packages. Write raw SQL, use the builder API, or load SQL from files. Statements pass through a sqlglot-powered AST pipeline for validation, parameter handling, and dialect conversion.
 
 ## Match-Your-Framework — read first
 
@@ -132,6 +132,7 @@ await db.load_from_records("users", [{"id": 1, "name": "Ada"}])
 | MySQL async | `asyncmy` | PYFORMAT params |
 | Oracle | `oracledb` | NAMED_COLON params, sync+async |
 | IBM Db2 | `db2` | QMARK params, sync+async via `ibm_db`, `SYSCAT` catalog reflection |
+| SQL Server / Sybase / SQL Anywhere | `mssql_python`, `pymssql`, `sybase`, `sqlanywhere` | T-SQL (`tsql`), Sybase ASE (`sybase`), and SAP SQL Anywhere (`sqlanywhere`) dialects |
 | BigQuery / Spanner | `bigquery`, `spanner` | NAMED_AT params, cloud job/session controls, Spanner sync+async drivers, Property Graph & Vector/Search index AST |
 | Raw SQL strings | Driver methods | `select()`, `execute()` |
 | Dynamic queries | Query builder | `sql.select()...to_statement()`, `sql.update()...from_()`, `sql.upsert()` |
@@ -251,7 +252,7 @@ async def get_user_count() -> int:
 
 ## References Index
 
-> **Choosing between `sqlspec` and `advanced-alchemy`:** `advanced-alchemy` gives you an opinionated ORM service layer with `UUIDAuditBase`, lifecycle hooks, repository / service / Alembic integration, and `OffsetPagination[T]` out of the box — pick it when you want a complete CRUD surface with attribute-style row access and you're happy inside the SQLAlchemy ecosystem. `sqlspec` gives you direct SQL control, 20 adapter packages (asyncpg, oracledb, Db2, DuckDB, BigQuery, SQLite, and more), Arrow result paths for analytics, and a builder API when you need it — pick it when you want explicit SQL, heterogeneous database backends, or Arrow integration. Both skills integrate with Litestar via first-party plugins; see [`../advanced-alchemy/SKILL.md`](../advanced-alchemy/SKILL.md) for the ORM path.
+> **Choosing between `sqlspec` and `advanced-alchemy`:** `advanced-alchemy` gives you an opinionated ORM service layer with `UUIDAuditBase`, lifecycle hooks, repository / service / Alembic integration, and `OffsetPagination[T]` out of the box — pick it when you want a complete CRUD surface with attribute-style row access and you're happy inside the SQLAlchemy ecosystem. `sqlspec` gives you direct SQL control, first-party database adapter packages (asyncpg, oracledb, Db2, Sybase ASE, SQL Anywhere, DuckDB, BigQuery, Spanner, SQLite, and more), Arrow result paths for analytics, and a builder API when you need it — pick it when you want explicit SQL, heterogeneous database backends, or Arrow integration. Both skills integrate with Litestar via first-party plugins; see [`../advanced-alchemy/SKILL.md`](../advanced-alchemy/SKILL.md) for the ORM path.
 
 For detailed instructions, patterns, and API guides, refer to the following documents:
 
@@ -283,7 +284,7 @@ For detailed instructions, patterns, and API guides, refer to the following docu
 
 ### Adapters & Drivers
 
-- **[Adapter & Driver Registry](references/adapters.md)** -- Full 20-adapter registry with dialects and parameter styles.
+- **[Adapter & Driver Registry](references/adapters.md)** -- Full adapter registry with dialects and parameter styles.
 
 ### Framework & Storage Integrations
 
@@ -317,7 +318,7 @@ For detailed instructions, patterns, and API guides, refer to the following docu
 ## Official References
 
 - <https://sqlspec.dev/>
-- <https://sqlspec.dev/changelog.html>
+- <https://sqlspec.dev/changelog/>
 - <https://github.com/litestar-org/sqlspec>
 
 ## Shared Styleguide Baseline

@@ -65,7 +65,10 @@ query = (
 | `.join(table, on=)` | INNER JOIN | `.join("orders", on="users.id = orders.user_id")` |
 | `.left_join(table, on=)` | LEFT JOIN | `.left_join("profiles", on="users.id = profiles.user_id")` |
 | `.where(expr)` | WHERE clause (AND-combined) | `.where("active = true")` |
-| `.where_eq(column, value)` | WHERE col = value (parameterized) | `.where_eq("status", "active")` |
+| `.where_eq(column, value)` | WHERE col = value (`IS NULL` when `value is None`) | `.where_eq("status", "active")` |
+| `.where_neq(column, value)` | WHERE col != value (`NOT col IS NULL` when `value is None`) | `.where_neq("deleted_at", None)` |
+| `.where_in(column, values)` | WHERE col IN (...) | `.where_in("role", ["admin", "editor"])` |
+| `.where_not_any(column, values)` | WHERE NOT (col = ANY(...)) | `.where_not_any("tag", ["blocked"])` |
 | `.group_by(*cols)` | GROUP BY | `.group_by("department")` |
 | `.having(expr)` | HAVING clause | `.having("COUNT(*) > 5")` |
 | `.order_by(*exprs)` | ORDER BY | `.order_by("created_at DESC")` |
@@ -199,6 +202,8 @@ create_users = (
 )
 ```
 
+`CreateTable` and `CreateIndex` (`sqlspec.builder`) also provide schema-generation factories for migrations and Arrow/record introspection (`CreateTable.from_metadata`, `CreateTable.from_arrow_schema`, `CreateTable.from_records`, `CreateIndex.from_metadata`, and `compile_table_ddl_results`).
+
 ---
 
 ## Window Functions, Column Ordering & Expressions
@@ -216,9 +221,17 @@ query = (
     )
     .from_("employees")
     .where(sql.column("department").any_(["eng", "product"]))
+    .where(sql.not_any_("status", ["suspended", "terminated"]))
     .order_by(sql.column("salary").desc(nulls="last"))
 )
 ```
+
+### Null Equality & Subquery Quantifier Predicates
+
+- **Null equality semantics**: `.where_eq(col, None)` and `.where_neq(col, None)` (including `or_where_eq`, `or_where_neq`, `("col", None)` tuples, and `SQL.where_eq` / `SQL.where_neq`) emit `col IS NULL` / `NOT col IS NULL` instead of binding a `NULL` parameter.
+- **`sql.not_any_(column, values)`**: accepts `(column, values)` (matching `sql.column(col).not_any_(values)`, `.where_not_any(col, values)`, and `NotAnyCollectionFilter`) and renders `NOT (column = ANY(...))` (compiled by SQLGlot to `<> ALL (...)` in PostgreSQL). `values` can be a sequence or a parameterized subquery.
+- **Subquery parameter merging**: `sql.exists_(subquery)`, `sql.any_(subquery)`, `sql.all_(subquery)`, and `sql.not_any_(col, subquery)` automatically merge parameters bound inside `subquery` into the outer query when passed to `.where()`, `.having()`, or `Column` comparisons.
+- **Use `.where_in(col, values)` instead of `.where(sql.in_(...))`**: passing a standalone `sql.in_()` fragment directly to `.where()` lacks a left-hand column and raises `SQLBuilderError` pointing to `.where_in()`.
 
 ### Vector Distance Expressions
 

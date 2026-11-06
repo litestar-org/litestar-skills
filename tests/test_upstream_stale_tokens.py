@@ -28,6 +28,13 @@ RETIRED_TOKENS = (
     "from litestar_mcp.auth",
     "SKILL_FILE_NAME",
     "AgentTeam",
+    "use_query_and_wait",
+    "pgbouncer_mode",
+    "SQLiteStore",
+    "ADBCStore",
+    "DuckdbStore",
+    "DuckdbADKStore",
+    "DuckdbADKMemoryStore",
 )
 RETIRED_GRANIAN_FLAGS = (
     "--threads",
