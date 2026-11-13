@@ -7,7 +7,7 @@ description: "Use when working with litestar_mcp, LitestarMCP, MCP, MCPConfig, M
 
 `litestar-mcp` exposes explicitly marked Litestar route handlers as [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools, resources, and prompts over JSON-RPC 2.0, and provides an optional [A2A 1.0](https://a2a-protocol.org/) adapter (`LitestarA2A`) backed by the official `a2a-sdk`.
 
-`litestar-mcp` follows the stateless MCP specification (protocol `2026-07-28` with backward compatibility for `2025-06-18` and `2025-03-26`). The MCP transport is POST-only and request-scoped: each request supplies protocol version, method, and capabilities. Call `server/discover` for capabilities. Features include the `io.modelcontextprotocol/skills` catalog (`MCPSkillsConfig`), durable task execution over `litestar-queues` (`QueueTaskExecutor`, `DurableWorkflowEngine`), the stdio-to-HTTP bridge (`httpx2`), standards-backed `LitestarA2A` (`litestar-mcp[a2a]`), and route authentication integration with `litestar-security`. See [Stateless Protocol](references/stateless-protocol.md).
+`litestar-mcp` implements the MCP Streamable HTTP specification: stateless request-scoped transport on `2026-07-28` (default, using `server/discover` and `subscriptions/listen` over `POST /mcp`) plus session-based compatibility (`Mcp-Session-Id`, `initialize`, `GET`/`DELETE /mcp`) for `2025-11-25`, `2025-06-18`, and `2025-03-26`. Features include the `io.modelcontextprotocol/skills` catalog (`MCPSkillsConfig`), `PromptController`/`SkillController`, durable task execution over `litestar-queues` (`QueueTaskExecutor`, `DurableWorkflowEngine`), the stdio-to-HTTP bridge (`httpx2`), standards-backed `LitestarA2A` (`litestar-mcp[a2a]`), and route auth via `MCPConfig(auth=...)` + `litestar-security`. See [Stateless Protocol](references/stateless-protocol.md).
 
 Mark routes by passing `mcp_tool="name"`, `mcp_resource="name"`, or `mcp_prompt="name"` directly to the Litestar route decorator — Litestar funnels unknown kwargs into `handler.opt`, so no `opt={...}` wrapper is needed. Use the decorator forms for structured metadata: `@mcp_tool` adds schemas, annotations, scopes, and task policy; `@mcp_prompt` adds title, arguments, and icons. Route description keys are `mcp_description`, `mcp_resource_description`, and `mcp_prompt_description`; `MCPOptKeys` can rename every key the plugin reads. There is no `opt={"mcp_tool_name": ...}` form or `mcp_exclude` key. To hide a route, leave it unmarked.
 
@@ -66,8 +66,8 @@ The transport and discovery surface across the ecosystem is:
 
 | Endpoint | Owner | Purpose |
 | --- | --- | --- |
-| `POST /mcp` | `LitestarMCP` | The only MCP transport route. JSON-RPC endpoint for `server/discover`, `tools/*`, `resources/*`, `resources/templates/list`, `resources/directory/read`, `prompts/*`, `skills/*`, `completion/complete`, `subscriptions/listen`, and optional `tasks/*` methods |
-| `POST /a2a` | `LitestarA2A` (`litestar-mcp[a2a]`) | Optional A2A 1.0 JSON-RPC and SSE streaming endpoint |
+| `POST /mcp` (`GET`, `DELETE`) | `LitestarMCP` | Streamable HTTP JSON-RPC endpoint (`server/discover`, `tools/*`, `resources/*`, `resources/templates/list`, `resources/directory/read`, `prompts/*`, `skills/*`, `completion/complete`, `subscriptions/listen`, `tasks/*`, plus `2025-*` `initialize`/`ping`/`resources/subscribe`/`logging/setLevel`). `GET` SSE (`enable_get_sse=True`) and `DELETE` are active for `2025-*` sessions and return `405` on `2026-07-28` |
+| `POST /a2a` (and REST) | `LitestarA2A` (`litestar-mcp[a2a]`) | Optional A2A 1.0 JSON-RPC/SSE endpoint (`POST /a2a`, `/{tenant}`) plus HTTP+JSON REST endpoints when `enable_http_json=True` |
 | `GET /.well-known/agent-card.json` | `LitestarA2A` (`litestar-mcp[a2a]`) | Standard A2A 1.0 agent card discovery route (with `ETag` and `Cache-Control`) |
 | `GET /.well-known/oauth-protected-resource` | `SecurityPlugin` (`litestar-security`) | RFC 9728 OAuth 2.1 protected-resource metadata via `SecurityConfig(protected_resource=ProtectedResourceConfig(...))` |
 
@@ -75,33 +75,31 @@ The transport and discovery surface across the ecosystem is:
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `base_path` | `str` | `"/mcp"` | URL prefix for the MCP transport endpoint |
-| `include_in_schema` | `bool` | `False` | Include the `/mcp` router in OpenAPI |
-| `name` | `str \| None` | `None` | Server name; defaults to OpenAPI title |
-| `instructions` | `str \| None` | `None` | Server instructions advertised to MCP clients |
-| `guards` | `list[Any] \| None` | `None` | Litestar guards applied to the MCP router |
-| `route_opt` | `dict[str, Any] \| None` | `None` | Route `opt` mapping merged into the mounted MCP router (e.g., `{AUTH_POLICY_OPT_KEY: required("api-key", "oidc")}` with `litestar-security`) |
-| `allowed_origins` | `list[str] \| None` | `None` | Restrict accepted `Origin` headers |
-| `include_operations` | `list[str] \| None` | `None` | Only expose matching operation names |
-| `exclude_operations` | `list[str] \| None` | `None` | Exclude matching operation names |
-| `include_tags` | `list[str] \| None` | `None` | Only expose routes with matching OpenAPI tags |
-| `exclude_tags` | `list[str] \| None` | `None` | Exclude routes with matching OpenAPI tags |
-| `tasks` | `bool \| MCPTaskConfig` | `False` | Enable MCP task support (`io.modelcontextprotocol/tasks`). Pass `MCPTaskConfig` to configure the backing `Store` and record TTLs |
-| `skills` | `MCPSkillsConfig \| None` | `None` | Enable the `io.modelcontextprotocol/skills` catalog serving `<path>/<name>/SKILL.md` directories |
-| `opt_keys` | `MCPOptKeys` | `MCPOptKeys()` | Rename the `handler.opt` keys the plugin reads |
-| `cache_ttl_ms` | `int` | `0` | Response cache lifetime in milliseconds; `0` disables caching |
-| `cache_scope` | `Literal["private", "public"]` | `"private"` | Whether cached responses may be shared between callers |
-| `subscription_max_streams` | `int` | `10000` | Max concurrent SSE streams |
-| `subscription_keepalive_seconds` | `float` | `15.0` | Seconds between SSE keepalive pings |
-| `stream_queue_capacity` | `int` | `256` | Maximum queued progress notifications per request stream |
-| `stream_cleanup_timeout` | `float` | `5.0` | Positive finite seconds allowed for cooperative stream producer cleanup |
-| `subscription_channels` | `Any \| None` | `None` | Channels backend backing `subscriptions/listen` fan-out |
-| `list_page_size` | `int` | `100` | Page size for `tools/list`, `resources/list`, `resources/templates/list`, `skills/list`, `prompts/list`, and `resources/directory/read` |
-| `before_tool_call` | `BeforeToolCallHook \| None` | `None` | Observe each `tools/call` before dispatch |
-| `after_tool_call` | `AfterToolCallHook \| None` | `None` | Observe each `tools/call` result, exception, and duration |
-| `max_blob_bytes` | `int \| None` | `25 * 1024 * 1024` | Maximum raw byte length for base64-embedded blobs; `None` disables the cap |
+| `base_path` | `str` | `"/mcp"` | URL prefix for the MCP endpoint |
+| `include_in_schema` | `bool` | `False` | Include `/mcp` in OpenAPI |
+| `name` / `instructions` | `str \| None` | `None` | Server name (defaults to OpenAPI title) and client instructions |
+| `guards` | `list[Any] \| None` | `None` | Litestar guards on the MCP router |
+| `auth` / `route_opt` | `Any \| None` / `dict \| None` | `None` | Auth policy (`opt["auth"]`, e.g. `required(...)`) and extra router `opt` |
+| `allowed_origins` | `list[str] \| None` | `None` | Restrict accepted `Origin` headers (beyond same-origin) |
+| `include_*` / `exclude_*` | `list[str] \| None` | `None` | Operation and OpenAPI tag filters (`include_operations`, `exclude_operations`, `include_tags`, `exclude_tags`) |
+| `tasks` | `bool \| MCPTaskConfig \| None` | `None` | Enable tasks (`QueueTaskExecutor` auto-configured with `QueuePlugin` unless `False`) |
+| `skills` | `MCPSkillsConfig \| None` | `None` | Enable `io.modelcontextprotocol/skills` catalog |
+| `prompt_controllers` / `skill_controllers` | `Sequence \| ()` | `()` | `PromptController` / `SkillController` classes or instances |
+| `opt_keys` | `MCPOptKeys` | `MCPOptKeys()` | Rename `handler.opt` keys read by plugin |
+| `cache_ttl_ms` / `cache_scope` | `int` / `Literal["private", "public"]` | `0` / `"private"` | Cache TTL (ms; `0` disables) and sharing scope |
+| `subscription_max_streams` / `subscription_keepalive_seconds` | `int` / `float` | `10000` / `15.0` | Max concurrent SSE streams and keepalive interval |
+| `stream_queue_capacity` / `stream_cleanup_timeout` | `int` / `float` | `256` / `5.0` | Per-stream progress queue cap and cleanup timeout (s) |
+| `subscription_channels` / `subscription_authorizer` | `Any \| None` / `Callable \| None` | `None` | Channels fan-out backend and sync/async `(request, uri) -> bool` gate |
+| `list_page_size` | `int` | `100` | Page size for `*/list` and `resources/directory/read` |
+| `before_tool_call` / `after_tool_call` | `Hook \| None` | `None` | Observe `tools/call` dispatch, result, error, duration |
+| `max_blob_bytes` | `int \| None` | `25 * 1024 * 1024` | Max raw bytes for base64 blobs (`None` disables) |
+| `infer_http_method_annotations` / `auto_output_schema` | `bool` | `True` / `False` | Infer HTTP `ToolAnnotations` hints; synthesize `outputSchema` from return types |
+| `max_tool_description_length` / `max_param_description_length` / `max_output_field_description_length` | `int \| None` | `None` | Optional character caps enforced on tool specs |
+| `ui_mime_types` / `filter_app_only_tools` | `Sequence[str] \| None` / `bool` | `None` / `False` | SEP-1865 UI MIME types (`()` disables) and filtering of app-only tools |
+| `enable_get_sse` / `session_ttl_seconds` | `bool` / `float` | `True` / `3600.0` | Pre-`2026-07-28` `GET` SSE streams and `Mcp-Session-Id` store TTL |
+| `logging` / `default_log_level` | `bool` / `str` | `True` / `"info"` | Enable `capabilities.logging`, `logging/setLevel`, initial RFC 5424 level |
 
-> Filters (`include_tags` / `exclude_tags` / `include_operations` / `exclude_operations`) gate both list responses and direct invocation. A filtered tool/resource/template behaves like an unknown name or URI in `tools/call` / `resources/read`; still use `guards` or `route_opt` auth policies for real access control.
+> Filters (`include_tags` / `exclude_tags` / `include_operations` / `exclude_operations`) gate both list and direct calls; still use `guards` or `auth`/`route_opt` for real access control.
 
 ### Route Marking
 
@@ -201,11 +199,11 @@ async def record_session(note: str) -> dict[str, str]:
 
 ### Standalone MCP App, Skills Catalog, A2A 1.0, Binary Results, and Auth
 
-- **Standalone `MCP(...)` & Stdio**: Use `mcp = MCP("inventory-mcp")` with `@mcp.tool(...)`, `@mcp.resource(uri=..., name=...)`, and `@mcp.prompt(...)` when the app exists solely as an MCP server (`app = mcp.app`). Run over HTTP/SSE (`mcp.run(transport="sse", port=8000)`) or line-delimited stdio (`mcp.run(transport="stdio", stdio_context=MCPStdioContext(...))`). Proxy a local stdio client to a remote Streamable HTTP endpoint via `litestar mcp bridge --endpoint https://api.example.com/mcp --bearer-env MCP_ACCESS_TOKEN` or serve in-process via `litestar --app app.main:app mcp stdio`.
+- **Standalone `MCP(...)` & Stdio**: Use `mcp = MCP("inventory-mcp")` with `@mcp.tool(...)`, `@mcp.resource(uri=..., name=...)`, and `@mcp.prompt(...)` for standalone MCP servers (`app = mcp.app`). Run over Streamable HTTP (`mcp.run(transport="streamable-http", port=8000)` — `"sse"` is unsupported) or stdio (`mcp.run(transport="stdio", stdio_context=MCPStdioContext(...))`). Proxy stdio to HTTP via `litestar mcp bridge --endpoint https://api.example.com/mcp --bearer-env MCP_ACCESS_TOKEN` or serve in-process via `litestar --app app.main:app mcp stdio`.
 - **Skills Over MCP (`MCPSkillsConfig`)**: Pass `skills=MCPSkillsConfig(paths=[Path("skills")], directory_read=True)` to `MCPConfig` to expose `<path>/<name>/SKILL.md` directories over the `io.modelcontextprotocol/skills` extension (`skills/list`, `skills/get`, `resources/directory/read`, and `resources/read` with SHA-256 integrity checks).
 - **A2A 1.0 Adapter (`LitestarA2A`)**: Install `litestar-mcp[a2a]` and mount `LitestarA2A(agent_card=card, request_handler=handler, config=A2AConfig(path="/a2a", agent_card_path="/.well-known/agent-card.json"))` to expose `POST /a2a` (JSON-RPC 2.0 + SSE streaming) and `GET /.well-known/agent-card.json`.
 - **Binary Resources & Multi-Round-Trip Inputs**: Return `MCPResourceLink(name=..., uri=..., mime_type=..., size=...)` from tools to link binary resources fetched via `resources/read` (or `MCPBlobResource` for inline base64 blobs bounded by `MCPConfig.max_blob_bytes`). Return `MCPInputRequiredResult(input_requests={...}, request_state=...)` when a tool requires interactive client confirmation (`ctx.input_responses`).
-- **Authentication (`litestar-security`)**: Attach auth policies via `MCPConfig(route_opt={AUTH_POLICY_OPT_KEY: required("oidc")})` and publish RFC 9728 metadata (`GET /.well-known/oauth-protected-resource`) via `SecurityConfig(protected_resource=ProtectedResourceConfig(...))`.
+- **Authentication (`litestar-security`)**: Attach auth policies via `MCPConfig(auth=required("oidc"))` (or `route_opt={AUTH_POLICY_OPT_KEY: required("oidc")}`) and publish RFC 9728 metadata (`GET /.well-known/oauth-protected-resource`) via `SecurityConfig(protected_resource=ProtectedResourceConfig(...))`.
 
 See [Standalone MCP, Skills, A2A, Binary Resources, and Auth](references/advanced-patterns.md) for complete code patterns.
 
@@ -214,6 +212,8 @@ See [Standalone MCP, Skills, A2A, Binary Resources, and Auth](references/advance
 ```bash
 litestar mcp list-tools
 litestar mcp list-resources
+litestar mcp list-skills
+litestar mcp export-tool-spec --strict-bounds
 litestar mcp run list_users
 litestar mcp stdio
 litestar mcp bridge --endpoint http://127.0.0.1:8000/mcp
@@ -223,7 +223,7 @@ litestar mcp bridge --endpoint http://127.0.0.1:8000/mcp
 
 Discovery is opt-in: unmarked routes never appear in MCP (`opt={"mcp_exclude": True}` is ignored). Use `MCPConfig` filters (`include_tags`, `exclude_tags`, `include_operations`, `exclude_operations`) to gate both list responses and direct invocation, paired with `guards` or `route_opt` auth policies for access control.
 
-Every HTTP `POST /mcp` request requires `params._meta` (`io.modelcontextprotocol/protocolVersion` and `io.modelcontextprotocol/clientCapabilities`) plus matching `MCP-Protocol-Version: 2026-07-28`, `Mcp-Method`, and (for named calls) `Mcp-Name` headers:
+In `2026-07-28` stateless mode, `POST /mcp` requires `params._meta` (`io.modelcontextprotocol/protocolVersion` and `io.modelcontextprotocol/clientCapabilities`) plus matching `MCP-Protocol-Version: 2026-07-28`, `Mcp-Method`, and (for named calls) `Mcp-Name` headers:
 
 ```json
 {
@@ -256,7 +256,7 @@ Every HTTP `POST /mcp` request requires `params._meta` (`io.modelcontextprotocol
 1. **Install**: Run `pip install litestar-mcp` (or `pip install "litestar-mcp[a2a]"` when mounting `LitestarA2A`).
 2. **Decide What to Expose**: Mark only intended AI-callable routes with `mcp_tool=`, `mcp_resource=` (plus `mcp_resource_template=` for URI templates), or `mcp_prompt=`. Unmarked routes are never exposed.
 3. **Add the Plugin**: Wire `LitestarMCP(MCPConfig(name=...))` into `Litestar(plugins=[...])`, or use standalone `MCP(...)` (`app = mcp.app`). Add `skills=MCPSkillsConfig(paths=[Path("skills")])` for `io.modelcontextprotocol/skills` and `LitestarA2A(agent_card, request_handler, config=A2AConfig(...))` for A2A 1.0.
-4. **Add Auth**: Attach `litestar-security` route policies via `MCPConfig(route_opt={AUTH_POLICY_OPT_KEY: required(...)})` and publish RFC 9728 metadata via `SecurityConfig(protected_resource=ProtectedResourceConfig(...))`, or configure `guards=[...]`.
+4. **Add Auth**: Attach `litestar-security` route policies via `MCPConfig(auth=required(...))` (or `route_opt`) and publish RFC 9728 metadata via `SecurityConfig(protected_resource=ProtectedResourceConfig(...))`, or configure `guards=[...]`.
 5. **Verify**: `POST /mcp` `server/discover`, `tools/list`, `resources/list`, `tools/call`, and `resources/read` (plus `skills/*` when enabled). Confirm only marked routes appear and verify auth and blob size limits.
 
 </workflow>
@@ -270,7 +270,7 @@ Every HTTP `POST /mcp` request requires `params._meta` (`io.modelcontextprotocol
 - **Never expose admin or destructive routes by default** - require a human-confirmation workflow or multi-round-trip verification (`MCPInputRequiredResult`) before any irreversible operation.
 - **Prefer resources for read-only reference data** - agents may read resources speculatively.
 - **Keep DTOs precise** - loose `dict[str, Any]` request schemas produce weak tool contracts.
-- **Delegate auth and RFC 9728 metadata to `litestar-security`** - use `MCPConfig(route_opt={AUTH_POLICY_OPT_KEY: required(...)})` and `SecurityConfig(protected_resource=ProtectedResourceConfig(...))`.
+- **Delegate auth and RFC 9728 metadata to `litestar-security`** - use `MCPConfig(auth=required(...))` (or `route_opt`) and `SecurityConfig(protected_resource=ProtectedResourceConfig(...))`.
 - **Set `allowed_origins` for browser-accessible MCP clients** - leave it `None` only for trusted server-to-server deployments.
 - **Prefer `MCPResourceLink` over inline blobs** - linked resources avoid base64 expansion and let the application enforce authorization when the client reads the resource.
 - **Keep `max_blob_bytes` bounded** - base64 embedding increases memory and wire size; disable the cap only behind a stricter application-owned limit.
@@ -288,23 +288,17 @@ Before delivering an MCP integration, verify:
 
 - [ ] Existing Litestar apps include `LitestarMCP` in `app.plugins`; standalone apps expose `app = mcp.app`
 - [ ] Exposed routes/functions use `mcp_tool=`, `mcp_resource=`, `mcp_prompt=`, `@mcp.tool`, `@mcp.resource`, or `@mcp.prompt`
-- [ ] Admin / internal routes are left unmarked, or kept outside `include_*` / inside `exclude_*` — with `guards` or `route_opt` auth policies enforcing access
-- [ ] Auth is configured for the deployment boundary (`MCPConfig(route_opt=...)`, `SecurityConfig(protected_resource=ProtectedResourceConfig(...))`, `guards=[...]`, or custom middleware)
-- [ ] `POST /mcp` `tools/list` returns only intended tools
-- [ ] `POST /mcp` `resources/list` includes only intended resources plus `litestar://openapi` (and indexed skill files when `MCPSkillsConfig` is enabled)
-- [ ] When `MCPSkillsConfig` is enabled, `skills/list`, `skills/get`, `resources/directory/read`, and `resources/read` verify `skill://` URIs and SHA-256 digests
-- [ ] When `LitestarA2A` is enabled, `GET /.well-known/agent-card.json` and `POST /a2a` match the `AgentCard` JSON-RPC 1.0 interface URL
-- [ ] Filtered tools/resources/templates fail direct invocation as unknown
-- [ ] Provider-declared user inputs appear in tool `inputSchema`; Dishka-resolved service parameters do not
-- [ ] `before_tool_call` / `after_tool_call` callbacks are covered when configured, including failure paths
-- [ ] Standalone `MCP` SSE or stdio transport is smoke-tested for the chosen deployment mode
-- [ ] Direct stdio handlers and guards receive the intended `MCPStdioContext`; task ownership resolves to the intended principal
-- [ ] Stdio bridge stdout contains JSON-RPC only; static/dynamic auth, concurrent request-scoped streams, and frame limits match the deployment
-- [ ] Binary resource listings advertise the correct MIME type; reads return `text` or base64 `blob` as intended
-- [ ] `max_blob_bytes` accepts the largest intended payload and rejects oversized tool results and resource reads
-- [ ] OpenAPI contains ordinary application routes and hides plugin-owned paths (`/mcp`, `/a2a`, `/.well-known/agent-card.json`) by default unless `include_in_schema=True` is set
-- [ ] Exposed handlers performing I/O are `async def`; sync standalone functions are pure/non-blocking and return JSON-serializable types
-- [ ] Tool argument DTOs are specific enough for generated schemas
+- [ ] Admin/internal routes stay unmarked or filtered (`include_*`/`exclude_*`) with `guards` or `auth`/`route_opt` policies
+- [ ] Auth configured (`MCPConfig(auth=...)` or `route_opt`, `SecurityConfig(protected_resource=ProtectedResourceConfig(...))`, `guards=[...]`)
+- [ ] `tools/list` & `resources/list` return only intended entries plus `litestar://openapi` (and `MCPSkillsConfig` files)
+- [ ] `MCPSkillsConfig`: `skills/list`, `skills/get`, `resources/directory/read`, and `resources/read` verify `skill://` URIs & SHA-256 digests
+- [ ] `LitestarA2A`: `GET /.well-known/agent-card.json` and `POST /a2a` (plus HTTP+JSON REST when enabled) match `AgentCard` URL
+- [ ] Filtered tools/resources/templates fail direct invocation; provider user inputs appear in `inputSchema`, Dishka deps do not
+- [ ] `before_tool_call` / `after_tool_call` covered including failure paths
+- [ ] Standalone `MCP` (`streamable-http` or `stdio`), `MCPStdioContext`, and bridge (`stdout` JSON-RPC only, auth, limits) verified
+- [ ] Binary resource MIME types and `max_blob_bytes` caps verified on tool results and resource reads
+- [ ] OpenAPI hides plugin paths (`/mcp`, `/a2a`, `/.well-known/agent-card.json`) unless `include_in_schema=True`
+- [ ] Exposed I/O handlers are `async def`; sync functions are non-blocking and JSON-serializable with specific DTOs
 
 </validation>
 
@@ -355,7 +349,7 @@ app = Litestar(
 ## References Index
 
 - **[Standalone MCP, Skills, A2A, Binary Resources, and Auth](references/advanced-patterns.md)** — standalone `MCP(...)`, `MCPStdioContext`, stdio-to-HTTP bridge, `MCPSkillsConfig`, `LitestarA2A` / `A2AConfig`, `MCPResourceLink` / `MCPBlobResource`, `MCPInputRequiredResult`, and `litestar-security` auth wiring.
-- **[Stateless Protocol](references/stateless-protocol.md)** — the POST-only transport, `server/discover`, `subscriptions/listen`, progress reporting, the tasks and skills extensions, `LitestarA2A`, MRTR results, response caching, and client migration.
+- **[Streamable HTTP & Stateless Protocol](references/stateless-protocol.md)** — `2026-07-28` stateless vs `2025-*` session modes, `server/discover`, `subscriptions/listen`, progress/logging, tasks and skills extensions, `LitestarA2A`, MRTR results, response caching, and client migration.
 
 ## Cross-References
 

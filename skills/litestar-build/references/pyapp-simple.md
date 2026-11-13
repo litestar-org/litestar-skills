@@ -13,8 +13,8 @@ build-backend = "hatchling.build"
 requires = ["hatchling"]
 
 [tool.hatch.build.targets.binary]
-pyapp-version = "0.29.0"
-python-version = "3.12"
+pyapp-version = "0.31.0"
+python-version = "3.13"
 scripts = ["app"]
 ```
 
@@ -22,8 +22,8 @@ Three knobs:
 
 | Key | Meaning | Example |
 | --- | --- | --- |
-| `pyapp-version` | Git tag of PyApp to compile | `"0.29.0"` |
-| `python-version` | Python major.minor bundled into the binary | `"3.12"` |
+| `pyapp-version` | Crates.io version of `pyapp` to compile (no `v` prefix) | `"0.31.0"` |
+| `python-version` | Python major.minor bundled into the binary | `"3.13"` |
 | `scripts` | Names of console scripts (from `[project.scripts]`) that become binary entry-points | `["app"]` |
 
 `scripts` must match one of your `[project.scripts]` entries:
@@ -39,26 +39,29 @@ app = "app.__main__:run"
 # Prereqs: uv sync, assets built, wheel buildable
 make build-wheel                                     # dist/app-X.Y.Z-py3-none-any.whl
 
-# Build binary via hatch (delegates to PyApp)
-uv run hatch build --target binary                   # dist/binary/app
+# Build binary via hatch (delegates to PyApp via Cargo; use `uvx hatch` if hatch is not in dev deps)
+PYAPP_PROJECT_PATH="$(realpath dist/app-*.whl)" \
+PYAPP_DISTRIBUTION_EMBED=1 \
+PYAPP_FULL_ISOLATION=1 \
+PYAPP_UV_ENABLED=1 \
+  hatch build --target binary                        # dist/binary/app-X.Y.Z
 ```
 
-Hatch:
+Hatch (`hatchling.builders.binary.BinaryBuilder`):
 
-1. Clones PyApp at `pyapp-version` into a temp dir.
-2. Sets `PYAPP_PROJECT_PATH` to the just-built wheel.
-3. Sets `PYAPP_PYTHON_VERSION` to `python-version`.
-4. Runs `cargo build --release`.
-5. Copies the resulting binary to `dist/binary/<script>`.
+1. Sets `PYAPP_PROJECT_NAME`, `PYAPP_PROJECT_VERSION`, `PYAPP_PYTHON_VERSION` (from `python-version`), and `PYAPP_EXEC_SPEC` (for each script in `scripts`).
+2. Inherits all `PYAPP_*` variables from the process environment (`os.environ`).
+3. Runs `cargo install pyapp --force --root <temp_dir> --version <pyapp-version>` from crates.io (or `cargo build --release` when `PYAPP_REPO` points to a local PyApp checkout).
+4. Writes each resulting binary to `dist/binary/<script>-<version>` (or `dist/binary/<script>-<version>-<CARGO_BUILD_TARGET>` when `CARGO_BUILD_TARGET` is set).
 
-The `[tool.hatch.build.targets.binary.env]` table in pyproject.toml lets you set any `PYAPP_*` env var statically. An advanced reference uses it for the embed/isolation/uv flags:
+Note: Hatchling's `binary` builder does **not** set `PYAPP_PROJECT_PATH` automatically and does **not** read a `[tool.hatch.build.targets.binary.env]` TOML table. Export `PYAPP_*` variables in your shell or CI `env:` block — without `PYAPP_PROJECT_PATH`, PyApp fetches the package from PyPI by name and version on first run instead of embedding your local wheel.
 
-```toml
-[tool.hatch.build.targets.binary.env]
-PYAPP_DISTRIBUTION_EMBED = "1"
-PYAPP_FULL_ISOLATION = "1"
-PYAPP_UV_ENABLED = "1"
-PYAPP_ALLOW_UPDATES = "1"
+```bash
+export PYAPP_PROJECT_PATH="$(realpath dist/app-*.whl)"
+export PYAPP_DISTRIBUTION_EMBED="1"
+export PYAPP_FULL_ISOLATION="1"
+export PYAPP_UV_ENABLED="1"
+export PYAPP_ALLOW_UPDATES="1"
 ```
 
 | Env var | Effect |
@@ -73,7 +76,7 @@ At runtime, the compiled PyApp wrapper sets `PYAPP=1` in the environment (or the
 
 ## Release pipeline (multi-platform)
 
-litestar-fullstack-inertia's `release.yml` builds 4 binaries in parallel:
+litestar-fullstack-inertia's `release.yml` builds 4 binaries in parallel (note: GitHub retired `macos-13` on Dec 4, 2025; use `macos-15-intel` for x86_64 macOS until its planned Fall 2027 retirement, and `macos-15` for Apple Silicon):
 
 ```yaml
 # .github/workflows/release.yml
@@ -87,28 +90,35 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
           - target: x86_64-apple-darwin
-            runner: macos-13
+            runner: macos-15-intel
           - target: aarch64-apple-darwin
-            runner: macos-14
+            runner: macos-15
     runs-on: ${{ matrix.runner }}
     needs: build-wheel
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v7
-      - run: uv python install 3.12
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - run: uv python install 3.13
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: wheel
           path: dist/
       - run: uv sync --all-extras --dev
-      - run: uv run hatch build --target binary
+      - name: Build binary
+        env:
+          PYAPP_DISTRIBUTION_EMBED: "1"
+          PYAPP_FULL_ISOLATION: "1"
+          PYAPP_UV_ENABLED: "1"
+        run: |
+          export PYAPP_PROJECT_PATH="$(realpath dist/*.whl)"
+          uvx hatch build --target binary
       - run: |
-          mv dist/binary/app dist/binary/app-${{ matrix.target }}
+          mv dist/binary/app-* dist/binary/app-${{ matrix.target }}
           chmod +x dist/binary/app-${{ matrix.target }}
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: binary-${{ matrix.target }}
           path: dist/binary/app-${{ matrix.target }}

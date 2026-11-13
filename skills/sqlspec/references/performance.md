@@ -70,7 +70,7 @@ Configure BigQuery job behavior through `BigQueryConfig.driver_features`.
 | `query_page_size` | Passed to `QueryJob.result()` for SELECT result fetching |
 | `query_max_results` | Total row cap passed to `QueryJob.result()` for SELECT result fetching |
 | `enable_storage_write_api` | Uses Storage Write API for `load_from_arrow(..., overwrite=False)` appends when available |
-| `storage_write_stream_type` | Selects Storage Write stream mode: `"COMMITTED"` (default streaming append) or `"PENDING"` (buffered two-phase finalize + batch commit) |
+| `storage_write_stream_type` | Selects Storage Write stream mode: `"PENDING"` (default buffered two-phase finalize + batch commit) or `"COMMITTED"` (immediate streaming append) |
 | `enable_native_storage` | Enables native BigQuery server-side `LOAD DATA` / `EXPORT DATA` jobs for `gs://` URIs before falling back to `StorageBridgeJob` |
 | `native_export_connection` | Optional BigQuery connection resource name forwarded to `EXPORT DATA WITH CONNECTION` |
 

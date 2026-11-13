@@ -71,8 +71,8 @@ Update `DEFAULT_PYTHON_VERSION` and substitute the new `cpython-3.14.X` archive 
 DEFAULT_PYTHON_VERSION = "3.14"
 
 DEFAULT_URLS: dict[str, str] = {
-    "x86_64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.14.1%2B20260414-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
-    "aarch64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.14.1%2B20260414-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz",
+    "x86_64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.14.10%2B20261026-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+    "aarch64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.14.10%2B20261026-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz",
 }
 ```
 
@@ -98,7 +98,7 @@ make build-onefile
 # CI matrix runs green on the new version
 ```
 
-## Upgrade: PyApp version (e.g., 0.29.0 → 0.30.0)
+## Upgrade: PyApp version (e.g., 0.30.0 → 0.31.0)
 
 Before upgrading, **read the PyApp CHANGELOG**: <https://github.com/ofek/pyapp/releases>. Breaking changes in 0.x are common.
 
@@ -109,7 +109,7 @@ One file:
 ```toml
 # pyproject.toml
 [tool.hatch.build.targets.binary]
-pyapp-version = "0.30.0"                  # ← bump
+pyapp-version = "0.31.0"                  # ← bump
 ```
 
 ### Advanced flavor
@@ -120,27 +120,27 @@ Three files:
 
 ```toml
 [tool.hatch.build.targets.binary]
-pyapp-version = "0.30.0"                  # ← bump (even if not using hatch-binary, keeps metadata consistent)
+pyapp-version = "0.31.0"                  # ← bump (even if not using hatch-binary, keeps metadata consistent)
 ```
 
 **2. `tools/scripts/build-onefile-package.sh`:**
 
 ```bash
-export PYAPP_VERSION="v0.30.0"            # ← bump
+export PYAPP_VERSION="v0.31.0"            # ← bump
 ```
 
 **3. `.github/workflows/release.yml`:**
 
 ```yaml
 env:
-  PYAPP_VERSION: v0.30.0                  # ← bump
+  PYAPP_VERSION: v0.31.0                  # ← bump
 ```
 
 ### Verification (PyApp bump)
 
 After bumping:
 
-1. **Check the install-dir patch still applies.** The regex in `patch_pyapp_install_dir()` (`tools/bundler.py`) matches the PyApp `src/app.rs` `initialize()` expression (in PyApp `v0.29.0` there is no separate `storage_dir()` or `project_dirs()` helper function, and runtime overrides use `PYAPP_INSTALL_DIR_<PROJECT_NAME>`). Upstream refactors break it:
+1. **Check the install-dir patch still applies.** The regex in `patch_pyapp_install_dir()` (`tools/bundler.py`) matches the PyApp `src/app.rs` `initialize()` expression (in PyApp `v0.29.0`–`v0.31.0` there is no separate `storage_dir()` or `project_dirs()` helper function, and runtime overrides use `PYAPP_INSTALL_DIR_<PROJECT_NAME>`). Upstream refactors break it:
 
    ```python
    import re
@@ -156,13 +156,13 @@ After bumping:
    Test:
 
    ```bash
-   git clone --depth 1 --branch v0.30.0 https://github.com/ofek/pyapp /tmp/pyapp-new
+   git clone --depth 1 --branch v0.31.0 https://github.com/ofek/pyapp /tmp/pyapp-new
    grep -E "platform_dirs\(\)" /tmp/pyapp-new/src/app.rs
    ```
 
    If the pattern doesn't match, update the regex. The replacement expression (`render_install_dir_expression`) usually doesn't need changes — PyApp's `directories::BaseDirs` dependency is stable.
 
-2. **Check the Cargo.toml `sed` patch for static linking.** In PyApp `v0.29.0`, `bzip2 = "0.6.0"` uses the pure-Rust `libbz2-rs-sys` backend by default (making `static = ["bzip2-sys?/static"]` a harmless no-op) and there is no `xz`/`lzma` dependency, so this patch primarily guards older PyApp pins or future C-backed compression dependencies. If PyApp changes its dependency names or moves the `[dependencies]` section, the `sed` invocations break:
+2. **Check the Cargo.toml `sed` patch for static linking.** In PyApp `v0.29.0`–`v0.31.0`, `bzip2 = "0.6.0"` uses the pure-Rust `libbz2-rs-sys` backend by default (making `static = ["bzip2-sys?/static"]` a harmless no-op) and there is no `xz`/`lzma` dependency, so this patch primarily guards older PyApp pins or future C-backed compression dependencies. If PyApp changes its dependency names or moves the `[dependencies]` section, the `sed` invocations break:
 
    ```bash
    sed -i 's/bzip2 = "\([^"]*\)"/bzip2 = { version = "\1", features = ["static"] }/' Cargo.toml

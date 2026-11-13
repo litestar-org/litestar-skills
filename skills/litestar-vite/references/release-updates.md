@@ -1,6 +1,6 @@
-# litestar-vite - Release Updates 0.26.0 to 0.32.0
+# litestar-vite - Release Updates 0.26.0 to 0.33.0
 
-This guidance is audited against `litestar-vite` `0.32.0` and covers release changes from `0.26.0` through `0.32.0`.
+This guidance is audited against `litestar-vite` `0.33.0` and covers release changes from `0.26.0` through `0.33.0`.
 
 ## Release Anchors
 
@@ -36,6 +36,9 @@ This guidance is audited against `litestar-vite` `0.32.0` and covers release cha
 | `0.32.0` | Persistent IPC SSR worker, Vite 7+ `ModuleRunner`, and circuit breaker (#369). | `litestar_vite.ipc` provides `StdioIPCTransport` (prod stdin/stdout JSON-RPC worker running `startSsrWorker` from `litestar-vite-plugin/ssr-worker`), `TCPStreamIPCTransport` (dev `/__litestar_ssr__` via `litestarViteSsrPlugin` using Vite 7+ `ModuleRunner`), and `SSRCircuitBreaker` (`CircuitState`). `InertiaSSRConfig` removes legacy HTTP `url`/`auto_start`/`health_check`/`health_check_timeout` fields and adds `fallback_to_client`, `circuit_breaker_enabled`, `circuit_breaker_failure_threshold`, and `circuit_breaker_reset_timeout`. |
 | `0.32.0` | AsyncAPI 3.0 & typed channels (#368). | `TypeGenConfig(generate_channels=True)` (default `True`) exports `asyncapi.json` and `channels.ts` (`ChannelMap`) when `AsyncAPIPlugin` (`litestar-asyncapi`, extra `litestar-vite[asyncapi]`) is registered on the Litestar app (removing stale outputs when absent), paired with `createTypedChannels()` in `litestar-vite-plugin/helpers`. |
 | `0.32.0` | Single-port AnyIO streaming proxy, Vite `>=7.0.0` floor, & Inertia slot tokens (#369). | Unifies dev mode on the single-port AnyIO byte-streaming proxy (`ViteProxyMiddleware` + `/static/vite-hmr`), enforces Vite `>=7.0.0` peer dependency floor, and supports `<!--inertia-head-->`, `<!--inertia-body-->` / `<!--inertia-->`, and `@inertiaHead` / `@inertia` slot replacement with fallback to `#app`. |
+| `0.33.0` | QuickJS WASM SSR transport (`WasmIPCTransport`), `resolve_ssr_transport()`, and `RuntimeConfig.ssr_transport`. | `ssr_transport` (`"auto" \| "stdio" \| "wasm"`, default `"auto"`) uses `StdioIPCTransport` (`resolve_ssr_command` for `node`/`bun`/`deno`) when a runtime binary or custom `command` is available, or falls back to in-process QuickJS `WasmIPCTransport` (`litestar-vite[wasm]`). |
+| `0.33.0` | Lockfile JS runtime auto-detection, `RuntimeConfig.provisioning_mode`, and PEP 425 runtime wheels. | Omit `executor` to auto-detect `bun`/`deno`/`pnpm`/`yarn`/`npm` via `detect_runtime` (`bun.lock*`, `deno.lock`, `deno.json*`, `pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`, `package.json#packageManager`), override with `LITESTAR_VITE_RUNTIME` / `VITE_EXECUTOR`, and control wheel/nodeenv/PATH discovery with `provisioning_mode` (`"auto" \| "wheel" \| "nodeenv" \| "system"`). React auto-detection also inspects `deno.json` / `deno.jsonc` import maps. |
+| `0.33.0` | RFC 8288 `Link` preload headers, `103 Early Hints`, immutable cache headers, & static metadata guards. | Production HTML responses emit `Link` preload/modulepreload headers (`RuntimeConfig.link_preload_headers=True`, `ViteAssetLoader.render_preload_headers()`) and optional ASGI `103 Early Hints` (`early_hints=False`, `EarlyHintsASGIResponse`). `immutable_cache_headers=True` sets `Cache-Control: public, max-age=31536000, immutable` on hashed `assets/*` while blocking static requests to `manifest.json`, `.litestar.json`, and `hot`. |
 
 ## Inertia Protocol Boundary
 
@@ -69,7 +72,8 @@ and `--overwrite` only after reviewing collisions.
 - `v0.30.1`: <https://github.com/litestar-org/litestar-vite/tree/v0.30.1>
 - `v0.31.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.31.0>
 - `v0.32.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.32.0>
-- Tagged changelog: <https://github.com/litestar-org/litestar-vite/blob/v0.32.0/docs/changelog.rst>
-- Tagged configuration: <https://github.com/litestar-org/litestar-vite/tree/v0.32.0/src/py/litestar_vite/config>
-- Tagged Inertia tests: <https://github.com/litestar-org/litestar-vite/tree/v0.32.0/src/py/tests/unit/inertia>
-- Tagged CLI tests: <https://github.com/litestar-org/litestar-vite/tree/v0.32.0/src/py/tests>
+- `v0.33.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.33.0>
+- Tagged changelog: <https://github.com/litestar-org/litestar-vite/blob/v0.33.0/docs/changelog.rst>
+- Tagged configuration: <https://github.com/litestar-org/litestar-vite/tree/v0.33.0/src/py/litestar_vite/config>
+- Tagged Inertia tests: <https://github.com/litestar-org/litestar-vite/tree/v0.33.0/src/py/tests/unit/inertia>
+- Tagged CLI tests: <https://github.com/litestar-org/litestar-vite/tree/v0.33.0/src/py/tests>

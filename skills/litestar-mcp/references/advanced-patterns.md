@@ -42,7 +42,7 @@ if __name__ == "__main__":
     mcp.run(transport="stdio", stdio_context=stdio_context)
 ```
 
-`mcp.app` lazily builds the underlying `Litestar` instance; access it after registering standalone decorators. `@mcp.tool`, `@mcp.resource`, and `@mcp.prompt` accept normal Litestar route-handler kwargs (`dependencies`, `guards`, `tags`, DTO options, hooks, `sync_to_thread`). The `name` kwarg names the MCP primitive; use `route_name` when the Litestar route handler itself needs a name.
+`mcp.app` lazily builds the underlying `Litestar` instance; access it after registering standalone decorators. Call `mcp.run(transport="streamable-http", port=8000)` for HTTP (`"stdio"` for line-delimited stdio; `"sse"` is not a valid transport). `@mcp.tool`, `@mcp.resource`, and `@mcp.prompt` accept normal Litestar route-handler kwargs (`dependencies`, `guards`, `tags`, DTO options, hooks, `sync_to_thread`) plus `title`, `icons`, `meta` (and `output_schema` on `@mcp.tool`). The `name` kwarg names the MCP primitive; use `route_name` when the Litestar route handler itself needs a name.
 
 ### Stdio-to-Streamable-HTTP Bridge
 
@@ -79,6 +79,8 @@ app = Litestar(
                     directory_read=True,
                     max_files_per_skill=512,
                     max_bytes_per_skill=16_777_216,
+                    expose_as_prompts=False,
+                    list_changed=True,
                 ),
             )
         )
@@ -86,7 +88,7 @@ app = Litestar(
 )
 ```
 
-At startup, `SkillCatalog.from_config` (`litestar_mcp.mcp.skills`) scans immediate child directories of each configured path for a regular (non-symlink) `SKILL.md` file with valid YAML frontmatter whose `name` matches the folder name and declares a non-empty `description`. Every non-hidden regular file in the skill folder is indexed with a `skill://<name>/<relative_path>` URI, MIME type, byte size, and `sha256:<hex>` digest. `resources/read` verifies SHA-256 digests against the startup manifest (`SkillIntegrityError` on disk tampering).
+At startup, `SkillCatalog.from_config` (`litestar_mcp.mcp.skills`) scans immediate child directories of each configured path for a regular (non-symlink) `SKILL.md` file with valid YAML frontmatter whose `name` matches the folder name and declares a non-empty `description`. Every non-hidden regular file in the skill folder is indexed with a `skill://<name>/<relative_path>` URI, MIME type, byte size, and `sha256:<hex>` digest. `resources/read` verifies SHA-256 digests against the startup manifest (`SkillIntegrityError` on disk tampering). For controller-based prompts/skills, pass `PromptController` / `SkillController` classes or instances to `MCPConfig(prompt_controllers=..., skill_controllers=...)`.
 
 ## A2A 1.0 Integration (`LitestarA2A`)
 
@@ -163,6 +165,10 @@ app = Litestar(
 | `include_in_schema` | `bool` | `False` | Include `/a2a` and `/.well-known/agent-card.json` in OpenAPI |
 | `agent_card_max_age` | `int` | `300` | `Cache-Control` `max-age` in seconds for the agent card |
 | `stream_cleanup_timeout` | `float` | `5.0` | Positive finite seconds allowed for stream producer cleanup |
+| `auth` | `Any \| None` | `None` | Route authentication policy merged into RPC handler `opt["auth"]` |
+| `agent_card_route_opt` | `dict[str, Any]` | `{}` | Extra `opt` mapping merged onto `agent_card_path` (`exclude_from_auth` & `exclude_from_csrf` default `True`) |
+| `tenant_header` | `str \| None` | `"X-A2A-Tenant"` | Header supplying tenant identifier for A2A requests (`None` disables header lookup) |
+| `enable_http_json` | `bool` | `True` | Mount A2A HTTP+JSON REST routes (`/message:send`, `/message:stream`, `/tasks`, `/extendedAgentCard`) alongside JSON-RPC `POST /a2a` |
 
 ## Binary Resources, Tool Results, and Multi-Round-Trip Inputs
 
@@ -219,7 +225,7 @@ async def deploy_service(environment: str) -> MCPInputRequiredResult | dict[str,
 
 ## Authentication (`litestar-security`)
 
-Delegate route authentication and RFC 9728 OAuth 2.1 protected-resource discovery to `litestar-security`:
+Delegate route authentication and RFC 9728 OAuth 2.1 protected-resource discovery to `litestar-security` (pass `MCPConfig(auth=required(...))` / `A2AConfig(auth=required(...))` directly, or via `route_opt`):
 
 ```python
 from litestar import Litestar

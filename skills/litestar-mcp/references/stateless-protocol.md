@@ -1,22 +1,25 @@
 # litestar-mcp — Stateless Protocol Reference
 
-`litestar-mcp` adheres to the stateless MCP specification (protocol `2026-07-28`). The transport is POST-only and request-scoped.
+`litestar-mcp` implements MCP Streamable HTTP (`SUPPORTED_PROTOCOL_VERSIONS = ("2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26")`):
 
-## What Was Removed
+- **Default `2026-07-28` mode:** Stateless and request-scoped on `POST /mcp`. `GET /mcp` and `DELETE /mcp` return `405 Method Not Allowed`, and `_MODERN_DISALLOWED_METHODS` (`initialize`, `ping`, `resources/subscribe`, `resources/unsubscribe`, `logging/setLevel`) return `-32601` (`404`).
+- **Pre-`2026-07-28` compatibility (`2025-11-25`, `2025-06-18`, `2025-03-26`):** Supports stateful sessions (`initialize` issues `Mcp-Session-Id` stored in `MCPSessionStore` with `session_ttl_seconds=3600.0`), `notifications/initialized`, `ping`, `GET /mcp` SSE (`enable_get_sse=True`), `DELETE /mcp` session termination, `resources/subscribe`, `resources/unsubscribe`, and `logging/setLevel`.
 
-| Removed | Replacement |
-| --- | --- |
-| `initialize` handshake and `notifications/initialized` | Nothing — POST each request directly |
-| Sessions and the `Mcp-Session-Id` header | Nothing — every request is self-describing |
-| `ping` | Nothing |
-| `GET /mcp` SSE transport handler | `subscriptions/listen` over POST |
-| `DELETE /mcp` session termination | Nothing |
-| Replay | `subscriptions/listen` filters |
-| `GET /.well-known/mcp-server.json` | `server/discover` |
-| `MCPConfig.register_agent_card` and MCP-owned `GET /.well-known/agent-card.json` | `LitestarA2A` (`litestar-mcp[a2a]`) or `agent_to_a2a` |
-| `litestar_mcp.auth` and `MCPConfig.auth` / `MCPConfig.register_oauth_protected_resource` | `litestar-security` (`MCPConfig(route_opt={AUTH_POLICY_OPT_KEY: required(...)})` and `SecurityConfig(protected_resource=ProtectedResourceConfig(...))`) |
+## Protocol Modes & Removed Legacy Surfaces
 
-The transport is **POST-only and request-scoped**. `/mcp` accepts `POST` (and `OPTIONS`); no other method is registered on the transport path.
+| Feature | `2026-07-28` Stateless Mode | Pre-`2026-07-28` (`2025-*`) / Replacement |
+| --- | --- | --- |
+| `initialize` / `notifications/initialized` / `ping` | Disallowed (`-32601` / `404`) | Supported for `2025-*` clients |
+| Sessions and `Mcp-Session-Id` | Omitted — self-describing requests | Supported via `MCPSessionStore` (`session_ttl_seconds=3600.0`) |
+| `GET /mcp` SSE stream | Disallowed (`405`) — use `subscriptions/listen` | Supported when `enable_get_sse=True` |
+| `DELETE /mcp` session termination | Disallowed (`405`) | Terminates `Mcp-Session-Id` session |
+| `resources/subscribe`, `resources/unsubscribe`, `logging/setLevel` | Disallowed (`-32601` / `404`) | Supported for `2025-*` sessions |
+| Replay | Removed | `subscriptions/listen` filters |
+| `GET /.well-known/mcp-server.json` | Removed | `server/discover` |
+| `MCPConfig.register_agent_card` & MCP-owned `agent-card.json` | Removed | `LitestarA2A` (`litestar-mcp[a2a]`) or `agent_to_a2a` |
+| `litestar_mcp.auth` & `MCPConfig.register_oauth_protected_resource` | Removed | `litestar-security` (`MCPConfig(auth=required(...))` / `route_opt`, `ProtectedResourceConfig`) |
+
+In `2026-07-28` mode, `/mcp` accepts only `POST` (and `OPTIONS`) — `GET` and `DELETE` are reserved for `2025-*` sessions (`enable_get_sse=True`).
 
 ## Request Metadata And `MCPStreamableHTTPClient`
 
@@ -32,7 +35,7 @@ capabilities.
 
 | Surface | Key / Header | Purpose |
 | --- | --- | --- |
-| `params._meta` | `io.modelcontextprotocol/protocolVersion` | Must be `"2026-07-28"` |
+| `params._meta` | `io.modelcontextprotocol/protocolVersion` | `"2026-07-28"` (for modern stateless mode; `2025-*` uses `initialize`) |
 | `params._meta` | `io.modelcontextprotocol/clientCapabilities` | Client capability object (`{}` when none) |
 | `params._meta` | `io.modelcontextprotocol/clientInfo` | Optional `{"name": ..., "version": ...}` |
 | `params._meta` | `progressToken` | Optional string or integer token enabling `notifications/progress` SSE streaming |
@@ -69,7 +72,7 @@ async def call_remote_mcp() -> object:
 
 ## Subscriptions And Stream Bounds
 
-`subscriptions/listen` provides filtered streams over the POST transport, replacing the removed GET SSE channel. When a request supplies `params._meta.progressToken`, the response also upgrades to an SSE stream emitting `notifications/progress` events before the final JSON-RPC response.
+`subscriptions/listen` provides filtered streams over the `POST /mcp` transport in `2026-07-28` mode (while `GET /mcp` SSE remains available for `2025-*` sessions when `enable_get_sse=True`), gated by optional `MCPConfig(subscription_authorizer=...)`. When a request supplies `params._meta.progressToken`, the response also upgrades to an SSE stream emitting `notifications/progress` (and RFC 5424 `notifications/message` via `MCPRequestContext.log(level, data, logger=None)` when `logging=True`) before the final JSON-RPC response.
 
 | Option | Default | Purpose |
 | --- | --- | --- |
@@ -83,7 +86,7 @@ Supply `subscription_channels` with a Channels backend when subscription deliver
 
 ## Tasks Extension
 
-The opt-in `io.modelcontextprotocol/tasks` extension adds task records backed by a Litestar `Store`.
+The `io.modelcontextprotocol/tasks` extension adds task records backed by a Litestar `Store` (default `MCPConfig.tasks=None`; auto-enables `QueueTaskExecutor` when `QueuePlugin` is registered unless `tasks=False`, or configure explicitly via `MCPTaskConfig(store=..., executor=...)`).
 
 ```python
 from litestar_mcp import LitestarMCP, MCPConfig, MCPTaskConfig
@@ -129,10 +132,10 @@ plugin = LitestarMCP(
 )
 ```
 
-- `MCPSkillsConfig` accepts `paths: Sequence[Path] = ()` and `sources: Sequence[SkillSource] = ()` (requiring at least one entry in `paths` or `sources`).
+- `MCPSkillsConfig` accepts `paths: Sequence[Path] = ()`, `sources: Sequence[SkillSource] = ()` (requiring at least one entry in `paths` or `sources`), `expose_as_prompts: bool = False`, and `list_changed: bool = True`.
 - `SkillCatalog.from_config` composes `paths` first (as a `FilesystemSkillSource`) followed by `sources`; earlier sources win on duplicate skill names with a warning.
 - `SkillCatalog` methods (`list_skills(request)`, `get_skill(request, name)`, `get(request, uri)`, `get_file(request, uri)`, `list_directory(request, uri)`, `resource_entries(request)`, and `read_file(request, match)`) are async and accept the active `Request`.
-- When configured, `server/discover` advertises `capabilities.extensions["io.modelcontextprotocol/skills"] = {"directoryRead": True}` and registers `skills/list`, `skills/get`, `resources/directory/read` (when `directory_read=True`), and `skill://` support in `resources/read` and `resources/list` with SHA-256 digest verification on every file read (`SkillIntegrityError`).
+- When configured, `server/discover` advertises `capabilities.extensions["io.modelcontextprotocol/skills"]` (`directoryRead` and `listChanged`), registers `skills/list`, `skills/get`, `resources/directory/read` (when `directory_read=True`), and `skill://` support in `resources/read` and `resources/list` with SHA-256 digest verification (`SkillIntegrityError`), and optionally exposes skills as read-only MCP prompts when `expose_as_prompts=True`.
 
 ## Multi-Round-Trip Results
 
@@ -154,7 +157,7 @@ Cacheable methods are `server/discover`, `tools/list`, `resources/list`, `resour
 3. Replace manifest discovery from `/.well-known/mcp-server.json` with a `server/discover` call.
 4. Replace any `GET /mcp` SSE consumption with `subscriptions/listen`.
 5. Drop `DELETE /mcp` teardown.
-6. Use `MCPStreamableHTTPClient` (or `prepare_mcp_request` + `mcp_request_headers`) for stateless Streamable HTTP requests, `LitestarA2A` / `agent_to_a2a` (`litestar-mcp[a2a]`) for `/.well-known/agent-card.json` and `/a2a`, and `litestar-security` (`ProtectedResourceConfig`) for `/.well-known/oauth-protected-resource`.
+6. Use `MCPStreamableHTTPClient` (or `prepare_mcp_request(..., log_level=...)` + `mcp_request_headers(..., session_id=..., tool_schema=...)`) for Streamable HTTP requests, `LitestarA2A` / `agent_to_a2a` (`litestar-mcp[a2a]`) for `/.well-known/agent-card.json` and `/a2a`, and `litestar-security` (`ProtectedResourceConfig`) for `/.well-known/oauth-protected-resource` (plus `MCPConfig(auth=...)` or `route_opt`).
 
 The stdio bridge handles MCP transport headers transparently and forwards independent request-scoped POST streams concurrently.
 

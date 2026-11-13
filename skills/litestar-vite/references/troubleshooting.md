@@ -37,7 +37,7 @@ See `hmr.md` for the full debug checklist. Quick summary:
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `Cannot find module 'litestar-vite-plugin'` | npm package not installed | `npm install -D litestar-vite-plugin` |
-| `Rollup failed to resolve import` | `input` path in plugin doesn't match disk | Verify paths; use `path.resolve(__dirname, ...)` for absolute |
+| `Rollup` / `Rolldown failed to resolve import` | `input` path in plugin doesn't match disk | Verify paths; use `path.resolve(__dirname, ...)` for absolute |
 | Build outputs to wrong dir | `build.outDir` ≠ `bundleDir` | Both must point at `bundle_dir` |
 | `emptyOutDir` warning | `outDir` is outside Vite root | Set `build.emptyOutDir: true` to acknowledge |
 

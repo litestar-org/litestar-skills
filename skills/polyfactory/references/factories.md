@@ -174,6 +174,8 @@ class OrderFactory(DataclassFactory[Order]):
 
 Set `__use_defaults__ = True` to use model field defaults instead of generating replacements. It defaults to `False` and does not apply to `TypedDictFactory`.
 
+Set `__use_examples__ = True` (`BaseFactory.__use_examples__: ClassVar[bool] = False`) to sample from non-empty `examples` lists in field annotation metadata (such as `pydantic.Field(examples=[...])` or `Annotated[T, msgspec.Meta(examples=[...])]`). This applies to both `build()` and `coverage()`.
+
 ### Collection length bounds
 
 Control generated list, set, tuple, and dict lengths with class variables:
@@ -206,8 +208,7 @@ This defaults to `True` in Polyfactory 3. It rejects `Use`, `PostGenerated`, `Ig
 
 ### `ModelFactory` (Pydantic)
 
-- `__use_examples__: ClassVar[bool] = False` — when `True`, picks from `Field(examples=[...])` on Pydantic fields.
-- `__by_name__: ClassVar[bool] = False` — when `True`, calls `model_validate(kwargs, by_name=True)` so fields with validation aliases can be populated by their Python attribute names.
+- `__by_name__: ClassVar[bool] = False` — when `True`, calls `model_validate(kwargs, by_name=True)` so fields with validation aliases can be populated by their Python attribute names (requires `pydantic >= 2.11`).
 - `Factory.build(factory_use_construct=True, **kwargs)` and `Factory.coverage(factory_use_construct=True, **kwargs)` — bypass Pydantic validation via `model_construct`.
 
 ### `TypedDictFactory`
@@ -216,7 +217,7 @@ This defaults to `True` in Polyfactory 3. It rejects `Use`, `PostGenerated`, `Ig
 
 ### `MsgspecFactory`
 
-- Supports `msgspec.Struct`, `msgspec.UnsetType` (`msgspec.UNSET`), `msgspec.msgpack.Ext`, and `msgspec.Meta` numeric, string, and collection constraints.
+- Supports `msgspec.Struct`, `msgspec.UnsetType` (`msgspec.UNSET`), `msgspec.msgpack.Ext`, `msgspec.Meta` numeric/string/collection constraints, and `msgspec.Meta(examples=[...])` when `__use_examples__ = True`.
 
 ## Dynamic factory creation
 
@@ -302,7 +303,7 @@ orders = await OrderFactory.create_batch_async(3)
 
 `create_sync()` / `create_batch_sync()` require `SyncPersistenceProtocol`; the async pair require `AsyncPersistenceProtocol`. The handler receives objects already produced by `build()` / `batch()`.
 
-## SQLAlchemy 3.3 behavior
+## SQLAlchemy behavior (3.3+)
 
 Polyfactory 3 defaults all four SQLAlchemy inclusion flags to `True`:
 
@@ -327,7 +328,7 @@ class OrderModelFactory(SQLAlchemyFactory[OrderModel]):
 
 For built-in persistence, set `__session__` (`Session | Callable[[], Session] | scoped_session[Session]`) or `__async_session__` (`AsyncSession | Callable[[], AsyncSession] | async_scoped_session[AsyncSession]`). Then call `create_sync()` / `create_batch_sync()` or await `create_async()` / `create_batch_async()`.
 
-The default `SQLAlchemyPersistenceMethod.COMMIT` commits each save. Polyfactory 3.3 adds `SQLAlchemyPersistenceMethod.FLUSH` for transaction-controlled tests:
+The default `SQLAlchemyPersistenceMethod.COMMIT` commits each save. Polyfactory 3.3+ includes `SQLAlchemyPersistenceMethod.FLUSH` for transaction-controlled tests:
 
 ```python
 from polyfactory.factories.sqlalchemy_factory import SQLAlchemyPersistenceMethod

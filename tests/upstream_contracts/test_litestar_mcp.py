@@ -13,6 +13,7 @@ from litestar.params import CookieParameter, HeaderParameter, PathParameter, Que
 from litestar.testing import RequestFactory
 from litestar_mcp import (
     MCP,
+    SUPPORTED_PROTOCOL_VERSIONS,
     A2AConfig,
     AfterToolCallHook,
     BeforeToolCallHook,
@@ -132,9 +133,10 @@ class _CustomInjectMarker:
 
 
 def test_litestar_mcp_0160_upstream_contract() -> None:
-    """Verify litestar-mcp 0.18.0 public API surface, config defaults, skills, A2A, signatures, and wire aliases."""
-    assert version("litestar-mcp") == "0.18.0"
+    """Verify litestar-mcp 0.20.0 public API surface, config defaults, skills, A2A, signatures, and wire aliases."""
+    assert version("litestar-mcp") == "0.20.0"
     assert version("a2a-sdk") == "1.3.0"
+    assert "2025-11-25" in SUPPORTED_PROTOCOL_VERSIONS
 
     config = MCPConfig()
     assert config.base_path == "/mcp"
@@ -151,9 +153,10 @@ def test_litestar_mcp_0160_upstream_contract() -> None:
     assert config.skills is None
     assert config.prompt_controllers == ()
     assert config.skill_controllers == ()
-    assert not hasattr(config, "auth")
+    assert config.auth is None
     assert not hasattr(config, "register_oauth_protected_resource")
     assert not hasattr(config, "register_agent_card")
+    assert A2AConfig().tenant_header == "X-A2A-Tenant"
 
     secured_config = MCPConfig(route_opt={AUTH_POLICY_OPT_KEY: required("api-key")})
     assert secured_config.route_opt is not None

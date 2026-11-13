@@ -1,10 +1,19 @@
 # Configuration
 
-Configuration is fixture-first. Override the package's session-scoped fixture
-with the same name in `conftest.py`. Version 0.19.0 registers no custom
-`pytest` CLI flags (`pytest_addoption`).
+Configuration is fixture-first, supplemented by CLI flags and environment variables in `v0.20.0b3`.
+
+## Pytest CLI flags and INI options (`v0.20.0b3`)
+
+| Option | Env / INI equivalent | Purpose |
+| --- | --- | --- |
+| `--container-runtime={auto,docker,podman}` | `PYTEST_DATABASES_CONTAINER_RUNTIME`, `CONTAINER_RUNTIME`, or `container_runtime` ini | Select container runtime (`auto` probes Docker first, then rootless/rootful Podman) |
+| `--keep-containers` | `PYTEST_DATABASES_KEEP_CONTAINERS=1` | Keep managed containers running after the pytest session exits |
+| `--postgres-backend={docker,embedded}` | `PYTEST_DATABASES_POSTGRES_BACKEND` or `postgres_backend` ini | Select backend used by `postgres_any_service` (`"docker"` or `"embedded"`) |
+| — | `PYTEST_DATABASES_NAMESPACE` | Append a sanitized namespace suffix to the deterministic `pytest_databases.owner` container label |
 
 ## Override fixtures
+
+Override any session-scoped configuration fixture in `conftest.py`:
 
 ```python
 import pytest
@@ -16,54 +25,28 @@ def postgres_password() -> str:
 
 
 @pytest.fixture(scope="session")
-def postgres_image() -> str:
-    return "postgres:18-alpine"
+def alloydb_omni_image() -> str:
+    return "gcr.io/alloydb-omni/alloydbomni:18"
 ```
 
-Image selection is configured by overriding the backend's image fixture in
-`conftest.py`.
+When overriding platform fixtures, prefer the backend-namespaced fixture (`mysql_platform`, `dolt_platform`, `bigquery_platform`); `v0.20.0b3` still honors a user-defined `platform` fixture with a `DeprecationWarning`.
 
 ## Environment-backed fixtures
 
-Version 0.19.0 explicitly reads these environment variable families:
-
 | Plugin | Environment variables |
 | --- | --- |
-| Core Docker client | `DOCKER_HOST` |
-| PostgreSQL | `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_11_PORT`–`POSTGRES_18_PORT` |
+| Core runtime | `PYTEST_DATABASES_CONTAINER_RUNTIME`, `PYTEST_DATABASES_CONTAINER_RUNTIME_ENDPOINT`, `CONTAINER_RUNTIME`, `DOCKER_HOST`, `CONTAINER_HOST`, `PYTEST_DATABASES_KEEP_CONTAINERS`, `PYTEST_DATABASES_NAMESPACE`, `PYTEST_DATABASES_POSTGRES_BACKEND`, `PYTEST_DATABASES_SESSION_LOCK_DIR` |
+| PostgreSQL | `POSTGRES_HOST`, `POSTGRES_USER`, `POSTGRES_DATABASE`, `POSTGRES_STARTUP_TIMEOUT`, `POSTGRES_EXTERNAL_HOST`, `POSTGRES_EXTERNAL_PORT`, `POSTGRES_PORT`, `POSTGRES_11_PORT`–`POSTGRES_18_PORT` |
 | pgvector | `PGVECTOR_PORT`, `PGVECTOR_13_PORT`–`PGVECTOR_18_PORT` |
 | ParadeDB | `PARADEDB_PORT`, `PARADEDB_15_PORT`–`PARADEDB_18_PORT` |
-| AlloyDB Omni | `ALLOYDB_OMNI_PORT`, `ALLOYDB_OMNI_15_PORT`–`ALLOYDB_OMNI_17_PORT` |
-| MySQL | `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE` |
-| MariaDB | `MARIADB_USER`, `MARIADB_PASSWORD`, `MARIADB_ROOT_PASSWORD`, `MARIADB_DATABASE` |
-| Dolt | `DOLT_USER`, `DOLT_PASSWORD`, `DOLT_ROOT_PASSWORD`, `DOLT_DATABASE` |
-| MinIO | `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_SECURE`, `MINIO_DEFAULT_BUCKET_NAME` |
-| RustFS | `RUSTFS_ACCESS_KEY`, `RUSTFS_SECRET_KEY`, `RUSTFS_SECURE`, `RUSTFS_DEFAULT_BUCKET_NAME` |
-
-Other configuration values are fixture overrides. For example, override
-`oracle_23ai_image`, `bigquery_image`, or `mssql_password` directly in
-`conftest.py`.
-
-## Host-port pinning
-
-Leave PostgreSQL-family port fixtures as `None` to use dynamic host ports. Pin
-a port only for a runtime constraint:
-
-```python
-import pytest
-
-
-@pytest.fixture(scope="session")
-def pgvector_18_port() -> int:
-    return 55432
-```
-
-The environment equivalent is `PGVECTOR_18_PORT=55432`.
-
-Only the PostgreSQL-family `*_port` fixtures pass `host_port` into
-`DockerService.run(...)`. By contrast, `redis_port`, `dragonfly_port`,
-`keydb_port`, and `valkey_port` are read-only helper fixtures that return
-`*_service.port` after the container starts.
-
-If a container with the generated name is already running, its existing
-mapping wins. Start a clean test session when verifying a new pin.
+| AlloyDB Omni | `ALLOYDB_OMNI_PORT`, `ALLOYDB_OMNI_15_PORT`–`ALLOYDB_OMNI_18_PORT`, `ALLOYDB_OMNI_COMMAND`, `ALLOYDB_OMNI_LEGACY_COMMAND`, `ALLOYDB_OMNI_SHM_SIZE`, `ALLOYDB_OMNI_STARTUP_TIMEOUT` |
+| Embedded PostgreSQL | `PG_BIN_DIR` |
+| MySQL | `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_PORT` |
+| MariaDB | `MARIADB_USER`, `MARIADB_PASSWORD`, `MARIADB_ROOT_PASSWORD`, `MARIADB_DATABASE`, `MARIADB_PORT` |
+| Dolt / Doltgres | `DOLT_USER`, `DOLT_PASSWORD`, `DOLT_ROOT_PASSWORD`, `DOLT_DATABASE`, `DOLTGRES_IMAGE`, `DOLTGRES_USER`, `DOLTGRES_PASSWORD`, `DOLTGRES_ROOT_PASSWORD`, `DOLTGRES_DATABASE`, `DOLTGRES_PORT` |
+| Oracle / ADB-Free | `ORACLE_26AI_IMAGE`, `ORACLE_26AI_SERVICE_NAME`, `ORACLE_26AI_PORT`, `ORACLE_18C_PORT`, `ORACLE_PORT`, `ORACLE_USER`, `ORACLE_PASSWORD`, `ORACLE_SYSTEM_PASSWORD`, `ORACLE_ADB_IMAGE`, `ORACLE_ADB_PORT`, `ORACLE_ADB_WORKLOAD_TYPE`, `ORACLE_ADB_HOSTNAME`, `ORACLE_ADB_TZ`, `ORACLE_ADB_WALLET_PASSWORD`, `ORACLE_ADB_PASSWORD`, `ORACLE_ADB_ADMIN_PASSWORD`, `ORACLE_ADB_FILESYSTEMIO_OPTIONS` |
+| SQL Server / Db2 / Sybase / SQL Anywhere | `MSSQL_USER`, `MSSQL_PASSWORD`, `MSSQL_DATABASE`, `MSSQL_PORT`, `DB2_IMAGE`, `DB2_USER`, `DB2_PASSWORD`, `DB2_DBNAME`, `DB2_PORT`, `DB2_4K_DEVICE_SUPPORT`, `DB2_ACTIVATE_DATABASE`, `DB2_IPC_MODE`, `DB2_STARTUP_TIMEOUT`, `SYBASE_IMAGE`, `SYBASE_USER`, `SYBASE_PASSWORD`, `SYBASE_DATABASE`, `SYBASE_PORT`, `SYBASE_STARTUP_TIMEOUT`, `SYBASE_ENABLE_MONITORING`, `SQLANYWHERE_IMAGE`, `SQLANYWHERE_USER`, `SQLANYWHERE_PASSWORD`, `SQLANYWHERE_DATABASE`, `SQLANYWHERE_SERVER`, `SQLANYWHERE_STARTUP_TIMEOUT` |
+| Teradata Vantage | `TERADATA_IMAGE`, `TERADATA_TEST_IMAGE`, `TERADATA_EXTERNAL_HOST`, `TERADATA_EXTERNAL_PORT`, `TERADATA_HOST`, `TERADATA_PORT`, `TERADATA_USER`, `TERADATA_PASSWORD`, `TERADATA_DATABASE`, `TERADATA_LOGMECH`, `TERADATA_LOGDATA`, `TERADATA_SSLMODE`, `TERADATA_ENCRYPTDATA`, `TERADATA_TMODE`, `TERADATA_STARTUP_TIMEOUT` |
+| MinIO / RustFS | `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_SECURE`, `MINIO_DEFAULT_BUCKET_NAME`, `RUSTFS_ACCESS_KEY`, `RUSTFS_SECRET_KEY`, `RUSTFS_SECURE`, `RUSTFS_DEFAULT_BUCKET_NAME` |
+| LocalStack / Floci / Cloudflare | `LOCALSTACK_IMAGE`, `LOCALSTACK_AUTH_TOKEN`, `LOCALSTACK_REGION`, `LOCALSTACK_ACCESS_KEY`, `LOCALSTACK_SECRET_KEY`, `LOCALSTACK_SERVICES`, `LOCALSTACK_RESOURCE_PREFIX`, `FLOCI_RESOURCE_PREFIX`, `FLOCI_AWS_*`, `FLOCI_GCP_*`, `FLOCI_AZ_*`, `FLOCI_OCI_*`, `CLOUDFLARE_IMAGE`, `CLOUDFLARE_MINIFLARE_VERSION`, `CLOUDFLARE_ACCESS_KEY_ID`, `CLOUDFLARE_SECRET_ACCESS_KEY`, `CLOUDFLARE_STARTUP_TIMEOUT` |
+| MongoDB / Snowflake / Redpanda / BigQuery / PubSub | `MONGODB_IMAGE`, `MONGODB_USER`, `MONGODB_PASSWORD`, `MONGODB_DATABASE`, `MONGODB_PORT`, `MONGODB_REPLICA_SET`, `SNOWFLAKE_IMAGE`, `SNOWFLAKE_USER`, `SNOWFLAKE_PASSWORD`, `SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_DATABASE`, `SNOWFLAKE_SCHEMA`, `SNOWFLAKE_WAREHOUSE`, `SNOWFLAKE_ROLE`, `SNOWFLAKE_WIRE_COMPAT`, `REDPANDA_IMAGE`, `REDPANDA_PORT`, `BIGQUERY_IMAGE`, `PUBSUB_IMAGE` |

@@ -1,76 +1,38 @@
 # Troubleshooting
 
-## Fixture not found
+## Fixture override is ignored (plugin load-order shadowing)
 
-Confirm the exact plugin module is loaded:
+When a local helper module (such as `tests/database.py`) declares `pytest_plugins = ("pytest_databases.docker.postgres",)`, pytest loads the child plugin *after* `tests/database.py`. Defining a fixture in `tests/database.py` with the exact same name as an upstream fixture (for example `alloydb_omni_service`) allows the child plugin's fixture to overwrite the local definition.
 
-```python
-pytest_plugins = ["pytest_databases.docker.postgres"]
+Fix this in one of two ways:
+
+1. Give the custom service fixture in `tests/database.py` a project-specific name (such as `custom_alloydb_omni_service`) and request it from `app_db`, or
+2. Register `"pytest_databases.docker.postgres"` in the root `conftest.py` *before* `"tests.database"`.
+
+## `pg_textsearch library not loaded` on AlloyDB Omni 18
+
+`alloydb_omni_service`, `alloydb_omni_17_service`, and `alloydb_omni_18_service` in `v0.20.0b3` automatically pass `alloydb_omni_command` (`build_alloydb_omni_command(include_textsearch=True)`), which includes `pg_textsearch` in `shared_preload_libraries`. This error occurs only when using AlloyDB Omni 15/16 (`alloydb_omni_legacy_command`), overriding `alloydb_omni_command` / `ALLOYDB_OMNI_COMMAND` without `pg_textsearch`, or invoking `docker_service.run(...)` manually without `build_alloydb_omni_command()`:
+
+```text
+-c shared_preload_libraries=g_stats,google_columnar_engine,google_job_scheduler,google_ml_integration,google_storage,pg_stat_statements,pg_textsearch
 ```
 
-Then check the exhaustive matrix in [reference.md](reference.md). Do not infer
-fixture names. In particular:
+## Container runtime resolution error
 
-- Service-only plugins do not create a `*_connection` fixture.
-- AlloyDB Omni, pgvector, and ParadeDB live in `pytest_databases.docker.postgres` (not `alloydb`); Azure/Azurite uses `pytest_databases.docker.azure_blob` and `azure_blob_*` (not `azurite`); Elasticsearch uses `pytest_databases.docker.elastic_search` (not `elasticsearch` or `ElasticSearch`); Dragonfly and KeyDB live in `pytest_databases.docker.redis`; SQLite has no 0.19.0 plugin.
-- `elasticsearch_service` fails with `fixture 'elasticsearch8_service' not found` in 0.19.0; request `elasticsearch_8_service` or `elasticsearch_7_service` instead.
-- `oracle_startup_connection` fails with `fixture 'oracle_23ai_startup_connection' not found` in 0.19.0; request `oracle_23ai_connection` or `oracle_18c_connection` instead.
+`v0.20.0b3` resolves container runtimes via `resolve_container_runtime()`:
 
-## Client import fails
+1. Inspects `--container-runtime`, `PYTEST_DATABASES_CONTAINER_RUNTIME`, `CONTAINER_RUNTIME`, or `container_runtime` ini (`auto`, `docker`, `podman`).
+2. Checks `PYTEST_DATABASES_CONTAINER_RUNTIME_ENDPOINT`, `DOCKER_HOST`, `CONTAINER_HOST`, active Docker context, `/var/run/docker.sock`, Podman connection JSON files (`~/.config/containers/podman-connections.json`, `~/.local/share/containers/podman/connections.json`), rootless Podman (`/run/user/<uid>/podman/podman.sock`), and rootful Podman (`/run/podman/podman.sock`).
 
-Install the backend extra when one exists. Even among service-only plugins:
+Ensure the Docker or Podman socket is running and accessible in your execution environment.
 
-- `pytest_databases.docker.redis` imports `redis` at module load time (`pip install "pytest-databases[redis]"`).
-- `pytest_databases.docker.valkey` imports `valkey` at module load time (`pip install "pytest-databases[valkey]"`).
-- `pytest_databases.docker.elastic_search` imports `elasticsearch7` at module load time for both v7 and v8 (`pip install "pytest-databases[elasticsearch7]"`).
+## 4Kn filesystem / `overlayfs` Direct I/O errors (Oracle ADB-Free & Db2)
 
-Only these backends bundle and import no Python client dependency at all:
+On hosts backed by 4096-byte logical sector storage (`dm-crypt` / `ext4` with `overlay2`), `v0.20.0b3` enables the required Direct I/O workarounds by default:
 
-- MySQL
-- MariaDB
-- SQL Server
-- YugabyteDB
-- Dolt
-- MinIO
-- RustFS
+- `oracle_adb_filesystemio_options` defaults to `"NONE"` (rewriting `SPFILE` before startup so `ORA-27072` / `ORA-00202` does not occur).
+- `db2_4k_device_support` defaults to `True` (`DB2_4K_DEVICE_SUPPORT=ON` and `DB2_DIRECT_IO=NO`).
 
-For those backends, install and use the client already selected by the project.
+## Azure Blob default container already exists
 
-## Container daemon is unavailable
-
-Version 0.19.0 requires a Docker-compatible API. If `DOCKER_HOST` is set, the
-Docker SDK uses it. Otherwise the package inspects the current Docker context;
-when none is available, it falls back to the rootless Podman socket at
-`unix:///run/user/<uid>/podman/podman.sock`.
-
-Start the selected daemon and verify the current user can access its socket.
-
-## Image or health check times out
-
-Confirm the selected image supports the machine architecture and that the
-container runtime can pull it. Override the backend-specific image fixture or
-the shared `platform` fixture in `conftest.py`.
-
-```python
-import pytest
-
-
-@pytest.fixture(scope="session")
-def platform() -> str:
-    return "linux/arm64"
-```
-
-The generic `platform` fixture is used by MySQL, Dolt, and BigQuery. When more
-than one of those plugins is loaded, one override applies to all of them.
-
-## Host port is already in use
-
-Dynamic host ports are the default. Remove an unnecessary `*_port` override or
-PostgreSQL-family port environment variable. If a fixed port is required,
-assign a distinct port to each versioned service.
-
-## Xdist workers interfere
-
-Override the backend's exact isolation fixture to `"server"`. Consult
-[xdist.md](xdist.md); Azure's fixture name differs from the common prefix, and
-not every plugin exposes an isolation override.
+In `v0.20.0b3`, `azure_blob_service` pre-creates `azure_blob_default_container_name` (consistent with `minio_service`, `rustfs_service`, and `bigquery_service`). Calling `container_client.create_container()` on the default container will raise `ResourceExistsError`.

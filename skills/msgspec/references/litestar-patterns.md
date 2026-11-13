@@ -189,7 +189,7 @@ class Order(CamelizedBaseStruct, kw_only=True):
 ```
 
 `__post_init__` runs after direct `__init__`, typed decode, `convert()`, and, as of msgspec
-0.21.0, `msgspec.structs.replace()` and Python's `copy.replace()`. Direct construction does not
+0.21.0, `msgspec.structs.replace()` and Python 3.13+'s `copy.replace()`. Direct construction does not
 validate field annotations first. Typed decode and `convert()` validate fields before the hook;
 in those paths a `ValueError` or `TypeError` becomes a path-aware `msgspec.ValidationError`.
 To normalize a field inside `__post_init__` on a `frozen=True` Struct, call

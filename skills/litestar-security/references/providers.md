@@ -9,7 +9,7 @@ verified principal.
 
 | Provider | Use for | Configuration |
 | --- | --- | --- |
-| Local accounts | Session cookies, bearer tokens, or hybrid; requires `[argon2,mfa]` | `SecurityConfig(local_auth=LocalAuth.session(...) / .tokens(...) / .hybrid(...))` |
+| Local accounts | Session cookies, bearer tokens, or hybrid; requires `[argon2]` (plus `[mfa]` for TOTP) | `SecurityConfig(local_auth=LocalAuth.session(...) / .tokens(...) / .hybrid(...))` |
 | OAuth / OpenID Connect | Browser sign-in, account linking, OIDC identity | `SecurityConfig(oauth=OAuthConfig(...))` |
 | OAuth Protected Resource | RFC 9728 `/.well-known/oauth-protected-resource` metadata and `WWW-Authenticate` challenges | `SecurityConfig(protected_resource=ProtectedResourceConfig(...))` |
 | Google IAP | Verifying Google Identity-Aware Proxy JWT assertions | `SecurityConfig(iap=GoogleIAPConfig(...))` |
@@ -26,11 +26,12 @@ verification, and OIDC token verification.
 
 | Install | Enables |
 | --- | --- |
-| `litestar-security[mfa]` | TOTP, recovery codes, step-up; includes reference `SecretProtector` |
+| `litestar-security[mfa]` | TOTP (`pyotp`), recovery codes, step-up; reference `AESGCMSecretProtector` uses core `cryptography` |
 | `litestar-security[passkeys]` | WebAuthn passkeys |
 | `litestar-security[oauth]` | OAuth/OIDC provider tree |
 | `litestar-security[argon2]` | Argon2-backed local-password authentication |
-| `litestar-security[all]` | Every optional capability |
+
+Combine extras directly when multiple capabilities are needed (for example `litestar-security[argon2,mfa,passkeys]`); `litestar-security` defines no `[all]` extra.
 
 ## OAuth Transaction and Account Protection
 

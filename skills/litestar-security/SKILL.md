@@ -150,7 +150,7 @@ The plugin registers these; do not shadow them.
 
 ### Step 1: Install the capabilities in use
 
-Core install covers JWT/JWKS validation, API keys, IAP, and OIDC token verification. Use `[argon2,mfa]` for `LocalAuth`; add `[passkeys]` or `[oauth]` only when needed, or use `[all]`.
+Core install covers JWT/JWKS validation, API keys, IAP, and OIDC token verification. Use `[argon2,mfa]` for `LocalAuth` with MFA; add `[passkeys]` or `[oauth]` when needed (there is no `[all]` extra).
 
 ### Step 2: Choose providers
 

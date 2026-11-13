@@ -58,6 +58,7 @@ app = Litestar(plugins=[vite_plugin])
 ```
 
 - `ViteConfig.exclude_static_from_auth=True` (default) attaches `opt={"exclude_from_auth": True}` directly to static route handlers (`0.30.1+`).
+- Static route guards (`0.33.0+`) block direct requests to build metadata files (`manifest.json`, `.vite/manifest.json`, `ssr-manifest.json`, `.vite/ssr-manifest.json`, `.litestar.json`, `hot`, and configured `manifest_name` / `hot_file`).
 - `vite_plugin.get_static_server_config()` returns `StaticServerConfig(placement=StaticPlacement.NATIVE | StaticPlacement.ASGI, mounts=(StaticServerMount(...),), reason=...)`. Granian 0.16+ (`GranianPlugin(static="auto")`) consumes `StaticPlacement.NATIVE` mounts when `dev_mode=False`, `set_static_folders=True`, `asset_url` is a local path prefix, and no custom `static_files_config` overrides are set.
 
 ### Reverse proxy (nginx, Caddy, Cloudflare)
@@ -98,12 +99,18 @@ changed files, and removes remote orphans when `delete_orphaned=True` (`VITE_DEP
 `--no-build` only for an already verified bundle and `--no-delete` for
 additive-only rollout.
 
-## Cache Strategy
+## Cache Strategy & Preload Headers (`0.33.0+`)
+
+`RuntimeConfig` ships production HTTP header defaults (also available programmatically via `ViteAssetLoader.render_preload_headers()`, `send_early_hints()`, and `EarlyHintsASGIResponse`):
+
+- `immutable_cache_headers=True` (default): automatically attaches `Cache-Control: public, max-age=31536000, immutable` on hashed files served under `assets/`.
+- `link_preload_headers=True` (default): emits RFC 8288 `Link` `modulepreload`/`preload` headers for entry scripts, chunks, and CSS on production HTML responses.
+- `early_hints=False` (opt-in): emits an ASGI `103 Early Hints` informational frame before `200 OK` when the ASGI server advertises `http.response.early_hint`.
 
 | Asset | Cache TTL | Why |
 | --- | --- | --- |
 | `assets/*.js`, `assets/*.css` (hashed) | `max-age=31536000, immutable` | Hashed names → safe to cache forever |
-| `manifest.json` | `no-cache` | Must reflect latest deploy |
+| `manifest.json` | `no-cache` (blocked on static routes) | Must reflect latest deploy; never expose publicly via static route |
 | `index.html` (template mode) | `no-cache` | References hashed assets via manifest |
 | `public/*` (favicon, images) | `max-age=86400` | Stable but might change |
 

@@ -179,7 +179,7 @@ CreateUserRequest = CreateUserV1 | CreateUserV2
 _decoder = msgspec.json.Decoder(CreateUserRequest)
 
 
-async def handle_create_user(body: bytes) -> dict:
+async def handle_create_user(body: bytes) -> dict[str, object]:
     request = _decoder.decode(body)
     match request:
         case CreateUserV1(username=u, email=e):

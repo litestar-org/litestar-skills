@@ -125,8 +125,8 @@ from litestar_security.testing import (
 
 
 def test_litestar_security_060_version() -> None:
-    """Verify installed library version matches the upstream 0.7.1 release."""
-    assert version("litestar-security") == "0.7.1"
+    """Verify installed library version matches the upstream 0.7.2 release."""
+    assert version("litestar-security") == "0.7.2"
 
 
 def test_litestar_security_060_authorization_predicates_and_combinators() -> None:

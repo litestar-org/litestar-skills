@@ -191,7 +191,7 @@ class ServerSettings:
     APP_LOC: str = "app.asgi:create_app"
     HOST: str = field(default_factory=get_env("LITESTAR_HOST", "0.0.0.0"))
     PORT: int = field(default_factory=get_env("LITESTAR_PORT", 8000))
-    KEEPALIVE: int = field(default_factory=get_env("LITESTAR_KEEPALIVE", 65))
+    KEEPALIVE: int = field(default_factory=get_env("SERVER_KEEPALIVE", 65))
     RELOAD: bool = field(default_factory=get_env("LITESTAR_RELOAD", False))
 
 

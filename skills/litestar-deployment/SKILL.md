@@ -104,7 +104,7 @@ Expose `/health` on the API container. K8s uses startupProbe + livenessProbe + r
 
 ## Guardrails
 
-- **Distroless for production, slim for dev.** Distroless (`gcr.io/distroless/cc-debian12:nonroot`) has no shell, no apt, minimal CVE surface. Use slim only when you need a shell for debugging.
+- **Distroless for production, slim for dev.** Distroless (`gcr.io/distroless/cc-debian13:nonroot`, or `cc-debian12:nonroot` for Bookworm builders) has no shell, no apt, minimal CVE surface. Use slim only when you need a shell for debugging.
 - **Non-root user (UID 65532).** Match the distroless `nonroot` user. Create with `useradd --system --uid 65532` in standard images.
 - **uv for all package installs.** No pip, no pip-tools. `uv sync --frozen --no-dev` in builder, `uv pip install` wheel in runner.
 - **UV_COMPILE_BYTECODE=1.** Pre-compile .pyc in the builder — saves 200-500ms cold-start in containers.

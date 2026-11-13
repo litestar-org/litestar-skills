@@ -15,7 +15,7 @@ litestar run --host 0.0.0.0 --port 8080
 # Auto-reload during development
 litestar run --reload
 
-# Production multi-worker with Granian v0.16+ supervision, access logs, and worker recycling
+# Production multi-worker with litestar-granian v0.16+ supervision, access logs, and worker recycling
 litestar run \
     --host 0.0.0.0 \
     --port 8080 \

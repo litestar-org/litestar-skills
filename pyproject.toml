@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "litestar-skills"
-version = "0.13.0"
+version = "0.14.0"
 description = "Opinionated first-party agent skills, plugins, subagents, slash commands, and MCP servers for the Litestar framework ecosystem"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -52,10 +52,10 @@ validation = [
   "litestar-email>=0.4.0",
   "litestar-granian>=0.17.0",
   "litestar-htmx>=0.5.0",
-  "litestar-mcp[a2a]>=0.18.0",
+  "litestar-mcp[a2a]>=0.20.0",
   "litestar-queues[advanced-alchemy,sqlspec]>=0.14.0",
   "litestar-saq[psycopg]>=0.8.0",
-  "litestar-security>=0.7.1",
+  "litestar-security>=0.7.2",
   "litestar-vite>=0.33.0",
   "msgspec>=0.22.0",
   "polyfactory[beanie,sqlalchemy]>=3.5.0",
@@ -173,7 +173,7 @@ exclude_lines = [
 # bump-my-version — atomic multi-manifest version sync
 # ============================================================
 [tool.bumpversion]
-current_version = "0.13.0"
+current_version = "0.14.0"
 commit = false
 tag = false
 tag_name = "v{new_version}"

@@ -163,7 +163,10 @@ app = Litestar(
 Task functions live in `app/domain/<domain>/tasks.py`:
 
 ```python
-async def send_email(ctx: dict, *, recipient: str, subject: str, body: str) -> None:
+from saq.types import Context
+
+
+async def send_email(ctx: Context, *, recipient: str, subject: str, body: str) -> None:
     """Send an email as a background job.
 
     Args:
@@ -180,10 +183,11 @@ For long-running work, set the job's `heartbeat` stale threshold (at least `60`s
 
 ```python
 from litestar_saq import monitored_job
+from saq.types import Context
 
 
 @monitored_job()
-async def rebuild_index(ctx: dict, *, index_name: str) -> dict[str, str]:
+async def rebuild_index(ctx: Context, *, index_name: str) -> dict[str, str]:
     await run_rebuild(index_name)
     return {"status": "complete"}
 ```
@@ -289,7 +293,7 @@ introspection UI and `enable_otel=True` when `litestar-saq[otel]` is installed.
 
 ### Step 4: Define Tasks
 
-Place task functions in `app/domain/<domain>/tasks.py`. Use `ctx: dict` as the
+Place task functions in `app/domain/<domain>/tasks.py`. Use `ctx: Context` as the
 first argument and pass job data as keywords. Add shared resources (DB, HTTP
 client, email service) in `QueueConfig.startup` / `before_process` hooks and
 read them from `ctx`.
@@ -354,7 +358,7 @@ Before delivering Litestar + SAQ code, verify:
 - [ ] Multi-process worker configs use `dsn`, not `broker_instance` only
 - [ ] Each `QueueConfig` lists tasks by dotted path; the imports resolve
 - [ ] Dotted-path lifecycle hooks (`startup`, `shutdown`, `before_process`, `after_process`) are passed as a list of strings, never a bare `str`
-- [ ] All tasks have `ctx: dict` as the first positional arg and receive job data as keywords
+- [ ] All tasks have `ctx: Context` (or `ctx: dict[str, Any]`) as the first positional arg and receive job data as keywords
 - [ ] Every task has `timeout` set
 - [ ] Long-running jobs have a `heartbeat` stale threshold longer than `HeartbeatManager`'s 30s flush cadence (`>= 60`s)
 - [ ] Long-running task functions use `monitored_job()` when they need automatic heartbeats
@@ -415,24 +419,27 @@ saq_plugin = create_saq_plugin()
 Task definitions in `app/domain/system/tasks.py`:
 
 ```python
-async def worker_startup(ctx: dict) -> None:
+from saq.types import Context
+
+
+async def worker_startup(ctx: Context) -> None:
     """Initialize shared resources for this worker."""
     ctx["email_service"] = create_email_service()
     ctx["db"] = create_database_client()
 
 
-async def worker_shutdown(ctx: dict) -> None:
+async def worker_shutdown(ctx: Context) -> None:
     """Dispose shared worker resources."""
     await ctx["db"].close()
 
 
-async def send_email(ctx: dict, *, recipient: str, subject: str, body: str) -> None:
+async def send_email(ctx: Context, *, recipient: str, subject: str, body: str) -> None:
     """Send an email as a background job."""
     email = ctx["email_service"]
     await email.send(recipient, subject, body)
 
 
-async def cleanup_sessions(ctx: dict) -> None:
+async def cleanup_sessions(ctx: Context) -> None:
     """Purge expired sessions every 15 minutes."""
     db = ctx["db"]
     await db.execute("DELETE FROM session WHERE expires_at < now()")

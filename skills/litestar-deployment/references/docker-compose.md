@@ -11,14 +11,12 @@ services:
     ports:
       - "16379:6379"
     hostname: cache
-    command: redis-server --appendonly yes
+    command: valkey-server --appendonly yes
     volumes:
       - cache-data:/data
-    environment:
-      ALLOW_EMPTY_PASSWORD: "yes"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 1s
       timeout: 3s
       retries: 30
@@ -107,11 +105,11 @@ services:
     ports:
       - "16379:6379"
     hostname: cache
-    command: redis-server --appendonly yes
+    command: valkey-server --appendonly yes
     volumes:
       - cache-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 1s
       timeout: 3s
       retries: 30

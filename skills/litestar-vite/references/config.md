@@ -106,15 +106,17 @@ static_cfg: StaticServerConfig = plugin.get_static_server_config()
 | `dev_mode` | `VITE_DEV_MODE` or `False` | Enable development mode |
 | `port` | `VITE_PORT` or `5173` | Vite dev server port |
 | `host` | `VITE_HOST` or `"127.0.0.1"` | Vite dev server host |
-| `protocol` | `VITE_PROTOCOL` or `"http"` | `"http"` or `"https"` |
-| `executor` | `"node"` after normalization | JS runtime (`node`, `bun`, `deno`, `yarn`, `pnpm`) |
+| `protocol` | `"http"` | `"http"` or `"https"` (`set_environment=True` exports `VITE_PROTOCOL`) |
+| `executor` | `None` (env/lockfile auto-detect or `"node"`) | JS runtime (`node`, `bun`, `deno`, `yarn`, `pnpm`); resolved from `LITESTAR_VITE_RUNTIME`, `VITE_EXECUTOR`, or `detect_runtime(paths.root)` |
+| `provisioning_mode` | `"auto"` | Binary discovery policy (`"auto"`, `"wheel"`, `"nodeenv"`, `"system"`) covering PEP 425 runtime wheels (`nodejs-wheel`, `bun-wheel`, `deno`), `nodeenv`, and `PATH` (`0.33.0+`) |
+| `ssr_transport` | `"auto"` | Production SSR IPC transport (`"auto"`, `"stdio"`, `"wasm"` via `litestar-vite[wasm]`) (`0.33.0+`) |
 | `run_command` | `None` | Custom dev command override (e.g. `["npm", "run", "dev"]`) |
 | `build_command` | `None` | Custom build command override |
 | `build_watch_command` | `None` | Custom watch-build command override |
 | `serve_command` | `None` | Custom production SSR server command override (`litestar assets serve --production`) |
 | `install_command` | `None` | Custom package install command override |
 | `start_dev_server` | `True` | Start the dev server when `dev_mode=True` |
-| `is_react` | `False` | Enable React Fast Refresh preamble support |
+| `is_react` | `False` | Enable React Fast Refresh preamble support (auto-detects `package.json` and `deno.json*`) |
 | `health_check` | `VITE_HEALTH_CHECK` or `False` | Wait for Vite dev server health check on startup |
 | `proxy_mode` | mode-derived | `"vite"` proxies Vite HTTP + WS/HMR through Litestar; `"proxy"` proxies framework dev servers; production uses `None` |
 | `external_dev_server` | `None` | `ExternalDevServer` or target URL string for framework/external workflows |
@@ -125,9 +127,12 @@ static_cfg: StaticServerConfig = plugin.get_static_server_config()
 | `http2` | `True` | Enable HTTP/2 proxy support when `h2` is installed |
 | `trusted_proxies` | `LITESTAR_TRUSTED_PROXIES` or `None` | Trusted proxy hosts/CIDRs (`"*"` or comma-separated) for `ProxyHeadersMiddleware` |
 | `csp_nonce` | `None` | CSP nonce injected into script tags |
+| `link_preload_headers` | `True` | Emit RFC 8288 `Link` `modulepreload`/`preload` headers on production HTML responses (`0.33.0+`) |
+| `early_hints` | `False` | Emit ASGI `103 Early Hints` frames when server advertises `http.response.early_hint` (`0.33.0+`) |
+| `immutable_cache_headers` | `True` | Attach `Cache-Control: public, max-age=31536000, immutable` on hashed `assets/*` files (`0.33.0+`) |
 | `spa_handler` | `True` | Enable SPA catch-all route handler |
 
-`RuntimeConfig.proxy_mode` accepts `"vite"`, `"proxy"`, or `None`. Legacy
+`detect_runtime` and `detect_runtime_marker` (`from litestar_vite.config import detect_runtime, detect_runtime_marker`) inspect `bun.lockb`, `bun.lock`, `deno.lock`, `deno.json`, `deno.jsonc`, `pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`, and `package.json#packageManager` when `executor` is unset. `RuntimeConfig.proxy_mode` accepts `"vite"`, `"proxy"`, or `None`. Legacy
 `VITE_PROXY_MODE=direct` emits `DeprecationWarning` and becomes `"vite"`.
 Browser requests stay on the Litestar origin. Configure
 `ExternalDevServer(target=..., command=..., build_command=..., http2=False, enabled=True)` only when a
@@ -188,7 +193,7 @@ Import `InertiaConfig` and `InertiaSSRConfig` from `litestar_vite` or
 | `extra_session_page_props` | `set()` | Keys pulled from session and merged into page props |
 | `shared_page_prop_types` | `None` | Type mappings for shared props (injected into generated `inertia.d.ts`) |
 | `encrypt_history` | `False` | Enable Inertia browser history encryption |
-| `type_gen` | `None` | `InertiaTypeGenConfig(include_default_auth=True, include_default_flash=True)` |
+| `type_gen` | `None` (effective `InertiaTypeGenConfig()`) | `InertiaTypeGenConfig(include_default_auth=True, include_default_flash=True)` |
 | `ssr` | `None` | `InertiaSSRConfig(...)` or `bool` for SSR server integration |
 | `use_script_element` | `True` | Embed page JSON inside `<script type="application/json">` tag |
 | `precognition` | `False` | Enable Laravel Precognition compatible real-time validation exception handler |
@@ -200,14 +205,14 @@ Import `InertiaConfig` and `InertiaSSRConfig` from `litestar_vite` or
 | `enabled` | `True` | Enable SSR rendering |
 | `timeout` | `2.0` | Timeout in seconds for SSR render requests |
 | `target_selector` | `"#app"` | Container selector to replace with SSR output |
-| `command` | `None` | Command to spawn production SSR worker process (defaults to `["node", "<ssr_bundle_path>"]`) |
+| `command` | `None` | Command to spawn production SSR worker process (auto-resolved via `resolve_ssr_command` for `node`/`bun`/`deno` when `None`) |
 | `cwd` | `None` | Working directory for the production SSR process |
 | `fallback_to_client` | `True` | Fall back to client-side CSR bootstrap if SSR rendering fails (`0.32.0+`) |
 | `circuit_breaker_enabled` | `True` | Enable `SSRCircuitBreaker` to short-circuit repeated SSR failures (`0.32.0+`) |
 | `circuit_breaker_failure_threshold` | `3` | Consecutive failures before opening the SSR circuit (`0.32.0+`) |
 | `circuit_breaker_reset_timeout` | `30.0` | Seconds before transitioning an open circuit to `HALF_OPEN` (`0.32.0+`) |
 
-In `0.32.0+`, `litestar_vite.ipc` exports `BaseIPCTransport`, `StdioIPCTransport`, `TCPStreamIPCTransport`, `SSRCircuitBreaker`, `CircuitState`, `IPCError`, `IPCRequest`, `IPCResponse`, `IPCTimeoutError`, `IPCWorkerCrashError`, and `CircuitBreakerOpenError`.
+In `0.33.0+`, `litestar_vite.ipc` exports `BaseIPCTransport`, `StdioIPCTransport`, `TCPStreamIPCTransport`, `WasmIPCTransport`, `is_wasm_available`, `resolve_ssr_transport`, `SSRCircuitBreaker`, `CircuitState`, `IPCError`, `IPCRequest`, `IPCResponse`, `IPCTimeoutError`, `IPCWorkerCrashError`, and `CircuitBreakerOpenError`.
 
 ## LoggingConfig
 
@@ -307,14 +312,16 @@ Also configure Vite top-level:
 | `ASSET_URL` | Public asset prefix / CDN base URL in prod |
 | `VITE_PORT` | Override Vite dev server port (`5173`) |
 | `VITE_HOST` | Override Vite dev server host (`127.0.0.1`) |
-| `VITE_PROTOCOL` | Override Vite dev server protocol (`http` / `https`) |
+| `VITE_PROTOCOL` | Exported by `set_environment=True` from `RuntimeConfig.protocol` |
 | `VITE_BASE_URL` | Public base URL of the Litestar server |
 | `VITE_ENABLED` | Disable runtime wiring (`false`) while retaining CLI/config access |
 | `VITE_DEV_MODE` | Enable development behavior (`true` / `false`) |
-| `VITE_HOT_RELOAD` | Enable/disable HMR hot reload |
+| `VITE_AUTO_DEV_MODE` | Auto-enable `dev_mode=True` for auto-detected SPA/hybrid apps without built assets (default `True`) |
+| `LITESTAR_VITE_RUNTIME` / `VITE_EXECUTOR` | Override `RuntimeConfig.executor` (`LITESTAR_VITE_RUNTIME` takes precedence) |
 | `VITE_PROXY_MODE` | `vite`, `proxy`, or `none`; `direct` is deprecated |
+| `VITE_PROXY_DEBUG` | Enable verbose proxy debug logging (`1` / `true` / `yes`) |
 | `VITE_HEALTH_CHECK` | Enable dev server startup health check |
-| `VITE_ALLOW_EXTERNAL_HOST` | Allow non-loopback `VITE_HOST` bindings |
+| `VITE_ALLOW_REMOTE` | Preserve non-loopback `VITE_HOST` in `proxy_mode="vite"` (otherwise normalized to `127.0.0.1`) |
 | `LITESTAR_TRUSTED_PROXIES` | Trusted proxy hosts/CIDRs for `ProxyHeadersMiddleware` |
 | `LITESTAR_VITE_LOG_LEVEL` | `quiet`, `normal`, or `verbose` |
 | `VITE_DEPLOY_STORAGE` | fsspec destination for `assets deploy` |

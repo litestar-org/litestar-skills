@@ -284,7 +284,7 @@ class AuditEventController(Controller):
                     CursorKey(field_name="created_at", sort_order="desc"),
                     CursorKey(field_name="id", sort_order="desc"),
                 ),
-                "cursor_secret": get_settings().app.secret_key,
+                "cursor_secret": get_settings().app.SECRET_KEY,
             }
         ),
     }
@@ -305,7 +305,10 @@ class AuditEventController(Controller):
 {
   "items": [ ... ],
   "limit": 50,
-  "next_cursor": "eyJ2IjpbIjIwMjYtMDktMjZUMTI6MDA6MDBaIiwi..."
+  "next_cursor": "eyJ2IjpbIjIwMjYtMDktMjZUMTI6MDA6MDBaIiwi...",
+  "previous_cursor": null,
+  "has_next": true,
+  "has_previous": false
 }
 ```
 

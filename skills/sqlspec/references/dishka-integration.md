@@ -168,7 +168,7 @@ from collections.abc import AsyncIterator
 from dishka import Provider, Scope, make_async_container, provide
 from dishka.integrations.litestar import FromDishka as Inject, setup_dishka
 from litestar import Litestar
-from litestar_channels.backends.base import ChannelsBackend
+from litestar.channels.backends.base import ChannelsBackend
 from sqlspec.driver import AsyncDriverAdapterBase
 
 from app.domains.orders.services import OrderService

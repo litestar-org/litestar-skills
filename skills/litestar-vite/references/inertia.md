@@ -121,7 +121,7 @@ app = Litestar(
 | `encrypt_history` | `bool` | `False` | Sets `encryptHistory: true` globally so the client encrypts browser history state via Web Crypto API |
 | `use_script_element` | `bool` | `True` | Emits initial page JSON inside `<script type="application/json" id="app_page" data-page="app">` (~37% smaller payload than HTML-escaped `data-page` attributes) |
 | `precognition` | `bool` | `False` | Enables Laravel Precognition protocol handling for `@precognition` routes |
-| `type_gen` | `InertiaTypeGenConfig \| None` | `InertiaTypeGenConfig()` | Controls default `auth` and `flash` ambient TypeGen definitions (`include_default_auth`, `include_default_flash`) |
+| `type_gen` | `InertiaTypeGenConfig \| None` | `None` (effective `InertiaTypeGenConfig()`) | Controls default `auth` and `flash` ambient TypeGen definitions (`include_default_auth`, `include_default_flash`) |
 | `ssr` | `InertiaSSRConfig \| bool \| None` | `None` | Enables server-side rendering (`ssr=True` normalizes to `InertiaSSRConfig()`) |
 
 ### Session Middleware Optionality (`InertiaTransientState`)

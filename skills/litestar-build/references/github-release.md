@@ -51,7 +51,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Validate tag format
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
@@ -78,9 +78,9 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v7
-      - run: uv python install 3.12
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - run: uv python install 3.13
       - run: mkdir -p app/domain/web/public
       - run: uv sync --all-extras --dev
       - run: uv run pytest tests -v
@@ -91,10 +91,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
-      - uses: astral-sh/setup-uv@v7
-      - run: uv python install 3.12
+      - uses: astral-sh/setup-uv@v10.3.3
+      - run: uv python install 3.13
       - run: uv sync --all-extras --dev
       - run: uv run app assets install
       - run: uv run app assets build
@@ -102,7 +102,7 @@ jobs:
       - name: Verify wheel contents
         run: |
           unzip -l dist/*.whl | grep -qE '\.(js|css|html)$' || (echo "Missing frontend" && exit 1)
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel
           path: dist/*.whl
@@ -119,29 +119,36 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
           - target: x86_64-apple-darwin
-            runner: macos-13
+            runner: macos-15-intel
           - target: aarch64-apple-darwin
-            runner: macos-14
+            runner: macos-15
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v7
-      - run: uv python install 3.12
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - run: uv python install 3.13
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: wheel
           path: dist/
       - run: mkdir -p app/domain/web/public
       - run: uv sync --all-extras --dev
-      - run: uv run hatch build --target binary
+      - name: Build binary
+        env:
+          PYAPP_DISTRIBUTION_EMBED: "1"
+          PYAPP_FULL_ISOLATION: "1"
+          PYAPP_UV_ENABLED: "1"
+        run: |
+          export PYAPP_PROJECT_PATH="$(realpath dist/*.whl)"
+          uvx hatch build --target binary
       - name: Rename and chmod
         run: |
-          mv dist/binary/app dist/binary/app-${{ matrix.target }}
+          mv dist/binary/app-* dist/binary/app-${{ matrix.target }}
           chmod +x dist/binary/app-${{ matrix.target }}
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: binary-${{ matrix.target }}
           path: dist/binary/app-${{ matrix.target }}
@@ -152,10 +159,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           path: release-files/
           merge-multiple: true
@@ -190,7 +197,7 @@ build-onefiles:
   runs-on: ${{ matrix.job.os }}
   env:
     PYAPP_REPO: pyapp
-    PYAPP_VERSION: v0.29.0
+    PYAPP_VERSION: v0.31.0
     PYAPP_PYTHON_VERSION: "3.13"
     PYAPP_PROJECT_NAME: "app"
     PYAPP_FULL_ISOLATION: "true"
@@ -198,7 +205,7 @@ build-onefiles:
     BZIP2_SYS_STATIC: "1"
     LZMA_API_STATIC: "1"
   steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - uses: ./.github/actions/setup-python
       with:
         python-version: "${{ env.STABLE_PYTHON_VERSION }}"
@@ -275,10 +282,10 @@ build-onefiles:
       run: |
         docker run --rm --network=none \
           -v $PWD/dist/${{ matrix.job.artifact }}:/app:ro \
-          gcr.io/distroless/cc-debian12:nonroot /app --help
+          gcr.io/distroless/cc-debian13:nonroot /app --help
         rm -rf "$HOME/.<app>"
 
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v7
       with:
         name: ${{ matrix.job.artifact }}
         path: dist/${{ matrix.job.artifact }}
@@ -292,8 +299,8 @@ build-images:
   needs: build-onefiles
   runs-on: self-hosted
   steps:
-    - uses: actions/checkout@v6
-    - uses: actions/download-artifact@v7
+    - uses: actions/checkout@v7
+    - uses: actions/download-artifact@v8
       with:
         path: artifacts
 
@@ -333,7 +340,7 @@ build-images:
         outputs: type=docker,dest=dist/app-image-arm64.tar
         tags: app:latest-arm64
 
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v7
       with:
         name: container-images
         path: dist/app-image-*.tar
@@ -348,11 +355,11 @@ publish:
   permissions:
     contents: write
   steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         fetch-depth: 0      # required for `git log <prev-tag>..<tag>`
 
-    - uses: actions/download-artifact@v7
+    - uses: actions/download-artifact@v8
       with:
         path: dist
 

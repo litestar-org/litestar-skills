@@ -308,7 +308,7 @@ field_tuple = msgspec.structs.astuple(user)
 
 # Copy-and-replace (both call __post_init__ as of msgspec 0.21.0)
 updated = msgspec.structs.replace(user, name="Bob")
-updated_std = copy.replace(user, name="Bob")
+updated_std = copy.replace(user, name="Bob")  # Python 3.13+
 
 # Mutate a frozen=True Struct (e.g. inside __post_init__ to normalize a field)
 msgspec.structs.force_setattr(event, "event_type", event.event_type.lower())

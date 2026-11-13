@@ -13,7 +13,7 @@ The runtime has four canonical modes: `spa`, `template`, `hybrid`, and `framewor
 
 The plugin pairs with the npm package [`litestar-vite-plugin`](https://www.npmjs.com/package/litestar-vite-plugin) on the JS side. Python `ViteConfig` is the source of truth; the generated `.litestar.json` bridge lets JS config normally keep only `litestar({ input: [...] })`.
 
-This guidance targets `litestar-vite` 0.33.0. Features include server-rendered UI component fragments, persistent IPC SSR transports with circuit-breaker fallback, AsyncAPI 3.0 typed channel generation, Vite 7+ support, and single-port development proxying. See [Release Updates](references/release-updates.md).
+This guidance targets `litestar-vite` 0.33.0. Features include server-rendered UI component fragments, persistent stdio and QuickJS WASM (`WasmIPCTransport`) SSR transports with circuit-breaker fallback, lockfile JS runtime auto-detection (`detect_runtime`), RFC 8288 `Link` preload / `103 Early Hints` / immutable cache headers, AsyncAPI 3.0 typed channel generation, Vite 7+ support, and single-port development proxying. See [Release Updates](references/release-updates.md).
 
 ## Code Style Rules
 
@@ -181,7 +181,7 @@ type LoginInput = FormInput<"auth:login">
 
 ### `ViteAssetLoader`, Secondary HTML Entries, and Component Fragments
 
-Auto-registered Jinja2 globals when a template engine is configured:
+Auto-registered Jinja2 globals when `mode="template"` and `JinjaTemplateEngine` is configured (`vite_asset` aliases `vite`):
 
 | Helper | Use |
 | --- | --- |
@@ -228,8 +228,8 @@ litestar assets status           # Read-only status summary
 
 ### HMR & Production Build
 
-- **Dev Mode (Single-Port Proxy)**: Vite runs on `runtime.port` and writes `paths.hot_file`; Litestar proxies asset HTTP and the HMR WebSocket (`/static/vite-hmr`) so the browser uses a single public origin. In Vite 8.1+, place explicit HMR network overrides under `server.ws` (not `server.hmr`). See [HMR Reference](references/hmr.md).
-- **Production Build**: Run `litestar assets build` (or `litestar assets deploy`) with `dev_mode=False`. Asset loading checks `<bundle_dir>/<manifest_name>` then `<bundle_dir>/.vite/<manifest_name>`. See [Deployment Reference](references/deployment.md).
+- **Dev Mode (Single-Port Proxy)**: Vite runs on `runtime.port` (runtime auto-detected via `detect_runtime` when `executor` is omitted) and writes `paths.hot_file`; Litestar proxies asset HTTP and `/static/vite-hmr` so the browser uses a single origin. In Vite 8.1+, place explicit HMR network overrides under `server.ws` (not `server.hmr`). See [HMR Reference](references/hmr.md).
+- **Production Build**: Run `litestar assets build` (or `litestar assets deploy`) with `dev_mode=False`. Asset loading checks `<bundle_dir>/<manifest_name>` then `<bundle_dir>/.vite/<manifest_name>`; `RuntimeConfig` defaults enable `link_preload_headers=True` and `immutable_cache_headers=True` (opt into `103 Early Hints` with `early_hints=True`). See [Deployment Reference](references/deployment.md).
 
 ### Inertia & HTMX Integration
 
@@ -399,7 +399,7 @@ For deep-dives on specific surfaces, see:
 - **[Streams](references/streams.md)** — WebSocket/SSE helpers, `createTypedChannels`, `<litestar-stream>`, React/Vue/Svelte adapters, stream auth.
 - **[Deployment](references/deployment.md)** — Production build, Granian native static serving, static hosting, CDN patterns, cache strategy.
 - **[Troubleshooting](references/troubleshooting.md)** — Common errors and fixes.
-- **[Release Updates](references/release-updates.md)** — Audited `0.26.0` through `0.32.0` release behavior changes.
+- **[Release Updates](references/release-updates.md)** — Audited `0.26.0` through `0.33.0` release behavior changes.
 
 ## Cross-References
 

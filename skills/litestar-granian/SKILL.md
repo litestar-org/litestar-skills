@@ -7,7 +7,7 @@ description: "Use when working with litestar_granian, GranianPlugin, litestar ru
 
 `litestar-granian` replaces Litestar's `run` command with a
 supervised Granian command and bridges Litestar's active log formatter into
-Granian worker processes. It requires Granian 2.8.0 or later (using Granian 2.8.7).
+Granian worker processes. It requires Granian 2.8.0 or later (using Granian 2.8.8).
 
 ## Code Style Rules
 
@@ -49,7 +49,7 @@ JSON `dictConfig` (`--log-config`), and reconstructs matching `generic`
 (`_granian`) and `access` (`granian.access`) formatters inside Granian worker
 processes.
 
-### Defaults in 0.17.0 / Granian 2.8.7
+### Defaults in 0.17.0 / Granian 2.8.8
 
 | Concern | Default |
 | --- | --- |
@@ -290,7 +290,7 @@ WebSocket endpoints, and load-test production capacity settings.
   `blocking_threads` to `1` on ASGI/RSGI and rejects `--blocking-threads > 1` with `ConfigurationError`.
 - **Do not attempt `--reload` or `--workers-max-rss` on free-threaded Python.**
   Free-threaded Python builds (GIL disabled) reject these flags with `UsageError`.
-- **Do not expect HTTP/3 support.** Granian 2.8.4 supports HTTP/1.1 and HTTP/2; terminate HTTP/3 at an external proxy.
+- **Do not expect HTTP/3 support.** Granian 2.8.8 supports HTTP/1.1 and HTTP/2; terminate HTTP/3 at an external proxy.
 - **Do not pass Uvicorn proxy flags.** Use `granian.utils.proxies.wrap_asgi_with_proxy_headers` instead of `--proxy-headers` or `--forwarded-allow-ips`.
 
 </guardrails>

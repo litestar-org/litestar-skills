@@ -76,7 +76,7 @@ Registering the plugin twice raises `ImproperConfigurationError` — the plugin 
 
 Transaction modes are the same three values as the ASGI extensions — `"manual"`, `"autocommit"`, `"autocommit_include_redirect"` — with the same 2xx / 3xx semantics. See [commit-modes.md](commit-modes.md) for the full decision table.
 
-When `enable_correlation_middleware=True` on any config, the `before_request` handler extracts a correlation ID from headers (primary `x-request-id`, plus any configured fallbacks and W3C trace headers), propagates it into `CorrelationContext` so driver-layer logs pick it up, stores it on `g.correlation_id`, and the `after_request` handler stamps `X-Correlation-ID` on the response.
+By default (unless `enable_correlation_middleware=False` on all configs), the `before_request` handler extracts a correlation ID from headers (primary `x-request-id`, plus any configured fallbacks and W3C trace headers), propagates it into `CorrelationContext` so driver-layer logs pick it up, stores it on `g.correlation_id`, and the `after_request` handler stamps `X-Correlation-ID` on the response.
 
 When `enable_sqlcommenter_middleware=True` (and the adapter has `statement_config.enable_sqlcommenter=True`), the plugin sets `SQLCommenterContext` on each request with the current route and endpoint name. The driver wraps every SQL statement with a comment carrying those attributes. Details in [observability.md](observability.md).
 
@@ -111,7 +111,7 @@ Per-config keys the plugin reads from `extension_config["flask"]`:
 | `extra_commit_statuses` | `None` | Extra status codes that trigger commit. |
 | `extra_rollback_statuses` | `None` | Extra status codes that trigger rollback. |
 | `disable_di` | `False` | Skip request hooks for this config — you own the lifecycle. |
-| `enable_correlation_middleware` | `False` | Turn on correlation-ID extraction + response stamping. |
+| `enable_correlation_middleware` | `True` | Enable correlation-ID extraction + response stamping. |
 | `correlation_header` | `"x-request-id"` | Primary correlation header name. |
 | `correlation_headers` | `None` | Additional fallback headers. |
 | `auto_trace_headers` | `True` | Also probe W3C trace headers. |

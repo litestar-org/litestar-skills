@@ -36,6 +36,7 @@ construct the application:
 import sys
 from pathlib import Path
 
+import pytest
 from litestar import Litestar
 from litestar.testing import TestClient
 from litestar_autowire import AutowireConfig, AutowirePlugin
