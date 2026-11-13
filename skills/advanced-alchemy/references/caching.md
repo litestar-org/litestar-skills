@@ -147,8 +147,9 @@ Concurrent cache misses for the same key are deduplicated automatically via sing
 ### Cache Key Structure
 
 - Entity: `{prefix}{model_name}:get:{entity_id}`
-- List: `{prefix}{model_name}:v{version}:list:{query_hash}`
 - With bind groups: `{prefix}{model_name}:{bind_group}:get:{entity_id}`
+- List / list+count: `{prefix}{model_name}:{method}:{sha256_digest}` (where `method` is `get_many` or `get_many_and_count`, and the SHA-256 digest hashes the canonicalized payload including the model's `version` token, filters, kwargs, `order_by`, `execution_options`, and `uniquify`)
+- Model version token: `{prefix}{model_name}:version`
 
 ### Low-Level CacheManager API
 
@@ -265,6 +266,10 @@ This means code using the cache manager works identically with or without a real
 For backends not supported by dogpile (e.g., a custom in-house cache), provide a `region_factory`:
 
 ```python
+from advanced_alchemy.cache import CacheConfig
+from advanced_alchemy.cache.manager import SyncCacheRegionProtocol
+
+
 def my_region_factory(config: CacheConfig) -> SyncCacheRegionProtocol:
     return MyCustomRegion(ttl=config.expiration_time)
 

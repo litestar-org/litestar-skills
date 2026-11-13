@@ -29,7 +29,7 @@ For JS-side testing (Vitest, Testing Library, Playwright), use the upstream Vite
 - One assertion concern per test
 - Async Litestar tests use `@pytest.mark.anyio` by default; do not mix AnyIO and `pytest-asyncio` auto modes.
 - Prefer `AsyncTestClient` for new code; `TestClient` only for legacy / sync-only flows.
-- Always enter test clients as context managers (`async with AsyncTestClient(...)` / `with TestClient(...)`) — implicit lifespan startup without a context manager emits `DeprecationWarning` and is removed in Litestar 3.0.
+- Always enter test clients as context managers (`async with AsyncTestClient(...)` / `with TestClient(...)`) — `LifeSpanHandler` only runs inside `__aenter__` / `__enter__`, so without a context manager `on_startup`, `on_shutdown`, and `lifespan` hooks never execute.
 
 ## Quick Reference
 
@@ -138,7 +138,7 @@ async def async_client(app: Litestar) -> AsyncGenerator[AsyncTestClient[Litestar
         yield client
 ```
 
-`async with AsyncTestClient(...)` enters `LifeSpanHandler`, firing `on_startup` / `on_shutdown` hooks and plugin `lifespan` context managers (Vite, SAQ, SQLAlchemy, Channels, etc.). Without the context manager, implicit startup emits a `DeprecationWarning` and shutdown hooks never run.
+`async with AsyncTestClient(...)` enters `LifeSpanHandler`, firing `on_startup` / `on_shutdown` hooks and plugin `lifespan` context managers (Vite, SAQ, SQLAlchemy, Channels, etc.). Without the context manager, `LifeSpanHandler` is never entered and startup/shutdown hooks never run.
 
 ### Mocking Guards & Overriding DI Dependencies (Match Your Stack)
 
@@ -387,7 +387,7 @@ Build a fresh app with fake identity providers, use `RequestFactory` to unit-tes
 ## Guardrails
 
 - **Use `@pytest.mark.anyio` for new Litestar async tests** — keep `pytest-asyncio` only when a project already uses it explicitly, and never mix auto modes.
-- **Always enter `AsyncTestClient` / `TestClient` as a context manager** — without `async with` / `with`, plugin lifespans (Vite, SAQ, SQLAlchemy) do not run cleanly and Litestar emits a `DeprecationWarning` for implicit startup (removed in 3.0).
+- **Always enter `AsyncTestClient` / `TestClient` as a context manager** — without `async with` / `with`, `LifeSpanHandler` never enters and plugin lifespans (Vite, SAQ, SQLAlchemy) do not run.
 - **Prefer `AsyncTestClient` over `TestClient`** for new tests — the async client matches Litestar's runtime model.
 - **Pass `session_config` to the client when using `get_session_data` / `set_session_data`** — omitting `session_config` raises `ImproperlyConfiguredException`.
 - **Await `websocket_connect` on `AsyncTestClient`, then enter `WebSocketTestSession` with sync `with`** — `with await async_client.websocket_connect("/ws") as ws:`; `WebSocketTestSession` methods (`send_json`, `receive_json`, etc.) are synchronous.

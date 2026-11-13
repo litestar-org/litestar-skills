@@ -216,7 +216,7 @@ LITESTAR_APP=app:app litestar queues run-maintenance --json
 
 ## Observability
 
-Managed transports report `litestar_queues.execution`, `litestar_queues.execution.delivery`, and `litestar_queues.execution.repair` metrics with a fixed outcome vocabulary. Task ids, delivery names, and API error text never reach a metric, span, or event.
+Managed transports report `litestar_queues.execution.dispatch`, `litestar_queues.execution.delivery`, `litestar_queues.execution.repair`, `litestar_queues.execution.cancel`, and `litestar_queues.execution.reconcile` metrics with a fixed outcome vocabulary. Task ids, delivery names, and API error text never reach a metric, span, or event.
 
 ## Custom Backends
 

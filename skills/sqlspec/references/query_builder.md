@@ -208,7 +208,7 @@ create_users = (
 
 ## Window Functions, Column Ordering & Expressions
 
-SQLSpec provides fluent window function helpers and column expression builders (`sql.column("col")` / `sql.col`):
+SQLSpec provides fluent window function helpers and column expression builders (`sql.column("col")`):
 
 ```python
 query = (

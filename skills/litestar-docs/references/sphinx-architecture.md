@@ -7,30 +7,30 @@ Canonical configuration, theme integration, extensions, and guardrails for Sphin
 ```toml
 [dependency-groups]
 doc = [
-  "sphinx>=8.1.0",
-  "shibuya>=2025.1.0",
-  "sphinx-design>=0.6.1",
+  "sphinx>=9.2.0",
+  "shibuya>=2026.7.12",
+  "sphinx-design>=0.7.0",
   "sphinx-copybutton>=0.5.2",
-  "sphinx-click>=6.0.0",
-  "sphinxcontrib-mermaid>=1.0.0",
-  "auto-pytabs>=0.5.0",
-  "myst-parser>=4.0.0",
+  "sphinx-click>=6.2.0",
+  "sphinxcontrib-mermaid>=2.1.1",
+  "auto-pytabs[sphinx]>=0.5.0",
+  "myst-parser>=5.2.0",
 ]
 ```
 
-When using Litestar's branded theme package, replace direct `shibuya` with `litestar-sphinx-theme`:
+When using Litestar's branded theme package (which extends `pydata-sphinx-theme` and is distributed via GitHub rather than PyPI), replace `shibuya` with a Git dependency:
 
 ```toml
 [dependency-groups]
 doc = [
-  "sphinx>=8.1.0",
-  "litestar-sphinx-theme>=3.0.0",
-  "sphinx-design>=0.6.1",
+  "sphinx>=9.2.0",
+  "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git",
+  "sphinx-design>=0.7.0",
   "sphinx-copybutton>=0.5.2",
-  "sphinx-click>=6.0.0",
-  "sphinxcontrib-mermaid>=1.0.0",
-  "auto-pytabs>=0.5.0",
-  "myst-parser>=4.0.0",
+  "sphinx-click>=6.2.0",
+  "sphinxcontrib-mermaid>=2.1.1",
+  "auto-pytabs[sphinx]>=0.5.0",
+  "myst-parser>=5.2.0",
 ]
 ```
 
@@ -65,7 +65,7 @@ extensions = [
     "sphinx_copybutton",
     "sphinx_click",
     "sphinxcontrib.mermaid",
-    "auto_pytabs",
+    "auto_pytabs.sphinx_ext",
     "myst_parser",
 ]
 
@@ -75,7 +75,7 @@ source_suffix = {
     ".md": "markdown",
 }
 
-# Theme Configuration
+# Theme Configuration (Shibuya options shown; pydata-sphinx-theme / litestar-sphinx-theme use different html_theme_options)
 html_theme = "shibuya"
 html_title = "SQLSpec Documentation"
 html_static_path = ["_static"]
@@ -96,7 +96,6 @@ html_theme_options = {
 autodoc_default_options = {
     "members": True,
     "show-inheritance": True,
-    "special-members": False,
 }
 autodoc_class_signature = "separated"
 autodoc_typehints = "description"
@@ -173,7 +172,7 @@ Sphinx `autoclass` introspects `TypedDict` and `msgspec.Struct` classes via runt
 
 ## Theme CSS Invariants (`docs/_static/custom.css`)
 
-Maintain readability and scannability by applying these CSS invariants to `shibuya` / `litestar-sphinx-theme`:
+Maintain readability and scannability by applying these CSS invariants to **Shibuya** (for `litestar-sphinx-theme` / `pydata-sphinx-theme`, apply the corresponding rules to `.bd-sidebar-secondary`, `.bd-article-container`, and `[data-theme="dark"]`):
 
 ```css
 /* 1. Never hide the secondary "On this page" TOC */

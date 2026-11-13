@@ -64,3 +64,18 @@ def test_strict_missing_package_turns_warning_into_violation(monkeypatch: Any) -
     assert result == ("missing", "definitely_missing_package")
     strict_result = mod.classify_import(ref, {}, strict_missing=True)
     assert strict_result[0] == "violation"
+
+
+def test_prerelease_pragma_exempts_block_from_import_check(tmp_path: Path) -> None:
+    """Verify # pragma: prerelease-example skips import checks like legacy-example."""
+    mod = _load_module()
+    mod.SKILLS_DIR = tmp_path / "skills"
+    mod.COMMANDS_DIR = tmp_path / "commands"
+    (mod.SKILLS_DIR / "demo").mkdir(parents=True)
+    (mod.COMMANDS_DIR).mkdir(parents=True)
+    skill = mod.SKILLS_DIR / "demo" / "SKILL.md"
+    skill.write_text(
+        "```python  # pragma: prerelease-example\nfrom litestar import NonExistentPreviewSymbol\n```\n",
+        encoding="utf-8",
+    )
+    assert mod.main([]) == 0

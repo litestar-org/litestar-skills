@@ -144,7 +144,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from litestar.openapi.spec import OpenAPIFormat, OpenAPIType, Schema
+from litestar.openapi.spec import OpenAPIType, Schema
 from litestar.plugins import OpenAPISchemaPlugin, SerializationPlugin
 
 if TYPE_CHECKING:
@@ -166,7 +166,6 @@ class CustomMoneySchemaPlugin(OpenAPISchemaPlugin):
     ) -> Schema:
         return Schema(
             type=OpenAPIType.STRING,
-            format=OpenAPIFormat.DECIMAL,
             examples=["19.99 USD"],
         )
 

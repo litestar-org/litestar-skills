@@ -53,8 +53,8 @@ Dual-engine documentation architecture for `litestar-org` and ecosystem reposito
 
 Inspect the repository root for `docs/conf.py` (Sphinx) or `zensical.toml` (Zensical):
 
-- **Sphinx Track**: Configure `[dependency-groups] doc` with `sphinx`, `shibuya` (or `litestar-sphinx-theme`), `sphinx-design`, `sphinx-copybutton`, `sphinx-click`, `sphinxcontrib-mermaid`, `auto-pytabs`, and `myst-parser`. Configure `docs/conf.py` with `sphinx.ext.autodoc`, `sphinx.ext.napoleon`, and `sphinx.ext.intersphinx`. See [`references/sphinx-architecture.md`](references/sphinx-architecture.md).
-- **Zensical Track**: Configure `[dependency-groups] doc` with `zensical>=0.0.71`, `mkdocstrings-python>=2.0.1`, `pymdown-extensions>=10.16`, and `ruff>=0.15.0`. Configure `zensical.toml` with `use_directory_urls = true`, `navigation.tabs`, `toc.follow`, `pymdownx.snippets` (`check_paths = true`), and `enable_inventory = true`. See [`references/zensical-architecture.md`](references/zensical-architecture.md).
+- **Sphinx Track**: Configure `[dependency-groups] doc` with `sphinx`, `shibuya` (or `litestar-sphinx-theme` via Git, which extends `pydata-sphinx-theme`), `sphinx-design`, `sphinx-copybutton`, `sphinx-click`, `sphinxcontrib-mermaid`, `auto-pytabs[sphinx]`, and `myst-parser`. Configure `docs/conf.py` with `sphinx.ext.autodoc`, `sphinx.ext.napoleon`, and `sphinx.ext.intersphinx`. See [`references/sphinx-architecture.md`](references/sphinx-architecture.md).
+- **Zensical Track**: Configure `[dependency-groups] doc` with `zensical>=0.1.1`, `mkdocstrings-python>=2.0.10`, `pymdown-extensions>=13.0`, and `ruff>=0.17.5`. Configure `zensical.toml` with `use_directory_urls = true`, `navigation.tabs`, `toc.follow`, `pymdownx.snippets` (`check_paths = true`), and `enable_inventory = true`. See [`references/zensical-architecture.md`](references/zensical-architecture.md).
 
 ### Step 2: Enforce Docstring and `TypedDict` Hygiene
 
@@ -71,7 +71,7 @@ Group API directives (`.. autoclass::` in Sphinx or `:::` in Zensical) under `2â
 ### Step 5: Run Build and Quality Gates
 
 - **Sphinx**: Run `uv run sphinx-build -b html -W --keep-going docs site` and verify output artifacts.
-- **Zensical**: Run `zensical build --clean`, `tools/docs/postbuild.py`, and `tools/docs/verify_docs_artifacts.py`.
+- **Zensical**: Run `zensical build --clean --strict`, `tools/docs/postbuild.py`, and `tools/docs/verify_docs_artifacts.py`.
 
 </workflow>
 
@@ -79,7 +79,7 @@ Group API directives (`.. autoclass::` in Sphinx or `:::` in Zensical) under `2â
 
 ## Guardrails
 
-- **Never hide `.sy-rside` (Sphinx) or `.md-sidebar--secondary` (Zensical) in custom CSS.** Reason: Hiding the right-hand `"On this page"` outline traps readers on multi-section guides and API pages.
+- **Never hide `.sy-rside` (Shibuya), `.bd-sidebar-secondary` (`pydata-sphinx-theme` / `litestar-sphinx-theme`), or `.md-sidebar--secondary` (Zensical) in custom CSS.** Reason: Hiding the right-hand `"On this page"` outline traps readers on multi-section guides and API pages.
 - **Never load `numpydoc` or `sphinx_autodoc_typehints` alongside `sphinx.ext.napoleon` in Sphinx.** Reason: Combining them double-parses docstrings and duplicates union types across signatures and parameter lists.
 - **Never place `:no-index:` on primary `.. automodule::` directives in Sphinx.** Reason: `:no-index:` strips HTML `id=""` anchors from public classes and breaks `:class:` cross-references across the site.
 - **Never enable inherited members on leaf adapter or plugin classes.** Reason: Repeating 40+ base methods across adapter pages inflates HTML past `400 KB` and duplicates search results.
@@ -95,7 +95,7 @@ Group API directives (`.. autoclass::` in Sphinx or `:::` in Zensical) under `2â
 ## Validation Checkpoint
 
 - [ ] `uv run python -m tools.docs.scan_public_docstrings --check-leaks --check-overloads --check-typeddicts <pkg>` exits `0`
-- [ ] Documentation build (`sphinx-build -b html -W --keep-going docs site` or `zensical build --clean`) exits `0` with zero warnings
+- [ ] Documentation build (`sphinx-build -b html -W --keep-going docs site` or `zensical build --clean --strict`) exits `0` with zero warnings
 - [ ] `objects.inv` exists in the built output directory and is non-empty
 - [ ] Every built Reference HTML file is `<= 120,000` bytes with `<= 14` `"On this page"` TOC items
 - [ ] `uv run pytest tests/unit/docs/ -q` passes with zero inline comments in `docs/examples/`

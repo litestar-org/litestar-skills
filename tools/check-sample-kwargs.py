@@ -14,8 +14,9 @@ release: the class stays, one keyword changes.
 
 Exemptions:
 
-- ``# pragma: legacy-example`` on a block's opening fence (or any line inside
-  it) skips that block, matching ``check-upstream-imports.py``.
+- ``# pragma: legacy-example`` or ``# pragma: prerelease-example`` on a block's
+  opening fence (or any line inside it) skips that block, matching
+  ``check-upstream-imports.py``.
 - A callable accepting ``**kwargs`` is treated as permissive and skipped.
 - A symbol that is not a class or function (a re-exported instance, a typing
   alias) is skipped, since it has no meaningful signature to check.
@@ -62,6 +63,8 @@ UPSTREAM_ROOTS: Final = frozenset(
 
 PYTHON_FENCE: Final = re.compile(r"```python(?P<info>[^\n]*)\n(?P<code>.*?)```", re.DOTALL)
 LEGACY_PRAGMA: Final = "pragma: legacy-example"
+PRERELEASE_PRAGMA: Final = "pragma: prerelease-example"
+EXEMPT_PRAGMAS: Final = (LEGACY_PRAGMA, PRERELEASE_PRAGMA)
 
 
 def _is_upstream(module: str) -> bool:
@@ -169,8 +172,9 @@ def main() -> int:
     for path in _iter_markdown():
         text = path.read_text(encoding="utf-8")
         for match in PYTHON_FENCE.finditer(text):
+            info = match.group("info")
             code = match.group("code")
-            if LEGACY_PRAGMA in match.group("info") or LEGACY_PRAGMA in code:
+            if any(pragma in info or pragma in code for pragma in EXEMPT_PRAGMAS):
                 continue
             blocks += 1
             violations.extend(_check_block(code, path))

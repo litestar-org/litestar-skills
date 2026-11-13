@@ -74,7 +74,7 @@ See [commit-modes.md](commit-modes.md) for the full decision table and the `extr
 
 The plugin also conditionally adds two cross-cutting middlewares:
 
-- `CorrelationMiddleware` — only when any config sets `enable_correlation_middleware=True`. Extracts a correlation ID from `x-request-id` (or configured fallback headers), propagates it into `CorrelationContext` (for driver-layer logs), stashes it on `request.state.correlation_id`, and echoes it back via `X-Correlation-ID` on the response.
+- `CorrelationMiddleware` — on by default (`enable_correlation_middleware=True`). Extracts a correlation ID from `x-request-id` (or configured fallback headers), propagates it into `CorrelationContext` (for driver-layer logs), stashes it on `request.state.correlation_id`, and echoes it back via `X-Correlation-ID` on the response.
 - `SQLCommenterMiddleware` — on by default when the adapter has `statement_config.enable_sqlcommenter=True`. Annotates generated SQL with the route path, endpoint name, and framework tag so slow queries in the database's own logs can be traced back to the handler that issued them.
 
 Both middlewares are additive and tap into existing driver-layer machinery — they don't change how you write handlers.
@@ -146,7 +146,7 @@ The per-config keys the plugin reads from `extension_config["starlette"]`:
 | `extra_commit_statuses` | `None` | Status codes that should commit even outside the mode's default window. |
 | `extra_rollback_statuses` | `None` | Status codes that should roll back even on success. |
 | `disable_di` | `False` | Skip middleware registration for this config (advanced — you manage sessions yourself). |
-| `enable_correlation_middleware` | `False` | Turn on correlation-ID extraction + propagation. |
+| `enable_correlation_middleware` | `True` | Enable correlation-ID extraction + propagation. |
 | `correlation_header` | `"x-request-id"` | Primary header the correlation extractor reads. |
 | `correlation_headers` | `None` | Additional headers to probe as fallbacks. |
 | `auto_trace_headers` | `True` | If true, the extractor also probes standard W3C tracing headers. |

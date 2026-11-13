@@ -60,7 +60,7 @@ Per-request wiring uses the same two middleware variants:
 
 See [commit-modes.md](commit-modes.md) for the status-code decision table.
 
-The plugin also conditionally adds `CorrelationMiddleware` (if any config sets `enable_correlation_middleware=True`) and `SQLCommenterMiddleware` (if the adapter has `statement_config.enable_sqlcommenter=True`). Both are additive — they thread correlation IDs and route metadata into driver logs without touching handler signatures. Details are in [observability.md](observability.md).
+The plugin also adds `CorrelationMiddleware` (enabled by default unless `enable_correlation_middleware=False`) and `SQLCommenterMiddleware` (if `enable_sqlcommenter_middleware=True` and the adapter has `statement_config.enable_sqlcommenter=True`). Both are additive — they thread correlation IDs and route metadata into driver logs without touching handler signatures. Details are in [observability.md](observability.md).
 
 A note on middleware ordering: FastAPI's `app.add_middleware` prepends middleware (the most recently added runs outermost). Because the SQLSpec plugin adds its transaction middleware during `init_app`, any `app.add_middleware(...)` calls you make *after* `SQLSpecPlugin(sqlspec, app)` will run *before* the transaction middleware — meaning those middlewares do not yet have a DB connection on `request.state`. If you need to read a connection inside custom middleware, register it before constructing the plugin.
 
@@ -99,12 +99,12 @@ The keys the plugin reads from `extension_config["fastapi"]`:
 | `extra_commit_statuses` | `None` | Extra status codes that should commit (e.g. `{418}` for a custom success). |
 | `extra_rollback_statuses` | `None` | Extra status codes that should roll back. |
 | `disable_di` | `False` | Skip middleware for this config entirely. |
-| `enable_correlation_middleware` | `False` | Turn on the correlation ID extractor. |
+| `enable_correlation_middleware` | `True` | Enable the correlation ID extractor middleware. |
 | `correlation_header` | `"x-request-id"` | Primary correlation header. |
 | `correlation_headers` | `None` | Additional correlation header fallbacks. |
 | `auto_trace_headers` | `True` | Also probe W3C trace headers as fallbacks. |
 | `enable_sqlcommenter_middleware` | `True` | Requires `statement_config.enable_sqlcommenter=True` on the adapter. |
-| `sqlcommenter_framework` | `"starlette"` | Framework tag in generated SQL comments. Override to `"fastapi"` if you want it in logs. |
+| `sqlcommenter_framework` | `"fastapi"` | Framework tag in generated SQL comments. |
 
 For multi-database applications, give each config a distinct `connection_key` / `session_key` / `pool_key`. The plugin raises `ImproperConfigurationError` on duplicates at `init_app`. The full per-bind model is in [multi-database.md](multi-database.md).
 
@@ -266,7 +266,7 @@ What the filter keys advertise as query parameters:
 | `null_fields="notes"` | `?notesIsNull=true` | `NullFilter(field_name="notes")` |
 | `not_null_fields="notes"` | `?notesIsNotNull=true` | `NotNullFilter(field_name="notes")` |
 | `boolean_fields="is_active"` | `?isActive=<bool>` | `BooleanFilter(field_name="is_active", value=...)` |
-| `choice_fields=[ChoiceField("tier", ("free", "pro"))]` | `?tier=<choice>` | `ChoicesFilter(field_name="tier", choices=..., value=...)` |
+| `choice_fields=[ChoiceField("tier", ("free", "pro"))]` (`ChoiceField` from `sqlspec.extensions.fastapi.providers`) | `?tier=<choice>` | `ChoicesFilter(field_name="tier", values=...)` |
 
 The returned callable is memoized on the hashed `FilterConfig`, so calling `db_plugin.provide_filters(same_config)` twice reuses the same dynamically-generated function. Build the filter dependency at module scope and reference the variable in route signatures — don't reconstruct it inside `Annotated[...]` because that regenerates the signature every request.
 

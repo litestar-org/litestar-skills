@@ -1,33 +1,42 @@
 ---
 name: pytest-databases
-description: "Use when working with pytest_databases, Docker DB fixtures, PostgreSQL/pgvector/ParadeDB, MySQL/MariaDB, Oracle/SQL Server, CockroachDB, MongoDB, Redis/Valkey, BigQuery/Spanner, MinIO, or RustFS. Not for mocked DBs."
+description: "Use when working with pytest_databases (v0.20.0b3+), Docker/Podman or embedded DB fixtures, PostgreSQL/pgvector/ParadeDB/AlloyDB Omni 18, MySQL/MariaDB/Dolt/Doltgres, Oracle 26ai/ADB-Free/SQL Server/Db2/Sybase/SQL Anywhere/Teradata, CockroachDB/YugabyteDB, MongoDB, Redis/Dragonfly/KeyDB/Valkey, Elasticsearch, BigQuery/Spanner/PubSub, GizmoSQL/Hardcharger/Snowflake, MinIO/RustFS/Azure Blob, Redpanda/RabbitMQ, LocalStack, Floci, or Cloudflare Miniflare. Not for mocked DBs."
 ---
 
 # pytest-databases
 
-`pytest-databases` provides session-scoped, container-backed service fixtures.
-This guidance targets the immutable `v0.19.0` tag. Load only the plugin modules
-the test suite uses. Consume a ready client fixture where one exists; otherwise
-connect with the client already used by the project.
+`pytest-databases` (`>=0.20.0b3` / `0.20.0-beta.3`) provides session-scoped,
+100% clientless container and embedded database/broker/emulator service
+fixtures across 32 plugin modules (31 `pytest_databases.docker.*` modules and
+`pytest_databases.embedded.postgres`). Load only the plugin modules the test
+suite uses and connect with the project's existing driver using the
+`*_service` fixture's `host`, `port`, and credentials (`v0.19.0` `*_connection`
+and `*_client` fixtures remain available as lazy-import `DeprecationWarning`
+shims).
 
 ## Code Style Rules
 
-- Keep database I/O consistent with the project driver. The package's
-  PostgreSQL connection fixtures use synchronous `psycopg`; do not `await`
-  their methods.
-- Type service fixtures with the service class from the same plugin module.
-- Prefer ready client fixtures when provided. For service-only plugins, build
-  the project's existing client from the service object's host, port, and
-  credentials.
-- Keep plugin declarations in the nearest `conftest.py`; do not load every
-  backend globally.
+- Prefer `*_service` fixtures and construct the project's native driver
+  (`asyncpg`, `psycopg`, `sqlspec`, etc.) from the service coordinates. Every
+  `pytest_databases.docker.*` and `pytest_databases.embedded.*` module in
+  `v0.20.0b3` starts and probes readiness with zero third-party database client
+  imports.
+- Type service fixtures with the service class exported from the same plugin
+  module (for example `PostgresService`, `RedisService`, `MinioService`).
+- Keep `pytest_plugins` declarations in the root `conftest.py` or a dedicated
+  fixture plugin module; do not load unused backends globally.
+- When overriding a fixture defined inside a `pytest_databases.docker.<mod>`
+  plugin, either register `"pytest_databases.docker.<mod>"` before the local
+  fixture module in `conftest.py` or give the project wrapper fixture a
+  distinct name (such as `custom_alloydb_omni_service`) so pytest's plugin
+  load order never shadows the override.
 
 ## Quick Reference
 
 ### Install and enable
 
 ```bash
-pip install "pytest-databases[postgres]"
+uv add --group test "pytest-databases>=0.20.0b3"
 ```
 
 In `conftest.py`:
@@ -36,42 +45,45 @@ In `conftest.py`:
 pytest_plugins = ["pytest_databases.docker.postgres"]
 ```
 
-The core `pytest_databases` pytest entry point supplies `docker_client` and
-`docker_service`. Each database module supplies its own fixtures.
+The core `pytest_databases` entry point registers:
+
+- `container_runtime` (`ContainerRuntimeConfig` resolved across Docker and Podman)
+- `container_client` and `docker_client` (`DockerClient`)
+- `container_service` and `docker_service` (`ContainerService` / `DockerService`)
+- CLI options `--container-runtime={auto,docker,podman}`, `--keep-containers`,
+  and `--postgres-backend={docker,embedded}`
 
 ### Choose the fixture shape
 
 | Need | Use |
 | --- | --- |
-| A ready `psycopg` connection | `postgres_connection`, a versioned PostgreSQL-family connection, or `cockroachdb_connection` |
-| A ready vendor client | `bigquery_client`, `spanner_connection`, `mongodb_connection`, an Oracle connection, a GizmoSQL connection, or an Azure Blob container client |
-| Service coordinates for the project's own client | The backend's `*_service` fixture |
-| A specific PostgreSQL-family release | Matching `*_NN_service`, `*_NN_connection`, and `*_NN_port` fixtures |
-| Parallel worker isolation | The backend's exact `*_xdist_isolation_level` fixture from [xdist.md](references/xdist.md) |
+| Service coordinates for the project's own client (recommended) | The backend's `*_service` fixture (`postgres_service`, `alloydb_omni_service`, `redis_service`, etc.) |
+| A specific PostgreSQL-family release | `postgres_11_service`–`postgres_18_service`, `pgvector_13_service`–`pgvector_18_service`, `paradedb_15_service`–`paradedb_18_service`, `alloydb_omni_15_service`–`alloydb_omni_18_service` |
+| Switchable Docker vs embedded PostgreSQL | `postgres_any_service` (controlled by `--postgres-backend`, `postgres_backend` ini, or `PYTEST_DATABASES_POSTGRES_BACKEND`) |
+| Host-process PostgreSQL without Docker/Podman | `pytest_databases.embedded.postgres` (`embedded_postgres_service`, `EmbeddedPostgresService`) |
+| Parallel worker isolation (`database`, `server`, or PostgreSQL `template`) | The backend's `xdist_*_isolation_level` fixture from [xdist.md](references/xdist.md) |
+| Custom AlloyDB Omni GUCs or `docker_service.run(...)` flags | Override `alloydb_omni_command` (e.g. `build_alloydb_omni_command(extra_gucs=...)`) or define a distinct session fixture calling `docker_service.run(...)` |
 
-See [reference.md](references/reference.md) for the exact plugin, service, and
-ready-client matrix. Do not infer a `*_connection` fixture from a
-`*_service` fixture's name.
+See [reference.md](references/reference.md) for the complete `v0.20.0b3`
+module, service class, and fixture matrix.
 
 <workflow>
 
 ## Workflow
 
-1. Install the extra matching the selected backend. Backends with no bundled
-   Python client, such as MySQL, MariaDB, SQL Server, and YugabyteDB, expose
-   service fixtures and expect the project to supply its own driver.
-2. Add only the required `pytest_databases.docker.<module>` entries to
-   `pytest_plugins`.
-3. Prefer a ready client fixture listed in
-   [reference.md](references/reference.md). Otherwise construct the project's
-   existing client from the typed service fixture.
-4. Override session-scoped configuration fixtures in `conftest.py`. Use
-   environment variables only where 0.19.0 explicitly reads them; see
+1. Install `"pytest-databases>=0.20.0b3"` in the `test` dependency group (no
+   driver extras are required for `*_service` fixtures).
+2. Add only the required `pytest_databases.docker.<module>` (or
+   `pytest_databases.embedded.postgres`) entries to `pytest_plugins`.
+3. Consume the typed `*_service` fixture and pass its `host`, `port`, `user`,
+   `password`, and `database` to the project's database config or client.
+4. Override session-scoped configuration fixtures (`*_image`, `*_port`,
+   `*_password`, `postgres_template_options`) in `conftest.py`; see
    [config.md](references/config.md).
-5. For `pytest-xdist`, keep the default `"database"` isolation when the service
-   supports logical namespaces. Override the backend's exact isolation fixture
-   to `"server"` when each worker needs its own container.
-6. Run the focused integration tests against a Docker-compatible daemon.
+5. For `pytest-xdist`, keep the default isolation level (usually `"database"`),
+   use `"template"` on PostgreSQL/AlloyDB Omni when cloning a migrated template
+   database across workers, or override to `"server"` when each worker requires
+   an isolated container.
 
 </workflow>
 
@@ -79,43 +91,38 @@ ready-client matrix. Do not infer a `*_connection` fixture from a
 
 ## Guardrails
 
-- **Connection fixtures vs service fixtures**: Ready-client fixtures
-  (`*_connection`, `*_client`) exist for PostgreSQL-family, CockroachDB,
-  Oracle, GizmoSQL, BigQuery, Spanner, MongoDB, and Azure Blob. Service-only
-  backends (MySQL, MariaDB, SQL Server, YugabyteDB, Dolt, Redis, Dragonfly,
-  KeyDB, Valkey, Elasticsearch, MinIO, and RustFS) export `*_service` fixtures
-  but no ready client fixture. Note that `redis`, `valkey`, and `elastic_search`
-  still import their Python client package at module load time for readiness
-  checks, whereas `mysql`, `mariadb`, `mssql`, `yugabyte`, `dolt`, `minio`, and
-  `rustfs` require no Python client dependency to start the service.
-- **Avoid broken alias fixtures in `v0.19.0`**:
-  `elasticsearch_service` requests an undefined `elasticsearch8_service` fixture
-  (missing underscore) — request `elasticsearch_8_service` or
-  `elasticsearch_7_service` directly. `oracle_startup_connection` requests an
-  undefined `oracle_23ai_startup_connection` fixture — request
-  `oracle_23ai_connection` or `oracle_18c_connection` instead.
-- **Use exact `pytest_databases.docker.*` module names.** AlloyDB Omni,
-  pgvector, and ParadeDB live in `pytest_databases.docker.postgres` (not
-  `alloydb`); Azurite / Azure Blob lives in `pytest_databases.docker.azure_blob`
-  (not `azurite`, with `AzureBlobService`, `azure_blob_container_client`, and
-  `azure_blob_async_container_client`); Elasticsearch lives in
-  `pytest_databases.docker.elastic_search` (not `elasticsearch` or
-  `ElasticSearch`); Dragonfly and KeyDB live in `pytest_databases.docker.redis`.
-- **Keep synchronous fixtures synchronous.** `postgres_connection` is a
-  `psycopg.Connection`; call `execute()` directly.
-- **Do not assume every backend uses the same xdist fixture name.** Azure Blob
-  uses `azure_blob_xdist_isolation_level`; most others use
-  `xdist_<backend>_isolation_level`.
-- **Do not pass custom `pytest` CLI flags.** Version `0.19.0` registers no
-  `pytest_addoption` flags; configure services via session-scoped fixture
-  overrides or the environment variables in [config.md](references/config.md).
-- **Do not hand-roll container teardown.** The package owns labelled container
-  lifecycle through `docker_service`.
-- **Do not pin a host port without a reason.** Dynamic ports avoid conflicts.
-  Use the 0.19.0 PostgreSQL-family `*_port` fixture or matching environment
-  variable only when a rootless/container-network constraint requires it
-  (`redis_port`, `dragonfly_port`, `keydb_port`, and `valkey_port` only read
-  `*_service.port`).
+- **Clientless-first in `v0.20.0b3`**: All 32 plugin modules start and verify
+  readiness using stdlib wire probes, HTTP checks, or in-container CLI tools.
+  Legacy `v0.19.0` `*_connection` and `*_client` fixtures emit
+  `DeprecationWarning` on use and lazy-import their driver inside the fixture.
+- **AlloyDB Omni 18 defaults & custom GUCs**: `alloydb_omni_service`,
+  `alloydb_omni_17_service`, and `alloydb_omni_18_service` automatically pass
+  `alloydb_omni_command` (`build_alloydb_omni_command(include_textsearch=True)`),
+  which preloads `pg_textsearch`, sets `shm_size="512m"`, and executes
+  `ALLOYDB_OMNI_INIT_SQL` (`vector`, `alloydb_scann`, `google_ml_integration`,
+  `alloydb_ai_nl`, `pg_textsearch`). AlloyDB Omni 15/16 use
+  `alloydb_omni_legacy_command` without `pg_textsearch`. Override
+  `alloydb_omni_command` (or `ALLOYDB_OMNI_COMMAND`) when adding custom GUCs.
+- **Use exact `pytest_databases.docker.*` module names**: AlloyDB Omni,
+  pgvector, and ParadeDB live in `pytest_databases.docker.postgres`; Dragonfly
+  and KeyDB live in `pytest_databases.docker.redis`; Oracle 26ai (`oracle_26ai_service`,
+  with `oracle_23ai_service` kept as a deprecated alias), 18c, and Autonomous
+  Database (`oracle_adb_service`) live in `pytest_databases.docker.oracle`;
+  Azurite lives in `pytest_databases.docker.azure_blob`; Elasticsearch 7/8/9
+  lives in `pytest_databases.docker.elastic_search`; Floci AWS/GCP/Azure/OCI
+  live in `pytest_databases.docker.floci`; Hardcharger lives in
+  `pytest_databases.docker.hardcharger`; Teradata lives in
+  `pytest_databases.docker.teradata`.
+- **Avoid plugin load-order fixture shadowing**: When a helper module declares
+  `pytest_plugins = ("pytest_databases.docker.postgres",)`, pytest loads the
+  child plugin *after* the helper module. Name custom wrapper fixtures
+  distinctly (for example `custom_alloydb_omni_service`) so the upstream
+  `alloydb_omni_service` does not overwrite them.
+- **Do not hand-roll container teardown**: `ContainerService` labels containers
+  with a deterministic digest of `session.config.rootpath` (plus optional
+  `PYTEST_DATABASES_NAMESPACE`) and sweeps stale containers from prior crashed
+  runs automatically unless `--keep-containers` or
+  `PYTEST_DATABASES_KEEP_CONTAINERS=1` is set.
 
 </guardrails>
 
@@ -123,40 +130,98 @@ ready-client matrix. Do not infer a `*_connection` fixture from a
 
 ## Validation Checkpoint
 
-- [ ] Installed version is `pytest-databases>=0.19.0`.
+- [ ] Installed version is `pytest-databases>=0.20.0b3`.
 - [ ] `pytest_plugins` names an existing module from
       [reference.md](references/reference.md).
-- [ ] Every requested fixture exists in that module's 0.19.0 fixture row.
-- [ ] Service-only backends use the project's own client rather than a
-      fabricated `*_connection` fixture.
-- [ ] PostgreSQL connection examples use synchronous `psycopg` calls.
-- [ ] Configuration uses an actual fixture or environment variable from
+- [ ] Service fixtures are typed with the matching `*Service` dataclass.
+- [ ] Custom `docker_service.run(...)` wrappers use a distinct fixture name so
+      child `pytest_plugins` do not shadow them.
+- [ ] Configuration overrides and CLI flags match
       [config.md](references/config.md).
-- [ ] Xdist overrides use the backend's exact isolation-fixture name.
-- [ ] Container-backed tests run against a Docker-compatible daemon.
+- [ ] Xdist overrides use the backend's exact isolation fixture name from
+      [xdist.md](references/xdist.md).
 
 </validation>
 
 <example>
 
-## Example: synchronous PostgreSQL connection
+## Example: Customizing AlloyDB Omni 18 via `docker_service.run(...)`
 
-```python
-import psycopg
+```python  # pragma: prerelease-example
+from collections.abc import Generator
+import pytest
+from pytest_databases import DockerService
+from pytest_databases.docker.postgres import (
+    PostgresService,
+    build_alloydb_omni_command,
+    create_worker_database,
+    exec_psql,
+)
+from pytest_databases.helpers import get_xdist_worker_num, tcp_port_open
+from pytest_databases.types import ServiceContainer
 
-pytest_plugins = ["pytest_databases.docker.postgres"]
+pytest_plugins = ("pytest_databases.docker.postgres",)
+
+CUSTOM_ALLOYDB_COMMAND = build_alloydb_omni_command(
+    extra_gucs={
+        "google_columnar_engine.enabled": "off",
+        "max_connections": "500",
+    }
+)
 
 
-def test_postgres_is_ready(
-    postgres_connection: psycopg.Connection,
-) -> None:
-    row = postgres_connection.execute("SELECT 1").fetchone()
+@pytest.fixture(scope="session")
+def custom_alloydb_omni_service(
+    docker_service: DockerService,
+    alloydb_omni_image: str,
+    postgres_host: str,
+    postgres_user: str,
+    postgres_password: str,
+    alloydb_omni_port: int | None,
+) -> Generator[PostgresService, None, None]:
+    def check(service_container: ServiceContainer) -> bool:
+        exit_code, output = exec_psql(
+            service_container.container,
+            user=postgres_user,
+            password=postgres_password,
+            database="postgres",
+            sql="SELECT 1",
+            tuples_only=True,
+        )
+        return (
+            exit_code == 0 and output.strip() == b"1" and tcp_port_open(service_container.host, service_container.port)
+        )
 
-    assert row == (1,)
+    worker_num = get_xdist_worker_num()
+    db_name = f"pytest_databases_{worker_num}" if worker_num is not None else "pytest_databases"
+    with docker_service.run(
+        image=alloydb_omni_image,
+        command=CUSTOM_ALLOYDB_COMMAND,
+        check=check,
+        container_host=postgres_host,
+        container_port=5432,
+        name="alloydb-omni",
+        env={"POSTGRES_PASSWORD": postgres_password},
+        shm_size="512m",
+        timeout=90,
+        pause=0.5,
+        host_port=alloydb_omni_port,
+    ) as service:
+        create_worker_database(
+            service.container,
+            user=postgres_user,
+            password=postgres_password,
+            db_name=db_name,
+        )
+        yield PostgresService(
+            host=service.host,
+            port=service.port,
+            container=service.container,
+            database=db_name,
+            user=postgres_user,
+            password=postgres_password,
+        )
 ```
-
-`postgres_connection` is a synchronous `psycopg.Connection`. Use an async
-driver only by constructing it separately from `postgres_service`.
 
 </example>
 
@@ -164,26 +229,25 @@ driver only by constructing it separately from `postgres_service`.
 
 ## References Index
 
-- [Supported database patterns](references/databases.md) — ready-client and
-  service-only examples.
-- [Complete fixture matrix](references/reference.md) — exact 0.19.0 modules,
-  classes, service fixtures, and client/provider fixtures.
-- [Xdist parallel testing](references/xdist.md) — supported isolation fixture
-  names and helper functions.
-- [Configuration](references/config.md) — fixture overrides and environment
-  variables implemented by 0.19.0.
-- [Troubleshooting](references/troubleshooting.md) — runtime, plugin, client,
-  and port failures.
-
+- [Supported database patterns](references/databases.md) — service-first,
+  AlloyDB Omni 18, embedded Postgres, and cloud/broker emulator examples.
+- [Complete fixture matrix](references/reference.md) — exact `v0.20.0b3`
+  modules, service classes, service fixtures, and helper fixtures.
+- [Xdist parallel testing](references/xdist.md) — `"database"`, `"server"`, and
+  PostgreSQL `"template"` isolation levels.
+- [Configuration](references/config.md) — CLI flags, environment variables,
+  runtime resolution, and fixture overrides.
+- [Troubleshooting](references/troubleshooting.md) — runtime, plugin load
+  order, 4Kn storage, and port failures.
 - [Litestar testing](../litestar-testing/SKILL.md) — integrate container-backed
   services with Litestar test clients and dependency overrides.
 
 ## Official References
 
-- <https://pypi.org/project/pytest-databases/0.19.0/>
-- <https://github.com/litestar-org/pytest-databases/tree/v0.19.0>
-- <https://github.com/litestar-org/pytest-databases/tree/v0.19.0/src/pytest_databases/docker>
-- <https://github.com/litestar-org/pytest-databases/tree/v0.19.0/tests>
+- <https://pypi.org/project/pytest-databases/0.20.0b3/>
+- <https://github.com/litestar-org/pytest-databases>
+- <https://github.com/litestar-org/pytest-databases/tree/main/src/pytest_databases/docker>
+- <https://github.com/litestar-org/pytest-databases/tree/main/src/pytest_databases/embedded>
 
 ## Shared Styleguide Baseline
 

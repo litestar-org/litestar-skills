@@ -258,7 +258,7 @@ try:
     msgspec.json.decode(b'{"price": -1.0}', type=Item)
 except msgspec.ValidationError as e:
     print(e)
-    # Expected `float` satisfying gt=0.0 - at `$.price`
+    # Expected `float` > 0.0 - at `$.price`
 ```
 
 Errors include the path to the offending field. Map them through the application's validation
@@ -288,5 +288,5 @@ NonEmptyStr = Annotated[str, Meta(min_length=1)]
 ShortStr = Annotated[str, Meta(min_length=1, max_length=255)]
 Slug = Annotated[str, Meta(pattern=r"^[a-z0-9-]+$", min_length=1, max_length=64)]
 
-NonEmptyList = Annotated[list, Meta(min_length=1)]
+NonEmptyList = Annotated[list[object], Meta(min_length=1)]
 ```

@@ -22,7 +22,7 @@ export LITESTAR_APP="app.main:create_app"
 litestar --app app.main:create_app --app-dir src info
 ```
 
-If `python-dotenv` is installed, the Litestar CLI automatically loads `.env` from the current working directory before resolving `LITESTAR_*` variables. Set `LITESTAR_WARN_IMPLICIT_ENV_HEADERS=0` to silence the implicit `.env` loading notice.
+If `python-dotenv` is installed, the Litestar CLI automatically loads `.env` from the current working directory before resolving `LITESTAR_*` variables.
 
 ## Built-in CLI Environment Variables
 
@@ -34,14 +34,14 @@ If `python-dotenv` is installed, the Litestar CLI automatically loads `.env` fro
 | `LITESTAR_PORT` | `--port` (`-p`) | Bind port for `litestar run` (default `8000`). |
 | `LITESTAR_RELOAD` | `--reload` (`-r`) | Enable file-watcher auto-reload during development. |
 | `LITESTAR_RELOAD_DIRS` | `--reload-dir` (`-R`) | Comma-separated directories watched when reload is active. |
-| `LITESTAR_RELOAD_INCLUDES` | `--reload-include` (`-i`) | Glob patterns included in reload watching. |
-| `LITESTAR_RELOAD_EXCLUDES` | `--reload-exclude` (`-e`) | Glob patterns excluded from reload watching. |
-| `LITESTAR_WEB_CONCURRENCY` / `WEB_CONCURRENCY` | `--wc` | Number of server worker processes (default `1`). |
+| `LITESTAR_RELOAD_INCLUDES` | `--reload-include` (`-I`) | Glob patterns included in reload watching. |
+| `LITESTAR_RELOAD_EXCLUDES` | `--reload-exclude` (`-E`) | Glob patterns excluded from reload watching. |
+| `LITESTAR_WEB_CONCURRENCY` / `WEB_CONCURRENCY` | `--wc` (`-W` / `--web-concurrency`) | Number of server worker processes (default `1`). |
 | `LITESTAR_DEBUG` | `--debug` (`-d`) | Enable Litestar debug mode at startup. |
-| `LITESTAR_PDB` | `--pdb` (`-P`) | Drop into `pdb` on unhandled application exceptions. |
-| `LITESTAR_QUIET_CONSOLE` | `-q` / `--quiet-console` | Suppress non-essential Rich console output. |
-| `LITESTAR_FILE_DESCRIPTOR` | `--fd` | Bind server to an existing file descriptor. |
-| `LITESTAR_UNIX_DOMAIN_SOCKET` | `--uds` | Bind server to a Unix domain socket path. |
+| `LITESTAR_PDB` | `--pdb` (`-P` / `--use-pdb`) | Drop into `pdb` on unhandled application exceptions. |
+| `LITESTAR_QUIET_CONSOLE` | — | Suppress non-essential Rich console output (environment variable only). |
+| `LITESTAR_FILE_DESCRIPTOR` | `--fd` (`-F` / `--file-descriptor`) | Bind server to an existing file descriptor. |
+| `LITESTAR_UNIX_DOMAIN_SOCKET` | `--uds` (`-U` / `--unix-domain-socket`) | Bind server to a Unix domain socket path. |
 | `LITESTAR_SSL_CERT_PATH` | `--ssl-certfile` | TLS certificate file path for `litestar run`. |
 | `LITESTAR_SSL_KEY_PATH` | `--ssl-keyfile` | TLS private key file path for `litestar run`. |
 | `LITESTAR_CREATE_SELF_SIGNED_CERT` | `--create-self-signed-cert` | Generate a local self-signed TLS certificate if none exists. |
@@ -62,6 +62,7 @@ If `python-dotenv` is installed, the Litestar CLI automatically loads `.env` fro
 First-party plugins attach subcommands automatically when registered in `Litestar(plugins=[...])`:
 
 - `SQLAlchemyPlugin` (`advanced-alchemy`): `litestar database ...` (Alembic migrations, fixtures, table drop/create)
+- `SQLSpecPlugin` (`sqlspec`): `litestar database ...` (SQLSpec migration commands)
 - `GranianPlugin` (`litestar-granian`): replaces `litestar run` with the Granian Rust HTTP server
 - `SAQPlugin` (`litestar-saq`): `litestar workers ...`
 - `QueuePlugin` (`litestar-queues`): `litestar queues ...`

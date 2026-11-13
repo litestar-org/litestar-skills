@@ -7,7 +7,7 @@ Reference patterns for testing a Litestar app in CI. Covers uv + bun setup, Pyth
 | Project | Runners | Python matrix | Setup style | Notable |
 | --- | --- | --- | --- | --- |
 | [litestar-fullstack-inertia](https://github.com/litestar-org/litestar-fullstack-inertia) | `ubuntu-latest` | 3.11, 3.12, 3.13 | Reusable workflow (`test.yml` w/ `workflow_call`) | Coverage only from 3.12 |
-| [litestar-fullstack](https://github.com/litestar-org/litestar-fullstack) | `ubuntu-latest` | 3.12, 3.13 | Inline, `setup-uv@v6` with `enable-cache: true` | No services; React Email built in CI |
+| [litestar-fullstack](https://github.com/litestar-org/litestar-fullstack) | `ubuntu-latest` | 3.12, 3.13 | Inline, `setup-uv` with `enable-cache: true` | No services; React Email built in CI |
 
 ## Pattern 1 — Reusable workflow (inertia)
 
@@ -40,9 +40,9 @@ jobs:
     runs-on: ${{ inputs.os }}
     timeout-minutes: ${{ inputs.timeout }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v10.3.3
 
       - name: Install Python ${{ inputs.python-version }}
         run: uv python install ${{ inputs.python-version }}
@@ -64,7 +64,7 @@ jobs:
         if: ${{ inputs.coverage }}
         run: uv run pytest --dist "loadgroup" -m "" --cov=app --cov-report=xml -n 2
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: ${{ inputs.coverage }}
         with:
           name: coverage-xml
@@ -85,8 +85,8 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v7
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
       - run: uv python install 3.12
       - run: mkdir -p app/domain/web/public
       - run: uv sync --all-extras --dev
@@ -100,8 +100,8 @@ jobs:
   mypy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v7
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
       - run: uv python install 3.12
       - run: mkdir -p app/domain/web/public
       - run: uv sync --all-extras --dev
@@ -110,8 +110,8 @@ jobs:
   pyright:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v7
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
       - run: uv python install 3.12
       - run: mkdir -p app/domain/web/public
       - run: uv sync --all-extras --dev
@@ -120,18 +120,18 @@ jobs:
   build_assets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v10.3.3
       - run: uv python install 3.12
       - run: mkdir -p app/domain/web/public
       - run: uv sync --all-extras --dev
       - run: uv run app assets install
       - run: make frontend-check
       - run: uv run app assets build
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: built-assets
           path: app/domain/web/public/
@@ -154,12 +154,12 @@ jobs:
     permissions:
       security-events: write
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v7
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: coverage-xml
           path: .
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v7
         with:
           files: coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -201,11 +201,11 @@ runs:
       if: steps.check-uv.outputs.uv-installed != 'true'
       shell: bash
       env:
-        UV_VERSION: "0.11.6"
+        UV_VERSION: "0.13.7"
       run: |
         set -euo pipefail
         curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
-        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
     - name: Pin Python
       shell: bash
@@ -253,7 +253,7 @@ runs:
       if: steps.check-bun.outputs.bun-installed != 'true'
       shell: bash
       env:
-        BUN_INSTALL_VERSION: "bun-v1.3.12"
+        BUN_INSTALL_VERSION: "bun-v1.4.4"
       run: |
         set -euo pipefail
         curl -fsSL https://bun.sh/install | bash -s "${BUN_INSTALL_VERSION}"
@@ -272,7 +272,7 @@ runs:
 lint-python:
   runs-on: self-hosted
   steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - uses: ./.github/actions/setup-python
       with:
         python-version: "3.12"
@@ -285,7 +285,7 @@ test-python:
     matrix:
       python-version: ["3.11", "3.12", "3.13"]
   steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - uses: ./.github/actions/setup-python
       with:
         python-version: ${{ matrix.python-version }}
@@ -330,7 +330,7 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-python
       - run: uv run pytest tests/ -v
         env:
@@ -475,15 +475,15 @@ Configure as a **required status check** in branch protection. One box to tick, 
 | Mistake | Symptom | Fix |
 | --- | --- | --- |
 | `uv sync` before placeholder dir | Hatchling errors in lint/typecheck jobs | `mkdir -p <bundle_dir>` before `uv sync` |
-| `uv` version floats | Reproducibility issues across runs | Pin in composite action: `UV_VERSION: "0.11.6"` |
+| `uv` version floats | Reproducibility issues across runs | Pin in composite action: `UV_VERSION: "0.13.7"` |
 | Coverage from every Python version | Last-writer-wins in codecov | Conditional: `coverage: ${{ matrix.python-version == '3.12' }}` |
 | `fail-fast: true` on experimental matrix cells | One flaky cell kills the whole matrix | `fail-fast: false` for expensive/experimental matrices |
 | No timeout-minutes | Runaway test hangs consume minutes budget | Set per-job (e.g. 30 for lint, 100 for e2e) |
-| `actions/checkout@v6` without `fetch-depth` | Changelog generation fails in release | `with: fetch-depth: 0` for release jobs |
+| `actions/checkout@v7` without `fetch-depth` | Changelog generation fails in release | `with: fetch-depth: 0` for release jobs |
 
 ## Summary
 
-1. Use `astral-sh/setup-uv@v7` (or `@v6` with `enable-cache: true` on older repos).
+1. Use `astral-sh/setup-uv@v10.3.3` (pin full tag or SHA on `v8+`; moving `@v10` tags are not maintained).
 2. `uv python install <version>` to install Python — faster than `setup-python@v5`.
 3. `oven-sh/setup-bun@v2` for frontend builds.
 4. Always `mkdir -p <bundle_dir>` before `uv sync`.

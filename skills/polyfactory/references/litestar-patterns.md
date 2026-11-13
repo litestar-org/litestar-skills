@@ -133,7 +133,7 @@ async def test_order_repo(order_repository, order_model_factory) -> None:
     assert persisted.id is not None
 ```
 
-When the factory owns persistence instead, configure `__session__` / `__async_session__` and call `create_sync()` / `create_async()`. Polyfactory 3.3 defaults to commit; select `SQLAlchemyPersistenceMethod.FLUSH` when the test owns the transaction and needs rollback isolation.
+When the factory owns persistence instead, configure `__session__` / `__async_session__` and call `create_sync()` / `create_async()`. Polyfactory defaults to commit; select `SQLAlchemyPersistenceMethod.FLUSH` when the test owns the transaction and needs rollback isolation.
 
 ## SAQ task payload generation
 

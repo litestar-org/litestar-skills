@@ -20,7 +20,10 @@ await queue.enqueue(
 Use `monitored_job()` so the plugin registers the current job and periodically signals its batched `HeartbeatManager`. With no explicit decorator interval, v0.8.0 uses half the job's `heartbeat` threshold, floored at one second (`MIN_HEARTBEAT_INTERVAL = 1.0`); a disabled or unavailable threshold falls back to five seconds (`DEFAULT_HEARTBEAT_INTERVAL = 5.0`). Use manual updates only when task progress itself defines the correct touch points:
 
 ```python
-async def process_large_file(ctx: dict, *, file_id: int) -> None:
+from saq.types import Context
+
+
+async def process_large_file(ctx: Context, *, file_id: int) -> None:
     job = ctx["job"]
 
     async for chunk in read_chunks(file_id):
@@ -33,11 +36,14 @@ async def process_large_file(ctx: dict, *, file_id: int) -> None:
 Use `litestar_saq.monitored_job` to auto-calculate and refresh heartbeat intervals for long-running tasks:
 
 ```python
+from typing import Any
+
 from litestar_saq import monitored_job
+from saq.types import Context
 
 
 @monitored_job()
-async def long_running_export(ctx: dict, *, export_id: int) -> dict: ...
+async def long_running_export(ctx: Context, *, export_id: int) -> dict[str, Any]: ...
 ```
 
 ## Dead Letter / Failed Job Handling
@@ -83,7 +89,12 @@ Let SAQ retry task exceptions. `retry_delay` sets the first delay. Set `retry_ba
 By default, SAQ populates `ctx["worker"]` and `ctx["job"]` (and `litestar-saq` injects `ctx["heartbeat_manager"]`); `ctx["queue"]` is not set unless a `startup` hook adds it. Access the active queue via `ctx["worker"].queue` or `ctx["job"].queue`:
 
 ```python
-async def step_one(ctx: dict, *, record_id: int) -> None:
+from typing import Any
+
+from saq.types import Context
+
+
+async def step_one(ctx: Context, *, record_id: int) -> None:
     queue = ctx["worker"].queue
     result = await process_step_one(record_id)
     await queue.enqueue(
@@ -94,7 +105,7 @@ async def step_one(ctx: dict, *, record_id: int) -> None:
     )
 
 
-async def step_two(ctx: dict, *, record_id: int, step_one_result: dict) -> None:
+async def step_two(ctx: Context, *, record_id: int, step_one_result: dict[str, Any]) -> None:
     queue = ctx["worker"].queue
     await process_step_two(record_id, step_one_result)
     await queue.enqueue("step_three", record_id=record_id, timeout=60)
@@ -175,9 +186,10 @@ For lightweight in-band fan-out where every child can wait via `apply()`:
 ```python
 import asyncio
 from saq import Queue
+from saq.types import Context
 
 
-async def fan_out_coordinator(ctx: dict, *, batch_ids: list[int]) -> None:
+async def fan_out_coordinator(ctx: Context, *, batch_ids: list[int]) -> None:
     queue: Queue = ctx["worker"].queue
     await asyncio.gather(*[queue.apply("process_item", item_id=item_id, timeout=60) for item_id in batch_ids])
 ```
@@ -322,7 +334,7 @@ async def after_process(ctx: Context) -> None:
         await to_thread.run_sync(functools.partial(shutil.rmtree, working_path, ignore_errors=True))
 ```
 
-With `litestar-saq`, the plugin manages startup/shutdown via the Litestar app lifespan; per-job hooks are still available via `QueueConfig.before_process` / `after_process`. When referencing hooks by dotted import path, always wrap them in a list (`startup=["app.domain.system.tasks.startup"]`); passing a bare `str` fails because `str` is a `Collection` and gets iterated character-by-character.
+With `litestar-saq`, `QueueConfig.startup` and `QueueConfig.shutdown` register SAQ worker lifecycle hooks, while `before_process` and `after_process` run around each job (and `SAQPlugin` manages worker child processes when `use_server_lifespan=True`). When referencing hooks by dotted import path, always wrap them in a list (`startup=["app.domain.system.tasks.startup"]`); passing a bare `str` fails because `str` is a `Collection` and gets iterated character-by-character.
 
 ### Timers, Shutdown, and Burst Mode
 

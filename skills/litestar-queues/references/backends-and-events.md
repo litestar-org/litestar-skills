@@ -143,7 +143,7 @@ def create_queue_config(
 
 ## SQLSpec Backend
 
-Choose between **migration-managed** (`manage_schema=False`) and **auto-managed** (`manage_schema=True`) SQLSpec schema strategies:
+Choose between **package-managed** (`manage_schema=True`, default) and **application-managed** (`manage_schema=False`) SQLSpec schema strategies:
 
 ```python
 from sqlspec.adapters.asyncpg import AsyncpgConfig
@@ -152,46 +152,44 @@ from litestar_queues import QueueConfig
 from litestar_queues.backends.sqlspec import SQLSpecBackendConfig, SQLSpecWorkerWakeupConfig
 from litestar_queues.backends.sqlspec.extension import configure_queue_migration_extension
 
-sqlspec_config = AsyncpgConfig(
+package_managed_config = QueueConfig(
+    queue_backend=SQLSpecBackendConfig(
+        sqlspec_config=AsyncpgConfig(
+            connection_config={"dsn": "postgresql://postgres:postgres@127.0.0.1:5432/app"},
+            extension_config={"events": {"queue_table": "event_queue"}},
+        ),
+        queue_table_name="queue_task",
+        event_history_table_name="queue_task_event_history",
+        worker_wakeups=SQLSpecWorkerWakeupConfig(queue_table_name="event_queue"),
+        manage_schema=True,
+    ),
+    execution_backend="local",
+)
+
+standalone_sqlspec_config = AsyncpgConfig(
     connection_config={"dsn": "postgresql://postgres:postgres@127.0.0.1:5432/app"},
-    migration_config={
-        "script_location": "migrations",
-        "include_extensions": ["events", "litestar_queues"],
-    },
-    extension_config={
-        "events": {"queue_table_name": "event_queue"},
-    },
+    migration_config={"script_location": "migrations"},
 )
 configure_queue_migration_extension(
-    sqlspec_config,
+    standalone_sqlspec_config,
     queue_table_name="queue_task",
     event_history_enabled=True,
     event_history_table_name="queue_task_event_history",
 )
 
-migration_managed_config = QueueConfig(
-    queue_backend=SQLSpecBackendConfig(
-        sqlspec_config=sqlspec_config,
-        queue_table_name="queue_task",
-        event_history_table_name="queue_task_event_history",
-        worker_wakeups=SQLSpecWorkerWakeupConfig(queue_table_name="event_queue"),
-        manage_schema=False,
-    ),
-    execution_backend="local",
-)
-
-auto_managed_config = QueueConfig(
+app_managed_config = QueueConfig(
     queue_backend=SQLSpecBackendConfig(
         sqlspec_config=AsyncpgConfig(
             connection_config={"dsn": "postgresql://postgres:postgres@127.0.0.1:5432/app"},
+            migration_config={"script_location": "migrations"},
         ),
-        manage_schema=True,
+        manage_schema=False,
     ),
     execution_backend="local",
 )
 ```
 
-When `manage_schema=True` (the default), `QueuePlugin` registers the consolidated `0001_create_queue_tasks` migration revision (including `dispatch_checked_at`) with the supplied SQLSpec configuration. When `manage_schema=False`, register `"litestar_queues"` in `migration_config={"include_extensions": ["events", "litestar_queues"]}` and wire `configure_queue_migration_extension(...)` from `litestar_queues.backends.sqlspec.extension`.
+When `manage_schema=True` (the default), `QueuePlugin` registers the packaged `"litestar_queues"` (`0001_create_queue_tasks`, including `dispatch_checked_at`) and `"events"` extension migrations with the supplied SQLSpec configuration automatically. Call `configure_queue_migration_extension(...)` from `litestar_queues.backends.sqlspec.extension` only when running SQLSpec migration commands standalone without initializing `QueuePlugin`. When `manage_schema=False`, `QueuePlugin` removes the packaged `"litestar_queues"` and `"events"` extension migrations so the application owns the queue and wakeup tables in its own migrations.
 
 `SQLSpecBackendConfig.worker_wakeups` defaults to native wakeups (`SQLSpecWorkerWakeupConfig`). Capable PostgreSQL adapters use `notify_queue`, DuckDB uses `poll_queue`, and other adapters fall back to polling. Set `worker_wakeups=None` when using `CloudTasksExecutionConfig`.
 
@@ -257,7 +255,6 @@ from litestar_queues.events import (
     QueueEventQuery,
     QueueEventsConfig,
     beat,
-    create_event_producer,
     publish_task_event,
 )
 

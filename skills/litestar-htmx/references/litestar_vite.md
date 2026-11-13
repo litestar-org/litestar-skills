@@ -82,7 +82,7 @@ Activate that extension in the page:
 </body>
 ```
 
-`registerHtmxExtension()` takes no arguments in Litestar Vite 0.32.0. It
+`registerHtmxExtension()` takes no arguments in Litestar Vite 0.33.0. It
 registers the extension named `litestar`, injects the CSRF token from the meta
 tag into HTMX requests, and enables `hx-swap="json"` templating.
 
@@ -102,6 +102,6 @@ swaps. Do not describe its `ls-*` directives as features of `litestar-htmx`.
 ## Official References
 
 - <https://github.com/litestar-org/litestar-htmx/tree/v0.5.0>
-- <https://github.com/litestar-org/litestar-vite/blob/v0.32.0/docs/frameworks/htmx.rst>
-- <https://github.com/litestar-org/litestar-vite/blob/v0.32.0/src/js/src/helpers/htmx.ts>
-- <https://github.com/litestar-org/litestar-vite/tree/v0.32.0/examples/jinja-htmx>
+- <https://github.com/litestar-org/litestar-vite/blob/v0.33.0/docs/frameworks/htmx.rst>
+- <https://github.com/litestar-org/litestar-vite/blob/v0.33.0/src/js/src/helpers/htmx.ts>
+- <https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/jinja-htmx>

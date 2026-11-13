@@ -5,11 +5,11 @@ Preferred production Dockerfile using Google's distroless base image. No shell, 
 ## Complete Dockerfile
 
 ```dockerfile
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1
 ARG PYTHON_VERSION=3.13
-ARG DEBIAN_VERSION=bookworm
+ARG DEBIAN_VERSION=trixie
 ARG BUILDER_IMAGE=python:${PYTHON_VERSION}-slim-${DEBIAN_VERSION}
-ARG RUN_IMAGE=gcr.io/distroless/cc-debian12:nonroot
+ARG RUN_IMAGE=gcr.io/distroless/cc-debian13:nonroot
 
 # =============================================================================
 # Stage 1: Python Base
@@ -163,7 +163,7 @@ CMD ["litestar", "run", "--host", "0.0.0.0", "--port", "8000"]
 
 ## Why distroless
 
-| Property | `python:slim` | `distroless/cc-debian12` |
+| Property | `python:slim` | `distroless/cc-debian13` |
 | --- | --- | --- |
 | Shell | Yes (`/bin/sh`, `/bin/bash`) | **None** |
 | Package manager | Yes (apt) | **None** |

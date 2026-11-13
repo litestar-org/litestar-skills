@@ -18,12 +18,7 @@ def anyio_backend() -> str:
     return "asyncio"
 ```
 
-Or via `pyproject.toml`:
-
-```toml
-[tool.pytest.ini_options]
-anyio_backend = "asyncio"
-```
+Note: AnyIO's pytest plugin registers `anyio_mode` (`"strict"` by default, or `"auto"`) as a `pyproject.toml` ini option — not `anyio_backend` (defining `anyio_backend = "asyncio"` in `[tool.pytest.ini_options]` emits `PytestConfigWarning: Unknown config option`). Override `anyio_backend` as a fixture in `conftest.py`.
 
 ## Basic Async Test
 
@@ -195,7 +190,7 @@ Async fixtures may depend on sync fixtures, not the reverse. A sync test cannot 
 
 ### `AsyncTestClient` and `TestClient` Lifespan
 
-`AsyncTestClient(app)` and `TestClient(app)` require entering their context managers (`async with` / `with`) so `LifeSpanHandler` runs `on_startup` / `on_shutdown` hooks and `lifespan` context managers. Implicit lifespan startup without a context manager emits a `DeprecationWarning` and is removed in Litestar 3.0.
+`AsyncTestClient(app)` and `TestClient(app)` require entering their context managers (`async with` / `with`) so `LifeSpanHandler` runs `on_startup` / `on_shutdown` hooks and `lifespan` context managers (calling `LifeSpanHandler` directly outside a context manager emits a `DeprecationWarning` on implicit startup).
 
 ```python
 async with AsyncTestClient(app=app) as client:
@@ -389,7 +384,7 @@ Available `WebSocketTestSession` methods:
 
 ### `RequestFactory` and Subprocess Clients
 
-- Use `RequestFactory` (`from litestar.testing import RequestFactory`) to build `Request` objects (`.get()`, `.post()`, `.put()`, `.patch()`, `.delete()`) with `user`, `auth`, `session`, `state`, `headers`, `cookies`, `query_params`, `path_params`, and `data` for unit-testing Guards or dependencies directly without ASGI transport overhead.
+- Use `RequestFactory` (`from litestar.testing import RequestFactory`) to build `Request` objects (`.get()`, `.post()`, `.put()`, `.patch()`, `.delete()`) with `user`, `auth`, `session`, `state`, `headers`, `cookies`, `query_params`, and `path_params` (plus `data` and `request_media_type` on `post`/`put`/`patch`) for unit-testing Guards or dependencies directly without ASGI transport overhead.
 - `ASGIConnection.app` / `request.app` reads `request.scope["litestar_app"]` (not `request.scope["app"]`). `RequestFactory(app=app)` populates `scope["litestar_app"] = app` automatically; if constructing a synthetic `Request(scope={...})` directly without `RequestFactory`, always set `"litestar_app": app` in `scope`.
 - Use `subprocess_async_client(workdir, app, capture_output=True)` or `subprocess_sync_client(workdir, app, capture_output=True)` (`from litestar.testing import subprocess_async_client, subprocess_sync_client`) to boot `litestar --app <app> run` in a background subprocess and yield a live `httpx.AsyncClient` / `httpx.Client`.
 
@@ -434,7 +429,7 @@ async def test_live_subprocess_server(tmp_path: Path) -> None:
 
 ## Tagged source
 
-- [2.24 test-client helpers](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/testing/helpers.py)
-- [2.24 RequestFactory](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/testing/request_factory.py)
-- [2.24 WebSocketTestSession](https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/testing/websocket_test_session.py)
-- [2.24 dependency replacement guidance](https://github.com/litestar-org/litestar/blob/v2.24.0/docs/onboarding/fastapi.rst)
+- [2.25 test-client helpers](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/testing/helpers.py)
+- [2.25 RequestFactory](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/testing/request_factory.py)
+- [2.25 WebSocketTestSession](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/testing/websocket_test_session.py)
+- [2.25 dependency replacement guidance](https://github.com/litestar-org/litestar/blob/v2.25.0/docs/onboarding/fastapi.rst)

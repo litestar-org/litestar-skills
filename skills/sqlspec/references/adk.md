@@ -99,9 +99,7 @@ Each store owns its DDL. Call `ensure_tables()` or `create_tables()` when bootst
 - `artifact_table` (default `"adk_artifact"`)
 - `owner_id_column` — optional DDL fragment (e.g. `"tenant_id INTEGER REFERENCES tenants(id)"`) for owner scoping when the store call path supplies owner IDs
 
-Migrations check that the selected adapter has the session and memory store classes before generating schema.
-
-The ADK 2 migration `0002_reset_adk_tables` is destructive: it drops legacy ADK session, event, state, metadata, and memory tables before recreating the 2.0 schema. Back up ADK data before applying it to an existing deployment.
+Migrations check that the selected adapter has the session and memory store classes before generating schema. Built-in ADK migrations cover initial schema creation (`0001_create_adk_tables`) and backfilling memory storage on existing `mssql_python` deployments (`0002_create_mssql_python_memory`).
 
 ## Litestar Handler Pattern
 

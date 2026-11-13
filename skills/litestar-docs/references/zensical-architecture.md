@@ -1,16 +1,16 @@
 # Zensical Documentation Architecture
 
-Canonical configuration, plugins, markdown extensions, and companion tooling for **Zensical Free** (`zensical >= 0.0.71`, MIT open source) + **`mkdocstrings-python` (Griffe static AST)** across Litestar repositories.
+Canonical configuration, plugins, markdown extensions, and companion tooling for **Zensical** (`zensical >= 0.1.1`, MIT open source) + **`mkdocstrings-python` (Griffe static AST)** across Litestar repositories.
 
 ## Dependency Group (`pyproject.toml`)
 
 ```toml
 [dependency-groups]
 doc = [
-  "zensical>=0.0.71",
-  "mkdocstrings-python>=2.0.1",
-  "pymdown-extensions>=10.16",
-  "ruff>=0.15.0",
+  "zensical>=0.1.1",
+  "mkdocstrings-python>=2.0.10",
+  "pymdown-extensions>=13.0",
+  "ruff>=0.17.5",
 ]
 ```
 
@@ -130,7 +130,7 @@ generator = false
 - **`tags`**: Native page classification via frontmatter tags (`tags: [postgresql, async]`). Generates tag search pills and index listings.
 - **`blog`**: Optional subsystem generating chronological posts, author bios, categories, archives, and RSS/Atom feeds.
 - **`offline`**: Bundles all CSS/JS assets and rewrites URLs for air-gapped `file://` distribution.
-- **`projects`**: Workspace composition for multi-project repositories or multi-package monorepos.
+- **`llmstxt`**: Native built-in replacement for `mkdocs-llmstxt`. Configured via `[project.plugins.llmstxt]` (`enabled = true`, `sections`, `markdown_description`) to emit `site/llms.txt` and Markdown page copies for AI agents. (Note: Material's legacy `projects` plugin is deprecated and not supported by Zensical.)
 
 ### 2. Markdown Extensions
 
@@ -165,7 +165,7 @@ Maintain documentation quality and compact asset budgets using the following com
    - Strips Rich markup console tags and generates clean Markdown tables for arguments and options.
 2. **`tools/docs/postbuild.py`**:
    - Compacts non-`<pre>` and non-`<textarea>` HTML indentation, saving ~40 KB per page.
-   - Generates `site/llms.txt` and `site/llms-full.txt` for AI agent discovery.
+   - Generates `site/llms-full.txt` (or supplements Zensical's native `[project.plugins.llmstxt]` `site/llms.txt` output) for AI agent discovery.
    - Emits flat `site/<path>.html` redirect stubs to prevent 404s on legacy `.html` links without directory collision.
 3. **`tools/docs/verify_docs_artifacts.py`**:
    - Automated CI gate verifying:
@@ -265,7 +265,7 @@ Maintain documentation quality and compact asset budgets using the following com
 ## Animated Terminal Blocks (`docs/javascripts/termynal.js` + `.lv-termynal`) & Interactive SVG Diagrams
 
 1. **Theme-Aware Termynal Plugin (`docs/javascripts/termynal.js`)**:
-   - Because third-party MkDocs plugins (`termynal`) do not run on Zensical `0.0.71`, register `extra_javascript = ["javascripts/termynal.js"]` in `zensical.toml` and style `.lv-termynal` in `docs/stylesheets/extra.css` using `--md-*` variables and `[data-md-color-scheme="slate"]`.
+   - Because arbitrary third-party MkDocs plugins (such as `termynal`) do not run natively in Zensical, register `extra_javascript = ["javascripts/termynal.js"]` in `zensical.toml` and style `.lv-termynal` in `docs/stylesheets/extra.css` using `--md-*` variables and `[data-md-color-scheme="slate"]`.
    - Place `<!-- termynal -->` immediately before any ```` ```console ```` or ```` ```bash ```` fence. The script animates command lines, comments, progress bars, and output lines on scroll via `IntersectionObserver` (respecting reduced motion preferences), provides replay and copy buttons, and rebinds on page navigation.
 2. **Interactive SVG Architecture Diagrams (`tools/docs/includes/diagram-*.html`)**:
    - Store reusable SVG/CSS diagrams in `tools/docs/includes/diagram-*.html` and embed them via `--8<--`.
@@ -274,13 +274,13 @@ Maintain documentation quality and compact asset budgets using the following com
 ## Building and Verification Commands
 
 ```bash
-# Clean production build
-uv run zensical build --clean
+# Clean production build with strict link/reference checks
+uv run zensical build --clean --strict
 
 # Run post-build compaction and artifact verification
 uv run python -m tools.docs.postbuild
 uv run python -m tools.docs.verify_docs_artifacts
 
-# Local authoring development server
+# Local authoring development server (supports --dev-addr and --open)
 uv run zensical serve
 ```

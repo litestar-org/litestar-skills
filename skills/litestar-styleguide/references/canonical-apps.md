@@ -24,7 +24,7 @@ When citing a specific source location, prefer a permalink to a tagged commit ov
 See <https://github.com/cofin/litestar-sqlstack/blob/main/src/sqlstack/lib/service.py> for the `paginate` implementation.
 ```
 
-Provenance citations to non-public codebases are forbidden — the validator at `tools/validate-skills.py` (`check_forbidden_vocab`) enforces this on every shipped file via `make validate-skills`.
+Provenance citations to non-public codebases are forbidden across all shipped skill files (validated via `make validate`).
 
 ## Framework coverage
 

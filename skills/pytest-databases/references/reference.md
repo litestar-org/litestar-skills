@@ -1,104 +1,66 @@
-# Complete 0.19.0 Fixture Reference
+# Complete 0.20.0b3 Fixture Reference
 
-Every plugin module below is published in the immutable `v0.19.0` tag. The
-ready-client column is exhaustive: a blank entry means the package expects the
-test suite to construct its own client from the service fixture.
+Every plugin module below ships in `pytest-databases>=0.20.0b3` (`0.20.0-beta.3`). All 32 plugin modules (31 `pytest_databases.docker.*` modules and `pytest_databases.embedded.postgres`) start and verify readiness without importing third-party database client libraries. Legacy `v0.19.0` `*_connection` and `*_client` fixtures are retained as lazy-import `DeprecationWarning` shims.
 
 ## Plugin and provider matrix
 
-| Integration | Plugin module | Service class | Service fixtures | Ready client/provider fixtures | Config & helper fixtures |
+| Integration | Plugin module | Service class | Service fixtures | Config & helper fixtures | Deprecated v0.19.0 client shims |
 | --- | --- | --- | --- | --- | --- |
-| PostgreSQL | `postgres` | `PostgresService` | `postgres_service`, `postgres_11_service`–`postgres_18_service` | `postgres_connection`, `postgres_11_connection`–`postgres_18_connection` | `postgres_host`, `postgres_user`, `postgres_password`, `postgres_port`, `postgres_11_port`–`postgres_18_port`, `postgres_image` |
-| pgvector | `postgres` | `PostgresService` | `pgvector_service`, `pgvector_13_service`–`pgvector_18_service` | `pgvector_connection`, `pgvector_13_connection`–`pgvector_18_connection` | `pgvector_port`, `pgvector_13_port`–`pgvector_18_port`, `pgvector_image` |
-| ParadeDB | `postgres` | `PostgresService` | `paradedb_service`, `paradedb_15_service`–`paradedb_18_service` | `paradedb_connection`, `paradedb_15_connection`–`paradedb_18_connection` | `paradedb_port`, `paradedb_15_port`–`paradedb_18_port`, `paradedb_image` |
-| AlloyDB Omni | `postgres` | `PostgresService` | `alloydb_omni_service`, `alloydb_omni_15_service`–`alloydb_omni_17_service` | `alloydb_omni_connection`, `alloydb_omni_15_connection`–`alloydb_omni_17_connection` | `alloydb_omni_port`, `alloydb_omni_15_port`–`alloydb_omni_17_port`, `alloydb_omni_image` |
-| CockroachDB | `cockroachdb` | `CockroachDBService` | `cockroachdb_service` | `cockroachdb_connection` | `cockroachdb_image`, `cockroachdb_driver_opts` |
-| MySQL | `mysql` | `MySQLService` | `mysql_service`, `mysql_56_service`, `mysql_57_service`, `mysql_8_service`, `mysql_84_service`, `mysql_96_service` | — | `mysql_user`, `mysql_password`, `mysql_root_password`, `mysql_database`, `platform` |
-| MariaDB | `mariadb` | `MariaDBService` | `mariadb_service`, `mariadb_113_service`, `mariadb_114_service`, `mariadb_122_service` | — | `mariadb_user`, `mariadb_password`, `mariadb_root_password`, `mariadb_database` |
-| Dolt | `dolt` | `DoltService` | `dolt_service` | — | `dolt_user`, `dolt_password`, `dolt_root_password`, `dolt_database`, `platform` |
-| Oracle | `oracle` | `OracleService` | `oracle_service`, `oracle_18c_service`, `oracle_23ai_service` | `oracle_18c_connection`, `oracle_23ai_connection`, `oracle_startup_connection`* | `oracle_18c_image`, `oracle_18c_service_name`, `oracle_23ai_image`, `oracle_23ai_service_name` |
-| SQL Server | `mssql` | `MSSQLService` | `mssql_service` | — | `mssql_image`, `mssql_user`, `mssql_password`, `mssql_database` |
-| YugabyteDB | `yugabyte` | `YugabyteService` | `yugabyte_service` | — | `yugabyte_image`, `yugabyte_user`, `yugabyte_password`, `yugabyte_database` |
-| MongoDB | `mongodb` | `MongoDBService` | `mongodb_service` | `mongodb_connection`, `mongodb_database` | `mongodb_image` |
-| Redis | `redis` | `RedisService` | `redis_service` | — | `redis_host`, `redis_port`, `redis_image` |
-| Dragonfly | `redis` | `RedisService` | `dragonfly_service` | — | `dragonfly_host`, `dragonfly_port`, `dragonfly_image` |
-| KeyDB | `redis` | `RedisService` | `keydb_service` | — | `keydb_host`, `keydb_port`, `keydb_image` |
-| Valkey | `valkey` | `ValkeyService` | `valkey_service` | — | `valkey_host`, `valkey_port`, `valkey_image` |
-| Elasticsearch 7/8 | `elastic_search` | `ElasticsearchService` | `elasticsearch_7_service`, `elasticsearch_8_service`, `elasticsearch_service`* | — | `elasticsearch_service_memory_limit` |
-| BigQuery emulator | `bigquery` | `BigQueryService` | `bigquery_service` | `bigquery_client` | `bigquery_image`, `platform` |
-| Spanner emulator | `spanner` | `SpannerService` | `spanner_service` | `spanner_connection` | `spanner_image` |
-| GizmoSQL | `gizmosql` | `GizmoSQLService` | `gizmosql_service` | `gizmosql_connection` | `gizmosql_image`, `gizmosql_username`, `gizmosql_password` |
-| Azure Blob/Azurite | `azure_blob` | `AzureBlobService` | `azure_blob_service` | `azure_blob_container_client`, `azure_blob_async_container_client` | `azure_blob_default_container_name`, `azurite_in_memory` |
-| MinIO | `minio` | `MinioService` | `minio_service` | — | `minio_access_key`, `minio_secret_key`, `minio_secure`, `minio_default_bucket_name` |
-| RustFS | `rustfs` | `RustfsService` | `rustfs_service` | — | `rustfs_access_key`, `rustfs_secret_key`, `rustfs_secure`, `rustfs_default_bucket_name` |
+| PostgreSQL | `docker.postgres` | `PostgresService`, `ExternalPostgresService` | `postgres_service`, `postgres_11_service`–`postgres_18_service`, `postgres_external_service`, `postgres_any_service` | `postgres_host`, `postgres_user`, `postgres_password`, `postgres_database`, `postgres_port`, `postgres_11_port`–`postgres_18_port`, `postgres_external_host`, `postgres_external_port`, `postgres_image`, `postgres_startup_timeout`, `postgres_template_name`, `postgres_template_setup`, `postgres_template_lock_dir`, `postgres_template_fingerprint_sources`, `postgres_template_options` | `postgres_connection`, `postgres_11_connection`–`postgres_18_connection` |
+| pgvector | `docker.postgres` | `PostgresService` | `pgvector_service`, `pgvector_13_service`–`pgvector_18_service` | `pgvector_port`, `pgvector_13_port`–`pgvector_18_port`, `pgvector_image` | `pgvector_connection`, `pgvector_13_connection`–`pgvector_18_connection` |
+| ParadeDB | `docker.postgres` | `PostgresService` | `paradedb_service`, `paradedb_15_service`–`paradedb_18_service` | `paradedb_port`, `paradedb_15_port`–`paradedb_18_port`, `paradedb_image` | `paradedb_connection`, `paradedb_15_connection`–`paradedb_18_connection` |
+| AlloyDB Omni | `docker.postgres` | `PostgresService` | `alloydb_omni_service`, `alloydb_omni_15_service`–`alloydb_omni_18_service` | `alloydb_omni_port`, `alloydb_omni_15_port`–`alloydb_omni_18_port`, `alloydb_omni_image` (`gcr.io/alloydb-omni/alloydbomni:18`), `alloydb_omni_command`, `alloydb_omni_legacy_command`, `alloydb_omni_shm_size`, `alloydb_omni_startup_timeout` | `alloydb_omni_connection`, `alloydb_omni_15_connection`–`alloydb_omni_18_connection` |
+| Embedded PostgreSQL | `embedded.postgres` | `EmbeddedPostgresService` | `embedded_postgres_service`, `postgres_any_service` | `embedded_postgres_user`, `embedded_postgres_database`, `embedded_postgres_port`, `embedded_postgres_bin_dir`, `embedded_postgres_template_name`, `embedded_postgres_template_setup`, `embedded_postgres_template_fingerprint_sources`, `embedded_postgres_template_lock_dir` | — |
+| CockroachDB | `docker.cockroachdb` | `CockroachDBService` | `cockroachdb_service` | `cockroachdb_image`, `cockroachdb_driver_opts` | `cockroachdb_connection` |
+| YugabyteDB | `docker.yugabyte` | `YugabyteService` | `yugabyte_service` | `yugabyte_image`, `yugabyte_user`, `yugabyte_password`, `yugabyte_database` | — |
+| Doltgres | `docker.doltgres` | `DoltgresService` | `doltgres_service` | `doltgres_image`, `doltgres_user`, `doltgres_password`, `doltgres_root_password`, `doltgres_database`, `doltgres_port` | — |
+| MySQL | `docker.mysql` | `MySQLService` | `mysql_service`, `mysql_56_service`, `mysql_57_service`, `mysql_8_service`, `mysql_84_service`, `mysql_96_service`, `mysql_97_service` | `mysql_user`, `mysql_password`, `mysql_root_password`, `mysql_database`, `mysql_port`, `mysql_platform`, `platform` (deprecated) | — |
+| MariaDB | `docker.mariadb` | `MariaDBService` | `mariadb_service`, `mariadb_113_service`, `mariadb_114_service`, `mariadb_118_service`, `mariadb_122_service`, `mariadb_123_service`, `mariadb_130_service` | `mariadb_user`, `mariadb_password`, `mariadb_root_password`, `mariadb_database`, `mariadb_port` | — |
+| Dolt | `docker.dolt` | `DoltService` | `dolt_service` | `dolt_image`, `dolt_user`, `dolt_password`, `dolt_root_password`, `dolt_database`, `dolt_platform`, `platform` (deprecated) | — |
+| Oracle & ADB-Free | `docker.oracle` | `OracleService`, `OracleADBService` | `oracle_service`, `oracle_18c_service`, `oracle_26ai_service`, `oracle_23ai_service` (deprecated alias), `oracle_adb_service` | `oracle_18c_image`, `oracle_18c_service_name`, `oracle_18c_port`, `oracle_26ai_image`, `oracle_26ai_service_name`, `oracle_26ai_port`, `oracle_23ai_image` (deprecated), `oracle_23ai_service_name` (deprecated), `oracle_port`, `oracle_user`, `oracle_password`, `oracle_system_password`, `oracle_startup_timeout`, `oracle_adb_image`, `oracle_adb_workload_type`, `oracle_adb_hostname`, `oracle_adb_tz`, `oracle_adb_wallet_password`, `oracle_adb_password`, `oracle_adb_admin_password`, `oracle_adb_wallet_dir`, `oracle_adb_volumes`, `oracle_adb_filesystemio_options`, `oracle_adb_devices`, `oracle_adb_port`, `oracle_adb_startup_timeout` | `oracle_18c_connection`, `oracle_26ai_connection`, `oracle_23ai_connection`, `oracle_startup_connection` |
+| SQL Server | `docker.mssql` | `MSSQLService` | `mssql_service`, `mssql_2022_service`, `mssql_2025_service` | `mssql_image`, `mssql_2022_image`, `mssql_2025_image`, `mssql_user`, `mssql_password`, `mssql_database`, `mssql_port` | — |
+| IBM Db2 | `docker.db2` | `Db2Service` | `db2_service` | `db2_image`, `db2_username`, `db2_password`, `db2_dbname`, `db2_port`, `db2_4k_device_support`, `db2_activate_database`, `db2_ipc_mode`, `db2_volumes`, `db2_startup_timeout` | — |
+| Sybase ASE | `docker.sybase` | `SybaseService` | `sybase_service` | `sybase_image`, `sybase_user`, `sybase_password`, `sybase_database`, `sybase_port`, `sybase_startup_timeout`, `sybase_enable_monitoring`, `sybase_freetds_alias` | — |
+| SAP SQL Anywhere | `docker.sqlanywhere` | `SQLAnywhereService` | `sqlanywhere_service` | `sqlanywhere_image`, `sqlanywhere_user`, `sqlanywhere_password`, `sqlanywhere_database`, `sqlanywhere_server`, `sqlanywhere_startup_timeout`, `sqlanywhere_client_libs` | — |
+| Teradata Vantage | `docker.teradata` | `TeradataService`, `ExternalTeradataService` | `teradata_service`, `teradata_external_service` | `teradata_image`, `teradata_external_host`, `teradata_external_port`, `teradata_port`, `teradata_user`, `teradata_password`, `teradata_database`, `teradata_logmech`, `teradata_logdata`, `teradata_sslmode`, `teradata_encryptdata`, `teradata_tmode`, `teradata_startup_timeout`, `teradata_service_environment` | — |
+| MongoDB | `docker.mongodb` | `MongoDBService` | `mongodb_service` | `mongodb_image`, `mongodb_username`, `mongodb_password`, `mongodb_database_name`, `mongodb_port`, `mongodb_replica_set` | `mongodb_connection`, `mongodb_database` |
+| Redis / Dragonfly / KeyDB | `docker.redis` | `RedisService` | `redis_service`, `dragonfly_service`, `keydb_service` | `redis_host`, `redis_port`, `redis_image`, `dragonfly_host`, `dragonfly_port`, `dragonfly_image`, `keydb_host`, `keydb_port`, `keydb_image` | — |
+| Valkey | `docker.valkey` | `ValkeyService` | `valkey_service` | `valkey_host`, `valkey_port`, `valkey_image` | — |
+| Elasticsearch 7/8/9 | `docker.elastic_search` | `ElasticsearchService` | `elasticsearch_service`, `elasticsearch_7_service`, `elasticsearch_8_service`, `elasticsearch_9_service` | `elasticsearch_7_image`, `elasticsearch_8_image`, `elasticsearch_9_image`, `elasticsearch_service_memory_limit` | — |
+| BigQuery emulator | `docker.bigquery` | `BigQueryService` | `bigquery_service` | `bigquery_image`, `bigquery_platform`, `platform` (deprecated) | `bigquery_client` |
+| Spanner emulator | `docker.spanner` | `SpannerService` | `spanner_service` | `spanner_image`, `spanner_project`, `spanner_instance_name`, `spanner_database_name` | `spanner_connection` |
+| Pub/Sub emulator | `docker.pubsub` | `PubSubService` | `pubsub_service` | `pubsub_image`, `pubsub_project` | — |
+| GizmoSQL (DuckDB / SQLite Flight SQL) | `docker.gizmosql` | `GizmoSQLService` | `gizmosql_service`, `gizmosql_duckdb_service`, `gizmosql_sqlite_service` | `gizmosql_image`, `gizmosql_username`, `gizmosql_password` | `gizmosql_connection` |
+| Hardcharger (DuckDB Chargewire) | `docker.hardcharger` | `HardchargerService` | `hardcharger_service` | `hardcharger_image`, `hardcharger_username`, `hardcharger_password` | — |
+| Snowflake (Embucket) | `docker.snowflake` | `SnowflakeService` | `snowflake_service` | `snowflake_image`, `snowflake_user`, `snowflake_password`, `snowflake_account`, `snowflake_database`, `snowflake_schema`, `snowflake_warehouse`, `snowflake_role`, `snowflake_wire_compat` | — |
+| Azure Blob / Azurite | `docker.azure_blob` | `AzureBlobService` | `azure_blob_service` | `azure_blob_default_container_name`, `azurite_in_memory` | `azure_blob_container_client`, `azure_blob_async_container_client` |
+| MinIO | `docker.minio` | `MinioService` | `minio_service` | `minio_image` (`cgr.dev/chainguard/minio:latest`), `minio_access_key`, `minio_secret_key`, `minio_secure`, `minio_default_bucket_name` | — |
+| RustFS | `docker.rustfs` | `RustfsService` | `rustfs_service` | `rustfs_image`, `rustfs_access_key`, `rustfs_secret_key`, `rustfs_secure`, `rustfs_default_bucket_name` | — |
+| Redpanda (Kafka) | `docker.redpanda` | `RedpandaService` | `redpanda_service` | `redpanda_image`, `redpanda_port` | — |
+| RabbitMQ | `docker.rabbitmq` | `RabbitMQService` | `rabbitmq_service` | `rabbitmq_image`, `rabbitmq_username`, `rabbitmq_password`, `rabbitmq_vhost` | — |
+| LocalStack / MiniStack | `docker.localstack` | `LocalStackService` | `localstack_service` | `localstack_image` (`ministackorg/ministack:latest`), `localstack_auth_token`, `localstack_region`, `localstack_access_key`, `localstack_secret_key`, `localstack_services`, `localstack_resource_prefix` | — |
+| Floci (AWS / GCP / Azure / OCI) | `docker.floci` | `FlociAWSService`, `FlociGCPService`, `FlociAzureService`, `FlociOCIService` | `floci_aws_service`, `floci_gcp_service`, `floci_az_service`, `floci_oci_service` | `floci_resource_prefix`, `floci_aws_image`, `floci_aws_region`, `floci_aws_access_key`, `floci_aws_secret_key`, `floci_gcp_image`, `floci_gcp_project`, `floci_gcp_compat_proxy`, `floci_az_image`, `floci_az_account_name`, `floci_az_account_key`, `floci_oci_image`, `floci_oci_namespace`, `floci_oci_region`, `floci_oci_compartment_id` | — |
+| Cloudflare (Miniflare 5 KV/R2/D1) | `docker.cloudflare` | `CloudflareService` | `cloudflare_service` | `cloudflare_image`, `cloudflare_miniflare_version`, `cloudflare_kv_namespaces`, `cloudflare_r2_buckets`, `cloudflare_d1_databases`, `cloudflare_access_key_id`, `cloudflare_secret_access_key`, `cloudflare_startup_timeout` | — |
 
-\* **Known 0.19.0 alias caveats**:
+## Core runtime & container fixtures (`pytest_databases`)
 
-- `oracle_startup_connection` depends on `oracle_23ai_startup_connection`, which 0.19.0 does not define. Request `oracle_23ai_connection` or `oracle_18c_connection` instead.
-- `elasticsearch_service` depends on `elasticsearch8_service` (missing underscore), which 0.19.0 does not define. Request `elasticsearch_8_service` or `elasticsearch_7_service` directly (or define an `elasticsearch8_service` bridge fixture in `conftest.py`). Also note that `pytest_databases.docker.elastic_search` imports `elasticsearch7` at module load time for both v7 and v8.
+| Fixture | Scope | Return type | Purpose |
+| --- | --- | --- | --- |
+| `container_runtime` | `session` | `ContainerRuntimeConfig` | Resolved Docker or Podman runtime configuration (`kind`, `endpoint`, `source`, `context_name`, `environment`, `timeout`) |
+| `container_client` / `docker_client` | `session` | `DockerClient` | Connected Docker SDK client for the active runtime |
+| `container_service` / `docker_service` | `session` | `ContainerService` (`DockerService`) | Container lifecycle manager (`run`, `run_container`, `resolve_port`, `get_internal_network_ip`) |
 
-### Module path notes
+## Key service methods and attributes
 
-- AlloyDB Omni, pgvector, and ParadeDB live in `pytest_databases.docker.postgres` (there is no `pytest_databases.docker.alloydb` module).
-- Azurite / Azure Blob lives in `pytest_databases.docker.azure_blob` (there is no `pytest_databases.docker.azurite` module).
-- Elasticsearch lives in `pytest_databases.docker.elastic_search` (there is no `pytest_databases.docker.elasticsearch` or `pytest_databases.docker.ElasticSearch` module).
-- Dragonfly and KeyDB live in `pytest_databases.docker.redis`.
-- There is no built-in plugin module in 0.19.0 for SQLite, standalone DuckDB (DuckDB/SQLite over Arrow Flight SQL is served by `gizmosql`), TimescaleDB, ClickHouse, Cassandra, ScyllaDB, Couchbase, DynamoDB, Neo4j/Memgraph, Meilisearch, Typesense, OpenSearch, Qdrant, Weaviate, Vespa, SurrealDB, Google Cloud Storage, Kafka/Redpanda, RabbitMQ, or Db2. For custom containers, use the core `docker_service.run(...)` fixture.
+Every container-backed service inherits `host: str`, `port: int`, and `container: Container` from `ServiceContainer`.
 
-## Service dataclass attributes and properties
-
-Every service class inherits `host: str`, `port: int`, and `container: Container` from `ServiceContainer`. Backend-specific fields vary by module:
-
-| Service class | Extra fields and properties |
-| --- | --- |
-| `PostgresService` | `database: str`, `user: str`, `password: str` |
-| `CockroachDBService` | `database: str`, `driver_opts: dict[str, str]` |
-| `MySQLService`, `MariaDBService`, `DoltService` | `db: str`, `user: str`, `password: str` |
-| `OracleService` | `user: str`, `password: str`, `system_password: str`, `service_name: str` |
-| `MSSQLService` | `user: str`, `password: str`, `database: str`, `.connection_string: str` |
-| `YugabyteService` | `database: str`, `user: str`, `password: str` |
-| `MongoDBService` | `username: str`, `password: str`, `database: str` |
-| `RedisService`, `ValkeyService` | `db: int` |
-| `ElasticsearchService` | `scheme: str`, `user: str`, `password: str`, `database: str` |
-| `BigQueryService` | `project: str`, `dataset: str`, `credentials: Credentials`, `.endpoint: str`, `.client_options: ClientOptions` |
-| `SpannerService` | `credentials: Credentials`, `project: str`, `database_name: str`, `instance_name: str`, `.endpoint: str`, `.client_options: ClientOptions` |
-| `GizmoSQLService` | `username: str`, `password: str`, `.uri: str` (`grpc+tls://{host}:{port}`) |
-| `AzureBlobService` | `connection_string: str`, `account_url: str`, `account_key: str`, `account_name: str` |
-| `MinioService`, `RustfsService` | `endpoint: str`, `access_key: str`, `secret_key: str`, `secure: bool` |
-
-## PostgreSQL-family port fixtures
-
-Version 0.19.0 adds optional host-port fixtures:
-
-| Family | Default fixture | Versioned fixtures |
-| --- | --- | --- |
-| PostgreSQL | `postgres_port` | `postgres_11_port`–`postgres_18_port` |
-| pgvector | `pgvector_port` | `pgvector_13_port`–`pgvector_18_port` |
-| ParadeDB | `paradedb_port` | `paradedb_15_port`–`paradedb_18_port` |
-| AlloyDB Omni | `alloydb_omni_port` | `alloydb_omni_15_port`–`alloydb_omni_17_port` |
-
-When unset, Docker chooses a free host port. Each fixture reads the uppercase
-equivalent environment variable, such as `POSTGRES_18_PORT` or
-`ALLOYDB_OMNI_17_PORT`. By contrast, `redis_port`, `dragonfly_port`,
-`keydb_port`, and `valkey_port` are read-only helper fixtures that return the
-running service's bound `.port`.
-
-## Installation extras
-
-| Extra | Bundled client dependency |
-| --- | --- |
-| `postgres` | `psycopg>=3` |
-| `cockroachdb` | `psycopg` |
-| `oracle` | `oracledb` |
-| `mongodb` | `pymongo` |
-| `redis`, `dragonfly`, `keydb` | `redis` (imported by `pytest_databases.docker.redis`) |
-| `valkey` | `valkey` (imported by `pytest_databases.docker.valkey`) |
-| `elasticsearch7`, `elasticsearch8` | `elasticsearch7` / `elasticsearch8` (`elastic_search.py` unconditionally imports `elasticsearch7` at load time, even for v8) |
-| `bigquery` | `google-cloud-bigquery` |
-| `spanner` | `google-cloud-spanner` |
-| `gizmosql` | `adbc-driver-flightsql`, `pyarrow` |
-| `azure-storage` | `azure-storage-blob` |
-| `mysql`, `mariadb`, `mssql`, `yugabyte` | None; install the project's chosen client separately |
-
-Dolt, MinIO, and RustFS have no dedicated extra in 0.19.0. Their service
-fixtures use core dependencies; install the application client separately.
+- **`PostgresService` & `EmbeddedPostgresService`**: `database`, `user`, `password`, `.dsn`, `.connection_config`, `exec_sql()`, `clone_template_database()`, `drop_database_force()`, `ensure_template(...)`, `create_worker_database_from_template(...)`, `sweep_worker_databases(...)`.
+- **`OracleADBService`**: `user`, `password`, `system_password`, `service_name` (`"myatp_high.adb.oraclecloud.com"` for default `ATP`), `service_names`, `workload_type`, `wallet_dir`, `wallet_password`, `tls_port`, `ords_port`, `mongo_port`, `.ca_cert_path`, `.ords_url`, `.apex_url`, `.sql_developer_url`, `.mongo_uri`, `.mtls_alias`, `extract_wallet()`, `enable_ords_schema()`, `build_wallet_zip()`.
+- **`Db2Service`**: `username`, `password`, `db_name`, `.dsn`, `.connection_config`, `exec_sql()`, `create_worker_database()`, `activate_database()`.
+- **`SybaseService` & `SQLAnywhereService`**: `user`, `password`, `database`, `.dsn`, `.connection_config`, `exec_sql()` (plus `create_worker_database()`, `write_freetds_conf()` on `SybaseService`, and `server_name` on `SQLAnywhereService`).
+- **`TeradataService` & `ExternalTeradataService`**: `host`, `port`, `user`, `password`, `database`, `logmech`, `logdata`, `sslmode`, `encryptdata`, `tmode`, `.dbs_port`, `.connection_config`.
+- **`MinioService` & `RustfsService`**: `endpoint`, `.endpoint_url`, `access_key`, `secret_key`, `secure`, `ensure_bucket(bucket_name)`.
+- **`RedpandaService`**: `host`, `port`, `bootstrap_servers`, `topic_prefix`.
+- **`RabbitMQService`**: `host`, `port`, `username`, `password`, `vhost`, `management_port`, `.amqp_url`, `.management_url`.
+- **`HardchargerService`**: `host`, `port`, `username`, `password`, `.uri`, `.connection_kwargs`.
+- **`CloudflareService`**: `host`, `port`, `.endpoint_url`, `.api_base_url`, `.r2_s3_endpoint_url`, `access_key_id`, `secret_access_key`, `kv_namespaces`, `r2_buckets`, `d1_databases`, `kv_put()`, `kv_get()`, `r2_put()`, `r2_get()`, `d1_query()`.

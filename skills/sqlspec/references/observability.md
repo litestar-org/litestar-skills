@@ -66,7 +66,7 @@ config = SamplingConfig(
 
 ## SQL-level Event Broadcasting (StatementObserver → Channels)
 
-`SQLSpec.ObservabilityConfig` accepts a `statement_observers` tuple — callables invoked synchronously with a `StatementEvent` for every executed statement. This is the primary extension point for SQL-level side effects: audit logs, Prometheus counters, and **real-time broadcasts of DB changes** without modifying service code.
+`ObservabilityConfig` accepts a `statement_observers` tuple — callables invoked synchronously with a `StatementEvent` for every executed statement. This is the primary extension point for SQL-level side effects: audit logs, Prometheus counters, and **real-time broadcasts of DB changes** without modifying service code.
 
 The canonical use case: broadcasting INSERT/UPDATE events on a target table to WebSocket clients subscribed to a Channels backend, without adding any publish calls to the service layer. Because the observer fires inside SQLSpec's statement lifecycle, it has access to the raw SQL string and parameters before the result is returned to the caller. The async bridge (`asyncio.get_running_loop().create_task(...)`) keeps the observer non-blocking.
 
@@ -81,7 +81,7 @@ from typing import TYPE_CHECKING
 from msgspec.json import encode as to_json
 
 if TYPE_CHECKING:
-    from litestar_channels.backends.base import ChannelsBackend
+    from litestar.channels.backends.base import ChannelsBackend
     from sqlspec.observability import StatementEvent
 
 logger = logging.getLogger(__name__)
@@ -114,7 +114,7 @@ class ChangeBroadcaster:
         try:
             payload = {"sql": event.sql, "parameters": event.parameters}
             channel = self.channel_resolver(event.parameters)
-            await self.backend.publish(to_json(payload, as_bytes=True), channels=[channel])
+            await self.backend.publish(to_json(payload), channels=[channel])
         except (OSError, RuntimeError, ValueError, TypeError):
             logger.exception("SQL change broadcast failed")
 ```

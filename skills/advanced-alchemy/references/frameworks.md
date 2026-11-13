@@ -207,7 +207,7 @@ db_config = SQLAlchemyAsyncConfig(
 
 
 async def list_users(request):
-    session = request.state.session
+    session = alchemy.get_async_session(request)
     service = UserService(session=session)
     results = await service.get_many()
     return JSONResponse([{"id": str(r.id)} for r in results])
@@ -219,7 +219,7 @@ alchemy = AdvancedAlchemy(config=db_config, app=app)
 
 ### Middleware-Based Session
 
-The Starlette plugin injects the session into `request.state`, making it available to all route handlers without explicit dependency injection.
+The Starlette plugin manages one session per request on `request.state` under its namespaced session key and exposes `alchemy.get_async_session(request)` / `alchemy.get_sync_session(request)` for route handlers without explicit dependency injection.
 
 ---
 
@@ -258,13 +258,13 @@ from sanic.request import Request
 
 @app.get("/users")
 async def list_users(request: Request):
-    session = request.ctx.session
+    session = alchemy.get_async_session(request)
     service = UserService(session=session)
     results = await service.get_many()
     return json([{"id": str(r.id), "email": r.email} for r in results])
 ```
 
-- Sanic uses `request.ctx` for request-scoped state
+- Sanic uses `request.ctx` under a namespaced session key; retrieve the session with `alchemy.get_async_session(request)` or `alchemy.get_sync_session(request)`
 - The plugin manages session creation and teardown per request
 
 ---
@@ -308,8 +308,8 @@ Every integration ensures one session per request with automatic cleanup:
 | Litestar | DI (`db_session` parameter) | `before_send_handler` |
 | FastAPI | `Depends(alchemy.provide_session())` | ASGI middleware |
 | Flask | `alchemy.get_sync_session()` / app context | `teardown_appcontext` |
-| Starlette | `request.state.session` | ASGI middleware |
-| Sanic | `request.ctx.session` | Request middleware |
+| Starlette | `alchemy.get_async_session(request)` / `request.state` | ASGI middleware |
+| Sanic | `alchemy.get_async_session(request)` / `request.ctx` | Request middleware |
 
 ### Transaction Management
 
@@ -354,7 +354,7 @@ alchemy = AdvancedAlchemy(config=[primary, analytics], app=app)
 | DTOs (SQLAlchemyDTO) | Yes | No | No | No | No |
 | Filter dependencies | Yes | Yes (`provide_filters`) | Manual | Manual | Manual |
 | CLI migrations | `litestar database` / `db` | FastAPI `database` / `db` group | Flask `database` / `db` group | Standalone `alchemy` | Standalone `alchemy` |
-| Lifespan integration | Built-in | `plugin.lifespan()` | `init_app()` | `init_app()` | `init_app()` |
+| Lifespan integration | Built-in | `alchemy.lifespan` | `init_app()` | `init_app()` / `lifespan` | `register()` |
 | Multiple databases | Yes | Yes | Yes | Yes | Yes |
 | Engine config | Yes | Yes | Yes | Yes | Yes |
 | Service layer | Yes | Yes | Yes | Yes | Yes |

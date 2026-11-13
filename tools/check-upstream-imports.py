@@ -13,10 +13,11 @@ API drift. See ``.agents/workflow.md`` §Upstream API Drift.
 
 Exemptions:
 
-- Append ``# pragma: legacy-example`` to a code block's opening fence (or to
-  any line inside the block) to mark a sample as intentionally showing a
-  deprecated form. The block is still parsed and any forbidden vocab still
-  triggers; only the import-existence check is skipped for that block.
+- Append ``# pragma: legacy-example`` or ``# pragma: prerelease-example`` to a
+  code block's opening fence (or to any line inside the block) to mark a sample
+  as intentionally showing a deprecated or unreleased preview form. The block is
+  still parsed and any forbidden vocab still triggers; only the
+  import-existence check is skipped for that block.
 - Files in :data:`_IMPORT_CHECK_ALLOWLIST` are skipped entirely (rare — the
   tool's own tests would go here).
 
@@ -60,6 +61,8 @@ _IMPORT_CHECK_ALLOWLIST: frozenset[str] = frozenset()
 # inside the block (or on the opening fence). The block is still scanned for
 # forbidden vocabulary by ``check_forbidden_vocab`` in ``validate-skills.py``.
 _LEGACY_PRAGMA = "# pragma: legacy-example"
+_PRERELEASE_PRAGMA = "# pragma: prerelease-example"
+_EXEMPT_PRAGMAS = (_LEGACY_PRAGMA, _PRERELEASE_PRAGMA)
 
 # Match a Python fenced code block: ```python ... ```.
 # Captures the block body including any pragma marker on the opening fence line.
@@ -96,9 +99,9 @@ def iter_python_blocks(text: str, file_offset_lines: int = 0) -> Iterator[tuple[
     """Yield ``(start_line, code, is_legacy)`` per Python fenced block.
 
     ``start_line`` is the 1-based line number in the source file where the
-    block's first code line appears. ``is_legacy`` is True if the
-    ``# pragma: legacy-example`` marker was found on the opening fence line
-    or anywhere inside the block.
+    block's first code line appears. ``is_legacy`` is True if an exemption
+    pragma (``# pragma: legacy-example`` or ``# pragma: prerelease-example``)
+    was found on the opening fence line or anywhere inside the block.
     """
     for match in _PYTHON_BLOCK_PATTERN.finditer(text):
         fence_extras = match.group(1) or ""
@@ -107,7 +110,7 @@ def iter_python_blocks(text: str, file_offset_lines: int = 0) -> Iterator[tuple[
         before = text[: match.start()]
         opening_fence_line = before.count("\n") + 1
         body_start_line = opening_fence_line + 1 + file_offset_lines
-        is_legacy = _LEGACY_PRAGMA in fence_extras or _LEGACY_PRAGMA in body
+        is_legacy = any(pragma in fence_extras or pragma in body for pragma in _EXEMPT_PRAGMAS)
         yield body_start_line, body, is_legacy
 
 

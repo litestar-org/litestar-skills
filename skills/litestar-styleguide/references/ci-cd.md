@@ -17,9 +17,9 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10
       - name: Set up Python
         run: uv python install 3.13
       - name: Create virtual environment
@@ -54,8 +54,8 @@ tests:
     matrix:
       python-version: ["3.12", "3.13"]
   steps:
-    - uses: actions/checkout@v6
-    - uses: astral-sh/setup-uv@v7
+    - uses: actions/checkout@v7
+    - uses: astral-sh/setup-uv@v10
     - run: uv python install ${{ matrix.python-version }}
     - run: uv sync --all-extras --dev
     - run: uv run pytest
@@ -67,7 +67,7 @@ tests:
 js-lint:
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - uses: oven-sh/setup-bun@v2
     - run: bun install --frozen-lockfile
     - run: bun run check
@@ -78,7 +78,7 @@ js-lint:
 ### Pre-commit / prek Cache
 
 ```yaml
-- uses: actions/cache@v5
+- uses: actions/cache@v6
   with:
     path: |
       ~/.cache/prek/
@@ -89,7 +89,7 @@ js-lint:
 ### uv Cache
 
 ```yaml
-- uses: astral-sh/setup-uv@v7
+- uses: astral-sh/setup-uv@v10
   with:
     enable-cache: true
 ```
@@ -104,7 +104,7 @@ default_language_version:
 
 repos:
   - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v4.4.0
+    rev: v4.5.0
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
@@ -121,14 +121,14 @@ repos:
       - id: trailing-whitespace
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: "v0.16.10"
+    rev: "v0.17.4"
     hooks:
       - id: ruff
         args: ["--fix"]
       - id: ruff-format
 
   - repo: https://github.com/crate-ci/typos
-    rev: v1.30.3
+    rev: v1.50.0
     hooks:
       - id: typos
 ```

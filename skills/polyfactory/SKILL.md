@@ -126,6 +126,7 @@ Core `BaseFactory` configuration attributes:
 - `__check_model__ = True`: validates that `Use`, `PostGenerated`, `Ignore`, and `Require` attribute names exist on `__model__`.
 - `__random_seed__`: integer seed passed to `cls.seed_random(...)` during class creation.
 - `__use_defaults__ = False`: when `True`, prefers model field defaults / `default_factory` over generated values.
+- `__use_examples__ = False`: when `True`, picks from field annotation metadata `examples` (for example `pydantic.Field(examples=[...])` or `Annotated[T, msgspec.Meta(examples=[...])]`).
 - `__allow_none_optionals__ = True`: when `True`, optional fields (`T | None`) randomly produce `None`; set `False` to always populate `T`.
 - `__set_as_default_factory_for_type__ = False`: when `True`, registers the factory globally for nested fields of type `__model__`.
 - `__faker__` and `__random__`: the factory's `Faker` and `random.Random` instances.
@@ -310,7 +311,7 @@ The factory provides a fully-populated, validation-passing `OrderCreatedEvent`; 
 
 For detailed guides, refer to the following documents in `references/`:
 
-- **[Factories](references/factories.md)** — Per-backend factory bases, model inference, randomization control, `PostGenerated`, model coverage, persistence protocols, and SQLAlchemy 3.3 persistence behavior.
+- **[Factories](references/factories.md)** — Per-backend factory bases, model inference, randomization control, `PostGenerated`, model coverage, persistence protocols, and SQLAlchemy persistence behavior (3.3+).
 - **[Pytest integration](references/pytest-integration.md)** — `@register_fixture`, separate registration from `conftest.py`, fixture scoping and naming, collection boundaries, and async persistence.
 - **[Litestar patterns](references/litestar-patterns.md)** — Using factories with `TestClient` / `AsyncTestClient`, parametrizing handler tests via `coverage()`, integrating with `litestar-testing` fixtures, msgspec DTOs, advanced-alchemy model factories, and SAQ task payload generation.
 
@@ -326,7 +327,6 @@ For detailed guides, refer to the following documents in `references/`:
 - <https://polyfactory.litestar.dev/usage/decorators.html>
 - <https://polyfactory.litestar.dev/usage/fixtures.html>
 - <https://polyfactory.litestar.dev/usage/configuration.html>
-- <https://github.com/litestar-org/polyfactory>
 
 ## Shared Styleguide Baseline
 

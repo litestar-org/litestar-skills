@@ -105,7 +105,7 @@ inertia = InertiaConfig(
 ```
 
 - In development, `TCPStreamIPCTransport` connects to `/__litestar_ssr__` (`litestarViteSsrPlugin` from `litestar-vite-plugin/dev-ssr` using Vite 7+ `ModuleRunner`).
-- In production, `StdioIPCTransport` spawns the bundled SSR worker (`InertiaSSRConfig.command`, defaulting to `["node", "<ssr_bundle_path>"]` running `startSsrWorker` from `litestar-vite-plugin/ssr-worker`) over newline-delimited JSON `stdin`/`stdout` pipes.
+- In production (`0.33.0+`), `resolve_ssr_transport(config, ssr_config)` chooses the transport from `RuntimeConfig.ssr_transport`: `"stdio"` spawns `StdioIPCTransport` using `InertiaSSRConfig.command` (or `resolve_ssr_command` for `node` / `bun` / `deno`), `"wasm"` runs in-process QuickJS via `WasmIPCTransport` (`litestar-vite[wasm]`), and `"auto"` (default) uses `StdioIPCTransport` when `command` or a JS runtime binary is available, otherwise falling back to `WasmIPCTransport`.
 - `<!--inertia-head-->`, `<!--inertia-body-->` / `<!--inertia-->`, and bare `@inertiaHead` / `@inertia` slot tokens in `root_template` are replaced with SSR head/body output (`inject_inertia_ssr_tags`), falling back to `#app`.
 
 ## End-to-End Authenticated Controller & Page Example

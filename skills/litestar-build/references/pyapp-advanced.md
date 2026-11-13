@@ -50,11 +50,11 @@ Three things make this different from simple hatch-binary:
 
 ```python
 DEFAULT_URLS: dict[str, str] = {
-    "x86_64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
-    "aarch64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz",
-    "x86_64-apple-darwin": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-x86_64-apple-darwin-install_only_stripped.tar.gz",
-    "aarch64-apple-darwin": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-aarch64-apple-darwin-install_only_stripped.tar.gz",
-    "x86_64-pc-windows-msvc": "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.13.13%2B20260414-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+    "x86_64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.13.18%2B20261026-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+    "aarch64-unknown-linux-gnu": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.13.18%2B20261026-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz",
+    "x86_64-apple-darwin": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.13.18%2B20261026-x86_64-apple-darwin-install_only_stripped.tar.gz",
+    "aarch64-apple-darwin": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.13.18%2B20261026-aarch64-apple-darwin-install_only_stripped.tar.gz",
+    "x86_64-pc-windows-msvc": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.13.18%2B20261026-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
 }
 
 DEFAULT_PLATFORMS: dict[str, str] = {
@@ -108,7 +108,7 @@ Step 4 is why the onefile is offline-capable: every dep is already unpacked into
 
 ### The install-dir patch (the clever bit)
 
-In PyApp `v0.29.0`, `src/app.rs` resolves the installation directory inside `initialize()` as `platform_dirs().data_local_dir().join(project_name()).join(distribution_id()).join(project_version())` (with a built-in runtime override via `PYAPP_INSTALL_DIR_<PROJECT_NAME>`, where `<PROJECT_NAME>` is the uppercased `PYAPP_PROJECT_NAME` with `-` replaced by `_`; note that there is no separate `storage_dir()` or `project_dirs()` helper function in `src/app.rs`):
+In PyApp `v0.29.0`–`v0.31.0`, `src/app.rs` resolves the installation directory inside `initialize()` as `platform_dirs().data_local_dir().join(project_name()).join(distribution_id()).join(project_version())` (with a built-in runtime override via `PYAPP_INSTALL_DIR_<PROJECT_NAME>`, where `<PROJECT_NAME>` is the uppercased `PYAPP_PROJECT_NAME` with `-` replaced by `_`; note that there is no separate `storage_dir()` or `project_dirs()` helper function in `src/app.rs`):
 
 - Linux: `~/.local/share/<app>/<hash>/<version>/`
 - macOS: `~/Library/Application Support/<app>/<hash>/<version>/`
@@ -190,7 +190,7 @@ export BZIP2_SYS_STATIC="1"
 export LZMA_API_STATIC="1"
 
 # PyApp build-time env
-export PYAPP_VERSION="v0.29.0"
+export PYAPP_VERSION="v0.31.0"
 export PYAPP_DIR="dist/.scratch"
 export PYAPP_PROJECT_PATH="$(realpath dist/app-${current_version}-py3-none-any.whl)"
 export PYAPP_PROJECT_NAME="app"
@@ -253,7 +253,7 @@ chmod +x dist/app
 rm -rf "${PYAPP_DIR}" dist/python-dist.tar.gz
 ```
 
-In PyApp `v0.29.0`, `Cargo.toml` sets `bzip2 = "0.6.0"` (which uses the pure-Rust `libbz2-rs-sys` backend by default, making `static = ["bzip2-sys?/static"]` a no-op) and has no `xz`/`lzma` dependency. Keeping `BZIP2_SYS_STATIC=1`, `LZMA_API_STATIC=1`, and the `sed` patch is a harmless belt-and-suspenders guard that remains essential when pinning older `PYAPP_VERSION` tags. (If rewriting `Cargo.toml` in Python with `re.MULTILINE`, match end-of-line with `[ \t]*$` rather than `\s*$` so `\s*` does not consume the newline and join the next line.)
+In PyApp `v0.29.0`–`v0.31.0`, `Cargo.toml` sets `bzip2 = "0.6.0"` (which uses the pure-Rust `libbz2-rs-sys` backend by default, making `static = ["bzip2-sys?/static"]` a no-op) and has no `xz`/`lzma` dependency. Keeping `BZIP2_SYS_STATIC=1`, `LZMA_API_STATIC=1`, and the `sed` patch is a harmless belt-and-suspenders guard that remains essential when pinning older `PYAPP_VERSION` tags. (If rewriting `Cargo.toml` in Python with `re.MULTILINE`, match end-of-line with `[ \t]*$` rather than `\s*$` so `\s*` does not consume the newline and join the next line.)
 
 ## PyApp env var catalog
 
@@ -261,7 +261,7 @@ Everything the advanced build sets:
 
 | Var | Value | When read | Why |
 | --- | --- | --- | --- |
-| `PYAPP_VERSION` | `v0.29.0` | Shell (git clone) | PyApp release to compile |
+| `PYAPP_VERSION` | `v0.31.0` | Shell (git clone) | PyApp release to compile |
 | `PYAPP_PROJECT_PATH` | `dist/*.whl` | cargo build | Wheel to embed in the binary |
 | `PYAPP_PROJECT_NAME` | `app` | cargo build | Project identifier (also determines runtime `PYAPP_INSTALL_DIR_<PROJECT_NAME>`) |
 | `PYAPP_PROJECT_VERSION` | `1.2.3` | cargo build | Stamped into binary metadata |
@@ -285,7 +285,7 @@ Everything the advanced build sets:
 
 ## glibc portability with `cargo-zigbuild`
 
-Plain `cargo build --release` on `ubuntu-latest` (Ubuntu 24.04) links against the runner's host glibc (`GLIBC_2.39`). The resulting binary passes `./dist/app --help` on the runner host, then fails inside older distros or Debian Bookworm / distroless containers (`gcr.io/distroless/cc-debian12:nonroot`, `GLIBC_2.36`):
+Plain `cargo build --release` on `ubuntu-latest` (Ubuntu 24.04) links against the runner's host glibc (`GLIBC_2.39`). The resulting binary passes `./dist/app --help` on the runner host, then fails inside older distros or Debian Bookworm / distroless containers (`gcr.io/distroless/cc-debian12:nonroot`, `GLIBC_2.36`) with:
 
 ```text
 ./app: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.39' not found
@@ -353,7 +353,7 @@ time ./dist/app --help                 # should be < 200ms
 # 4. Network isolation test
 docker run --rm --network=none \
   -v $PWD/dist:/opt/dist:ro \
-  gcr.io/distroless/cc-debian12:nonroot \
+  gcr.io/distroless/cc-debian13:nonroot \
   /opt/dist/app --help
 # If this succeeds, the binary is fully offline
 ```

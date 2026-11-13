@@ -1,11 +1,11 @@
 ---
 name: litestar-build
-description: "Use when working with uv build, hatch build, PyApp, PYAPP_*, wheel assets, GitHub release matrices, cargo-zigbuild, or python-build-standalone. Not for runtime deployment."
+description: "Use when working with uv build, uv_build, hatch build, PyApp, scie-jump, PYAPP_*, wheel assets, GitHub release matrices, cargo-zigbuild, or python-build-standalone. Not for runtime deployment."
 ---
 
 # litestar-build
 
-Build-side packaging patterns for Litestar applications: how to produce a **self-contained wheel** that embeds the Vite/Bun frontend, how to wrap that wheel in a **PyApp onefile** binary, and how to wire the whole pipeline into **GitHub Actions** CI and releases.
+Build-side packaging patterns for Litestar applications: how to produce a **self-contained wheel** (`uv_build` or `hatchling`) that embeds the Vite/Bun frontend, how to wrap that wheel in a **PyApp** or **`scie-jump`** onefile binary, and how to wire the pipeline into **GitHub Actions** CI and releases.
 
 This skill is the counterpart to [litestar-deployment](../litestar-deployment/SKILL.md) — build is about producing artifacts, deployment is about running them.
 
@@ -97,10 +97,11 @@ Rule: **Vite's `outDir` and litestar-vite's `bundle_dir` must point inside one o
 
 | Topic | Reference | Key Commands |
 | --- | --- | --- |
-| Wheel build + asset bundling | [references/wheel-assets.md](references/wheel-assets.md) | `uv build --wheel --clear`, `[tool.hatch.build.targets.wheel.force-include]`, `ignore-vcs = true` |
-| PyApp — simple (hatch-binary) | [references/pyapp-simple.md](references/pyapp-simple.md) | `uv run hatch build --target binary` |
+| Wheel build + asset bundling | [references/wheel-assets.md](references/wheel-assets.md) | `uv build --wheel --clear`, `uv_build`, `hatchling` (`force-include` / `ignore-vcs`) |
+| PyApp — simple (hatch-binary) | [references/pyapp-simple.md](references/pyapp-simple.md) | `hatch build --target binary` |
 | PyApp — advanced (offline + custom install dir) | [references/pyapp-advanced.md](references/pyapp-advanced.md) | `tools/bundler.py build`, `cargo zigbuild` |
-| GitHub Actions CI (test matrix) | [references/github-ci.md](references/github-ci.md) | `astral-sh/setup-uv@v7`, `oven-sh/setup-bun@v2`, composite actions |
+| Standalone onefile (`a-scie/jump` `scie-jump`) | [references/scie-bundler.md](references/scie-bundler.md) | `uv export`, `uv pip install --target`, `scie-jump --scie-jump` |
+| GitHub Actions CI (test matrix) | [references/github-ci.md](references/github-ci.md) | `astral-sh/setup-uv@v10.3.3`, `oven-sh/setup-bun@v2`, composite actions |
 | GitHub Actions release | [references/github-release.md](references/github-release.md) | matrix onefiles, `cargo-zigbuild`, `gh release create` |
 | Upgrading Python / PyApp | [references/upgrading.md](references/upgrading.md) | Files to edit in sync |
 
@@ -148,11 +149,12 @@ Each `js-build-*` target emits into a distinct subdirectory of the Python packag
 
 Configure `ViteConfig(paths=PathConfig(bundle_dir=Path("app/domain/web/public")))` in Python so `.litestar.json` bridges the target directory to `litestar-vite-plugin`. If `vite.config.ts` overrides `build.outDir` directly (monorepo or standalone Vite build), set `build.outDir` and `litestar({ bundleDir, hotFile })` to an absolute path inside your Python package (`src/py/<pkg>/...` or `<pkg>/...`). **Do not** let Vite default to `./dist/`.
 
-### Step 2: Choose a Hatchling bundling strategy
+### Step 2: Choose a build backend (`uv_build` vs `hatchling`)
 
-- **`force-include`** (inertia): List the built-asset directory explicitly under `[tool.hatch.build.targets.wheel.force-include]`. Built assets stay `.gitignore`d. Explicit, auditable.
-- **`ignore-vcs = true`** (SPA): Tell Hatchling to ignore `.gitignore`. All package files ship. Simpler; requires discipline to keep dev junk out of package dirs.
-- **Optional custom Hatchling hook**: If you add a `BuildHookInterface` subclass (e.g., `tools/build/hatch_build.py`) to validate or build frontend assets during `uv build`, guard `initialize(version, build_data)` with `if version == "editable":` (warning to `sys.stderr`, creating the placeholder directory, and returning early instead of raising `ValueError` or running a frontend build) so `uv sync` succeeds before frontend assets exist, and exclude `tools/build` from `mypy` and `pyright`.
+- **`uv_build`** (`requires = ["uv_build>=0.13.0,<0.14.0"]`, `build-backend = "uv_build"`): fastest backend for pure-Python packages whose built assets live inside `module-root/module-name` (`[tool.uv.build-backend]` options: `module-root`, `module-name`, `source-include`, `source-exclude`, `wheel-exclude`). Does not support `BuildHookInterface` hooks or `hatch-binary`.
+- **`hatchling` `force-include`** (inertia): List built assets under `[tool.hatch.build.targets.wheel.force-include]` so built assets stay `.gitignore`d.
+- **`hatchling` `ignore-vcs = true`** (SPA): Ignore `.gitignore` under `packages = [...]`; requires keeping dev junk out of package dirs.
+- **Optional custom Hatchling hook**: Guard `BuildHookInterface.initialize(version, build_data)` with `if version == "editable":` (warn to `sys.stderr`, create placeholder dir, return early) so `uv sync` succeeds before assets exist, and exclude `tools/build` from `mypy` and `pyright`.
 
 See [references/wheel-assets.md](references/wheel-assets.md) for full config.
 
@@ -160,16 +162,17 @@ See [references/wheel-assets.md](references/wheel-assets.md) for full config.
 
 Create `install`, `build-assets`, `build-wheel`. Make the wheel target **depend** on the asset target. Pass `--clear` to `uv build --wheel --clear` so stale wheels in `dist/` never get picked up by downstream packaging steps.
 
-### Step 4: Add PyApp (if shipping a binary)
+### Step 4: Add a onefile bundler (if shipping a binary)
 
 Decide which flavor:
 
-- **Simple**: add `[tool.hatch.build.targets.binary]` to `pyproject.toml` and run `uv run hatch build --target binary` (runtime install location can still be overridden via `PYAPP_INSTALL_DIR_<PROJECT_NAME>`). Good when end-users have PyPI access. See [pyapp-simple.md](references/pyapp-simple.md).
-- **Advanced**: write a `tools/bundler.py` that pre-installs deps into a `python-build-standalone` archive, patches PyApp's `src/app.rs` for a custom compiled-in default install dir, then runs `cargo zigbuild`. Good for air-gapped distribution or bespoke default install locations. See [pyapp-advanced.md](references/pyapp-advanced.md).
+- **PyApp — Simple**: add `[tool.hatch.build.targets.binary]` to `pyproject.toml`, export `PYAPP_*` env vars (`PYAPP_PROJECT_PATH`, `PYAPP_DISTRIBUTION_EMBED=1`, `PYAPP_FULL_ISOLATION=1`, `PYAPP_UV_ENABLED=1`), and run `hatch build --target binary`. Good for standard OS baselines with `self` CLI commands. See [pyapp-simple.md](references/pyapp-simple.md).
+- **PyApp — Advanced**: write a `tools/bundler.py` that pre-installs deps into a `python-build-standalone` archive, patches PyApp's `src/app.rs` for a custom default install dir, and runs `cargo zigbuild`. Good for air-gapped distribution or bespoke install dirs. See [pyapp-advanced.md](references/pyapp-advanced.md).
+- **`scie-jump` (`a-scie/jump` `v1.13.0`)**: stage `uv export` + wheel via `uv pip install --target` into `python-build-standalone`, render `lift.json` (`load_dotenv: false`, `=PYTHONNOUSERSITE: "1"`, `=PYTHONPATH: ""`), and assemble per target with `<host-scie-jump> --scie-jump <target-scie-jump> lift.json`. Requires no Rust/Zig toolchain and builds Linux/macOS/Windows onefiles from one script. See [scie-bundler.md](references/scie-bundler.md).
 
 ### Step 5: Add GitHub Actions CI
 
-Start with a reusable `test.yml` that accepts `python-version` + `coverage` inputs. Call it from `ci.yml` across a matrix. Use `astral-sh/setup-uv@v7` and `oven-sh/setup-bun@v2`. See [github-ci.md](references/github-ci.md).
+Start with a reusable `test.yml` that accepts `python-version` + `coverage` inputs. Call it from `ci.yml` across a matrix. Use `astral-sh/setup-uv@v10.3.3` and `oven-sh/setup-bun@v2`. See [github-ci.md](references/github-ci.md).
 
 For larger projects, factor `setup-python` and `setup-node` into `.github/actions/` composite actions.
 
@@ -190,8 +193,8 @@ Trigger on `v*` tags. Run the test matrix first. Then build the wheel once. Then
 - **PyApp `PYAPP_*` config vars are build-time (except `PYAPP_INSTALL_DIR_<PROJECT_NAME>`).** `PYAPP_PROJECT_NAME`, `PYAPP_PYTHON_VERSION`, `PYAPP_DISTRIBUTION_EMBED`, `PYAPP_DISTRIBUTION_VARIANT_GIL` are consumed when `cargo build` compiles PyApp — not when the resulting binary runs. At runtime, the compiled binary reads `PYAPP_INSTALL_DIR_<PROJECT_NAME>` (uppercased `PYAPP_PROJECT_NAME` with `-` replaced by `_`; keep set for `self remove` / `self restore`) to override the extraction directory, and sets `PYAPP=1` (or the executable path when `PYAPP_PASS_LOCATION=1`) inside the spawned Python process.
 - **PyApp version upgrades touch multiple files.** `pyproject.toml`, `build-onefile-package.sh`, `.github/workflows/release.yml`, `tools/bundler.py`. See [upgrading.md](references/upgrading.md).
 - **`cargo-zigbuild` for portable glibc — and verify it is on `PATH`.** Plain `cargo build` on a modern Linux runner links against the runner's host `glibc` (e.g. `GLIBC_2.39` on Ubuntu 24.04), producing binaries that pass host smoke tests (`./dist/app --help`) but fail inside older distros or Debian Bookworm / distroless containers (`GLIBC_2.36`) with `version 'GLIBC_2.39' not found`. Use `cargo zigbuild --target x86_64-unknown-linux-gnu.2.17` to link against glibc 2.17, add `$(uv tool dir --bin)` (`$HOME/.local/bin`) and `$HOME/.cargo/bin` to `PATH` / `$GITHUB_PATH` after `uv tool install cargo-zigbuild`, and never allow Linux CI builds to fall back silently to `cargo build --release`.
-- **Static-link native deps in PyApp.** Set `BZIP2_SYS_STATIC=1` and `LZMA_API_STATIC=1` before `cargo zigbuild`, or patch `Cargo.toml` to add `features = ["static"]`. (In PyApp `v0.29.0`, `bzip2 = "0.6.0"` uses the pure-Rust `libbz2-rs-sys` backend by default and has no `xz`/`lzma` dependency, so these flags are a harmless belt-and-suspenders safeguard that remain critical when pinning older PyApp releases.)
-- **Pin `uv` and `bun` versions in CI.** Use exact pinned versions (e.g., `UV_VERSION=0.11.6` and `BUN_INSTALL_VERSION=bun-v1.3.12`). Drift in either breaks reproducible builds.
+- **Static-link native deps in PyApp.** Set `BZIP2_SYS_STATIC=1` and `LZMA_API_STATIC=1` before `cargo zigbuild`, or patch `Cargo.toml` to add `features = ["static"]`. (In PyApp `v0.29.0`–`v0.31.0`, `bzip2 = "0.6.0"` uses the pure-Rust `libbz2-rs-sys` backend by default and has no `xz`/`lzma` dependency, so these flags are a harmless belt-and-suspenders safeguard that remain critical when pinning older PyApp releases.)
+- **Pin `uv` and `bun` versions in CI.** Use exact pinned versions (e.g., `UV_VERSION=0.13.7` and `BUN_INSTALL_VERSION=bun-v1.4.4`). Drift in either breaks reproducible builds.
 - **Create placeholder asset dirs in CI.** Hatchling's `force-include` target fails if `app/domain/web/public` or `src/py/app/server/static/web` doesn't exist at wheel/editable-build time. CI jobs that don't build the frontend (lint, mypy, pyright) still need `mkdir -p <asset-dir>` before `uv sync`.
 - **Never commit built frontend output or `.litestar.json`.** Keep `bundle_dir` paths (including `hot` and `hot.ssr`) and `.litestar.json` in `.gitignore`. CI rebuilds them on every run. Reason: JS builds are non-deterministic across machines and cause noisy diffs.
 - **Coverage on one Python version only.** Multiple versions uploading the same `coverage.xml` silently stomp each other. Pin it to one version in your matrix (`if: matrix.python-version == '3.12'`).
@@ -218,7 +221,7 @@ Before claiming "the PyApp binary works":
 - [ ] `dist/<app> --help` runs on the build machine
 - [ ] The binary is ≥ 50 MB (much smaller means it's not embedding Python)
 - [ ] On Linux, `ldd dist/<app>` shows ≤ libc / libm / libpthread (no `libbz2`, no `liblzma`)
-- [ ] A network-isolated `docker run --rm --network=none gcr.io/distroless/cc-debian12:nonroot /opt/dist/<app> --help` succeeds (proves no runtime PyPI fetches)
+- [ ] A network-isolated `docker run --rm --network=none gcr.io/distroless/cc-debian13:nonroot /opt/dist/<app> --help` succeeds (proves no runtime PyPI fetches)
 - [ ] The install dir (`~/.<app>/runtime/` or similar) is created on first run and re-used on second run
 
 Before claiming "CI works":
@@ -247,14 +250,15 @@ packages = ["app"]
 "app/domain/web/public" = "app/domain/web/public"
 
 [tool.hatch.build.targets.binary]
-pyapp-version = "0.29.0"
+pyapp-version = "0.31.0"
 python-version = "3.13"
 scripts = ["app"]
+```
 
-[tool.hatch.build.targets.binary.env]
-PYAPP_DISTRIBUTION_EMBED = "1"
-PYAPP_FULL_ISOLATION = "1"
-PYAPP_UV_ENABLED = "1"
+```bash
+# Hatchling's binary builder reads PYAPP_* from the process environment (not pyproject.toml)
+PYAPP_DISTRIBUTION_EMBED=1 PYAPP_FULL_ISOLATION=1 PYAPP_UV_ENABLED=1 \
+  hatch build --target binary
 ```
 
 ### Example Projects
@@ -269,6 +273,7 @@ PYAPP_UV_ENABLED = "1"
 - [Wheel Build + Asset Bundling](references/wheel-assets.md)
 - [PyApp — Simple (hatch-binary)](references/pyapp-simple.md)
 - [PyApp — Advanced (offline, custom install dir, portable glibc)](references/pyapp-advanced.md)
+- [Standalone Onefiles (`a-scie/jump` `scie-jump`)](references/scie-bundler.md)
 - [GitHub Actions — CI (Test Matrix)](references/github-ci.md)
 - [GitHub Actions — Release](references/github-release.md)
 - [Upgrading — Python, PyApp, python-build-standalone](references/upgrading.md)
@@ -277,8 +282,10 @@ PYAPP_UV_ENABLED = "1"
 
 - <https://ofek.dev/pyapp/> — PyApp documentation (all `PYAPP_*` env vars)
 - <https://github.com/ofek/pyapp> — PyApp source (patch target: `src/app.rs`)
+- <https://github.com/a-scie/jump> — `scie-jump` onefile launcher and `lift.json` spec
 - <https://hatch.pypa.io/latest/config/build/> — Hatchling build config
 - <https://hatch.pypa.io/latest/plugins/builder/binary/> — Hatch binary builder (simple PyApp)
+- <https://docs.astral.sh/uv/concepts/build-backend/> — `uv_build` backend configuration
 - <https://docs.astral.sh/uv/concepts/projects/build/> — `uv build` reference
 - <https://github.com/astral-sh/python-build-standalone/releases> — Portable Python archives
 - <https://github.com/rust-cross/cargo-zigbuild> — cargo-zigbuild for portable glibc

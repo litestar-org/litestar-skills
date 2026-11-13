@@ -41,8 +41,8 @@ packages = ["app"]
 "app/domain/web/public" = "app/domain/web/public"
 
 [tool.hatch.build.targets.binary]
-pyapp-version = "0.29.0"
-python-version = "3.12"
+pyapp-version = "0.31.0"
+python-version = "3.13"
 scripts = ["app"]
 ```
 
@@ -109,14 +109,15 @@ artifacts = [
 
 [tool.hatch.build.targets.binary]
 scripts = ["<app>"]
-pyapp-version = "0.29.0"
+pyapp-version = "0.31.0"
 python-version = "3.13"
+```
 
-[tool.hatch.build.targets.binary.env]
-PYAPP_DISTRIBUTION_EMBED = "1"
-PYAPP_FULL_ISOLATION = "1"
-PYAPP_UV_ENABLED = "1"
-PYAPP_ALLOW_UPDATES = "1"
+Export `PYAPP_*` variables in the shell or CI `env:` before invoking `hatch build --target binary` (`Hatchling`'s binary builder does not read a `[tool.hatch.build.targets.binary.env]` TOML table):
+
+```bash
+PYAPP_DISTRIBUTION_EMBED=1 PYAPP_FULL_ISOLATION=1 PYAPP_UV_ENABLED=1 PYAPP_ALLOW_UPDATES=1 \
+  hatch build --target binary
 ```
 
 **When to use:**
@@ -124,6 +125,38 @@ PYAPP_ALLOW_UPDATES = "1"
 - You want one switch to "include everything the package tree contains".
 - You trust your dev workflow not to leave stray files under `src/py/<pkg>/`.
 - You prefer one rule over per-directory `force-include` entries.
+
+### Pattern C — `uv_build` (fast pure-Python + pre-built package assets)
+
+`uv_build` (`uv_build==0.13.8`) is Astral's native PEP 517 build backend for pure-Python packages and applications whose frontend bundles are emitted inside the package tree before `uv build --wheel --clear`.
+
+```toml
+# pyproject.toml
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "src/py"                 # default is "src"; use "" for flat app/ layout
+module-name = "app"                    # or list / dotted namespace e.g. "acme.app"
+source-include = ["docs/**/*.md"]      # anchored PEP 639 globs added to sdist
+source-exclude = ["**/tests/**"]       # unanchored globs dropped from sdist AND wheel
+wheel-exclude = ["*.map", "fixtures/**"] # unanchored globs dropped ONLY from wheel
+```
+
+Key `uv_build` behavior:
+
+- `__pycache__`, `*.pyc`, and `*.pyo` are excluded by default; exclusions always override inclusions, and `source-exclude` applies to both `sdist` and `wheel` so wheel builds stay consistent with sdist builds.
+- Pin the minor compatibility range (`"uv_build>=0.13.0,<0.14.0"` matching your installed `uv` minor version).
+- `uv_build` does **not** support custom Python `BuildHookInterface` hooks, compiled C/Rust extensions, or `[tool.hatch.build.targets.binary]`.
+
+| Requirement | Recommended Backend |
+| --- | --- |
+| Pure Python + Vite/Bun outputs written inside `module-root/module-name` | `uv_build` (fastest, minimal config) |
+| Per-directory `force-include` for `.gitignore`d asset folders | `hatchling` |
+| Custom Python `BuildHookInterface` validation/build hook | `hatchling` |
+| `hatch build --target binary` (`hatch-binary`) | `hatchling` |
+| `scie-jump` or custom `tools/bundler.py` PyApp bundling from the built `.whl` | Either `uv_build` or `hatchling` |
 
 ## Where Vite writes (and why it matters)
 
@@ -252,7 +285,7 @@ build-wheel: build-assets
 
 .PHONY: build-binary
 build-binary: build-wheel
-	@uv run hatch build --target binary
+	@PYAPP_PROJECT_PATH="$$(realpath dist/*.whl)" hatch build --target binary
 ```
 
 ### Multi-asset

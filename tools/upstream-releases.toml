@@ -40,9 +40,9 @@ imports = ["litestar_vite"]
 
 [[package]]
 pypi = "litestar-mcp"
-version = "0.18.0"
-date = "2026-11-03"
-tag = "v0.18.0"
+version = "0.20.0"
+date = "2026-11-12"
+tag = "v0.20.0"
 skills = ["skills/litestar-mcp"]
 imports = ["litestar_mcp"]
 
@@ -112,8 +112,8 @@ imports = ["litestar_autowire"]
 
 [[package]]
 pypi = "litestar-security"
-version = "0.7.1"
-date = "2026-11-02"
-tag = "v0.7.1"
+version = "0.7.2"
+date = "2026-11-12"
+tag = "v0.7.2"
 skills = ["skills/litestar-security"]
 imports = ["litestar_security"]

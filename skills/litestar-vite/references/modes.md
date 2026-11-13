@@ -20,27 +20,27 @@ Pick one canonical shape per project.
 ## Supported Frameworks Matrix
 
 Each row is a tested, shipping example in the immutable
-[`v0.31.0` examples tree](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples).
+[`v0.33.0` examples tree](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples).
 Prefer `litestar assets init --template <name>` so generated files come from the
-same tagged template registry.
+same tagged template registry (`react`, `react-router`, `react-tanstack`, `react-inertia`, `react-inertia-jinja`, `vue`, `vue-inertia`, `vue-inertia-ssr`, `vue-inertia-jinja`, `vue-inertia-jinja-ssr`, `svelte`, `svelte-inertia`, `svelte-inertia-jinja`, `sveltekit`, `nuxt`, `astro`, `htmx`, `jinja-htmx`, `htmx-no-jinja`, `angular`, `angular-cli`).
 
 | Framework | Mode | Example dir | Vite plugin(s) | Notes |
 | --- | --- | --- | --- | --- |
-| **React** | spa | [`react/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/react) | `@vitejs/plugin-react` | Standard React SPA. |
-| **React + TanStack Router** | spa | [`react-tanstack/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/react-tanstack) | `@vitejs/plugin-react`, `@tanstack/router-plugin/vite` | Auto code-splitting, file-based routing, end-to-end typed. |
-| **Vue 3** | spa | [`vue/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/vue) | `@vitejs/plugin-vue` | Composition API + `<script setup>`. |
-| **Svelte** | spa | [`svelte/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/svelte) | `@sveltejs/vite-plugin-svelte` | Svelte 5 runes. |
-| **Angular** | spa | [`angular/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/angular) | `@analogjs/vite-plugin-angular` | Requires `resolve.mainFields: ["module"]`; Angular plugin must be first in `plugins` array. See `angular-cli/` for Angular-CLI workflow. |
-| **Nuxt (Vue SSR)** | framework (`ssr`) | [`nuxt/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/nuxt) | Nuxt's own Vite setup | Litestar proxies API; Nuxt owns rendering. Type output → `./app/generated`. |
-| **SvelteKit** | framework (`ssr`) | [`sveltekit/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/sveltekit) | SvelteKit's own Vite setup | Framework owns rendering; Litestar is the API. |
-| **Astro** | framework (`ssg`) | [`astro/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/astro) | **`litestar-vite-plugin/astro`** (different import!) | Uses Astro's own `astro.config.mjs`; `apiProxy` points at Litestar. No `vite.config.ts` needed. |
-| **Inertia + React** | hybrid | [`react-inertia/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/react-inertia) | `@vitejs/plugin-react` | Server routing via `component=` route handlers. See [`inertia.md`](inertia.md). |
-| **Inertia + React + Jinja** | hybrid | [`react-inertia-jinja/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/react-inertia-jinja) | `@vitejs/plugin-react` | Inertia with Jinja root template (useful for auth-guarded vs public shells). |
-| **Inertia + Vue** | hybrid | [`vue-inertia/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/vue-inertia) | `@vitejs/plugin-vue` | Server routing + Vue page components. |
-| **Inertia + Vue + Jinja** | hybrid | [`vue-inertia-jinja/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/vue-inertia-jinja) | `@vitejs/plugin-vue` | Inertia + Jinja root template. |
-| **Inertia + Svelte** | hybrid | [`svelte-inertia/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/svelte-inertia) | `@sveltejs/vite-plugin-svelte` | Server routing + Svelte page components. |
-| **Inertia + Svelte + Jinja** | hybrid | [`svelte-inertia-jinja/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/svelte-inertia-jinja) | `@sveltejs/vite-plugin-svelte` | Inertia + Jinja root template. |
-| **HTMX + Jinja** | template (`htmx` alias) | [`jinja-htmx/`](https://github.com/litestar-org/litestar-vite/tree/v0.31.0/examples/jinja-htmx) | (none framework-specific) | Jinja `TemplateConfig` + `VitePlugin(mode="template")` + Litestar `HTMXPlugin` + client-side `ls-*` JSON templating. |
+| **React** | spa | [`react/`](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/react) | `@vitejs/plugin-react` | Standard React SPA. |
+| **React + TanStack Router** | spa | [`react-tanstack/`](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/react-tanstack) | `@vitejs/plugin-react`, `@tanstack/router-plugin/vite` | Auto code-splitting, file-based routing, end-to-end typed. |
+| **Vue 3** | spa | [`vue/`](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/vue) | `@vitejs/plugin-vue` | Composition API + `<script setup>`. |
+| **Svelte** | spa | [`svelte/`](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/svelte) | `@sveltejs/vite-plugin-svelte` | Svelte 5 runes. |
+| **Angular** | spa | [`angular/`](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/angular) | `@analogjs/vite-plugin-angular` | Requires `resolve.mainFields: ["module"]`; Angular plugin must be first in `plugins` array. See `angular-cli/` for Angular-CLI workflow. |
+| **Nuxt (Vue SSR)** | framework (`ssr`) | [`nuxt/`](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/nuxt) | Nuxt's own Vite setup | Litestar proxies API; Nuxt owns rendering. Type output → `./app/generated`. |
+| **SvelteKit** | framework (`ssr`) | [`sveltekit/`](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/sveltekit) | SvelteKit's own Vite setup | Framework owns rendering; Litestar is the API. |
+| **Astro** | framework (`ssg`) | [`astro/`](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/astro) | **`litestar-vite-plugin/astro`** (different import!) | Uses Astro's own `astro.config.mjs`; `apiProxy` points at Litestar. No `vite.config.ts` needed. |
+| **Inertia + React** | hybrid | [`react-inertia/`](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/react-inertia) | `@vitejs/plugin-react` | Server routing via `component=` route handlers. See [`inertia.md`](inertia.md). |
+| **Inertia + React + Jinja** | hybrid | [`react-inertia-jinja/`](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/react-inertia-jinja) | `@vitejs/plugin-react` | Inertia with Jinja root template (useful for auth-guarded vs public shells). |
+| **Inertia + Vue** | hybrid | [`vue-inertia/`](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/vue-inertia) | `@vitejs/plugin-vue` | Server routing + Vue page components. |
+| **Inertia + Vue + Jinja** | hybrid | [`vue-inertia-jinja/`](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/vue-inertia-jinja) | `@vitejs/plugin-vue` | Inertia + Jinja root template. |
+| **Inertia + Svelte** | hybrid | [`svelte-inertia/`](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/svelte-inertia) | `@sveltejs/vite-plugin-svelte` | Server routing + Svelte page components. |
+| **Inertia + Svelte + Jinja** | hybrid | [`svelte-inertia-jinja/`](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/svelte-inertia-jinja) | `@sveltejs/vite-plugin-svelte` | Inertia + Jinja root template. |
+| **HTMX + Jinja** | template (`htmx` alias) | [`jinja-htmx/`](https://github.com/litestar-org/litestar-vite/tree/v0.33.0/examples/jinja-htmx) | (none framework-specific) | Jinja `TemplateConfig` + `VitePlugin(mode="template")` + Litestar `HTMXPlugin` + client-side `ls-*` JSON templating. |
 
 ### Outside Shipped Examples
 
@@ -86,14 +86,15 @@ TypeGen output path convention: **`./src/generated`** for SPAs.
 - Vite bundles JS/CSS sprinkles that progressively enhance pages
 - Template helpers inject Vite asset URLs + HMR client
 
-Template helpers (available when `template_config` is set + `VitePlugin` is registered):
+Template helpers (auto-registered when `mode="template"` and `template_config` uses `JinjaTemplateEngine`):
 
 | Helper | Purpose |
 | --- | --- |
-| `{{ vite('resources/main.js') }}` | Emit `<script type="module" src="...">` for the input file; handles dev vs manifest |
+| `{{ vite('resources/main.js') }}` | Emit `<script type="module" src="...">` (and `vite_asset` alias) for the input file; handles dev vs manifest |
 | `{{ vite_hmr() }}` | Inject Vite HMR client `<script>` during `dev_mode=True`; no-op in prod |
 | `{{ vite_static('favicon.svg') }}` | Resolve a static asset URL |
 | `{{ vite_routes() }}` | Render inline route metadata for client-side routing |
+| `{{ vite_fragment('components/Card.vue', props=..., mode='static') }}` | Server-render a React/Vue/Svelte/Astro fragment or `<litestar-island>` |
 
 ```python
 from litestar_vite import ViteConfig, VitePlugin, PathConfig
@@ -465,7 +466,7 @@ async def counter_island() -> ComponentResponse:
 {{ vite_fragment("resources/components/Counter.tsx", props={"initial": 0}, mode="island") }}
 ```
 
-In development, `FragmentEngine` dispatches `render_fragment` over `TCPStreamIPCTransport` to `/__litestar_ssr__` (`litestarViteSsrPlugin` using Vite 7+ `ModuleRunner`). In production, it uses `StdioIPCTransport` (`["node", "<ssr_bundle_path>"]` or `InertiaSSRConfig.command`, backed by `startSsrWorker` from `litestar-vite-plugin/ssr-worker`).
+In development, `FragmentEngine` dispatches `render_fragment` over `TCPStreamIPCTransport` to `/__litestar_ssr__` (`litestarViteSsrPlugin` using Vite 7+ `ModuleRunner`). In production, `resolve_ssr_transport()` selects `StdioIPCTransport` (`resolve_ssr_command` or `InertiaSSRConfig.command`, backed by `startSsrWorker` from `litestar-vite-plugin/ssr-worker`) or `WasmIPCTransport` (`litestar-vite[wasm]`, QuickJS) based on `RuntimeConfig.ssr_transport`.
 
 ---
 
@@ -476,8 +477,8 @@ In development, `FragmentEngine` dispatches `render_fragment` over `TCPStreamIPC
 - **Zod is off by default** in TypeGen; opt in with
   `TypeGenConfig(generate_zod=True)` and install `zod`
 - **TypeGen output path** varies by mode: `./src/generated` (SPA), `./resources/generated` (Inertia), `./app/generated` (Nuxt)
-- **Template helpers** work across template, htmx, and hybrid modes (anywhere you render server-side HTML)
+- **Template helpers** are auto-registered for Jinja2 in `mode="template"` (use `ViteAssetLoader` or `AppHandler` HTML transform for custom engines/modes)
 - **Canonical scripts** in `package.json`: `dev`, `build`, `preview`/`serve`, `generate-types`
 
-Use the `v0.32.0` example tree and `assets init` templates above. Do not copy
+Use the `v0.33.0` example tree and `assets init` templates above. Do not copy
 unreleased application repositories when auditing a published package contract.

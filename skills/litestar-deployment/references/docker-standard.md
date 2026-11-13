@@ -7,9 +7,9 @@ For production, prefer [docker-distroless.md](docker-distroless.md) instead.
 ## Complete Dockerfile
 
 ```dockerfile
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1
 ARG PYTHON_VERSION=3.13
-ARG DEBIAN_VERSION=bookworm
+ARG DEBIAN_VERSION=trixie
 ARG BUILDER_IMAGE=python:${PYTHON_VERSION}-slim-${DEBIAN_VERSION}
 
 # =============================================================================

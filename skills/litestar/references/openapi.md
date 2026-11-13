@@ -19,7 +19,7 @@ Import `OpenAPIConfig` from `litestar.openapi` (`from litestar.openapi import Op
 | `title` | `str` (required) | API title in the `info` block. |
 | `version` | `str` (required) | API version string in the `info` block. |
 | `path` | `str \| None = None` | Base path for OpenAPI docs and raw specs (defaults to `"/schema"` when `openapi_router` is not supplied). |
-| `render_plugins` | `Sequence[OpenAPIRenderPlugin] = ()` | UI and raw-spec plugins to mount under `path`. Defaults to `(ScalarRenderPlugin(),)` when empty and `openapi_controller` is not set. |
+| `render_plugins` | `Sequence[OpenAPIRenderPlugin] = ()` | UI and raw-spec plugins to mount under `path`. When omitted (and `openapi_controller` is `None`), Litestar 2.25 mounts ReDoc (`/schema` root), Swagger, RapiDoc, Stoplight Elements, JSON, and YAML via legacy defaults; pass `[ScalarRenderPlugin()]` explicitly to serve Scalar. |
 | `openapi_router` | `Router \| None = None` | Optional custom `Router` for hosting OpenAPI endpoints (attach `guards`, `middleware`, or custom `path` here; when set, `OpenAPIConfig.path` is ignored). |
 | `create_examples` | `bool = False` | Auto-generate deterministic schema examples via Polyfactory (`random_seed: int = 10`). |
 | `random_seed` | `int = 10` | Random seed used by Polyfactory when `create_examples=True`. |
@@ -53,9 +53,9 @@ from litestar.openapi.plugins import (
 
 | Plugin | Default Path(s) (relative to `OpenAPIConfig.path`) | Key Parameters | Notes |
 | --- | --- | --- | --- |
-| `ScalarRenderPlugin` | `"/scalar"` | `version="latest"`, `js_url=None`, `css_url=None`, `path="/scalar"`, `options: dict[str, Any] \| None = None` | Default interactive UI when `render_plugins` is omitted. |
+| `ScalarRenderPlugin` | `"/scalar"` | `version="latest"`, `js_url=None`, `css_url=None`, `path="/scalar"`, `options: dict[str, Any] \| None = None` | Modern interactive UI; pass explicitly in `render_plugins=[ScalarRenderPlugin()]` (not mounted when `render_plugins` is omitted). |
 | `SwaggerRenderPlugin` | `"/swagger"` | `version="5.18.2"`, `js_url=None`, `css_url=None`, `standalone_preset_js_url=None`, `init_oauth: dict[str, Any] \| None = None`, `oauth2_redirect_url: str \| None = None`, `path="/swagger"` | Also registers `/oauth2-redirect.html`. Automatically injects a CSRF header interceptor when `app.csrf_config` has `cookie_httponly=False`. |
-| `RedocRenderPlugin` | `"/redoc"` | `version="latest"`, `js_url=None`, `google_fonts: bool = True`, `path="/redoc"` | Clean 3-pane documentation reader; set `google_fonts=False` in air-gapped environments. |
+| `RedocRenderPlugin` | `"/redoc"` | `version="latest"`, `js_url=None`, `google_fonts: bool = True`, `path="/redoc"` | Clean 3-pane documentation reader and default root UI (`root_schema_site="redoc"`) when `render_plugins` is omitted; set `google_fonts=False` in air-gapped environments. |
 | `RapidocRenderPlugin` | `"/rapidoc"` | `version="9.3.4"`, `js_url=None`, `path="/rapidoc"` | Web-component OpenAPI explorer; automatically injects a CSRF header interceptor when `app.csrf_config` has `cookie_httponly=False`. |
 | `StoplightRenderPlugin` | `"/elements"` | `version="7.7.18"`, `js_url=None`, `css_url=None`, `path="/elements"` | Stoplight Elements UI. |
 | `JsonRenderPlugin` | `"/openapi.json"` | `path="/openapi.json"`, `media_type=OpenAPIMediaType.OPENAPI_JSON` | Automatically added by `OpenAPIPlugin` if no plugin in `render_plugins` serves `"/openapi.json"`. |
