@@ -201,7 +201,7 @@ runs:
       if: steps.check-uv.outputs.uv-installed != 'true'
       shell: bash
       env:
-        UV_VERSION: "0.13.7"
+        UV_VERSION: "0.13.9"
       run: |
         set -euo pipefail
         curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
@@ -475,7 +475,7 @@ Configure as a **required status check** in branch protection. One box to tick, 
 | Mistake | Symptom | Fix |
 | --- | --- | --- |
 | `uv sync` before placeholder dir | Hatchling errors in lint/typecheck jobs | `mkdir -p <bundle_dir>` before `uv sync` |
-| `uv` version floats | Reproducibility issues across runs | Pin in composite action: `UV_VERSION: "0.13.7"` |
+| `uv` version floats | Reproducibility issues across runs | Pin in composite action: `UV_VERSION: "0.13.9"` |
 | Coverage from every Python version | Last-writer-wins in codecov | Conditional: `coverage: ${{ matrix.python-version == '3.12' }}` |
 | `fail-fast: true` on experimental matrix cells | One flaky cell kills the whole matrix | `fail-fast: false` for expensive/experimental matrices |
 | No timeout-minutes | Runaway test hangs consume minutes budget | Set per-job (e.g. 30 for lint, 100 for e2e) |

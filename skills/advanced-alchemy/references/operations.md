@@ -105,6 +105,10 @@ db_config = SQLAlchemyAsyncConfig(
 
 Per-session override via `session.info["enable_file_object_listener"] = False` or `session.info["enable_cache_listener"] = False` is honored at listener-dispatch time.
 
+## OpenTelemetry & Engine Telemetry (1.13+)
+
+When using `opentelemetry-instrumentation-sqlalchemy`, `SQLAlchemyConfig` supports late-bound `SQLAlchemyInstrumentor().instrument()` wiring alongside existing `engine_config` / `session_maker` overrides because instrumentation hooks bind against engine creation without overriding `before_flush` or `after_commit` listeners.
+
 ## Serialization (`advanced_alchemy.utils.serialization`)
 
 Library-wide JSON encoder / decoder — msgspec first, orjson fallback, stdlib `json` last. Used by the cache layer (`cache/serializers.py`), fixture loader (`utils/fixtures.py`), and the `JsonB` column type.

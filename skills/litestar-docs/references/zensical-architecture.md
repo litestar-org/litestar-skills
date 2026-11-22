@@ -1,16 +1,16 @@
 # Zensical Documentation Architecture
 
-Canonical configuration, plugins, markdown extensions, and companion tooling for **Zensical** (`zensical >= 0.1.1`, MIT open source) + **`mkdocstrings-python` (Griffe static AST)** across Litestar repositories.
+Canonical configuration, plugins, markdown extensions, and companion tooling for **Zensical** (`zensical >= 0.1.3`, MIT open source) + **`mkdocstrings-python` (Griffe static AST)** across Litestar repositories.
 
 ## Dependency Group (`pyproject.toml`)
 
 ```toml
 [dependency-groups]
 doc = [
-  "zensical>=0.1.1",
+  "zensical>=0.1.3",
   "mkdocstrings-python>=2.0.10",
   "pymdown-extensions>=13.0",
-  "ruff>=0.17.5",
+  "ruff>=0.17.6",
 ]
 ```
 

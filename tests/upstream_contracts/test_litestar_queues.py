@@ -44,6 +44,7 @@ from litestar_queues import (
     TaskDependencyResolver,
     TaskExecutionContext,
     TaskExitCode,
+    TaskListPage,
     TaskReservation,
     TaskStatus,
     Worker,
@@ -92,8 +93,8 @@ from litestar_queues.task import clear_task_registry, get_default_service
 
 
 def test_litestar_queues_0120_contract() -> None:
-    """Verify litestar-queues 0.14.0 package metadata, configs, and CLI contract."""
-    assert version("litestar-queues") == "0.14.0"
+    """Verify litestar-queues 0.15.0 package metadata, configs, and CLI contract."""
+    assert version("litestar-queues") == "0.15.0"
 
     config = QueueConfig()
     assert config.worker == WorkerConfig()
@@ -130,6 +131,7 @@ def test_litestar_queues_0120_contract() -> None:
 
         sqlspec_backend = SQLSpecBackendConfig()
         assert sqlspec_backend.manage_schema is True
+        assert sqlspec_backend.migration_mode == "reconcile"
         assert sqlspec_backend.queue_table_name is None
         assert sqlspec_backend.event_history_table_name is None
         assert sqlspec_backend.maintenance_table_name is None
@@ -215,6 +217,7 @@ def test_litestar_queues_0120_contract() -> None:
         "sqs",
     }
     assert set(queues_group.commands) == {
+        "list",
         "run",
         "run-consumer",
         "status",
@@ -510,5 +513,9 @@ async def test_litestar_queues_cooperative_cancellation_and_dependencies() -> No
                 await worker.stop()
                 await worker_task
             assert str(stream_handle.id) in closed_attempts
+
+        assert "list" in queues_group.commands
+        assert hasattr(QueueService, "list_tasks")
+        assert TaskListPage is not None
     finally:
         clear_task_registry()

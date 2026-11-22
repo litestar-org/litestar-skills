@@ -127,15 +127,20 @@ else:
 
 Install the `cli` extra (`pip install 'advanced-alchemy[cli]'`, which provides `rich-click`) when invoking the standalone `alchemy` CLI or `get_alchemy_group()`. Importing `advanced_alchemy.cli` or framework extensions at runtime does not require `rich` or `click` to be installed (`_ConsoleProxy` lazily resolves `rich.get_console()` only when CLI output is emitted, and `get_alchemy_group()` raises `MissingDependencyError(package="click", install_package="cli")` only when called without `click`).
 
+In 1.13+, `alchemy` discovers config from `--config`/`-c` (before or after subcommands), `ALCHEMY_CONFIG`, or `[tool.advanced-alchemy] config = "myapp.db:alchemy_config"` in `pyproject.toml`, and supports `--validate-config` and `alchemy show-config`. Generated Alembic `env.py` templates also conditionally enable `alembic_postgresql_enum` when installed.
+
 ```bash
+# Validate discovered configuration
+alchemy --validate-config show-config
+
 # Generate migration
-alchemy --config path.to.alchemy_config.config make-migrations -m "add user table"
+alchemy --config path.to.alchemy_config:config make-migrations -m "add user table"
 
 # Apply all pending migrations
-alchemy --config path.to.alchemy_config.config upgrade head
+alchemy --config path.to.alchemy_config:config upgrade head
 
 # Rollback one migration
-alchemy --config path.to.alchemy_config.config downgrade -1
+alchemy --config path.to.alchemy_config:config downgrade -1
 ```
 
 ### Litestar Integration CLI

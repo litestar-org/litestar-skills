@@ -94,7 +94,7 @@ The transport and discovery surface across the ecosystem is:
 | `before_tool_call` / `after_tool_call` | `Hook \| None` | `None` | Observe `tools/call` dispatch, result, error, duration |
 | `max_blob_bytes` | `int \| None` | `25 * 1024 * 1024` | Max raw bytes for base64 blobs (`None` disables) |
 | `infer_http_method_annotations` / `auto_output_schema` | `bool` | `True` / `False` | Infer HTTP `ToolAnnotations` hints; synthesize `outputSchema` from return types |
-| `max_tool_description_length` / `max_param_description_length` / `max_output_field_description_length` | `int \| None` | `None` | Optional character caps enforced on tool specs |
+| `max_tool_description_length` / `max_param_description_length` / `max_output_field_description_length` | `int \| None` | `None` | Character caps recursively checked across `$defs` and nested input/output schemas (`0.20.1+`) |
 | `ui_mime_types` / `filter_app_only_tools` | `Sequence[str] \| None` / `bool` | `None` / `False` | SEP-1865 UI MIME types (`()` disables) and filtering of app-only tools |
 | `enable_get_sse` / `session_ttl_seconds` | `bool` / `float` | `True` / `3600.0` | Pre-`2026-07-28` `GET` SSE streams and `Mcp-Session-Id` store TTL |
 | `logging` / `default_log_level` | `bool` / `str` | `True` / `"info"` | Enable `capabilities.logging`, `logging/setLevel`, initial RFC 5424 level |

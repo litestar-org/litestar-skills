@@ -30,8 +30,8 @@ from litestar import Litestar
 
 
 def test_advanced_alchemy_111_public_api_contract() -> None:
-    """Verify the documented Advanced Alchemy 1.12 public entrypoints."""
-    assert version("advanced-alchemy") == "1.12.0"
+    """Verify the documented Advanced Alchemy 1.13.0b3 public entrypoints."""
+    assert version("advanced-alchemy") == "1.13.0b3"
     assert {
         "AdvancedDeclarativeBase",
         "BasicAttributes",
@@ -135,19 +135,26 @@ def test_advanced_alchemy_111_public_api_contract() -> None:
         "is_attrs_instance",
         "find_filter",
     } <= set(service.__all__)
+    assert hasattr(service, "ServiceGroup")
+    assert hasattr(service.SQLAlchemyAsyncRepositoryReadService, "get_or_none")
+    assert hasattr(service.SQLAlchemySyncRepositoryReadService, "get_or_none")
+    assert hasattr(repository.SQLAlchemyAsyncRepository, "get_or_none")
+    assert hasattr(repository.SQLAlchemySyncRepository, "get_or_none")
     assert {
         "FilterTypes",
         "StatementFilter",
         "PaginationFilter",
         "InAnyFilter",
-        "LimitOffset",
-        "OrderBy",
+        "LimitOffsetFilter",
+        "CursorFilter",
+        "CursorKey",
+        "OrderByFilter",
         "SearchFilter",
-        "CollectionFilter",
+        "InCollectionFilter",
         "NotInCollectionFilter",
         "NotInSearchFilter",
-        "BeforeAfter",
-        "OnBeforeAfter",
+        "BeforeAfterFilter",
+        "OnBeforeAfterFilter",
         "NullFilter",
         "NotNullFilter",
         "ComparisonFilter",
@@ -155,7 +162,9 @@ def test_advanced_alchemy_111_public_api_contract() -> None:
         "BooleanFilter",
         "ExistsFilter",
         "NotExistsFilter",
+        "RelationshipFilter",
         "FilterGroup",
+        "FilterSet",
         "MultiFilter",
         "FilterMap",
         "LogicalOperatorMap",
@@ -294,9 +303,9 @@ def test_advanced_alchemy_filter_and_service_behavioral_contracts() -> None:
         "ignore_case",
         "escape_wildcards",
     }
-    order_by = filters.OrderBy(field_name="name")
+    order_by = filters.OrderByFilter(field_name="name")
     assert order_by.nulls is None
-    assert set(filters.OrderBy.__dataclass_fields__) == {"field_name", "sort_order", "nulls"}
+    assert set(filters.OrderByFilter.__dataclass_fields__) == {"field_name", "sort_order", "nulls"}
 
     assert {
         "eq",
@@ -321,10 +330,16 @@ def test_advanced_alchemy_filter_and_service_behavioral_contracts() -> None:
         "id_filter",
         "id_field",
         "sort_field",
+        "sort_fields",
         "sort_order",
         "sort_nulls",
+        "filter_fields",
         "pagination_type",
         "pagination_size",
+        "pagination_max_size",
+        "pagination_cursor_secret",
+        "pagination_cursor_ttl",
+        "pagination_cursor_encrypted",
         "search",
         "search_ignore_case",
         "search_escape_wildcards",
@@ -397,7 +412,7 @@ def test_advanced_alchemy_litestar_exception_handler_contract() -> None:
         plugins=[litestar.SQLAlchemyPlugin(config=int_key_cfg)],
         exception_handlers={500: custom_500_handler},
     )
-    assert exceptions.RepositoryError not in int_key_app.exception_handlers
+    assert exceptions.RepositoryError in int_key_app.exception_handlers
 
     explicit_cfg = litestar.SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
     explicit_app: Any = Litestar(

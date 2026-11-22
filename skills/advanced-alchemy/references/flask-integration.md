@@ -218,7 +218,7 @@ def list_orders():
     page_size = request.args.get("pageSize", 20, type=int)
     search_term = request.args.get("searchString")
 
-    limit_offset = filters.LimitOffset(
+    limit_offset = filters.LimitOffsetFilter(
         limit=page_size,
         offset=page_size * (current_page - 1),
     )
@@ -238,7 +238,7 @@ def list_orders():
     return orders_service.jsonify(payload)
 ```
 
-The `filters` subpackage is framework-agnostic; `LimitOffset`, `SearchFilter`, `CollectionFilter`, `OrderBy`, `BeforeAfter`, and friends all work the same way here as in any other integration.
+The `filters` subpackage is framework-agnostic; `LimitOffsetFilter`, `SearchFilter`, `InCollectionFilter`, `OrderByFilter`, `BeforeAfterFilter`, and `CursorFilter` all work the same way here as in any other integration.
 
 ## Migrations / CLI
 
@@ -351,7 +351,7 @@ alchemy = AdvancedAlchemy(
 def list_orders():
     current_page = request.args.get("currentPage", 1, type=int)
     page_size = request.args.get("pageSize", 20, type=int)
-    limit_offset = filters.LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
+    limit_offset = filters.LimitOffsetFilter(limit=page_size, offset=page_size * (current_page - 1))
     orders_service = OrderService(session=alchemy.get_sync_session())
     results, total = orders_service.get_many_and_count(limit_offset)
     payload = orders_service.to_schema(results, total, filters=[limit_offset], schema_type=OrderSchema)
@@ -403,6 +403,6 @@ One POST to `/orders` with `{"customer_email": "a@b.co", "total_cents": 9900}`:
 - [starlette-integration.md](starlette-integration.md) — ASGI base class behind FastAPI.
 - [sanic-integration.md](sanic-integration.md) — async framework counterpart.
 - [services.md](services.md) — `SQLAlchemySyncRepositoryService` and `FlaskServiceMixin`.
-- [filters.md](filters.md) — filter types (`LimitOffset`, `SearchFilter`, etc.).
+- [filters.md](filters.md) — filter types (`LimitOffsetFilter`, `SearchFilter`, `CursorFilter`, etc.).
 - [migrations.md](migrations.md) — Alembic workflow behind `flask database`.
 - [../../litestar-styleguide/references/canonical-apps.md](../../litestar-styleguide/references/canonical-apps.md) — public reference apps (Litestar-based; service/repository code transfers directly).

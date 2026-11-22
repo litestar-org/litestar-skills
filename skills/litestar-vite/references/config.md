@@ -172,6 +172,7 @@ Import `SPAConfig` from `litestar_vite.config`.
 | `fail_on_error` | `None` | Fail builds (`True`) and warn during dev (`False`) by default; explicit bool overrides both |
 | `fallback_type` | `"unknown"` | Fallback (`"unknown"` or `"any"`) for untyped containers in Inertia props |
 | `type_import_paths` | `{}` | Map of schema/class name → TypeScript import path for page-prop types absent from OpenAPI |
+| `only_routes` / `exclude_routes` | `()` / `()` | Allowlist / blocklist route filters controlling which Litestar routes emit TypeGen metadata (`routes.json`, `routes.ts`, `schemas.ts`) (`0.34.0+`) |
 | `extra_commands` | `[]` | Additional codegen commands (e.g. `[["tsr", "generate"]]`) run after metadata export and before `litestar-vite-typegen` |
 
 The JS generator writes hey-api output under `output/api/`, plus
@@ -212,7 +213,7 @@ Import `InertiaConfig` and `InertiaSSRConfig` from `litestar_vite` or
 | `circuit_breaker_failure_threshold` | `3` | Consecutive failures before opening the SSR circuit (`0.32.0+`) |
 | `circuit_breaker_reset_timeout` | `30.0` | Seconds before transitioning an open circuit to `HALF_OPEN` (`0.32.0+`) |
 
-In `0.33.0+`, `litestar_vite.ipc` exports `BaseIPCTransport`, `StdioIPCTransport`, `TCPStreamIPCTransport`, `WasmIPCTransport`, `is_wasm_available`, `resolve_ssr_transport`, `SSRCircuitBreaker`, `CircuitState`, `IPCError`, `IPCRequest`, `IPCResponse`, `IPCTimeoutError`, `IPCWorkerCrashError`, and `CircuitBreakerOpenError`.
+In `0.33.0+`, `litestar_vite.ipc` exports `BaseIPCTransport`, `StdioIPCTransport`, `TCPStreamIPCTransport`, `WasmIPCTransport`, `is_wasm_available`, `resolve_ssr_transport`, `SSRCircuitBreaker`, `CircuitState`, `IPCError`, `IPCRequest`, `IPCResponse`, `IPCTimeoutError`, `IPCWorkerCrashError`, and `CircuitBreakerOpenError`. Configure WASM safety bounds via `RuntimeConfig(wasm_memory_limit=..., wasm_max_stack_size=..., wasm_time_limit=...)` (`0.34.0+`).
 
 ## LoggingConfig
 
@@ -238,11 +239,12 @@ the user to run `litestar assets build` without exposing absolute manifest paths
 | `storage_backend` | `VITE_DEPLOY_STORAGE` or `None` | fsspec URL (`s3://bucket/assets`, `gcs://...`, `abfs://...`) |
 | `storage_options` | `{}` | Options forwarded to `fsspec.core.url_to_fs` |
 | `asset_url` | `VITE_DEPLOY_ASSET_URL` or `None` | Public CDN URL injected as `ASSET_URL` during `litestar assets deploy` builds |
-| `include_manifest` | `True` | Upload `manifest.json` alongside hashed bundles |
-| `delete_orphaned` | `VITE_DEPLOY_DELETE` or `True` | Delete remote files absent from the local bundle |
+| `include_manifest` | `False` | Upload `manifest.json` alongside hashed bundles (kept local on origin by default in `0.34.0+`) |
+| `delete_orphaned` | `VITE_DEPLOY_DELETE` or `False` | Delete remote files absent from the local bundle (opt in via `--delete` or env) |
+| `include_sourcemaps` | `False` | Upload `.map` sourcemap files alongside built bundles (also CLI `--include-sourcemaps`, `0.34.0+`) |
 | `content_types` | `{}` | Custom filename extension → MIME content-type overrides |
 
-Use `deploy_config.with_overrides(storage_backend=..., storage_options=..., delete_orphaned=..., asset_url=...)` to clone a `DeployConfig` with CLI overrides.
+Use `deploy_config.with_overrides(storage_backend=..., storage_options=..., delete_orphaned=..., include_sourcemaps=..., asset_url=...)` to clone a `DeployConfig` with CLI overrides.
 
 ## vite.config.ts Contract
 
@@ -316,7 +318,7 @@ Also configure Vite top-level:
 | `VITE_BASE_URL` | Public base URL of the Litestar server |
 | `VITE_ENABLED` | Disable runtime wiring (`false`) while retaining CLI/config access |
 | `VITE_DEV_MODE` | Enable development behavior (`true` / `false`) |
-| `VITE_AUTO_DEV_MODE` | Auto-enable `dev_mode=True` for auto-detected SPA/hybrid apps without built assets (default `True`) |
+| `VITE_AUTO_DEV_MODE` | Auto-enable `dev_mode=True` for auto-detected SPA/hybrid apps without built assets (default `False` in `0.34.0+`) |
 | `LITESTAR_VITE_RUNTIME` / `VITE_EXECUTOR` | Override `RuntimeConfig.executor` (`LITESTAR_VITE_RUNTIME` takes precedence) |
 | `VITE_PROXY_MODE` | `vite`, `proxy`, or `none`; `direct` is deprecated |
 | `VITE_PROXY_DEBUG` | Enable verbose proxy debug logging (`1` / `true` / `yes`) |

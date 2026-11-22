@@ -23,9 +23,11 @@
 | PyMSSQL | `"pymssql"` | `tsql` | PYFORMAT (`%s`) input, positional execution | `helper` | No | SQL Server native |
 | PyMySQL | `"pymysql"` | `mysql` | PYFORMAT (`%s`) | `helper` | No | MySQL native |
 | SAP SQL Anywhere | `"sqlanywhere"` | `sqlanywhere` | QMARK (`?`) | `helper` | No | SQL Anywhere DB-API |
+| Snowflake | `"snowflake"` | `snowflake` | PYFORMAT (`%s`) | `helper` | No | Snowflake DB-API |
 | Spanner | `"spanner"` | `spanner` | NAMED_AT (`@name`) | `helper` | Both | Spanner proto |
 | SQLite | `"sqlite"` | `sqlite` | QMARK (`?`) | `helper` | No | Python stdlib |
 | Sybase ASE | `"sybase"` | `sybase` | PYFORMAT (`%s`) | `helper` | No | Sybase TDS / DB-API |
+| Teradata Vantage | `"teradata"` | `vantage` | QMARK (`?`) | `helper` | No | Teradata DB-API |
 
 ### JSON Strategy
 
@@ -45,7 +47,7 @@ Check the adapter config flags before building generic tooling:
 | Native Arrow import | All adapters except `bigquery`, `db2`, and `pymssql` | Check `config.storage_capabilities()` at runtime. `load_from_records()` normalizes through Arrow. |
 | ADK session/event, memory, and artifact stores | Adapter-local `adk` packages, including PostgreSQL, CockroachDB, MySQL, SQLite, Oracle, IBM Db2, DuckDB, ADBC, Arrow ODBC, SQL Server, and Spanner families | Spanner ships concrete `SpannerSyncADKArtifactStore` and `SpannerAsyncADKArtifactStore` alongside sync/async session and memory stores. BigQuery ships `BigQueryADKStore` only as an analytics-replica/telemetry path (not for live low-latency transactional session writes or memory stores). Verify the concrete store export for the selected adapter instead of inferring it from database support. |
 | Event transports | PostgreSQL: `notify`, `notify_queue`, `poll_queue`; Oracle: `aq`, `txeventq`, `poll_queue`; others: `poll_queue` | Retired names `listen_notify`, `listen_notify_durable`, and `table_queue` raise configuration errors. |
-| Cloud job/session controls | `bigquery`, `spanner` | BigQuery controls live in `BigQueryConfig.driver_features`; Spanner controls live in `SpannerSyncConfig.driver_features` / `SpannerAsyncConfig.driver_features`, per-call kwargs, and `provide_session()` / `provide_write_session()` / `provide_read_session()`. |
+| Cloud job/session controls | `bigquery`, `spanner` | BigQuery controls live in `BigQueryConfig.driver_features`; Spanner controls live in `SpannerSyncConfig.driver_features` / `SpannerAsyncConfig.driver_features`, per-call kwargs, and `provide_session()` / `provide_write_session()` / `provide_replica_session()`. |
 
 ---
 
@@ -91,10 +93,16 @@ Check the adapter config flags before building generic tooling:
 
 ### Cloud / Analytical
 
-- **bigquery**: Google BigQuery jobs API. Use Storage Read API for large Arrow datasets.
-- **spanner**: Google Cloud Spanner with proto-based types. Globally distributed.
+- **bigquery**: Google BigQuery jobs API (requires `commit_mode="manual"` in web framework extensions). Use Storage Read API for large Arrow datasets.
+- **snowflake**: `SnowflakeConfig` / `SnowflakeDriver` (`sqlspec[snowflake]`) for Snowflake data cloud via `snowflake-connector-python`.
+- **spanner**: Google Cloud Spanner with proto-based types and native read-replica sessions (`provide_replica_session`). Globally distributed.
+- **teradata**: `TeradataConfig` / `TeradataDriver` (`sqlspec[teradata]`) for Teradata Vantage using the `vantage` SQLGlot dialect and query band helpers (`format_query_band`).
 - **duckdb**: In-process OLAP. Native Arrow, zero-copy transfers.
 - **adbc**: Apache Arrow Database Connectivity. Use for Arrow-first pipelines.
+
+### Read Replicas & Pool Resilience
+
+All 24 adapters support `ReplicaGroup` / `ReplicaSpec` read-replica configurations with `provide_replica_session()`, `provide_routing_session()`, `RoutingContext`, and `SQLSpecRoutingMiddleware` (including HMAC-signed read-after-write primary pinning via `sign_primary_pin` / `verify_primary_pin`). `AsyncpgDriverFeatures` and `PyMysqlDriverFeatures` also expose transient connector retry knobs (`connector_retry_count=3`, `connector_retry_delay=0.5`, `connector_retry_max_delay=5.0`) and `reset_session_on_release`.
 
 ### Testing
 
@@ -143,7 +151,7 @@ Every adapter normalizes common `connection_config` parameter aliases and DSN st
 ### Cloud Spanner (`sqlspec.adapters.spanner` & `sqlspec.dialects.spanner`)
 
 - Ships both synchronous (`SpannerSyncConfig`, `SpannerSyncDriver`, `SpannerSyncConnection`, `SpannerSyncCursor`, `SpannerSyncExceptionHandler`) and native AsyncIO (`SpannerAsyncConfig`, `SpannerAsyncDriver`, `SpannerAsyncConnection`, `SpannerAsyncCursor`, `SpannerAsyncExceptionHandler`) adapters built on `google-cloud-spanner>=3.64.0` (`SpannerAsyncClient`).
-- Both configs and drivers expose `provide_session()`, `provide_write_session()`, `provide_read_session()`, `run_in_transaction()`, `execute_partitioned_dml()`, and mutation helpers (`write_insert()`, `write_upsert()`, `write_update()`, `write_delete()`).
+- Both configs and drivers expose `provide_session()`, `provide_write_session()`, `provide_replica_session()` (with `provide_read_session()` retained as a deprecated alias), `run_in_transaction()`, `execute_partitioned_dml()`, and mutation helpers (`write_insert()`, `write_upsert()`, `write_update()`, `write_delete()`).
 - Exports `SpannerSyncDataDictionary` and `SpannerAsyncDataDictionary` (`sqlspec.adapters.spanner.data_dictionary`) with `mode="googlesql"` or `"postgresql"` (`spangres`), covering `property_graphs`, `change_streams`, `sequences`, `ddl`, and `system` metadata domains.
 - Ships first-party extension stores across sync and async configs:
   - **Litestar sessions**: `SpannerSyncStore`, `SpannerAsyncStore`, `SpannerLitestarConfig` (`sqlspec.adapters.spanner.litestar`)
@@ -169,6 +177,7 @@ Every adapter normalizes common `connection_config` parameter aliases and DSN st
 - Supports both sync and async modes via `oracledb` thin/thick client (async pools reject Thick mode before opening).
 - Named parameter binding with `:name` style.
 - Defaults `fetch_lobs=False`, which materializes supported LOBs as `str` or `bytes`. Set `fetch_lobs=True` only when code needs native LOB locators.
+- Single-row `INSERT` statements populate `SQLResult.last_inserted_id` via Oracle `ROWID` when available.
 - Native JSON, `IS JSON` CLOB/BLOB, and OSON columns decode through metadata-aware handlers. Plain CLOB/BLOB values are never JSON-decoded by content heuristics.
 - Event channels support opt-in `aq` and `txeventq`; `poll_queue` remains the Oracle default.
 

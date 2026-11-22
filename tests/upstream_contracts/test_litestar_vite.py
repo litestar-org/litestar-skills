@@ -40,7 +40,7 @@ from litestar_vite.codegen import (
 )
 from litestar_vite.config import InertiaTypeGenConfig, LoggingConfig, PaginationContainer, SPAConfig
 from litestar_vite.fragments import vite_fragment
-from litestar_vite.html_transform import inject_inertia_ssr_tags
+from litestar_vite.html_transform import escape_json_for_html, inject_inertia_ssr_tags
 from litestar_vite.inertia import (
     InertiaBack,
     InertiaExternalRedirect,
@@ -82,8 +82,8 @@ from litestar_vite.scaffolding.templates import FrameworkType, get_template
 
 
 def test_litestar_vite_032_config_contract() -> None:
-    """Verify litestar-vite 0.33.0 version and config contracts."""
-    assert version("litestar-vite") == "0.33.0"
+    """Verify litestar-vite 0.34.0 version and config contracts."""
+    assert version("litestar-vite") == "0.34.0"
     config = ViteConfig()
     assert config.mode == "template"
     assert config.enabled is None
@@ -158,16 +158,19 @@ def test_litestar_vite_032_config_contract() -> None:
     assert deploy_cfg.enabled is True
     assert isinstance(config.deploy, DeployConfig)
     assert config.deploy.enabled is False
-    assert deploy_cfg.include_manifest is True
-    assert deploy_cfg.delete_orphaned is True
+    assert deploy_cfg.include_manifest is False
+    assert deploy_cfg.delete_orphaned is False
+    assert deploy_cfg.include_sourcemaps is False
     overridden = deploy_cfg.with_overrides(
         storage_backend="s3://bucket/assets",
-        delete_orphaned=False,
+        delete_orphaned=True,
+        include_sourcemaps=True,
         asset_url="https://cdn.example.com/",
     )
     assert overridden.enabled is True
     assert overridden.storage_backend == "s3://bucket/assets"
-    assert overridden.delete_orphaned is False
+    assert overridden.delete_orphaned is True
+    assert overridden.include_sourcemaps is True
     assert overridden.asset_url == "https://cdn.example.com/"
 
     typegen_cfg = TypeGenConfig()
@@ -420,11 +423,20 @@ def test_litestar_vite_032_static_server_and_html_entry_contract(tmp_path: Path)
         exclude_static_from_auth=True,
     )
     plugin = VitePlugin(config=cfg)
+    fallback_cfg = plugin.get_static_server_config()
+    assert isinstance(fallback_cfg, StaticServerConfig)
+    assert fallback_cfg.placement == StaticPlacement.ASGI
+
+    assets_dir = bundle_dir / "assets"
+    assets_dir.mkdir()
+    (assets_dir / "main.1234.js").write_text("console.log(1);", encoding="utf-8")
+
     static_cfg = plugin.get_static_server_config()
     assert isinstance(static_cfg, StaticServerConfig)
     assert static_cfg.placement == StaticPlacement.NATIVE
     assert len(static_cfg.mounts) >= 1
     assert isinstance(static_cfg.mounts[0], StaticServerMount)
+    assert static_cfg.mounts[0].route == "/static/assets"
 
     loader = ViteAssetLoader(config=cfg)
     resolved = loader.resolve_html_entry_sync("resources/widget.html", production_path=entry_file)
@@ -452,8 +464,10 @@ def test_litestar_vite_032_csrf_routes_ts_and_cli_contract() -> None:
     )
 
     routes_ts = generate_routes_ts(app)
-    assert "export const CSRF_COOKIE_NAME = 'custom_csrf';" in routes_ts
-    assert "export const CSRF_HEADER_NAME = 'x-custom-csrf';" in routes_ts
+    assert 'export const CSRF_COOKIE_NAME = "custom_csrf";' in routes_ts
+    assert 'export const CSRF_HEADER_NAME = "x-custom-csrf";' in routes_ts
+    assert TypeGenConfig(only_routes=("items:list",)).only_routes == ("items:list",)
+    assert "</script>" not in escape_json_for_html('{"html":"</script>"}')
 
     routes_json = generate_routes_json(app, only=["items:list"])
     assert "items:list" in routes_json["routes"]

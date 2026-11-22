@@ -40,19 +40,19 @@ All deployment paths use **Granian** (via `litestar-granian`) as the ASGI server
 ENTRYPOINT ["tini", "--"]
 CMD ["litestar", "run", "--host", "0.0.0.0", "--port", "8000"]
 
-# Background worker — Option A: litestar-saq (separate container)
+# Background worker - Option A: litestar-saq (separate container)
 ENTRYPOINT ["tini", "--"]
 CMD ["litestar", "workers", "run"]
 
-# Background worker — Option B: litestar-queues (separate container)
+# Background worker - Option B: litestar-queues (separate container)
 ENTRYPOINT ["tini", "--"]
 CMD ["litestar", "queues", "run", "--max-concurrency", "10", "--drain-timeout", "30.0"]
 
-# Database migrator — Option A: advanced-alchemy (one-off job / init container)
+# Database migrator - Option A: advanced-alchemy (one-off job / init container)
 ENTRYPOINT ["tini", "--"]
 CMD ["litestar", "database", "upgrade", "--no-prompt"]
 
-# Database migrator — Option B: sqlspec (one-off job / init container)
+# Database migrator - Option B: sqlspec (one-off job / init container)
 ENTRYPOINT ["tini", "--"]
 CMD ["litestar", "db", "upgrade", "--no-prompt"]
 ```

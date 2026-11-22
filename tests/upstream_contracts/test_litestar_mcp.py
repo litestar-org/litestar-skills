@@ -98,6 +98,7 @@ from litestar_mcp.queues import (
     QueuedTurnManager,
     agent_turn_channel,
 )
+from litestar_mcp.utils import validate_tool_descriptions
 from litestar_mcp.utils.handler_signature import (
     get_advertised_handler_parameters,
     parameter_aliases,
@@ -133,9 +134,9 @@ class _CustomInjectMarker:
 
 
 def test_litestar_mcp_0160_upstream_contract() -> None:
-    """Verify litestar-mcp 0.20.0 public API surface, config defaults, skills, A2A, signatures, and wire aliases."""
-    assert version("litestar-mcp") == "0.20.0"
-    assert version("a2a-sdk") == "1.3.0"
+    """Verify litestar-mcp 0.20.1 public API surface, config defaults, skills, A2A, signatures, and wire aliases."""
+    assert version("litestar-mcp") == "0.20.1"
+    assert version("a2a-sdk") == "1.3.1"
     assert "2025-11-25" in SUPPORTED_PROTOCOL_VERSIONS
 
     config = MCPConfig()
@@ -596,3 +597,27 @@ def test_litestar_mcp_0160_queues_and_observability() -> None:
     assert GEN_AI_REQUEST_MODEL == "gen_ai.request.model"
     assert LITESTAR_MCP_AGENT_GROUP == "litestar_mcp.agent.group"
     assert LITESTAR_MCP_TURN_ID == "litestar_mcp.turn.id"
+
+    violations = validate_tool_descriptions(
+        [
+            {
+                "name": "nested_tool",
+                "description": "Valid tool summary.",
+                "inputSchema": {
+                    "type": "object",
+                    "description": "Root summary exempt from check " * 40,
+                    "properties": {
+                        "nested": {
+                            "anyOf": [
+                                {"type": "string", "description": "x" * 20},
+                                {"type": "null"},
+                            ]
+                        }
+                    },
+                },
+            }
+        ],
+        max_param_description_length=10,
+    )
+    assert len(violations) == 1
+    assert "nested" in violations[0]

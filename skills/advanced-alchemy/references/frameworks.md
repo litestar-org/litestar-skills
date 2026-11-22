@@ -352,7 +352,7 @@ alchemy = AdvancedAlchemy(config=[primary, analytics], app=app)
 | Sync sessions | Yes | Yes | Yes | Yes | Yes |
 | Auto-commit handler | Yes | Yes | Yes | Yes | Yes |
 | DTOs (SQLAlchemyDTO) | Yes | No | No | No | No |
-| Filter dependencies | Yes | Yes (`provide_filters`) | Manual | Manual | Manual |
+| Filter dependencies | Yes | Yes (`provide_filters`, `provide_service`) | Manual | Manual | Manual |
 | CLI migrations | `litestar database` / `db` | FastAPI `database` / `db` group | Flask `database` / `db` group | Standalone `alchemy` | Standalone `alchemy` |
 | Lifespan integration | Built-in | `alchemy.lifespan` | `init_app()` | `init_app()` / `lifespan` | `register()` |
 | Multiple databases | Yes | Yes | Yes | Yes | Yes |
@@ -362,8 +362,8 @@ alchemy = AdvancedAlchemy(config=[primary, analytics], app=app)
 
 ### Key Differences
 
-- **Litestar** has the deepest integration: native DTOs, `create_filter_dependencies()`, and built-in CLI migration commands
-- **FastAPI** uses standard `Depends()` for DI and requires explicit `provide_session` dependency
+- **Litestar** has the deepest integration: native DTOs, `create_filter_dependencies()` / `create_service_dependencies()` (with `DependencyDefaults(prefix=...)` and `scoped_filters`), `create_service_provider()` for `ServiceGroup`, and built-in CLI migration commands
+- **FastAPI** uses standard `Depends()` for DI via `provide_session`, `provide_filters` (including `CursorFilter` and `FilterSet`), and `provide_service` (for `SQLAlchemyAsyncRepositoryService` or `ServiceGroup`)
 - **Flask** is typically sync-first; async support requires Flask 2.0+ with an async-capable server
 - **Starlette** provides the most minimal integration — session on `request.state`, no DI framework
 - **Sanic** uses `request.ctx` for request-scoped state, fully async

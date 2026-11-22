@@ -179,10 +179,18 @@ query = (
     sql.merge("target_table", dialect="postgres")
     .using(source_data, alias="src")
     .on("target_table.id = src.id")
-    .when_matched_then_update(name="src.name", updated_at="now()")
-    .when_not_matched_then_insert(id="src.id", name="src.name")
+    .when_matched_then_update(
+        name=sql.col("name", "src"),
+        updated_at=sql.var("CURRENT_TIMESTAMP"),
+    )
+    .when_not_matched_then_insert(
+        id=sql.col("id", "src"),
+        name=sql.col("name", "src"),
+    )
 )
 ```
+
+In `when_matched_then_update(...)` and `when_not_matched_then_insert(...)`, pass column references using `sql.col("col", "src")` or `sql.c.col` and raw SQL tokens using `sql.var(...)` because plain string values are bound as query parameters. Use `sql.func(name, *args, dialect=...)` for dialect-aware function calls. `from_()`, `join()`, and `into()` validate table and alias identifiers (`SQLBuilderError`), and `where_any()` / `where_exists()` require builder objects, `SQL`, or SQLGlot AST nodes rather than raw strings.
 
 `sql.upsert(table, dialect=...)` automatically generates `MERGE` (PostgreSQL 15+, Oracle, BigQuery, T-SQL, IBM Db2 via `SYSIBM.SYSDUMMY1`), `INSERT ... ON CONFLICT` (SQLite, DuckDB), or `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL/MariaDB) depending on dialect capabilities.
 

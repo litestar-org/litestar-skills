@@ -130,7 +130,7 @@ async def list_users_dto(
     return service.to_schema(results, total, filters=filters, schema_type=User)
 ```
 
-`to_schema` inspects `filters` via `find_filter(LimitOffset, filters=filters)` to populate `limit`, `offset`, and `total` on `OffsetPagination[T]`. Never hand-roll pagination envelopes.
+`to_schema` inspects `filters` via `find_filter(LimitOffsetFilter, filters=filters)` (or `CursorFilter`) to populate `OffsetPagination[T]` or `CursorPagination[T]`. Never hand-roll pagination envelopes.
 
 ### When to drop to hand-written queries inside an `advanced-alchemy` service
 

@@ -1,6 +1,6 @@
 ---
 name: litestar-queues
-description: "Use when working with litestar_queues, QueuePlugin, QueueConfig, WorkerConfig, QueueService, @task, QueuedBackgroundTask, QueueEventsConfig, or SQLSpecBackendConfig. Not for litestar-saq, Celery, or Dramatiq."
+description: "Use when working with litestar_queues, QueuePlugin, QueueConfig, WorkerConfig, QueueService, TaskListPage, @task, QueuedBackgroundTask, QueueEventsConfig, SQLSpecBackendConfig, or SQLAlchemyBackendConfig. Not for litestar-saq, Celery, or Dramatiq."
 ---
 
 # litestar-queues
@@ -145,6 +145,7 @@ To mark a failure permanent and bypass retries, call `non_retryable("message")` 
 LITESTAR_APP=app:app litestar queues run --queue default --max-concurrency 4 --drain-timeout 60
 LITESTAR_APP=app:app litestar queues run-consumer --backend sqs --max-concurrency 4 --drain-timeout 60
 LITESTAR_APP=app:app litestar queues status --json
+LITESTAR_APP=app:app litestar queues list --status queued --json
 LITESTAR_APP=app:app litestar queues scheduler-health --minutes 5
 LITESTAR_APP=app:app litestar queues run-maintenance --json
 ```
@@ -179,9 +180,9 @@ Match the project's existing data stack. Memory cannot coordinate separate proce
 
 ### Persistent Backends & Schema
 
-- **SQLSpec (`SQLSpecBackendConfig`)**: When `manage_schema=True` (default), `QueuePlugin` registers packaged `"litestar_queues"` (`0001_create_queue_tasks`) and `"events"` extension migrations; call `configure_queue_migration_extension(...)` only for standalone SQLSpec migration CLI setups. When `manage_schema=False`, `QueuePlugin` strips packaged `"litestar_queues"` and `"events"` extension migrations so the application owns queue tables in its own migrations. `worker_wakeups` defaults to `SQLSpecWorkerWakeupConfig` (`notify_queue` on PostgreSQL, `poll_queue` on DuckDB); set `worker_wakeups=None` with `CloudTasksExecutionConfig`.
-- **Advanced Alchemy (`SQLAlchemyBackendConfig`)**: Pass `sqlalchemy_config=alchemy_config` and manage schema via application Alembic migrations (`QueueTaskModelMixin`, `QueueEventHistoryModelMixin`, `QueueMaintenanceModelMixin`, `QueueTaskReservationModelMixin`). Set `worker_wakeups=True` only on PostgreSQL.
-- **Redis & Valkey (`RedisBackendConfig` / `ValkeyBackendConfig`)**: Use pub/sub wakeup hints by default with keys namespaced under `key_prefix`.
+- **SQLSpec (`SQLSpecBackendConfig`)**: Rejects replica or multi-tenant SQLSpec configs at startup and defaults `migration_mode="reconcile"` (using `sqlspec>=0.72.2`). With `manage_schema=True` (default), `QueuePlugin` registers `"litestar_queues"` (`0001_create_queue_tasks`) and `"events"` extensions; `manage_schema=False` leaves queue tables to your app migrations. `worker_wakeups` defaults to `SQLSpecWorkerWakeupConfig` (`notify_queue` on PostgreSQL, `poll_queue` on DuckDB); set `worker_wakeups=None` for Cloud Tasks.
+- **Advanced Alchemy (`SQLAlchemyBackendConfig`)**: Requires `advanced-alchemy>=1.13.0b2` with `sqlalchemy_config=alchemy_config` and app Alembic migrations (`QueueTaskModelMixin`, `QueueEventHistoryModelMixin`, `QueueMaintenanceModelMixin`, `QueueTaskReservationModelMixin`). Set `worker_wakeups=True` only on PostgreSQL.
+- **Redis & Valkey (`RedisBackendConfig` / `ValkeyBackendConfig`)**: Pub/sub wakeups under `key_prefix`; run `RedisQueueBackend.rebuild_maintenance_indexes()` after key backfill.
 
 | Concern | Default table | Override setting (`SQLSpecBackendConfig`) |
 | --- | --- | --- |
@@ -194,9 +195,8 @@ Do not delete the reservation table during ordinary task or event retention. For
 
 ### Events, Progress, Observability, and Bounded Maintenance
 
-- **`QueueEventsConfig`**: Groups live `delivery` (`EventDeliveryConfig`), browser `stream` (`EventStreamConfig(path="/queues/events", transports={"sse", "websocket"})`), and durable `history` (`EventHistoryConfig` with optional `EventHistoryExtraColumn`). Inside `@task` functions, check `context = get_current_task_context()` before calling `await context.progress(...)`, `await context.log(...)`, or `await publish_task_event(...)`, and call `beat("stage")` for heartbeats. Query persisted events via `event_log = queue_service.get_event_log()` (`QueueEventLog | None`), then `await event_log.query_events(QueueEventQuery(...))` and `await event_log.summarize_stages(...)`.
-- **`ObservabilityConfig`**: Configures OpenTelemetry tracing (`enable_otel=True`), Prometheus metrics (`enable_prometheus=True`), and SQLCommenter (`enable_sqlcommenter=True`), plus `scheduler_canary_task` verified by `litestar queues scheduler-health --minutes 5`.
-- **Bounded Maintenance (`QueueMaintenanceConfig`)**: Runs six bounded phases in fixed order (`expire`, `external`, `stale`, `schedules`, `terminal`, `events`) via `litestar queues run-maintenance --json` or `QueueMaintenanceService(service, config).run()`. Retention thresholds (`stale_after`, `terminal_retention`, `event_retention_rules`) default to `None`/empty (disabled); `coordination_timeout` must exceed `time_budget`. Schedule one external invocation every six hours or daily. See [Backends, Worker Configuration, Events, and Maintenance](references/backends-and-events.md) for full configuration snippets.
+- **`QueueEventsConfig`**: Groups `delivery` (`EventDeliveryConfig`), browser `stream` (`EventStreamConfig`), and `history` (`EventHistoryConfig`). Inside `@task`, check `context = get_current_task_context()` for `progress()` / `log()`, or `publish_task_event()` and `beat("stage")`. Inspect queues via `await queue_service.list_tasks(...) -> TaskListPage` and events via `queue_service.get_event_log()`.
+- **`ObservabilityConfig` & Maintenance**: `ObservabilityConfig` wires OpenTelemetry, Prometheus, SQLCommenter, and `scheduler_canary_task`. `QueueMaintenanceConfig` runs bounded phases (`expire`, `external`, `stale`, `schedules`, `terminal`, `events`) via `litestar queues run-maintenance --json`; thresholds default to `None`. See [Backends, Worker Configuration, Events, and Maintenance](references/backends-and-events.md).
 
 ### External One-Task Execution & Background Responses
 
@@ -243,7 +243,7 @@ Do not delete the reservation table during ordinary task or event retention. For
 
 ## Validation Checkpoint
 
-- [ ] The dependency floor is `litestar-queues>=0.14.0`
+- [ ] The dependency floor is `litestar-queues>=0.15.0`
 - [ ] `QueuePlugin` receives one `QueueConfig`
 - [ ] Worker options live under `QueueConfig.worker`
 - [ ] `WorkerConfig.placement` matches the deployment topology

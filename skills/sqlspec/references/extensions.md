@@ -32,11 +32,13 @@ app = Litestar(
 
 ### Commit Modes
 
+`commit_mode` defaults to `"autocommit"` (except BigQuery, which requires `"manual"` and rejects `"autocommit"` / `"autocommit_include_redirect"` with `ImproperConfigurationError`):
+
 | Mode | Behavior | When to Use |
 | --- | --- | --- |
-| `"manual"` | No automatic commit. You call `commit()` explicitly. | Complex multi-step transactions |
-| `"autocommit"` | Commits after successful response, rolls back on error. | Standard CRUD endpoints |
+| `"autocommit"` | Default. Commits after successful 2xx response, rolls back on error or 4xx/5xx. | Standard CRUD endpoints |
 | `"autocommit_include_redirect"` | Same as autocommit but also commits on 3xx responses. | POST-redirect-GET patterns |
+| `"manual"` | No automatic commit. You call `commit()` explicitly. Required for BigQuery. | Complex multi-step transactions |
 
 ### Dependency Injection
 
@@ -108,6 +110,11 @@ config = AsyncpgConfig(
 )
 ```
 
+`SQLSpecPlugin` provides driver sessions (`db_session`), raw connections (`db_connection`), and replica/routing sessions (`replica_session_key` `"db_replica_session"`, `routing_session_key`) using lazy connection checkout on first access. Provider helpers in `sqlspec.extensions.litestar.providers` use `provide_db_session*`, `provide_db_connection*`, and `db_*_provider_maker` (the legacy `provide_request_session*`, `provide_request_connection*`, `*_provider_maker`, and `get_or_create_session` names were replaced in `sqlspec>=0.74`).
+
+- **Read replicas & primary pinning**: configure `ReplicaGroup` / `ReplicaSpec` on `driver_features` or config, then tune `LitestarConfig` keys `enable_routing_middleware`, `default_routing_mode`, `routing_header`, `primary_pin_cookie`, `primary_pin_secret`, `replica_session_key`, `replica_connection_key`, `replica_pool_key`, and `routing_session_key` (with `sign_primary_pin` / `verify_primary_pin`).
+- **Tenant isolation**: use `SQLSpecTenantMiddleware`, `TenantContext`, `TenantResolutionSettings`, `resolve_litestar_tenant`, `set_request_tenant`, `require_tenant`, and `tenant_bypass`.
+- **Cursor signing**: configure `pagination_cursor_secret`, `pagination_cursor_ttl`, and `pagination_cursor_encrypted` in `extension_config["litestar"]` and `FilterConfig`.
 - **Correlation extraction**: `CorrelationMiddleware` extracts the correlation ID from `correlation_header` / `correlation_headers` (plus W3C trace headers when `auto_trace_headers=True`) and attaches it to all SQL log events emitted during that request lifecycle. `SQLSpecPlugin` deduplicates `CorrelationMiddleware` across multiple registered configs.
 - **Dishka / Custom DI mode (`disable_di: True, manage_lifespan: True`)**: when `disable_di: True` is set so Dishka owns session/service injection, set `manage_lifespan: True` so `SQLSpecPlugin` still registers the Litestar lifespan handler that drains and closes connection pools on shutdown (`manage_lifespan` defaults to `not disable_di`).
 

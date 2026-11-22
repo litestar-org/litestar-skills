@@ -1,6 +1,6 @@
 ---
 name: advanced-alchemy
-description: "Use when working with advanced_alchemy, alembic/, SQLAlchemyAsyncRepositoryService, SQLAlchemyAsyncConfig, repository_type, service_class, filters, or storage. Not for raw SQLAlchemy — use sqlspec."
+description: "Use when working with advanced_alchemy, alembic/, SQLAlchemyAsyncRepositoryService, SQLAlchemyAsyncConfig, ServiceGroup, FilterSet, CursorFilter, RelationshipFilter, filters, or storage. Not for raw SQLAlchemy — use sqlspec."
 ---
 
 # Advanced Alchemy
@@ -9,8 +9,8 @@ description: "Use when working with advanced_alchemy, alembic/, SQLAlchemyAsyncR
 
 - Use `Mapped[...]` for columns and `T | None` for optional fields.
 - Keep business transformations in service lifecycle hooks.
-- Prefer the inner `Repo` service pattern and `advanced_alchemy.*` imports.
-- Use `from __future__ import annotations` when it matches the project; 1.12
+- Prefer `SQLAlchemyAsyncRepositoryService[Model]` (infers a default repo) or `SQLAlchemyAsyncRepositoryService[Model, CustomRepo]` (types custom repo methods) and `advanced_alchemy.*` imports.
+- Use `from __future__ import annotations` when it matches the project; 1.12+
   supports it in model modules.
 
 ## Match-Your-Framework — read first
@@ -71,9 +71,10 @@ Advanced Alchemy is NOT a raw ORM — it is a **service/repository layer** built
 
 | Service | Purpose |
 | --- | --- |
-| `SQLAlchemyAsyncRepositoryService[Model]` / `SQLAlchemySyncRepositoryService[Model]` | Full CRUD with lifecycle hooks |
-| `SQLAlchemyAsyncRepositoryReadService[Model]` / `SQLAlchemySyncRepositoryReadService[Model]` | Read-only (`get_many`, `get`, `count`, `exists`) |
+| `SQLAlchemyAsyncRepositoryService[Model]` / `SQLAlchemySyncRepositoryService[Model]` | Full CRUD with lifecycle hooks (optional 2nd type arg `[Model, Repo]` types custom repo methods) |
+| `SQLAlchemyAsyncRepositoryReadService[Model]` / `SQLAlchemySyncRepositoryReadService[Model]` | Read-only (`get_many`, `get`, `get_or_none`, `count`, `exists`) |
 | `SQLAlchemyAsyncQueryService` / `SQLAlchemySyncQueryService` | Service wrapper around arbitrary SQL queries |
+| `ServiceGroup` | Coordinates multiple services on one shared SQLAlchemy session (`ServiceGroup.new(config=...)`) |
 
 Key lifecycle hooks: `to_model_on_create`, `to_model_on_update`, `to_model_on_upsert`, `to_model_on_delete`.
 
@@ -82,12 +83,12 @@ Key lifecycle hooks: `to_model_on_create`, `to_model_on_update`, `to_model_on_up
 | Type | Purpose | Notes |
 | --- | --- | --- |
 | `FileObject` / `StoredObject` | Object storage with lifecycle hooks | Tracks file state across session; auto-deletes on row delete via `StoredObject` tracker; use `FileObjectList` for multi-file JSON arrays |
-| `PasswordHash` | Hashed password storage | Supports Argon2, Passlib, and Pwdlib backends; returns `HashedPassword` with `.verify()` and `.verify_and_update()` |
-| `EncryptedString` / `EncryptedText` | Transparent encryption at rest | Supports `FernetBackend` (client-side) and `PGCryptoBackend` (server-side); pass a stable key explicitly |
-| `GUID` | Cross-dialect UUID column | Native `UUID` on PostgreSQL/DuckDB/CockroachDB, `BINARY(16)` or `CHAR(32)` fallback elsewhere; pair with `UUIDv7AuditBase` / `UUIDv6AuditBase` for time-sortable UUIDs |
-| `DateTimeUTC` | Timezone-aware UTC datetime | Stores as UTC; normalizes or raises on naive datetimes |
+| `PasswordHash` | Hashed password storage | Supports Argon2 (`Argon2Hasher`), Bcrypt (`BcryptHasher` via `[bcrypt]`), Passlib, and Pwdlib backends; returns `HashedPassword` with `.verify()` and `.verify_and_update()` |
+| `EncryptedString` / `EncryptedText` | Transparent encryption at rest | Supports `FernetBackend` (client-side) and `PGCryptoBackend` (server-side, exported from `advanced_alchemy.types`); pass a stable key explicitly |
+| `GUID` | Cross-dialect UUID column | Native `UUID` on PostgreSQL/DuckDB/CockroachDB, `RAW(16)` or `CHAR(32)` (`binary=False`) on Oracle; pair with `UUIDv7AuditBase` / `UUIDv6AuditBase` for time-sortable UUIDs |
+| `DateTimeUTC` | Timezone-aware UTC datetime | Stores as UTC; accepts opt-in `fsp=0..6` for MySQL/MariaDB `DATETIME(fsp)` and Oracle `TIMESTAMP WITH TIME ZONE` |
 | `Bool` | Dialect-aware boolean | Uses Oracle 23ai native `BOOLEAN` when SQLAlchemy exposes it; falls back to stock SQLAlchemy `Boolean` |
-| `JsonB` | Dialect-aware JSON / JSONB | Uses `JSONB` on PostgreSQL/CockroachDB, `JSON` on other backends, `BLOB` with `OSON` on Oracle |
+| `JsonB` / `ORA_JSONB` | Dialect-aware JSON / JSONB | Uses `JSONB` on PostgreSQL/CockroachDB, `JSON` elsewhere, native `oracle.JSON` (21c+ / SQLAlchemy 2.1+) or BLOB (`ORA_JSONB(use_blob=True)`) on Oracle |
 | `Vector` | Dialect-aware vector storage and distance operators | Oracle 23ai `VECTOR`, PostgreSQL/CockroachDB `pgvector`, JSON fallback without distance operators |
 | `TOTPSecret` / `OneTimeCode` | MFA and single-use code storage | `TOTPSecret` encrypts shared secrets and returns `TOTPProvider`; `OneTimeCode` hashes codes with TTL/attempt tracking and returns `HashedOneTimeCode` |
 
@@ -95,7 +96,7 @@ Key lifecycle hooks: `to_model_on_create`, `to_model_on_update`, `to_model_on_up
 
 `SQLAlchemyAsyncRepositoryService` is the primary service base class. Key behaviors:
 
-- **Dict-to-model conversion**: pass raw `dict` to `create()`, `update()`, `upsert()` — the service converts via `to_model_on_create` / `to_model_on_update` lifecycle hooks before persistence
+- **Partial update hydration & single-query `update()`**: `Service.update()` uses `partial_model_from_dict` for generated/SQLModel `__init__` models so omitted fields stay unset, and `Service.update(data, item_id=...)` delegates directly to `Repository.update` without a duplicate `SELECT`; `get_or_none(...)` returns `None` instead of raising `NotFoundError`.
 - **Bulk operations**: `create_many(data)`, `update_many(data)`, `upsert_many(data, match_fields=..., no_merge=False, chunk_size=None)`, `delete_many(item_ids)` — batched in a single transaction; `upsert_many()` dispatches to native dialect primitives (`ON CONFLICT`, `ON DUPLICATE KEY UPDATE`, `MERGE`, Spanner `INSERT OR UPDATE`) via `resolve_upsert_strategy()` when uniqueness is provable, and `delete_many()` accepts raw primary keys, composite-key tuples/dicts, model instances, or mixed lists
 - **Lifecycle hooks**: `to_model_on_create`, `to_model_on_update`, `to_model_on_upsert` — override to transform input data, hash passwords, normalize strings, etc.
 
@@ -116,12 +117,9 @@ Use `SQLAlchemyPlugin` (composite of `SQLAlchemyInitPlugin` + `SQLAlchemySeriali
   `before_send` hook, and ORM type encoders in one call
 - **`SQLAlchemyDTO`**: generates Litestar DTOs directly from ORM models with `include`/`exclude` field control
 - **Type encoders**: automatic serialization of `datetime`, `UUID`, `Decimal`, `Enum`, and custom column types
-- **Exception handling**: `set_default_exception_handler=True` (the default)
-  registers `RepositoryError: exception_to_http_response` on the app — unless
-  `Litestar(exception_handlers={...})` contains any integer status-code key
-  (`500`, `404`, etc.), in which case `SQLAlchemyInitPlugin` skips default
-  registration and you must register `RepositoryError: exception_to_http_response`
-  explicitly
+- **Exception handling**: `set_default_exception_handler=True` (the default) registers `RepositoryError: exception_to_http_response` on the app unless a `RepositoryError` subclass handler is already registered (1.13+ registers it even when integer status-code handlers such as `500` or `404` are present)
+- **Typed submodule re-exports**: `advanced_alchemy.extensions.litestar.{base,exceptions,filters,mixins,operations,repository,service,types,utils}` lazily re-export core symbols alongside Litestar helpers
+- **OpenTelemetry instrumentation**: engines resolve `create_engine` / `create_async_engine` lazily, so calling `SQLAlchemyInstrumentor().instrument()` before app startup instruments default and routing engines automatically
 
 <workflow>
 
@@ -146,9 +144,8 @@ Use the framework plugin (Litestar, FastAPI, Flask, Sanic) to inject sessions an
 ### Step 5: Generate Migration
 
 With Litestar, run `litestar database make-migrations -m "description"` and
-then `litestar database upgrade`. With the standalone CLI, put the required
-config option before the command:
-`alchemy --config path.to.config make-migrations -m "description"`.
+then `litestar database upgrade`. With the standalone CLI, configure `[tool.advanced-alchemy] config = "path.to:config"` in `pyproject.toml` (or `ALCHEMY_CONFIG`), validate with `alchemy --validate-config show-config`, or pass `--config` / `-c` before or after the subcommand:
+`alchemy -c path.to:config make-migrations -m "description"`.
 
 </workflow>
 
@@ -168,7 +165,9 @@ config option before the command:
   a process restart.
 - **Use `get_many()` and `get_many_and_count()`.** `list()` and
   `list_and_count()` are deprecated until 2.0.
-- **Explicitly register `RepositoryError: exception_to_http_response` when using integer status-code `exception_handlers` in Litestar.** `SQLAlchemyInitPlugin` skips its default `RepositoryError` handler whenever any `int` key (`500`, `404`, etc.) is present in `Litestar(exception_handlers={...})`.
+- **Use canonical `*Filter` names (`LimitOffsetFilter`, `OrderByFilter`, `BeforeAfterFilter`, `OnBeforeAfterFilter`, `InCollectionFilter`).** The short aliases (`LimitOffset`, `OrderBy`, `BeforeAfter`, `OnBeforeAfter`, `CollectionFilter`) are deprecated in 1.13 and removed in 2.0.
+- **Supply `pagination_cursor_secret` for cursor pagination providers and install `[cryptography]` for encrypted cursors.** Litestar and FastAPI cursor providers require a secret (`pagination_cursor_secret`, `ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET`, or `SECRET_KEY`); `encrypted=True` / `pagination_cursor_encrypted=True` uses AES-256-GCM from `advanced-alchemy[cryptography]`.
+- **Specify `fsp` on `DateTimeUTC` for MySQL/MariaDB and Oracle.** Omitting `fsp` emits a 1.13 deprecation warning on those dialects (defaults to whole seconds in 1.x; will default to `6` in 2.0).
 
 </guardrails>
 
@@ -184,7 +183,7 @@ Before delivering code, verify:
 - [ ] Business logic lives in service lifecycle hooks, not in route handlers
 - [ ] Imports come from `advanced_alchemy.*`, not deprecated paths
 - [ ] Encrypted columns receive a stable explicit key
-- [ ] New code uses `get_many()` / `get_many_and_count()`, not deprecated list aliases
+- [ ] New code uses `get_many()` / `get_many_and_count()` and `*Filter` names (`LimitOffsetFilter`, `OrderByFilter`, `InCollectionFilter`, `CursorFilter`), not deprecated 1.x aliases
 
 </validation>
 
@@ -195,7 +194,7 @@ Before delivering code, verify:
 A complete `Tag` entity with model, repository, and service:
 
 ```python
-"""Tag domain — model, repository, and service."""
+"""Tag domain: model, repository, and service."""
 
 from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
@@ -249,17 +248,17 @@ For detailed guides and code examples, refer to the following documents in `refe
 - **[Repositories](references/repositories.md)**
   Async repository variants, configuration, slug repos, and query repos.
 - **[Services](references/services.md)**
-  Service layer, lifecycle hooks, composite services, filtering, and pagination.
+  Service layer, lifecycle hooks, `ServiceGroup` shared-session composition, filtering, `get_or_none()`, and pagination.
 - **[Litestar Plugin](references/litestar_plugin.md)**
-  SQLAlchemy plugin config, DTOs, dependency injection, and session management.
+  SQLAlchemy plugin config, DTOs, `DependencyDefaults(prefix=...)`, scoped filters, session management, and `SQLAlchemyStore.delete_expired()`.
 - **[Migrations](references/migrations.md)**
-  Alembic integration, CLI commands, metadata registry, and multi-database support.
+  Alembic integration, `pyproject.toml` / `ALCHEMY_CONFIG` CLI discovery, `alembic_postgresql_enum` detection, metadata registry, and multi-database support.
 - **[Types](references/types.md)**
-  Complete catalog of custom column types: EncryptedString, FileObject, DateTimeUTC, GUID, PasswordHash, Bool, Vector, TOTPSecret, OneTimeCode, and more.
+  Complete catalog of custom column types: `EncryptedString`, `FileObject`, `DateTimeUTC(fsp=...)`, `GUID`, `PasswordHash` (`BcryptHasher`, `Argon2Hasher`), `Bool`, `ORA_JSONB(use_blob=...)`, `Vector`, `TOTPSecret`, `OneTimeCode`.
 - **[Base Classes](references/bases.md)**
   Declarative base classes, UUID/BigInt/Nanoid variants, audit mixins, SlugKey, UniqueMixin, metadata registry, and custom base creation.
 - **[Filters](references/filters.md)**
-  Filter system, pagination, SearchFilter, CollectionFilter, BeforeAfter, OrderBy, LimitOffset, and frontend integration patterns.
+  Filter system, `CursorFilter` & `CursorPagination`, `FilterSet[Model]`, `RelationshipFilter`, `pagination_max_size`, `SearchFilter`, `InCollectionFilter`, `BeforeAfterFilter`, `OrderByFilter`, `LimitOffsetFilter`, and frontend integration patterns.
 - **[Framework Integrations](references/frameworks.md)**
   FastAPI, Flask, Starlette, and Sanic plugin setup, session management, and feature comparison across frameworks.
 - **[Caching](references/caching.md)**
@@ -275,9 +274,10 @@ For detailed guides and code examples, refer to the following documents in `refe
 
 ## Official References
 
+- <https://advanced-alchemy.litestar.dev/latest/>
+- <https://pypi.org/project/advanced-alchemy/1.13.0b3/>
+- <https://github.com/litestar-org/advanced-alchemy/blob/main/docs/changelog.rst>
 - <https://github.com/litestar-org/advanced-alchemy/tree/v1.12.0/advanced_alchemy>
-- <https://github.com/litestar-org/advanced-alchemy/blob/v1.12.0/docs/changelog.rst>
-- <https://github.com/litestar-org/advanced-alchemy/tree/v1.12.0/tests>
 - <https://github.com/litestar-org/advanced-alchemy/tree/v1.12.0/docs/usage>
 - <https://docs.litestar.dev/2/release-notes/changelog.html>
 - <https://docs.sqlalchemy.org/en/20/orm/quickstart.html>

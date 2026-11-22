@@ -465,3 +465,69 @@ await queue.enqueue(
     timeout=120,
 )
 ```
+
+## PostgreSQL Broker Setup and Options
+
+Install `litestar-saq[psycopg]` when PostgreSQL is the chosen backend. When sharing a database URL with SQLAlchemy (`postgresql+psycopg://` or `postgresql+asyncpg://`), strip the driver suffix so `QueueConfig.dsn` starts with `postgresql://`:
+
+```python
+from litestar_saq import (
+    CronJob,
+    PostgresQueueOptions,
+    QueueConfig,
+    SAQConfig,
+    SAQPlugin,
+    after_process_logger,
+    before_process_logger,
+    shutdown_logger,
+    startup_logger,
+    timing_after_process,
+    timing_before_process,
+)
+
+from app.lib.settings import get_settings
+from app.lib.worker import after_process, before_process, on_shutdown, on_startup
+
+
+def create_saq_plugin_pg() -> SAQPlugin:
+    settings = get_settings()
+    dsn = settings.db.url.replace("postgresql+psycopg", "postgresql").replace("postgresql+asyncpg", "postgresql")
+    return SAQPlugin(
+        config=SAQConfig(
+            use_server_lifespan=settings.saq.use_server_lifespan,
+            worker_processes=settings.saq.processes,
+            web_enabled=settings.saq.web_enabled,
+            enable_otel=settings.saq.otel_enabled,
+            queue_configs=[
+                QueueConfig(
+                    name="background-tasks",
+                    dsn=dsn,
+                    concurrency=settings.saq.concurrency,
+                    broker_options=PostgresQueueOptions(
+                        jobs_table="task_queue",
+                        stats_table="task_queue_stats",
+                        versions_table="task_queue_ddl_version",
+                        manage_pool_lifecycle=True,
+                    ),
+                    tasks=[
+                        "app.domain.reports.tasks.generate_report",
+                        "app.domain.reports.tasks.reap_abandoned_reports",
+                    ],
+                    scheduled_tasks=[
+                        CronJob(
+                            function="app.domain.reports.tasks.reap_abandoned_reports",
+                            cron="0 */3 * * *",
+                            timeout=60,
+                        ),
+                    ],
+                    startup=[startup_logger, on_startup],
+                    shutdown=[shutdown_logger, on_shutdown],
+                    before_process=[timing_before_process, before_process_logger, before_process],
+                    after_process=[after_process, timing_after_process, after_process_logger],
+                    shutdown_grace_period_s=60,
+                    cancellation_hard_deadline_s=10,
+                ),
+            ],
+        ),
+    )
+```

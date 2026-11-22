@@ -63,73 +63,7 @@ def create_saq_plugin() -> SAQPlugin:
 saq_plugin = create_saq_plugin()
 ```
 
-**PostgreSQL broker:** Install `litestar-saq[psycopg]` when PostgreSQL is the chosen backend. When sharing a database URL with SQLAlchemy (`postgresql+psycopg://` or `postgresql+asyncpg://`), strip the driver suffix so `QueueConfig.dsn` starts with `postgresql://`:
-
-```python
-from litestar_saq import (
-    CronJob,
-    PostgresQueueOptions,
-    QueueConfig,
-    SAQConfig,
-    SAQPlugin,
-    after_process_logger,
-    before_process_logger,
-    shutdown_logger,
-    startup_logger,
-    timing_after_process,
-    timing_before_process,
-)
-
-from app.lib.settings import get_settings
-from app.lib.worker import after_process, before_process, on_shutdown, on_startup
-
-
-def create_saq_plugin_pg() -> SAQPlugin:
-    settings = get_settings()
-    dsn = settings.db.url.replace("postgresql+psycopg", "postgresql").replace("postgresql+asyncpg", "postgresql")
-    return SAQPlugin(
-        config=SAQConfig(
-            use_server_lifespan=settings.saq.use_server_lifespan,
-            worker_processes=settings.saq.processes,
-            web_enabled=settings.saq.web_enabled,
-            enable_otel=settings.saq.otel_enabled,
-            queue_configs=[
-                QueueConfig(
-                    name="background-tasks",
-                    dsn=dsn,
-                    concurrency=settings.saq.concurrency,
-                    broker_options=PostgresQueueOptions(
-                        jobs_table="task_queue",
-                        stats_table="task_queue_stats",
-                        versions_table="task_queue_ddl_version",
-                        manage_pool_lifecycle=True,
-                    ),
-                    tasks=[
-                        "app.domain.reports.tasks.generate_report",
-                        "app.domain.reports.tasks.reap_abandoned_reports",
-                    ],
-                    scheduled_tasks=[
-                        CronJob(
-                            function="app.domain.reports.tasks.reap_abandoned_reports",
-                            cron="0 */3 * * *",
-                            timeout=60,
-                        ),
-                    ],
-                    startup=[startup_logger, on_startup],
-                    shutdown=[shutdown_logger, on_shutdown],
-                    before_process=[timing_before_process, before_process_logger, before_process],
-                    after_process=[after_process, timing_after_process, after_process_logger],
-                    shutdown_grace_period_s=60,
-                    cancellation_hard_deadline_s=10,
-                ),
-            ],
-        ),
-    )
-```
-
-Choose the broker already supported by the deployment. PostgreSQL job writes use
-SAQ's own pool and transaction; they are not automatically atomic with writes
-made through an application ORM or SQL session.
+**PostgreSQL broker:** Install `litestar-saq[psycopg]`, strip any SQLAlchemy driver suffix so `dsn` uses `postgresql://` (never `postgres://`), pass `PostgresQueueOptions(jobs_table=..., stats_table=..., versions_table=...)`, and note PostgreSQL job writes use SAQ's own pool (not atomic with app ORM sessions). See [Advanced Patterns](references/patterns.md#postgresql-broker-setup-and-options) for a complete `create_saq_plugin_pg()` configuration.
 
 Each `QueueConfig` accepts exactly one connection source: a supported `redis://`
 (`rediss://`, `redis+unix://`), `postgresql://`, or `http://` `dsn`, or a
@@ -374,90 +308,32 @@ Before delivering Litestar + SAQ code, verify:
 
 ## Example
 
-**Task:** A Litestar app with a default queue, an email task, a cleanup CronJob, and a handler that enqueues notifications. This example uses Redis as the SAQ broker; swap `dsn=settings.redis.url` for `dsn=settings.database.url` if the project is PG-only — see Quick Reference above for both patterns.
-
-Plugin creation in `app/server/plugins.py`:
+**Task:** A Litestar app wiring `SAQPlugin` with a `CronJob`, worker hooks, a task function, and controller enqueueing via `TaskQueues`. Swap `dsn=settings.redis.url` for a stripped `postgresql://` DSN if PostgreSQL-only.
 
 ```python
-from litestar_saq import CronJob, QueueConfig, SAQConfig, SAQPlugin
-
-from app.lib.settings import get_settings
-
-
-def create_saq_plugin() -> SAQPlugin:
-    settings = get_settings()
-    return SAQPlugin(
-        config=SAQConfig(
-            use_server_lifespan=True,
-            web_enabled=settings.saq.web_enabled,
-            queue_configs=[
-                QueueConfig(
-                    name="default",
-                    dsn=settings.redis.url,
-                    startup=["app.domain.system.tasks.worker_startup"],
-                    shutdown=["app.domain.system.tasks.worker_shutdown"],
-                    tasks=[
-                        "app.domain.system.tasks.send_email",
-                        "app.domain.system.tasks.cleanup_sessions",
-                    ],
-                    scheduled_tasks=[
-                        CronJob(
-                            function="app.domain.system.tasks.cleanup_sessions",
-                            cron="*/15 * * * *",
-                            timeout=120,
-                        ),
-                    ],
-                ),
-            ],
-        ),
-    )
-
-
-saq_plugin = create_saq_plugin()
-```
-
-Task definitions in `app/domain/system/tasks.py`:
-
-```python
+from litestar import Controller, Litestar, post
+from litestar.di import NamedDependency
+from litestar_saq import CronJob, QueueConfig, SAQConfig, SAQPlugin, TaskQueues
 from saq.types import Context
 
 
 async def worker_startup(ctx: Context) -> None:
     """Initialize shared resources for this worker."""
     ctx["email_service"] = create_email_service()
-    ctx["db"] = create_database_client()
-
-
-async def worker_shutdown(ctx: Context) -> None:
-    """Dispose shared worker resources."""
-    await ctx["db"].close()
 
 
 async def send_email(ctx: Context, *, recipient: str, subject: str, body: str) -> None:
     """Send an email as a background job."""
-    email = ctx["email_service"]
-    await email.send(recipient, subject, body)
+    await ctx["email_service"].send(recipient, subject, body)
 
 
 async def cleanup_sessions(ctx: Context) -> None:
     """Purge expired sessions every 15 minutes."""
-    db = ctx["db"]
-    await db.execute("DELETE FROM session WHERE expires_at < now()")
-```
-
-Controller enqueueing in `app/domain/notifications/controllers.py`:
-
-```python
-from litestar import Controller, post
-from litestar.di import NamedDependency
-from litestar_saq import TaskQueues
-
-from app.domain.notifications.schemas import NotificationCreate
+    await ctx["email_service"].purge_expired()
 
 
 class NotificationController(Controller):
     path = "/api/notifications"
-    tags = ["Notifications"]
 
     @post("/")
     async def queue_notification(
@@ -476,24 +352,27 @@ class NotificationController(Controller):
             key=f"notify-{data.email}",
         )
         return {"status": "queued" if job is not None else "duplicate"}
-```
-
-Application entrypoint in `app.py`:
-
-```python
-from litestar import Litestar
-
-from app.domain.notifications.controllers import NotificationController
-from app.server.plugins import saq_plugin
 
 
-app = Litestar(
-    route_handlers=[NotificationController],
-    plugins=[saq_plugin],
+saq_plugin = SAQPlugin(
+    config=SAQConfig(
+        use_server_lifespan=True,
+        queue_configs=[
+            QueueConfig(
+                name="default",
+                dsn="redis://localhost:6379/0",
+                startup=["app.domain.system.tasks.worker_startup"],
+                tasks=["app.domain.system.tasks.send_email", "app.domain.system.tasks.cleanup_sessions"],
+                scheduled_tasks=[
+                    CronJob(function="app.domain.system.tasks.cleanup_sessions", cron="*/15 * * * *", timeout=120)
+                ],
+            ),
+        ],
+    ),
 )
-```
 
-Running in development (workers start with server lifespan) and production:
+app = Litestar(route_handlers=[NotificationController], plugins=[saq_plugin])
+```
 
 ```bash
 litestar --app app:app run

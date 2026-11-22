@@ -57,7 +57,7 @@ git push origin HEAD --tags
 
 ## Code Style
 
-- **Python 3.10+**, PEP 604 unions (`T | None`), Google-style docstrings, zero inline `#` comments in repository Python code.
+- **Python 3.11+**, PEP 604 unions (`T | None`), Google-style docstrings, zero inline `#` comments in repository Python code.
 - **Linting:** `ruff` + `oxlint` + `markdownlint-cli2` (`make lint`).
 - **Type-checking:** `mypy` + `pyright` (`make type-check`).
 - **Validation:** `tools/validate.py` + `tools/check-upstream-imports.py` + `tools/check-sample-kwargs.py` (`make validate`).

@@ -6,7 +6,7 @@
 
 ## Status
 
-**v0.12.0** — Single-root multi-harness packaging, 20 skills. The plugin and namespace identifier is `litestar`. The Python package and repository remain `litestar-skills`.
+**v0.15.0** — Single-root multi-harness packaging, 20 skills. The plugin and namespace identifier is `litestar`. The Python package and repository remain `litestar-skills`.
 
 ## Host Artifacts
 
@@ -15,6 +15,7 @@
 | **Google Antigravity** | `plugin.json` + `hooks.json` + `rules/litestar-antigravity.md` + `agents/*.md` + `skills/` |
 | **Claude Code** | `.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` + `hooks/hooks-claude.json` + `agents/*.md` + `skills/` |
 | **Codex CLI** | `.codex-plugin/plugin.json` + `.agents/plugins/marketplace.json` + `.codex/agents/*.toml` + `skills/` |
+| **Cursor** | `.cursor-plugin/plugin.json` + `hooks/hooks-cursor.json` + `agents/*.md` + `skills/` |
 | **OpenCode V2** | `.opencode/plugins/litestar.js` + `skills/` |
 
 ## Harness Names
@@ -31,6 +32,7 @@
 | **Google Antigravity** | Skills load from the `litestar` plugin or `.agents/skills/`. `SessionStart` in `hooks.json` and `rules/litestar-antigravity.md` inject `litestar:<skill-name>` context when project signals are detected. | `litestar-reviewer` from `agents/`. |
 | **Claude Code** | `/litestar:litestar` for the hub skill; `/litestar:sqlspec` for focused skills. Plugin policy uses `Skill(litestar:<skill-name>)`. | `litestar-reviewer` from `agents/`. |
 | **Codex CLI** | Force the hub with `$litestar:litestar` and focused skills with `$litestar:<skill-name>`, or use natural language. | `$agent litestar-reviewer` from `.codex/agents/`. |
+| **Cursor** | Skills load from the `litestar` plugin with `SessionStart` context in `hooks/hooks-cursor.json`. | `litestar-reviewer` from `agents/`. |
 | **OpenCode V2** | `.opencode/plugins/litestar.js` injects `litestar:<skill-name>` system reminders and registers `litestar-reviewer`; skills load from `.agents/skills/`. | `litestar-reviewer` registered via plugin. |
 
 ## Install

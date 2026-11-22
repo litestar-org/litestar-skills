@@ -148,8 +148,8 @@ query = (
     .into("products", alias="t")
     .using({"id": 1, "name": "Widget"}, alias="src")
     .on("t.id = src.id")
-    .when_matched_then_update(name="src.name")
-    .when_not_matched_then_insert(id="src.id", name="src.name")
+    .when_matched_then_update(name=sql.col("name", "src"))
+    .when_not_matched_then_insert(id=sql.col("id", "src"), name=sql.col("name", "src"))
 )
 ```
 
@@ -165,8 +165,8 @@ query = (
     .into("products", alias="t")
     .using(products, alias="src")
     .on("t.id = src.id")
-    .when_matched_then_update(name="src.name")
-    .when_not_matched_then_insert(id="src.id", name="src.name")
+    .when_matched_then_update(name=sql.col("name", "src"))
+    .when_not_matched_then_insert(id=sql.col("id", "src"), name=sql.col("name", "src"))
 )
 ```
 

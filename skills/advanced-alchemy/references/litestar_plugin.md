@@ -157,7 +157,7 @@ from advanced_alchemy.extensions.litestar.providers import (
     create_filter_dependencies,
     create_service_dependencies,
 )
-from advanced_alchemy.filters import CollectionFilter
+from advanced_alchemy.filters import InCollectionFilter
 from advanced_alchemy.service import schema_dump
 from litestar import Controller, delete, get, patch, post
 from litestar.di import Provide
@@ -173,9 +173,9 @@ if TYPE_CHECKING:
 
 def provide_role_id_filter(
     role_ids: Annotated[list[UUID] | None, Parameter(query="roleIds")] = None,
-) -> CollectionFilter[UUID]:
-    """Provide an additional CollectionFilter parsed from ?roleIds=... query params."""
-    return CollectionFilter(field_name="role_id", values=role_ids or [])
+) -> InCollectionFilter[UUID]:
+    """Provide an additional InCollectionFilter parsed from ?roleIds=... query params."""
+    return InCollectionFilter(field_name="role_id", values=role_ids or [])
 
 
 class TagController(Controller):
@@ -300,36 +300,7 @@ one is configured.
 
 By default (`set_default_exception_handler=True`), `SQLAlchemyInitPlugin` maps `RepositoryError` to `exception_to_http_response` (`NotFoundError` → `404 NotFoundException`, `DuplicateKeyError` / `IntegrityError` / `ForeignKeyError` → `409 ConflictError`, other `RepositoryError` subclasses → `500 InternalServerException`).
 
-**Gotcha:** `SQLAlchemyInitPlugin.on_app_init` checks:
-
-```python
-if configure_exception_handler and not any(
-    isinstance(exc, int) or issubclass(exc, RepositoryError) for exc in app_config.exception_handlers
-):
-    app_config.exception_handlers.update({RepositoryError: exception_to_http_response})
-```
-
-If `Litestar(exception_handlers={...})` contains **any integer status-code key** (such as `500`, `404`, or `HTTP_500_INTERNAL_SERVER_ERROR`), `isinstance(exc, int)` evaluates to `True` and `SQLAlchemyInitPlugin` **skips** registering `RepositoryError: exception_to_http_response`. Unhandled `NotFoundError` and `DuplicateKeyError` exceptions then surface as `500 Internal Server Error` instead of `404` / `409`.
-
-Whenever your Litestar application registers integer status-code exception handlers, explicitly include `RepositoryError: exception_to_http_response`:
-
-```python
-from advanced_alchemy.exceptions import RepositoryError
-from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
-from advanced_alchemy.extensions.litestar.exception_handler import exception_to_http_response
-from litestar import Litestar
-from litestar.status_codes import HTTP_500_INTERNAL_SERVER_ERROR
-
-
-app = Litestar(
-    route_handlers=[...],
-    plugins=[SQLAlchemyPlugin(config=db_config)],
-    exception_handlers={
-        HTTP_500_INTERNAL_SERVER_ERROR: custom_500_handler,
-        RepositoryError: exception_to_http_response,
-    },
-)
-```
+In 1.13+, `SQLAlchemyInitPlugin.on_app_init` registers `{RepositoryError: exception_to_http_response}` whenever no `RepositoryError` subclass handler is already present, even if `Litestar(exception_handlers={...})` defines integer status-code keys (`500`, `404`). Pass `set_default_exception_handler=False` on the config or register a custom `RepositoryError` handler when you want to override it. (On 1.12 and earlier, integer status-code keys suppressed the default `RepositoryError` registration.)
 
 ## Dishka Integration
 
@@ -488,6 +459,6 @@ concrete model before migration autogeneration.
 
 ### Common pitfalls
 
-- **Expiry GC is not scheduled.** Both backends expose `delete_expired()` but do not run it automatically. Wire a periodic task (SAQ cron job, Litestar `on_startup` background task) that calls `await backend.delete_expired()` on a schedule, or run it on `get()` access for your own session keys — `backend.get()` already deletes a row when it finds it expired.
+- **Expiry GC is not scheduled.** Both `SQLAlchemyAsyncSessionBackend` and `SQLAlchemyStore` expose `await backend.delete_expired()` (which removes expired rows in the configured namespace while preserving active rows and other namespaces), but do not run it automatically. Wire a periodic task (SAQ cron job, `litestar-queues` schedule, or startup background task) to sweep expired rows, or rely on `get()` which deletes an expired row on read.
 - **Session ID generation is Litestar's concern.** The `SQLAlchemyAsyncSessionBackend` truncates inbound session IDs to 255 chars (`SESSION_ID_MAX_LENGTH`) but does not generate them — that is handled by `ServerSideSessionConfig`'s cookie middleware.
 - **Upsert path varies by dialect.** On PostgreSQL / SQLite / MySQL / DuckDB / CockroachDB the backend uses `OnConflictUpsert.create_upsert`; on Oracle it uses `MergeStatement`; elsewhere it falls back to SELECT-then-INSERT/UPDATE. PostgreSQL 15+ MERGE is currently disabled upstream via `_DISABLE_POSTGRES_MERGE` due to locking concerns — expect `ON CONFLICT` for all Postgres versions.

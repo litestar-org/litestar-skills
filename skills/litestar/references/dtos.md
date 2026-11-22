@@ -373,4 +373,4 @@ Use `Annotated[T, Body(...)]` when you need body constraints or OpenAPI metadata
 
 - [2.25 DTO implementation](https://github.com/litestar-org/litestar/tree/v2.25.0/litestar/dto)
 - [2.25 changelog](https://github.com/litestar-org/litestar/blob/v2.25.0/docs/release-notes/changelog.rst)
-- [Advanced Alchemy 1.12 Litestar DTO](https://github.com/litestar-org/advanced-alchemy/blob/v1.12.0/advanced_alchemy/extensions/litestar/dto.py)
+- [Advanced Alchemy 1.13 Litestar DTO](https://github.com/litestar-org/advanced-alchemy/blob/v1.13.0b3/advanced_alchemy/extensions/litestar/dto.py)

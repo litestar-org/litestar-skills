@@ -163,7 +163,7 @@ async def list_orders(request: Request):
     search_term = request.args.get("searchString")
 
     applied_filters: list[filters.FilterTypes] = [
-        filters.LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
+        filters.LimitOffsetFilter(limit=page_size, offset=page_size * (current_page - 1))
     ]
     if search_term:
         applied_filters.append(filters.SearchFilter(field_name={"customer_email"}, value=search_term, ignore_case=True))

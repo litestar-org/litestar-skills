@@ -103,7 +103,7 @@ result = await driver.execute(
 )
 ```
 
-Session-scoped controls belong on `provide_session()`, `provide_write_session()`, or `provide_read_session()`:
+Session-scoped controls belong on `provide_session()`, `provide_write_session()`, or `provide_replica_session()`:
 
 ```python
 async with config.provide_session(
@@ -118,7 +118,7 @@ async with config.provide_session(
     )
 ```
 
-Use `provide_read_session()` for multi-use snapshot reads. Use `provide_session()` or `provide_write_session()` for DDL, DML, and write-capable transactions.
+Use `provide_replica_session()` (or its alias `provide_read_session()`) for multi-use snapshot reads. Use `provide_session()` or `provide_write_session()` for DDL, DML, and write-capable transactions. Pass `normalize_nested=True` on `driver.to_schema(...)` (enabled by default) when mapping nested JSON/record structures into schemas.
 
 Both `SpannerSyncConfig` / `SpannerAsyncConfig` and `SpannerSyncDriver` / `SpannerAsyncDriver` also expose:
 

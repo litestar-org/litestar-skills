@@ -194,6 +194,8 @@ iap_config = GoogleIAPConfig(
 )
 ```
 
+`GoogleIAPClaims` also exposes `spiffe_id`, `is_agent_identity`, and `is_machine_principal` to distinguish Workload Identity (`spiffe://...`), Google Cloud Agent Identity (`principal://agents.global.` / `principal://agents-nonprod.global.` / `principalSet://agents...`, `0.7.3+`), and Cloud service accounts from human accounts.
+
 ## API Keys and Self-Service Rotation
 
 Configure `APIKeyConfig` on `SecurityConfig(api_key=...)` for request

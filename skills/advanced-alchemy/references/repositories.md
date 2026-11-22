@@ -114,7 +114,7 @@ The session is still required (an `AsyncSession` instance) but the mock ignores 
 
 ### Supported filter subset
 
-`SQLAlchemyAsyncMockRepository._apply_filters` handles `LimitOffset`, `BeforeAfter`, `OnBeforeAfter`, `CollectionFilter`, `NotInCollectionFilter`, `SearchFilter`, `NotInSearchFilter`, and `OrderBy`. A raw SQLAlchemy `ColumnElement` is silently accepted (not evaluated); any other filter type raises `RepositoryError` with `"Unexpected filter"`. `load` / `loader_options` / `execution_options` are accepted but ignored — eager loading is implicit because rows are Python objects.
+`SQLAlchemyAsyncMockRepository._apply_filters` handles `LimitOffsetFilter`, `CursorFilter`, `BeforeAfterFilter`, `OnBeforeAfterFilter`, `InCollectionFilter`, `NotInCollectionFilter`, `SearchFilter`, `NotInSearchFilter`, `OrderByFilter`, `ExistsFilter`, `NotExistsFilter`, `RelationshipFilter`, `MultiFilter`, and `FilterSet` (raising `RepositoryError` for unsupported SQL expressions). `load` / `loader_options` / `execution_options` are accepted but ignored — eager loading is implicit because rows are Python objects.
 
 ### Fixture + test example
 
@@ -222,6 +222,7 @@ instance = await repo.add(model_instance)
 instances = await repo.add_many([model1, model2])
 
 instance = await repo.get(id)
+instance = await repo.get_or_none(id)
 instance = await repo.get_one_or_none(email="x@y.com")
 
 results = await repo.get_many()

@@ -74,7 +74,7 @@ Registering the plugin twice raises `ImproperConfigurationError` — the plugin 
    - `teardown_appcontext(self._teardown_appcontext_handler)` — closes the connection (or exits its context manager). Runs whether the request succeeded or raised.
 5. **Registers an `atexit` shutdown hook** that closes all pools and stops the portal thread on interpreter exit.
 
-Transaction modes are the same three values as the ASGI extensions — `"manual"`, `"autocommit"`, `"autocommit_include_redirect"` — with the same 2xx / 3xx semantics. See [commit-modes.md](commit-modes.md) for the full decision table.
+Transaction modes use the same three values as the ASGI extensions — `"autocommit"` (default, except BigQuery which requires `"manual"`), `"autocommit_include_redirect"`, and `"manual"` — with lazy connection checkout on first `get_session()` / `get_connection()` call and the same 2xx / 3xx semantics. See [commit-modes.md](commit-modes.md) for the full decision table.
 
 By default (unless `enable_correlation_middleware=False` on all configs), the `before_request` handler extracts a correlation ID from headers (primary `x-request-id`, plus any configured fallbacks and W3C trace headers), propagates it into `CorrelationContext` so driver-layer logs pick it up, stores it on `g.correlation_id`, and the `after_request` handler stamps `X-Correlation-ID` on the response.
 
@@ -107,7 +107,7 @@ Per-config keys the plugin reads from `extension_config["flask"]`:
 | --- | --- | --- |
 | `connection_key` | `"sqlspec_connection_<session_key>"` | `flask.g` attribute holding the per-request connection. |
 | `session_key` | `"db_session"` | Logical bind name. Used for the pool slot, the `get_session` lookup key, and the session-cache key. |
-| `commit_mode` | `"manual"` | `"manual"` / `"autocommit"` / `"autocommit_include_redirect"`. |
+| `commit_mode` | `"autocommit"` | `"autocommit"` (default) / `"autocommit_include_redirect"` / `"manual"` (required for BigQuery). |
 | `extra_commit_statuses` | `None` | Extra status codes that trigger commit. |
 | `extra_rollback_statuses` | `None` | Extra status codes that trigger rollback. |
 | `disable_di` | `False` | Skip request hooks for this config — you own the lifecycle. |
