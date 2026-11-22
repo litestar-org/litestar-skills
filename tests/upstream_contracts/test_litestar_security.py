@@ -125,8 +125,8 @@ from litestar_security.testing import (
 
 
 def test_litestar_security_060_version() -> None:
-    """Verify installed library version matches the upstream 0.7.2 release."""
-    assert version("litestar-security") == "0.7.2"
+    """Verify installed library version matches the upstream 0.7.3 release."""
+    assert version("litestar-security") == "0.7.3"
 
 
 def test_litestar_security_060_authorization_predicates_and_combinators() -> None:
@@ -649,3 +649,10 @@ def test_litestar_security_060_custom_mechanism_openapi_and_non_default_controll
     ):
         response = client.get("/schema/openapi.json")
         assert response.status_code == 200
+
+    nonprod_claims = GoogleIAPClaims(
+        subject="accounts.google.com:principal://agents-nonprod.global.proj-123.agent.id.goog/ns/default/sa/bot",
+    )
+    assert nonprod_claims.spiffe_id == "principal://agents-nonprod.global.proj-123.agent.id.goog/ns/default/sa/bot"
+    assert nonprod_claims.is_agent_identity is True
+    assert nonprod_claims.is_machine_principal is True

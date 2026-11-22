@@ -4,36 +4,25 @@ This reference describes SQLSpec's commit-mode middleware semantics — how the 
 
 ## What `commit_mode` Selects
 
-SQLSpec attaches its commit policy through `extension_config["<framework>"]["commit_mode"]` on each adapter config. The framework extension reads that value and registers either `SQLSpecAutocommitMiddleware` or `SQLSpecManualMiddleware` against the application. The default — applied when the key is absent — is `"manual"`:
+SQLSpec attaches its commit policy through `extension_config["<framework>"]["commit_mode"]` on each adapter config. The ASGI framework extensions read that value and register `SQLSpecTransactionMiddleware(app, config_states=[...])` (which replaced the removed `SQLSpecManualMiddleware` and `SQLSpecAutocommitMiddleware` classes in `sqlspec>=0.74`). The default — applied when the key is absent — is `"autocommit"` (except BigQuery, which rejects `"autocommit"` and `"autocommit_include_redirect"` with `ImproperConfigurationError` and requires `"manual"`):
 
 ```python
-DEFAULT_COMMIT_MODE = "manual"
+DEFAULT_COMMIT_MODE = "autocommit"
 ```
 
-The three accepted values map to middleware as follows:
-
-| `commit_mode` value | Middleware registered | Notes |
+| `commit_mode` value | Middleware behavior (`SQLSpecTransactionMiddleware`) | Notes |
 | --- | --- | --- |
-| `"manual"` | `SQLSpecManualMiddleware` | Acquires + releases the connection; never commits or rolls back automatically. |
-| `"autocommit"` | `SQLSpecAutocommitMiddleware(include_redirect=False)` | Commits on 2xx, rolls back on everything else. |
-| `"autocommit_include_redirect"` | `SQLSpecAutocommitMiddleware(include_redirect=True)` | Commits on 2xx + 3xx, rolls back on everything else. |
+| `"manual"` | Checks out connection lazily on first use and releases it on exit. | Never commits or rolls back automatically. Required for BigQuery. |
+| `"autocommit"` | Default. Same lazy acquisition; commits on 2xx, rolls back otherwise. | Also rolls back when a handler raises an exception. |
+| `"autocommit_include_redirect"` | Commits on 2xx and 3xx, rolls back on everything else. | Use for POST-then-redirect-to-GET handlers. |
 
-The dispatch is hard-coded in the extension's `_add_middleware` step:
-
-```python
-if config_state.commit_mode == "manual":
-    app.add_middleware(SQLSpecManualMiddleware, config_state=...)
-elif config_state.commit_mode == "autocommit":
-    app.add_middleware(SQLSpecAutocommitMiddleware, ..., include_redirect=False)
-elif config_state.commit_mode == "autocommit_include_redirect":
-    app.add_middleware(SQLSpecAutocommitMiddleware, ..., include_redirect=True)
-```
+Because `SQLSpecTransactionMiddleware` uses deferred connection checkout (`ensure_request_connection_async` / `ensure_request_connection_sync`), requests that never access `db_session` or `db_connection` do not hold or check out a pool connection.
 
 ## What Each Mode Does
 
 ### `"manual"`
 
-`SQLSpecManualMiddleware` acquires a connection from the pool (or creates one if the adapter does not pool), stores it on `request.state` under the configured `connection_key`, runs the handler, and releases the connection on the way out. It never calls `commit()` or `rollback()` — your handler is responsible for transaction boundaries. Use `manual` when:
+With `commit_mode="manual"`, `SQLSpecTransactionMiddleware` binds request state so a connection is checked out lazily on first access (`request.state.<connection_key>`), runs the handler, and releases the connection on the way out if it was acquired. It never calls `commit()` or `rollback()` — your handler is responsible for transaction boundaries. Use `manual` when:
 
 - You want explicit control over commits (multiple atomic units inside one handler).
 - The adapter is already auto-committing each statement (e.g. a connection opened with `autocommit=True` at the driver level).
@@ -41,7 +30,7 @@ elif config_state.commit_mode == "autocommit_include_redirect":
 
 ### `"autocommit"`
 
-`SQLSpecAutocommitMiddleware` runs the handler, then calls `connection.commit()` if `_should_commit(response.status_code)` returns `True`, otherwise `connection.rollback()`. Exceptions raised by the handler always roll back and re-raise. The decision predicate from upstream:
+With `commit_mode="autocommit"` (the framework default), `SQLSpecTransactionMiddleware` runs the handler, checks `_should_commit(response.status_code)` when a connection was checked out, and calls `connection.commit()` if `True`, otherwise `connection.rollback()`. Exceptions raised by the handler always roll back and re-raise:
 
 ```python
 def _should_commit(self, status_code: int) -> bool:
@@ -143,7 +132,7 @@ sqlspec.add_config(config)
 - **`autocommit` rolls back on 5xx.** Handlers that catch an exception, log it, and return `500` will see a rollback because the status code drives the decision. Use `manual` if you need to commit partial work before reporting failure.
 - **Redirects do not commit by default.** If the handler returns `303 See Other` after a write, plain `autocommit` rolls back. Use `autocommit_include_redirect`.
 - **`manual` does not mean "no transaction".** The connection is still acquired and held open for the request. If your handler issues `INSERT`s and returns without calling `commit()`, the changes are discarded when the connection is released.
-- **Adapters without pooling still get the middleware.** `SQLSpecAutocommitMiddleware` checks `config.supports_connection_pooling` and falls through to `config.create_connection()` + `connection.close()` for non-pooled adapters. Behavior is identical from the handler's point of view.
+- **Adapters without pooling still get the middleware.** `SQLSpecTransactionMiddleware` checks `config.supports_connection_pooling` and falls through to `config.create_connection()` + `connection.close()` for non-pooled adapters. Behavior is identical from the handler's point of view.
 - **Background tasks scheduled inside a handler share the request connection.** If the handler returns `202 Accepted`, autocommit will commit and the connection goes back to the pool before the task runs. Pass payload data to the task and let the worker open its own connection.
 - **`extra_commit_statuses` / `extra_rollback_statuses` are sets, not lists.** Pass `{422}` not `[422]` — the upstream `or set()` fallback works either way at runtime, but the type hint is `set[int] | None`.
 - **`commit_mode` is per-config, not per-route.** Multiple routes that share the same adapter config get the same mode. Register a second config (with its own `connection_key`) if different routes need different commit semantics — see [multi-database.md](./multi-database.md).

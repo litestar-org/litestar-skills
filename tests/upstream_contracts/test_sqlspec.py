@@ -21,11 +21,14 @@ from sqlspec import (
     LoggingConfig,
     ObservabilityConfig,
     RedactionConfig,
+    ReplicaGroup,
+    ReplicaSpec,
     SQLFileLoader,
     SQLSpec,
     StackResult,
     StatementStack,
     TelemetryConfig,
+    TenantContext,
     create_statement_observer,
     default_statement_observer,
     nanoid,
@@ -110,7 +113,7 @@ from sqlspec.dialects.spanner import (
     tokenize_substring,
 )
 from sqlspec.dialects.sybase import SQLAnywhere, Sybase
-from sqlspec.exceptions import SQLBuilderError
+from sqlspec.exceptions import AmbiguousIdentifierError, FileExistsInStorageError, SQLBuilderError
 from sqlspec.extensions.adk import (
     PruneReport,
     SQLSpecArtifactService,
@@ -138,6 +141,7 @@ from sqlspec.extensions.litestar.providers import (
     FilterConfig,
     create_filter_dependencies,
 )
+from sqlspec.extensions.starlette import SQLSpecTransactionMiddleware
 from sqlspec.loader import SlotDeclaration
 from sqlspec.migrations.tracker import AsyncMigrationTracker, SyncMigrationTracker
 from sqlspec.service import SQLSpecAsyncService, SQLSpecSyncService
@@ -188,8 +192,8 @@ class UserRow:
 
 
 def test_sqlspec_067_contract() -> None:
-    """Validate sqlspec 0.71.1 core contracts and exported API surface."""
-    assert version("sqlspec") == "0.71.1"
+    """Validate sqlspec 0.74.1 core contracts and exported API surface."""
+    assert version("sqlspec") == "0.74.1"
 
     assert "sqlspec" in inspect.signature(SQLSpecPlugin).parameters
     spec = SQLSpec()
@@ -428,7 +432,8 @@ def test_sqlspec_065_filter_dependencies_contract() -> None:
             "pagination_type": "cursor",
             "pagination_size": 25,
             "pagination_max_size": 100,
-            "cursor_keys": (CursorKey("created_at", sort_order="desc"), "id"),
+            "pagination_cursor_keys": (CursorKey("created_at", sort_order="desc"), "id"),
+            "pagination_cursor_secret": "test-cursor-secret",
             "search": "name,email",
         },
     )
@@ -558,8 +563,18 @@ def test_sqlspec_065_sqlite_and_migration_tracker_contract() -> None:
     assert not hasattr(AiosqliteConfig, "backup")
     assert not hasattr(AiosqliteConfig, "run_in_transaction")
 
-    assert "batch_size" in inspect.signature(SqliteDriver.load_from_arrow).parameters
-    assert "batch_size" in inspect.signature(AiosqliteDriver.load_from_arrow).parameters
+    assert hasattr(SqliteDriver, "load_from_arrow")
+    assert hasattr(AiosqliteDriver, "load_from_arrow")
+
+    assert ReplicaGroup is not None
+    assert ReplicaSpec is not None
+    assert TenantContext is not None
+    assert SQLSpecTransactionMiddleware is not None
+    assert FileExistsInStorageError is not None
+    assert AmbiguousIdentifierError is not None
+    assert callable(sql.func)
+    assert callable(sql.col)
+    assert callable(sql.var)
     assert {"enable_custom_adapters", "custom_window_functions", "default_transaction_mode"}.issubset(
         SqliteDriverFeatures.__annotations__
     )

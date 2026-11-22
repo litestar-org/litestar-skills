@@ -68,13 +68,13 @@ from polyfactory.factories import DataclassFactory
 
 
 class OrderFactory(DataclassFactory[Order]):
-    # Plain literal — every build returns this exact value
+    # Plain literal - every build returns this exact value
     status = "pending"
 
-    # Callable — re-evaluated per build
+    # Callable - re-evaluated per build
     customer_email = Use(lambda: "test@example.com")
 
-    # Random choice — re-evaluated per build
+    # Random choice - re-evaluated per build
     total_cents = Use(DataclassFactory.__random__.randint, 100, 10_000)
 
     # Skip generation so the model's default / default_factory runs
@@ -280,7 +280,7 @@ register_fixture(OrderCreatedEventFactory)
 
 ```python
 # tests/test_orders.py
-from __future__ import annotations  # consumer module — fine to use future annotations
+from __future__ import annotations  # consumer module - fine to use future annotations
 
 import msgspec
 import pytest

@@ -231,13 +231,15 @@ The query parameters produced by that config:
 
 | Key | Produces | Query parameter(s) |
 | --- | --- | --- |
-| `id_filter` (+ `id_field`) | `CollectionFilter` | `?ids=...` |
-| `pagination_type="limit_offset"` (+ `pagination_size`) | `LimitOffset` | `?currentPage=1&pageSize=25` |
+| `id_filter` (+ `id_field`) | `InCollectionFilter` | `?ids=...` |
+| `pagination_type="limit_offset"` (+ `pagination_size`, `pagination_max_size`) | `LimitOffsetFilter` | `?currentPage=1&pageSize=25` |
+| `pagination_type="cursor"` (+ `pagination_cursor_secret`, `pagination_cursor_ttl`, `pagination_cursor_encrypted`) | `CursorFilter` | `?cursor=...&pageSize=25` |
 | `search` (+ `search_ignore_case`, `search_escape_wildcards`) | `SearchFilter` | `?searchString=...&searchIgnoreCase=true` |
-| `sort_field` + `sort_order` (+ `sort_nulls`) | `OrderBy` | `?orderBy=created_at&sortOrder=desc&nulls=last` |
-| `created_at: True` | `BeforeAfter` | `?createdBefore=...&createdAfter=...` |
-| `updated_at: True` | `BeforeAfter` | `?updatedBefore=...&updatedAfter=...` |
-| `in_fields` / `not_in_fields` | `CollectionFilter` / `NotInCollectionFilter` | `?<field>In=...` / `?<field>NotIn=...` |
+| `sort_field` + `sort_order` (+ `sort_nulls`) / `sort_fields` | `OrderByFilter` | `?orderBy=created_at&sortOrder=desc&nulls=last` |
+| `filter_fields` | Dotted-path field filters (`FilterSet`) | `?<path>__<op>=...` |
+| `created_at: True` | `BeforeAfterFilter` | `?createdBefore=...&createdAfter=...` |
+| `updated_at: True` | `BeforeAfterFilter` | `?updatedBefore=...&updatedAfter=...` |
+| `in_fields` / `not_in_fields` | `InCollectionFilter` / `NotInCollectionFilter` | `?<field>In=...` / `?<field>NotIn=...` |
 | `boolean_fields` | `BooleanFilter` | `?<field>=true` |
 | `choice_fields` | `ChoicesFilter` | `?<field>=...` (`ChoiceField(name, choices)`) |
 | `alias_generator` | Column alias map | Resolves public query parameter names to ORM columns |
@@ -429,6 +431,6 @@ One POST to `/orders` with `{"customer_email": "a@b.co", "total_cents": 9900}`:
 - [flask-integration.md](flask-integration.md) — WSGI equivalent.
 - [sanic-integration.md](sanic-integration.md) — `request.ctx`-based equivalent.
 - [services.md](services.md) — `SQLAlchemyAsyncRepositoryService` API.
-- [filters.md](filters.md) — the underlying filter types (`LimitOffset`, `SearchFilter`, etc.) that `provide_filters` assembles.
+- [filters.md](filters.md) — the underlying filter types (`LimitOffsetFilter`, `CursorFilter`, `FilterSet`, `SearchFilter`, etc.) that `provide_filters` assembles.
 - [migrations.md](migrations.md) — Alembic workflow behind the database CLI.
 - [../../litestar-styleguide/references/canonical-apps.md](../../litestar-styleguide/references/canonical-apps.md) — public reference apps (Litestar-based; service/repository code transfers directly).

@@ -94,7 +94,7 @@ Python migrations receive a `MigrationContext` that exposes `context.config` (th
 
 ## Version Tracking
 
-The runner stores applied versions in a tracking table (default name `ddl_migrations`, overridable via `migration_config["version_table_name"]`, including schema-qualified and quoted identifiers such as `"app_schema"."DdlMigrations"`). `sqlspec.migrations.tracker.AsyncMigrationTracker` / `SyncMigrationTracker` own the schema and expose:
+The runner stores applied versions in a tracking table (default name `ddl_migrations`, overridable via `migration_config["version_table_name"]`, including schema-qualified and quoted identifiers such as `"app_schema"."DdlMigrations"`). Applied migrations record SHA-256 checksums (while maintaining read compatibility with pre-v0.67.0 MD5 checksums) and coordinate concurrency via lease locks. `sqlspec.migrations.tracker.AsyncMigrationTracker` / `SyncMigrationTracker` own the schema and expose:
 
 - `ensure_tracking_table(driver)` — create the table if missing; auto-migrate the schema if columns have been added upstream.
 - `record_migration(driver, version, description, duration_ms, applied_by)` — insert a row when an upgrade succeeds.
@@ -115,7 +115,7 @@ Extensions that bundle their own migrations are opt-in via `migration_config["in
 
 ### External Package Extension Migrations (`migrations_path`)
 
-Third-party or ecosystem packages (such as `litestar-queues`) can register their own migration directory by setting `migrations_path` (a `Path`, filesystem path string, or `package.module:subdir` spec resolved via `resolve_extension_migrations_path`) inside `extension_config["<ext_name>"]` and listing `"<ext_name>"` in `migration_config["include_extensions"]`:
+Third-party or ecosystem packages (such as `litestar-queues`) can register their own migration directory using `add_extension_migrations` (`sqlspec.config`) or by setting `migrations_path` (a `Path`, filesystem path string, or `package.module:subdir` spec resolved via `resolve_extension_migrations_path`) inside `extension_config["<ext_name>"]` and listing `"<ext_name>"` in `migration_config["include_extensions"]`. Extension schemas default to additive reconciliation (`migration_mode="reconcile"`, `ExtensionMigrationMode = Literal["versioned", "reconcile"]`, `ensure_schema_async` / `ensure_schema_sync`) or opt into explicit `"versioned"` tracking:
 
 ```python
 from litestar_queues.backends.sqlspec.extension import queue_migration_directory

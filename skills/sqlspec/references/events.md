@@ -105,7 +105,7 @@ Oracle defaults to `poll_queue`. `aq` and `txeventq` are opt-in and attach to an
 - Both native transports work in python-oracledb Thin mode.
 - JSON payloads require Oracle Database 21c or newer.
 - The user needs the required `DBMS_AQADM`, AQ role, and `DBMS_AQ` privileges.
-- `aq_queue` defaults to `SQLSPEC_EVENTS_QUEUE` and can include `{channel}` when physical per-channel queues are pre-provisioned.
+- `aq_queue` defaults to `SQLSPEC_EVENTS_QUEUE` and can include `{channel}` when physical per-channel queues are pre-provisioned; pair `{channel}` templates with `aq_channels` when using additive schema reconciliation (`migration_mode="reconcile"`).
 
 ## Durable Queue Schema & Claim Primitives
 

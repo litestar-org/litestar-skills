@@ -242,7 +242,7 @@ export default defineConfig({
   build: {
     [bundlerKey]: {
       onwarn(warning, warn) {
-        // HTMX uses runtime expression evaluation — suppress the build warning
+        // HTMX uses runtime expression evaluation - suppress the build warning
         if (warning.code === "EVAL" && warning.id?.includes("htmx")) return
         warn(warning)
       },

@@ -155,7 +155,7 @@ Content = TextContent | ImageContent
 class Post(msgspec.Struct, kw_only=True):
     id: int
     author: str
-    content: Content  # union — dispatched at decode
+    content: Content  # union - dispatched at decode
 ```
 
 ---

@@ -53,12 +53,9 @@ async def combined_lifespan(app):
         yield
 ```
 
-Per-request wiring uses the same two middleware variants:
+Per-request wiring uses `SQLSpecTransactionMiddleware`, which checks out connections lazily on first access (`provide_session()` / `provide_connection()` / `get_session()`) and handles all three modes (`"autocommit"` default, `"autocommit_include_redirect"`, and `"manual"` required for BigQuery). Requests that do not access a DB dependency do not check out a connection from the pool.
 
-- `SQLSpecManualMiddleware` — acquires a connection from the pool, stashes it on `request.state` under `connection_key`, releases on exit. Transaction boundaries are your responsibility.
-- `SQLSpecAutocommitMiddleware` — same acquisition; commits on 2xx (and on 3xx when `commit_mode="autocommit_include_redirect"`), rolls back on everything else or on raised exceptions.
-
-See [commit-modes.md](commit-modes.md) for the status-code decision table.
+See [commit-modes.md](commit-modes.md) for the status-code decision table and lazy checkout behavior.
 
 The plugin also adds `CorrelationMiddleware` (enabled by default unless `enable_correlation_middleware=False`) and `SQLCommenterMiddleware` (if `enable_sqlcommenter_middleware=True` and the adapter has `statement_config.enable_sqlcommenter=True`). Both are additive — they thread correlation IDs and route metadata into driver logs without touching handler signatures. Details are in [observability.md](observability.md).
 
@@ -95,7 +92,7 @@ The keys the plugin reads from `extension_config["fastapi"]`:
 | `connection_key` | `"db_connection"` | `request.state` slot holding the per-request raw connection. |
 | `session_key` | `"db_session"` | `request.state` slot holding the cached per-request driver session. Also the lookup key for `provide_session("...")`. |
 | `pool_key` | `"db_pool"` | `app.state` slot holding the shared pool. |
-| `commit_mode` | `"manual"` | `"manual"` / `"autocommit"` / `"autocommit_include_redirect"`. |
+| `commit_mode` | `"autocommit"` | `"autocommit"` (default, except BigQuery) / `"autocommit_include_redirect"` / `"manual"` (required for BigQuery). |
 | `extra_commit_statuses` | `None` | Extra status codes that should commit (e.g. `{418}` for a custom success). |
 | `extra_rollback_statuses` | `None` | Extra status codes that should roll back. |
 | `disable_di` | `False` | Skip middleware for this config entirely. |
@@ -105,6 +102,10 @@ The keys the plugin reads from `extension_config["fastapi"]`:
 | `auto_trace_headers` | `True` | Also probe W3C trace headers as fallbacks. |
 | `enable_sqlcommenter_middleware` | `True` | Requires `statement_config.enable_sqlcommenter=True` on the adapter. |
 | `sqlcommenter_framework` | `"fastapi"` | Framework tag in generated SQL comments. |
+| `tenant_extractor` | `None` | Request tenant extractor used with `SQLSpecTenantMiddleware` / `TenantContext`. |
+| `replica_session_key` / `replica_connection_key` / `replica_pool_key` | `"db_replica_session"` / `"db_replica_connection"` / `"db_replica_pool"` | Read-replica dependency slots for `provide_replica_session()` / `provide_routing_session()`. |
+| `enable_routing_middleware` / `default_routing_mode` | `True` / `"auto"` | Replica routing middleware and `primary_pin_cookie` / `primary_pin_secret` / `routing_header`. |
+| `pagination_cursor_secret` / `pagination_cursor_ttl` / `pagination_cursor_encrypted` | `None` / `None` / `False` | Default cursor signing, TTL, and AES encryption settings for `provide_filters`. |
 
 For multi-database applications, give each config a distinct `connection_key` / `session_key` / `pool_key`. The plugin raises `ImproperConfigurationError` on duplicates at `init_app`. The full per-bind model is in [multi-database.md](multi-database.md).
 
@@ -112,7 +113,7 @@ For multi-database applications, give each config a distinct `connection_key` / 
 
 FastAPI's dependency injection is driven by `Depends`. The plugin exposes three families of dependency factories:
 
-- `provide_session(key=None)` — returns a callable that resolves to the driver session (the most common shape).
+- `provide_session(key=None)` — returns a callable that resolves to the driver session (the most common shape). Also exposes `provide_replica_session(key=None)` (`provide_async_replica_session` / `provide_sync_replica_session`) and `provide_routing_session(key=None)` for primary/replica routing.
 - `provide_connection(key=None)` — returns a callable that resolves to the raw connection (for driver-specific escape hatches).
 - `provide_async_session(key)` / `provide_sync_session(key)` — type-narrowed variants for when you're using a string key and need the static type-checker to know whether the config is async or sync.
 
@@ -312,7 +313,7 @@ async def list_orders(
     return {"orders": rows}
 ```
 
-Use `HTTPException` to return non-2xx responses — the `SQLSpecAutocommitMiddleware` reads the final response status, so `raise HTTPException(status_code=404, ...)` will roll back any open transaction (404 is not in the 2xx window). If you *want* the read-only handler to not own a transaction at all, set `commit_mode="manual"` on the config (the default) — nothing commits, nothing rolls back.
+Use `HTTPException` to return non-2xx responses — `SQLSpecTransactionMiddleware` reads the final response status under `"autocommit"`, so `raise HTTPException(status_code=404, ...)` will roll back any open transaction (404 is not in the 2xx window). If you *want* a read-only handler to not own a transaction at all, set `commit_mode="manual"` on the config — nothing commits, nothing rolls back.
 
 ## Multi-database
 
@@ -475,7 +476,7 @@ async def get_order(order_id: int, db: SessionDep) -> dict[str, Any]:
 Request flow for `POST /orders`:
 
 1. FastAPI enters the request scope. The plugin's lifespan has already created the asyncpg pool and stored it on `app.state.db_pool`.
-2. `SQLSpecAutocommitMiddleware` acquires a connection and stores it under `request.state.db_connection`.
+2. `SQLSpecTransactionMiddleware` attaches lazy connection checkout for `request.state.db_connection`. When `provide_session()` accesses the connection, it is acquired and stored under `request.state.db_connection`.
 3. FastAPI resolves `db: SessionDep`. `Depends(db_plugin.provide_session())` calls the factory, which calls `self.get_session(request, None)`, which reads the connection off `request.state`, builds an `AsyncpgDriver`, and caches it.
 4. The handler validates the payload (raising 422 if it's missing fields — that short-circuits before any DB work) and runs the insert with `RETURNING id`.
 5. The handler returns the response. The middleware reads the 201 status, calls `await connection.commit()`, then releases the connection.
@@ -491,7 +492,7 @@ Request flow for `GET /orders` with `?searchString=acme&currentPage=2&pageSize=2
 
 ## Cross-links
 
-- [commit-modes.md](commit-modes.md) — `SQLSpecAutocommitMiddleware` vs `SQLSpecManualMiddleware`, including `extra_commit_statuses` / `extra_rollback_statuses`.
+- [commit-modes.md](commit-modes.md) — `SQLSpecTransactionMiddleware` behavior across `autocommit`, `autocommit_include_redirect`, and `manual`, plus `extra_commit_statuses` / `extra_rollback_statuses`.
 - [multi-database.md](multi-database.md) — per-bind `connection_key` / `session_key` / `pool_key`, validation, async + sync mixing.
 - [filters.md](filters.md) — the filter object catalog — `LimitOffsetFilter`, `OrderByFilter`, `SearchFilter`, `BeforeAfterFilter`, `InCollectionFilter`, `NotInCollectionFilter`, `NullFilter`, `NotNullFilter`.
 - [adapters.md](adapters.md) — adapter pool configuration (`min_size`, `max_size`, `conninfo`, `dsn`).

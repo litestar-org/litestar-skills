@@ -127,7 +127,7 @@ async def list_orders(request: Request) -> JSONResponse:
 The standalone Starlette extension does not ship a filter-aggregator (`create_filter_dependencies` / `provide_filters`) — again, that is a FastAPI convenience. In a Starlette handler, build filters from query parameters yourself using the framework-neutral types in `advanced_alchemy.filters`:
 
 ```python
-from advanced_alchemy.filters import LimitOffset, SearchFilter
+from advanced_alchemy.filters import LimitOffsetFilter, SearchFilter
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -140,7 +140,7 @@ async def list_orders(request: Request) -> JSONResponse:
     page_size = int(request.query_params.get("pageSize", 20))
     search_term = request.query_params.get("searchString")
 
-    filters = [LimitOffset(limit=page_size, offset=page_size * (page - 1))]
+    filters = [LimitOffsetFilter(limit=page_size, offset=page_size * (page - 1))]
     if search_term:
         filters.append(SearchFilter(field_name={"customer_email"}, value=search_term, ignore_case=True))
 

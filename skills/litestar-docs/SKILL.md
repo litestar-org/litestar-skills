@@ -54,7 +54,7 @@ Dual-engine documentation architecture for `litestar-org` and ecosystem reposito
 Inspect the repository root for `docs/conf.py` (Sphinx) or `zensical.toml` (Zensical):
 
 - **Sphinx Track**: Configure `[dependency-groups] doc` with `sphinx`, `shibuya` (or `litestar-sphinx-theme` via Git, which extends `pydata-sphinx-theme`), `sphinx-design`, `sphinx-copybutton`, `sphinx-click`, `sphinxcontrib-mermaid`, `auto-pytabs[sphinx]`, and `myst-parser`. Configure `docs/conf.py` with `sphinx.ext.autodoc`, `sphinx.ext.napoleon`, and `sphinx.ext.intersphinx`. See [`references/sphinx-architecture.md`](references/sphinx-architecture.md).
-- **Zensical Track**: Configure `[dependency-groups] doc` with `zensical>=0.1.1`, `mkdocstrings-python>=2.0.10`, `pymdown-extensions>=13.0`, and `ruff>=0.17.5`. Configure `zensical.toml` with `use_directory_urls = true`, `navigation.tabs`, `toc.follow`, `pymdownx.snippets` (`check_paths = true`), and `enable_inventory = true`. See [`references/zensical-architecture.md`](references/zensical-architecture.md).
+- **Zensical Track**: Configure `[dependency-groups] doc` with `zensical>=0.1.3`, `mkdocstrings-python>=2.0.10`, `pymdown-extensions>=13.0`, and `ruff>=0.17.6`. Configure `zensical.toml` with `use_directory_urls = true`, `navigation.tabs`, `toc.follow`, `pymdownx.snippets` (`check_paths = true`), and `enable_inventory = true`. See [`references/zensical-architecture.md`](references/zensical-architecture.md).
 
 ### Step 2: Enforce Docstring and `TypedDict` Hygiene
 

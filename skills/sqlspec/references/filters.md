@@ -221,12 +221,15 @@ offset_filter_deps = create_filter_dependencies(
 cursor_filter_deps = create_filter_dependencies(
     {
         "pagination_type": "cursor",
-        "cursor_keys": [CursorKey("created_at", sort_order="desc"), "id"],
-        "cursor_secret": "app-cursor-signing-secret",
+        "pagination_cursor_keys": [CursorKey("created_at", sort_order="desc"), "id"],
+        "pagination_cursor_secret": "app-cursor-signing-secret",
+        "pagination_cursor_ttl": 3600,
+        "pagination_cursor_encrypted": False,
         "pagination_size": 25,
         "pagination_max_size": 100,
         "search": "name,email",
         "search_ignore_case": True,
+        "search_escape_wildcards": True,
     }
 )
 
@@ -260,8 +263,8 @@ async def list_users_cursor(
 Query parameters are automatically extracted and bounded by the provider:
 
 - `?currentPage=2&pageSize=20` for `LimitOffsetFilter` (`pageSize` is capped by `pagination_max_size`, default `1000`)
-- `?cursor=<token>&pageSize=25` for `CursorFilter`
+- `?cursor=<token>&pageSize=25` for `CursorFilter` (set `pagination_cursor_keys` and `pagination_cursor_secret`, plus optional `pagination_cursor_ttl` and `pagination_cursor_encrypted=True`)
 - `?orderBy=name&sortOrder=asc` for `OrderByFilter` (supports `sort_field` allowlists, camelCase aliases when `sort_field_camelize=True`, and `sort_field_aliases`)
-- `?searchString=alice&searchIgnoreCase=true` for `SearchFilter`
+- `?searchString=alice&searchIgnoreCase=true` for `SearchFilter` (`search_escape_wildcards=True` escapes `%` / `_` literals)
 - `?createdBefore=2025-12-31&createdAfter=2025-01-01` when `created_at=True`
 - `?ids=<value>` for the configured ID collection filter (`id_field` defaults to `"id"`)

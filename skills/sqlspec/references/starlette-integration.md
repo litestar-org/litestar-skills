@@ -2,7 +2,7 @@
 
 SQLSpec ships a first-party Starlette extension that wraps the ASGI lifespan to manage connection pools and mounts request-scoped middleware that stores each request's database connection on `request.state`. This guide covers the async ASGI wiring for plain Starlette apps. For FastAPI, see [fastapi-integration.md](fastapi-integration.md); for WSGI Flask, see [flask-integration.md](flask-integration.md).
 
-The whole integration is anchored on a single class — `SQLSpecPlugin` — plus two middleware variants (`SQLSpecManualMiddleware`, `SQLSpecAutocommitMiddleware`) that differ only in their transaction policy. Everything else (the filter system, the sqlcommenter and correlation middleware) composes on top.
+The whole integration is anchored on `SQLSpecPlugin` and `SQLSpecTransactionMiddleware` (which replaced the removed `SQLSpecManualMiddleware` and `SQLSpecAutocommitMiddleware` classes in `sqlspec>=0.74`). Everything else (the filter system, replica routing, tenant isolation via `SQLSpecTenantMiddleware`, and correlation/sqlcommenter middleware) composes on top.
 
 ## Install
 
@@ -65,10 +65,10 @@ app.router.lifespan_context = combined_lifespan
 
 Inside `db_plugin.lifespan(app)` the plugin iterates every config that reports `supports_connection_pooling` and calls `await config.create_pool()`, storing the pool on `app.state` under the config's `pool_key`. On shutdown the reverse happens — each pool is closed via `config.close_pool()` (awaited if the adapter returns a coroutine).
 
-Per-request wiring is driven by middleware. For each config whose `disable_di` is not set, the plugin registers one of two middleware instances based on `commit_mode`:
+Per-request wiring is driven by `SQLSpecTransactionMiddleware`. For each config whose `disable_di` is not set, the plugin configures connection checkout lazily on first access under `commit_mode` (`"autocommit"` default except BigQuery which requires `"manual"`, plus `"autocommit_include_redirect"`):
 
-- `SQLSpecManualMiddleware` — acquires a connection, stashes it on `request.state` under `connection_key`, releases on the way out. Never commits or rolls back; your handler owns transaction boundaries.
-- `SQLSpecAutocommitMiddleware` — same acquisition, but commits on 2xx responses and rolls back on anything else. Raising exceptions always rolls back and re-raises. `commit_mode="autocommit_include_redirect"` additionally commits 3xx.
+- Requests that never touch `db_session` or `db_connection` skip acquiring a pool connection.
+- On commit-mode teardown, `"autocommit"` commits 2xx responses (and 3xx under `"autocommit_include_redirect"`), rolls back otherwise or on exceptions, while `"manual"` releases without automatic commit or rollback.
 
 See [commit-modes.md](commit-modes.md) for the full decision table and the `extra_commit_statuses` / `extra_rollback_statuses` knobs.
 
@@ -83,7 +83,7 @@ Both middlewares are additive and tap into existing driver-layer machinery — t
 
 `Starlette.add_middleware` prepends — the most recently added middleware runs outermost. Order of plugin operations at `init_app`:
 
-1. The commit-mode middleware (`SQLSpecManualMiddleware` or `SQLSpecAutocommitMiddleware`) for each configured bind, in registration order. Each adds a layer; the first config registered ends up *innermost*.
+1. `SQLSpecTransactionMiddleware` for each configured bind, in registration order. Each adds a layer; the first config registered ends up *innermost*.
 2. `CorrelationMiddleware` (if any config enables it).
 3. `SQLCommenterMiddleware` (if any config enables it).
 
@@ -142,7 +142,7 @@ The per-config keys the plugin reads from `extension_config["starlette"]`:
 | `connection_key` | `"db_connection"` | `request.state` slot holding the per-request raw connection. |
 | `session_key` | `"db_session"` | `request.state` slot holding the cached per-request driver session. |
 | `pool_key` | `"db_pool"` | `app.state` slot holding the shared pool. Auto-suffixed with `id(config)` for non-pooling adapters. |
-| `commit_mode` | `"manual"` | `"manual"` / `"autocommit"` / `"autocommit_include_redirect"`. See [commit-modes.md](commit-modes.md). |
+| `commit_mode` | `"autocommit"` | `"autocommit"` (default, except BigQuery) / `"autocommit_include_redirect"` / `"manual"`. See [commit-modes.md](commit-modes.md). |
 | `extra_commit_statuses` | `None` | Status codes that should commit even outside the mode's default window. |
 | `extra_rollback_statuses` | `None` | Status codes that should roll back even on success. |
 | `disable_di` | `False` | Skip middleware registration for this config (advanced — you manage sessions yourself). |
@@ -157,7 +157,7 @@ Register a second config to talk to a second database — just give the second c
 
 ## Session injection
 
-Starlette has no built-in DI; handlers receive the raw request and fish their sessions out themselves. SQLSpec exposes `get_session(request, key=None)` and `get_connection(request, key=None)` on the plugin for exactly this.
+Starlette has no built-in DI; handlers receive the raw request and fetch their sessions with `get_session(request, key=None)`, `get_connection(request, key=None)`, `get_db_replica_session(request, key=None)`, and `get_db_routing_session(request, key=None)` on the plugin (plus `SQLSpecTenantMiddleware`, `set_request_tenant`, and `tenant_bypass` for tenant isolation).
 
 ```python
 from starlette.requests import Request
@@ -189,7 +189,7 @@ The lookup matches against each config's `session_key`, not the `connection_key`
 
 ### Reading `request.state` directly
 
-The plugin stores the raw connection at `request.state.<connection_key>` and the cached driver session at `request.state.<session_key>_instance` (the `_instance` suffix is added by `get_or_create_session`). For most code, prefer `db_plugin.get_session(request)` — it handles the cache lookup, the build path, and the multi-bind dispatch for you. Read from `request.state` directly only in middleware that runs inside the SQLSpec transaction middleware, where you may want to peek at the connection without invoking the driver-build machinery.
+The plugin stores the raw connection at `request.state.<connection_key>` and the cached driver session at `request.state.<session_key>_instance` (built via `get_or_create_db_session` / `get_or_create_session`). For most code, prefer `db_plugin.get_session(request)` — it handles lazy checkout, cache lookup, the build path, and multi-bind dispatch for you. Read from `request.state` directly only in middleware that runs inside `SQLSpecTransactionMiddleware` after a connection has been accessed.
 
 ```python
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -319,7 +319,7 @@ db_plugin.init_app(app)
 What happens on a `POST /orders`:
 
 1. Starlette's ASGI loop starts the request scope. On the first request after startup, the plugin's `lifespan` context has already created the asyncpg pool and stored it on `app.state.db_pool`.
-2. `SQLSpecAutocommitMiddleware.dispatch` runs. It pulls the pool off `app.state`, acquires a connection via `config.provide_connection(pool)`, and stores it on `request.state.db_connection`.
+2. `SQLSpecTransactionMiddleware` attaches lazy connection checkout to `request.state.db_connection`.
 3. The router dispatches to `create_order`. The handler calls `db_plugin.get_session(request)`, which looks up the connection on `request.state`, builds an `AsyncpgDriver` around it (or returns the cached one), and returns it.
 4. The handler runs `INSERT ... RETURNING id`. The middleware hasn't committed anything yet — it's still inside the `async with` block.
 5. The handler returns a `201`. Back in the middleware, `_should_commit(201)` is `True` (2xx window), so the middleware calls `await connection.commit()`.
@@ -329,7 +329,7 @@ If step 4 had raised an exception, the middleware would have caught it, called `
 
 ## Cross-links
 
-- [commit-modes.md](commit-modes.md) — full behavior of `SQLSpecAutocommitMiddleware` vs `SQLSpecManualMiddleware`, including `extra_commit_statuses` / `extra_rollback_statuses`.
+- [commit-modes.md](commit-modes.md) — full behavior of `SQLSpecTransactionMiddleware` across commit modes, including `extra_commit_statuses` / `extra_rollback_statuses`.
 - [multi-database.md](multi-database.md) — per-config `connection_key` / `session_key` / `pool_key` for applications talking to more than one database.
 - [filters.md](filters.md) — the filter object catalog (`LimitOffsetFilter`, `SearchFilter`, `OrderByFilter`, `BeforeAfterFilter`, `InCollectionFilter`).
 - [adapters.md](adapters.md) — adapter-specific pool config (`min_size` / `max_size` / `conninfo` / `dsn`).

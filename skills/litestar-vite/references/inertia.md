@@ -15,7 +15,7 @@ For deferred/lazy/merge props and pagination, see [Deferred, Partial & Merge Pro
 
 Inertia bridges server-side routing with client-side rendering:
 
-1. **Initial Request**: Server returns full `text/html`. When `InertiaConfig(use_script_element=True)` (default), the page payload is embedded inside `<script type="application/json" id="app_page" data-page="app">` with `<div id="app"></div>` as the mount root (~37% smaller than HTML-escaped `data-page` attributes). When `use_script_element=False`, the JSON is HTML-escaped inside `<div id="app" data-page="..."></div>`.
+1. **Initial Request**: Server returns full `text/html`. When `InertiaConfig(use_script_element=True)` (default), the page payload is embedded inside `<script type="application/json" id="app_page" data-page="app">` (escaped safely via `escape_json_for_html`, with `inertia_page` available as Jinja `Markup`) with `<div id="app"></div>` as the mount root (~37% smaller than HTML-escaped `data-page` attributes). When `use_script_element=False`, the JSON is HTML-escaped inside `<div id="app" data-page="..."></div>`.
 2. **Subsequent Requests**: Client sends XHR/fetch with `X-Inertia: true` and `X-Inertia-Version: <version>`, and server returns `application/json` with `X-Inertia: true`.
 3. **Page Envelope (`PageProps` / `PageObjectData`)**:
 

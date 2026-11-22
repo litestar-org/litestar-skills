@@ -81,3 +81,28 @@ def test_check_package_accepts_matching_release_floor_lock_and_skill(tmp_path: P
         locked_versions={"demo": "1.2.3"},
     )
     assert errors == []
+
+
+def test_check_package_supports_prerelease_target(tmp_path: Path) -> None:
+    mod = _load_module()
+    package = mod.UpstreamPackage(
+        pypi="demo",
+        version="1.2.3",
+        date="2026-07-23",
+        tag="v1.3.0b1",
+        skills=("skills/demo",),
+        imports=("demo",),
+        prerelease="1.3.0b1",
+    )
+    (tmp_path / "skills" / "demo").mkdir(parents=True)
+    errors = mod.check_package(
+        package,
+        root=tmp_path,
+        pypi_releases={
+            "1.2.3": [{"yanked": False}],
+            "1.3.0b1": [{"yanked": False}],
+        },
+        validation_requirements={"demo": "demo>=1.3.0b1"},
+        locked_versions={"demo": "1.3.0b1"},
+    )
+    assert errors == []

@@ -144,4 +144,4 @@ handler makers.
 
 ## Canonical Reference
 
-- [Advanced Alchemy v1.12.0 source](https://github.com/litestar-org/advanced-alchemy/tree/v1.12.0/advanced_alchemy/extensions)
+- [Advanced Alchemy v1.13.0b3 extensions](https://github.com/litestar-org/advanced-alchemy/tree/v1.13.0b3/advanced_alchemy/extensions)

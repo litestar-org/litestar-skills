@@ -34,6 +34,7 @@ class UpstreamPackage:
     tag: str
     skills: tuple[str, ...]
     imports: tuple[str, ...]
+    prerelease: str | None = None
 
 
 def select_latest_final(releases: dict[str, list[dict[str, Any]]]) -> Version:
@@ -73,6 +74,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> tuple[UpstreamPackage, ...]:
                 tag=str(raw["tag"]),
                 skills=tuple(str(value) for value in raw["skills"]),
                 imports=tuple(str(value) for value in raw["imports"]),
+                prerelease=str(raw["prerelease"]) if raw.get("prerelease") else None,
             )
         )
     return tuple(packages)
@@ -127,18 +129,19 @@ def check_package(
     if latest != expected:
         errors.append(f"{package.pypi}: PyPI latest final is {latest}, manifest is {expected}")
 
+    target_version = package.prerelease or package.version
     canonical_name = canonicalize_name(package.pypi)
     requirement = validation_requirements.get(canonical_name)
     if requirement is None:
         errors.append(f"{package.pypi}: missing direct validation dependency")
     else:
         floor = validation_floor(requirement)
-        if floor != package.version:
-            errors.append(f"{package.pypi}: validation floor is {floor or 'unset'}, manifest is {package.version}")
+        if floor != target_version:
+            errors.append(f"{package.pypi}: validation floor is {floor or 'unset'}, manifest is {target_version}")
 
     locked = locked_versions.get(canonical_name)
-    if locked != package.version:
-        errors.append(f"{package.pypi}: lock version is {locked or 'missing'}, manifest is {package.version}")
+    if locked != target_version:
+        errors.append(f"{package.pypi}: lock version is {locked or 'missing'}, manifest is {target_version}")
 
     if not package.tag:
         errors.append(f"{package.pypi}: immutable tag is empty")

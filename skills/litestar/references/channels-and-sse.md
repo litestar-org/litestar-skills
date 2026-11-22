@@ -588,7 +588,7 @@ class RealtimePublisher:
             )
         except RuntimeError as exc:
             if self._is_backend_not_initialized_error(exc):
-                logger.debug("Channels backend not ready — skipping publish", event_type=event.event_type)
+                logger.debug("Channels backend not ready - skipping publish", event_type=event.event_type)
                 return
             raise
 

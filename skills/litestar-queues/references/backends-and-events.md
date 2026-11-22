@@ -189,9 +189,11 @@ app_managed_config = QueueConfig(
 )
 ```
 
-When `manage_schema=True` (the default), `QueuePlugin` registers the packaged `"litestar_queues"` (`0001_create_queue_tasks`, including `dispatch_checked_at`) and `"events"` extension migrations with the supplied SQLSpec configuration automatically. Call `configure_queue_migration_extension(...)` from `litestar_queues.backends.sqlspec.extension` only when running SQLSpec migration commands standalone without initializing `QueuePlugin`. When `manage_schema=False`, `QueuePlugin` removes the packaged `"litestar_queues"` and `"events"` extension migrations so the application owns the queue and wakeup tables in its own migrations.
+When `manage_schema=True` (the default), `QueuePlugin` registers the packaged `"litestar_queues"` (`0001_create_queue_tasks`, including `dispatch_checked_at`) and `"events"` extension migrations using `migration_mode="reconcile"` by default (pass `migration_mode="versioned"` on `SQLSpecBackendConfig` or `configure_queue_migration_extension(...)` for explicit versioned tracking; requires `sqlspec>=0.72.2`). `SQLSpecBackendConfig` validates upfront that the SQLSpec config is not a read-replica pool (`is_replica=True`) and does not enable `driver_features["tenant_strategy"]`. Call `configure_queue_migration_extension(...)` from `litestar_queues.backends.sqlspec.extension` only when running SQLSpec migration commands standalone without initializing `QueuePlugin`. When `manage_schema=False`, `QueuePlugin` removes the packaged `"litestar_queues"` and `"events"` extension migrations so the application owns the queue and wakeup tables in its own migrations.
 
 `SQLSpecBackendConfig.worker_wakeups` defaults to native wakeups (`SQLSpecWorkerWakeupConfig`). Capable PostgreSQL adapters use `notify_queue`, DuckDB uses `poll_queue`, and other adapters fall back to polling. Set `worker_wakeups=None` when using `CloudTasksExecutionConfig`.
+
+Use `await queue_service.list_tasks(status=..., queue=..., task_name=..., key=..., limit=50, offset=0) -> TaskListPage` (`items`, `limit`, `offset`, `total`) or `litestar queues list` to inspect persisted queue records programmatically or from the CLI.
 
 ## Advanced Alchemy Backend
 
@@ -237,7 +239,7 @@ queue_config = QueueConfig(
 )
 ```
 
-Use `ValkeyBackendConfig` from `litestar_queues.backends.valkey` for Valkey.
+Use `ValkeyBackendConfig` from `litestar_queues.backends.valkey` for Valkey. Call `await backend.rebuild_maintenance_indexes()` on `RedisQueueBackend` (including Valkey) to rebuild secondary maintenance index keys if older records need re-indexing.
 
 ## Events, Logging, Progress, and Event History Queries
 

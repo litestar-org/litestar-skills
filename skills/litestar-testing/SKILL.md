@@ -175,175 +175,27 @@ async def client_with_email() -> AsyncGenerator[tuple[AsyncTestClient, AsyncMock
         yield client, fake_email
 ```
 
-### Session Testing (`set_session_data` and `get_session_data`)
+### Session, WebSocket, SSE, and `ChannelsPlugin` Testing
 
-Pass the same `session_config` (`ServerSideSessionConfig` or `CookieBackendConfig`) to both `middleware=[session_config.middleware]` and `session_config=session_config` on the test client (omitting `session_config` on the client raises `ImproperlyConfiguredException`). On `AsyncTestClient`, `await client.set_session_data(data)` and `await client.get_session_data()` are **async**; on `TestClient`, they are **sync**.
+- **Sessions**: Pass the same `session_config` (`ServerSideSessionConfig` or `CookieBackendConfig`) to both `middleware=[session_config.middleware]` and `session_config=session_config` on `AsyncTestClient` / `TestClient` (omitting `session_config` raises `ImproperlyConfiguredException`). Call `await client.set_session_data(...)` / `await client.get_session_data()` on `AsyncTestClient` (sync on `TestClient`).
+- **WebSockets (`websocket_connect`)**: On `AsyncTestClient`, `websocket_connect` is `async def` and returns a **synchronous** `WebSocketTestSession` context manager (`with await client.websocket_connect("/ws") as ws:`). Server close causes `ws.receive*()` to raise `WebSocketDisconnect`.
+- **SSE (`ServerSentEvent`)**: Stream events via `async with client.stream("GET", "/sse") as resp:` and `resp.aiter_lines()`.
+- **`ChannelsPlugin`**: Enter `async with create_async_test_client(plugins=[ChannelsPlugin(backend=MemoryChannelsBackend(), channels=["alerts"], create_ws_route_handlers=True)]) as client:`, publish with `channels_plugin.publish(...)`, and read via `websocket_connect` or `start_subscription`.
 
-```python
-import pytest
-from litestar import Request, get, post
-from litestar.middleware.session.server_side import ServerSideSessionConfig
-from litestar.testing import create_async_test_client
-
-session_config = ServerSideSessionConfig()
-
-
-@get("/me")
-async def read_session(request: Request) -> dict[str, str]:
-    return dict(request.session)
-
-
-@post("/login")
-async def write_session(request: Request, data: dict[str, str]) -> None:
-    request.session["user_id"] = data["user_id"]
-
-
-@pytest.mark.anyio
-async def test_session_roundtrip() -> None:
-    async with create_async_test_client(
-        route_handlers=[read_session, write_session],
-        middleware=[session_config.middleware],
-        session_config=session_config,
-    ) as client:
-        await client.set_session_data({"user_id": "u-123"})
-        assert (await client.get("/me")).json() == {"user_id": "u-123"}
-        await client.post("/login", json={"user_id": "u-456"})
-        assert await client.get_session_data() == {"user_id": "u-456"}
-```
-
-### WebSocket, SSE (`ServerSentEvent`), and `ChannelsPlugin` Testing
-
-- **WebSockets (`websocket_connect`)**: On `AsyncTestClient`, `websocket_connect` is `async def` (must be awaited), while the returned `WebSocketTestSession` is always a **synchronous** context manager (`with await client.websocket_connect(...) as ws:`) with synchronous methods (`ws.send_json(...)`, `ws.receive_json(...)`, `ws.close(...)`). Server-initiated close causes `ws.receive*()` to raise `litestar.exceptions.WebSocketDisconnect`.
-- **SSE (`ServerSentEvent`)**: Stream events with `async with client.stream("GET", "/sse") as resp:` and iterate `resp.aiter_lines()`.
-- **`ChannelsPlugin`**: Configure `ChannelsPlugin(backend=MemoryChannelsBackend(), channels=["alerts"], create_ws_route_handlers=True)` and enter `async with create_async_test_client(plugins=[channels_plugin]) as client:`. Publish via `channels_plugin.publish(data, channels=["alerts"])` and consume via `websocket_connect`.
-
-```python
-from collections.abc import AsyncGenerator
-import pytest
-from litestar import get, websocket_listener
-from litestar.channels import ChannelsPlugin
-from litestar.channels.backends.memory import MemoryChannelsBackend
-from litestar.response.sse import ServerSentEvent, ServerSentEventMessage
-from litestar.testing import create_async_test_client
-
-
-@websocket_listener("/ws")
-async def echo_ws(data: dict[str, str]) -> dict[str, str]:
-    return {"echo": data["msg"]}
-
-
-@get("/events")
-async def stream_events() -> ServerSentEvent:
-    async def generator() -> AsyncGenerator[ServerSentEventMessage, None]:
-        yield ServerSentEventMessage(data="ready", event="status")
-
-    return ServerSentEvent(generator())
-
-
-@pytest.mark.anyio
-async def test_ws_sse_and_channels() -> None:
-    channels = ChannelsPlugin(backend=MemoryChannelsBackend(), channels=["alerts"], create_ws_route_handlers=True)
-    async with create_async_test_client(route_handlers=[echo_ws, stream_events], plugins=[channels]) as client:
-        with await client.websocket_connect("/ws") as ws:
-            ws.send_json({"msg": "hello"})
-            assert ws.receive_json() == {"echo": "hello"}
-
-        async with client.stream("GET", "/events") as resp:
-            lines = [line async for line in resp.aiter_lines() if line]
-            assert lines == ["event: status", "data: ready"]
-
-        with await client.websocket_connect("/alerts") as ws:
-            channels.publish({"msg": "fired"}, channels=["alerts"])
-            assert ws.receive_json() == {"msg": "fired"}
-```
+See [Async Testing](references/async_testing.md) for full runnable examples of session tests, WebSockets/SSE/Channels, `RequestFactory`, `subprocess_async_client`, `pytest-databases` wiring, request bodies, and `@pytest.mark.parametrize`.
 
 ### Unit Testing with `RequestFactory` & Live Subprocess Clients
 
-- **`RequestFactory`**: Construct real `litestar.connection.Request` instances for unit-testing Guards or dependencies without an ASGI transport (`factory = RequestFactory(); req = factory.get("/admin", user={"role": "viewer"})`). In Litestar, `connection.app` reads `request.scope["litestar_app"]` (not `request.scope["app"]`); `RequestFactory` populates `scope["litestar_app"]` automatically.
-- **`subprocess_async_client` / `subprocess_sync_client`**: Verify `litestar --app <app> run` CLI startup and real socket binding via `async with subprocess_async_client(workdir=tmp_path, app="main:app") as client:`. See [Async Testing](references/async_testing.md) for complete examples.
+- **`RequestFactory`**: Construct real `litestar.connection.Request` instances for unit-testing Guards or dependencies without ASGI transport (`factory = RequestFactory(); req = factory.get("/admin", user={"role": "viewer"})`; populates `scope["litestar_app"]` automatically).
+- **`subprocess_async_client` / `subprocess_sync_client`**: Boot `litestar --app <app> run` and yield a live `httpx` client (`async with subprocess_async_client(workdir=tmp_path, app="main:app") as client:`). See [Async Testing](references/async_testing.md).
 
-### Integration with pytest-databases
-
-Combine `pytest-databases` fixtures with the app fixture. See `../pytest-databases/SKILL.md`.
-
-```python
-# conftest.py
-pytest_plugins = ["pytest_databases.docker.postgres"]
-
-
-@pytest.fixture
-async def app(postgres_service) -> Litestar:
-    from app import create_app
-    from app.config import Settings
-
-    settings = Settings(
-        database_url=f"postgresql+asyncpg://{postgres_service.user}:{postgres_service.password}@{postgres_service.host}:{postgres_service.port}/{postgres_service.database}"
-    )
-    return create_app(settings=settings)
-```
-
-The `postgres_service` fixture starts a Postgres container. Inject its connection details into the app config.
-
-### Request Bodies
+### Request Bodies & HTTP Fixtures Summary
 
 | Body Type | Pass via |
 | --- | --- |
-| JSON | `client.post("/", json={...})` |
-| Form | `client.post("/", data={...})` |
-| Multipart (file upload) | `client.post("/", files={"file": ("name.txt", b"content", "text/plain")})` |
-| Raw bytes | `client.post("/", content=b"...")` |
-| Custom content-type | `client.post("/", content=b"...", headers={"Content-Type": "..."})` |
-
-```python
-async def test_create_user(async_client: AsyncTestClient) -> None:
-    resp = await async_client.post(
-        "/api/users",
-        json={"name": "Alice", "email": "alice@example.com"},
-    )
-    assert resp.status_code == 201
-    body = resp.json()
-    assert body["name"] == "Alice"
-```
-
-### Headers, Cookies, Auth, HTMX, and Response Assertions
-
-```python
-resp = await async_client.get(
-    "/items/list",
-    headers={"Authorization": "Bearer token", "HX-Request": "true", "HX-Target": "#item-list"},
-    cookies={"session": "abc123"},
-)
-assert resp.status_code == 200
-assert "HX-Trigger" in resp.headers
-assert "<ul" in resp.text
-```
-
-### Parametrize
-
-```python
-import pytest
-
-
-@pytest.mark.parametrize(
-    "payload, expected_status",
-    [
-        ({"name": "valid", "email": "a@b.co"}, 201),
-        ({"name": "", "email": "a@b.co"}, 400),
-        ({"name": "valid", "email": "not-email"}, 400),
-    ],
-)
-@pytest.mark.anyio
-async def test_create_user_validation(async_client, payload, expected_status):
-    resp = await async_client.post("/api/users", json=payload)
-    assert resp.status_code == expected_status
-```
-
-### Coverage
-
-```bash
-pytest --cov=src --cov-report=html
-pytest --cov=src --cov-fail-under=90
-```
+| JSON / Form / Raw | `json={...}` / `data={...}` / `content=b"..."` |
+| Multipart | `files={"file": ("name.txt", b"content", "text/plain")}` |
+| HTMX / Headers / Coverage | `headers={"HX-Request": "true"}` · `pytest --cov=src --cov-fail-under=90` |
 
 <workflow>
 

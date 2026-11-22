@@ -59,7 +59,7 @@ app = Litestar(plugins=[vite_plugin])
 
 - `ViteConfig.exclude_static_from_auth=True` (default) attaches `opt={"exclude_from_auth": True}` directly to static route handlers (`0.30.1+`).
 - Static route guards (`0.33.0+`) block direct requests to build metadata files (`manifest.json`, `.vite/manifest.json`, `ssr-manifest.json`, `.vite/ssr-manifest.json`, `.litestar.json`, `hot`, and configured `manifest_name` / `hot_file`).
-- `vite_plugin.get_static_server_config()` returns `StaticServerConfig(placement=StaticPlacement.NATIVE | StaticPlacement.ASGI, mounts=(StaticServerMount(...),), reason=...)`. Granian 0.16+ (`GranianPlugin(static="auto")`) consumes `StaticPlacement.NATIVE` mounts when `dev_mode=False`, `set_static_folders=True`, `asset_url` is a local path prefix, and no custom `static_files_config` overrides are set.
+- `vite_plugin.get_static_server_config()` returns `StaticServerConfig(placement=StaticPlacement.NATIVE | StaticPlacement.ASGI, mounts=(StaticServerMount(...),), reason=...)`. When `bundle_dir` contains build metadata (e.g. `manifest.json`), `0.34.0+` narrows `StaticPlacement.NATIVE` to mount only `<asset_url>/assets` against a clean non-empty `assets/` subdirectory and falls back to `StaticPlacement.ASGI` when no clean `assets/` directory exists (instead of exposing top-level bundle files natively). Non-dev static serving also no longer mounts `resource_dir` under `asset_url`. Granian 0.16+ (`GranianPlugin(static="auto")`) consumes `StaticPlacement.NATIVE` mounts when `dev_mode=False`, `set_static_folders=True`, `asset_url` is a local path prefix, and no custom `static_files_config` overrides are set.
 
 ### Reverse proxy (nginx, Caddy, Cloudflare)
 
@@ -78,8 +78,9 @@ vite_config = ViteConfig(
         storage_backend="s3://my-bucket/assets",
         storage_options={"anon": False},
         asset_url="https://cdn.example.com/assets/",
-        delete_orphaned=True,
-        include_manifest=True,
+        delete_orphaned=False,
+        include_manifest=False,
+        include_sourcemaps=False,
         content_types={".wasm": "application/wasm"},
     )
 )

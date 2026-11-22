@@ -27,11 +27,13 @@ registry.register_alias(
     "s3://analytics-bucket",
     base_path="daily",
 )
+# Register a custom StorageBackendFactory instance (pass overwrite=True to replace)
+registry.register_backend("custom", custom_backend_factory, overwrite=False)
 
 store = registry.get("exports")
 ```
 
-Install `sqlspec[obstore]` or `sqlspec[fsspec]` for cloud storage. Local paths always have the built-in local fallback. Pass `backend="local"`, `"obstore"`, or `"fsspec"` only when backend selection must be explicit.
+Install `sqlspec[obstore]` or `sqlspec[fsspec]` for cloud storage. Local paths always have the built-in local fallback. Pass `backend="local"`, `"obstore"`, or `"fsspec"` only when backend selection must be explicit. Streaming sinks implement `DirectStreamWriteProtocol` / `WritableBytesSink` / `AsyncWritableBytesSink`; storage writes accept `overwrite: bool = True` and raise `FileExistsInStorageError` when `overwrite=False` on an existing target.
 
 ## Storage Pipelines
 

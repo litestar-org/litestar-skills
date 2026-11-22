@@ -5,8 +5,9 @@
 | Service | Use Case |
 | --- | --- |
 | `SQLAlchemyAsyncRepositoryService` / `SQLAlchemySyncRepositoryService` | Full CRUD service with lifecycle hooks |
-| `SQLAlchemyAsyncRepositoryReadService` / `SQLAlchemySyncRepositoryReadService` | Read-only variant (`get_many`, `get`, `count`, `exists`) |
+| `SQLAlchemyAsyncRepositoryReadService` / `SQLAlchemySyncRepositoryReadService` | Read-only variant (`get_many`, `get`, `get_or_none`, `count`, `exists`) |
 | `SQLAlchemyAsyncQueryService` / `SQLAlchemySyncQueryService` | Read-only service wrapper around arbitrary SQL queries |
+| `ServiceGroup` | Coordinates multiple services on one shared SQLAlchemy session |
 
 ```python
 from advanced_alchemy.service import (
@@ -118,16 +119,17 @@ same rename applies to repositories, query repositories, memory repositories,
 and cache-manager list helpers.
 
 ```python
-from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.filters import LimitOffsetFilter
 
 user = await service.create({"email": "test@example.com", "name": "Test"})
 
 user = await service.get(user_id)
+user = await service.get_or_none(user_id)
 user = await service.get_one_or_none(id=user_id)
 user = await service.get_one_or_none(email="test@example.com")
 
 users = await service.get_many()
-users, count = await service.get_many_and_count(LimitOffset(limit=20, offset=0))
+users, count = await service.get_many_and_count(LimitOffsetFilter(limit=20, offset=0))
 
 user = await service.update({"name": "New Name"}, item_id=user_id)
 user = await service.upsert({"email": "test@example.com", "name": "Test"})
@@ -149,20 +151,20 @@ count = await service.count()
 
 ```python
 from advanced_alchemy.filters import (
-    CollectionFilter,
-    LimitOffset,
-    OrderBy,
+    InCollectionFilter,
+    LimitOffsetFilter,
+    OrderByFilter,
     SearchFilter,
 )
 
 users, count = await service.get_many_and_count(
-    LimitOffset(limit=20, offset=0),
-    OrderBy(field_name="created_at", sort_order="desc"),
+    LimitOffsetFilter(limit=20, offset=0),
+    OrderByFilter(field_name="created_at", sort_order="desc"),
     SearchFilter(field_name="name", value="John", ignore_case=True),
 )
 
 users = await service.get_many(
-    CollectionFilter(field_name="id", values=[id1, id2, id3]),
+    InCollectionFilter(field_name="id", values=[id1, id2, id3]),
 )
 ```
 
@@ -195,7 +197,7 @@ class UserService(SQLAlchemyAsyncRepositoryService[m.User]):
 ## Pagination Pattern
 
 ```python
-from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.filters import LimitOffsetFilter
 from advanced_alchemy.service.pagination import OffsetPagination
 
 
@@ -205,7 +207,7 @@ async def list_users(
     limit: int = 20,
     offset: int = 0,
 ) -> OffsetPagination[UserSchema]:
-    filters = [LimitOffset(limit=limit, offset=offset)]
+    filters = [LimitOffsetFilter(limit=limit, offset=offset)]
     results, total = await service.get_many_and_count(*filters)
     return service.to_schema(results, total, filters=filters, schema_type=UserSchema)
 ```
@@ -265,9 +267,30 @@ class PaymentService(SQLAlchemyAsyncRepositoryService[m.Payment]):
         return payment
 ```
 
-## Composite Service Pattern
+## Shared-Session Composition (`ServiceGroup`)
 
-For operations spanning multiple models, use lazy-loaded related services that share the same session:
+In 1.13+, declare a `ServiceGroup` subclass with typed member services so multi-model operations share one SQLAlchemy session with LIFO teardown:
+
+```python
+from advanced_alchemy.service import ServiceGroup
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+class AuthServices(ServiceGroup):
+    session: AsyncSession
+    roles: RoleService
+    users: UserService
+
+
+async with AuthServices.new(config=alchemy_config) as services:
+    role = await services.roles.create({"name": "admin"})
+    await services.users.create({"email": "ada@example.com", "role_id": role.id})
+    await services.session.commit()
+```
+
+Or bind an existing session directly with `AuthServices(session)`. For Litestar/FastAPI DI, register the group via `create_service_provider(AuthServices, config=...)` or `alchemy.provide_service(AuthServices)`.
+
+For single-service sub-operations inside an existing service class, lazy-loaded related services can also share `self.repository.session`:
 
 ```python
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository

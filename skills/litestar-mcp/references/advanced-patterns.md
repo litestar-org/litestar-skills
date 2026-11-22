@@ -255,3 +255,7 @@ app = Litestar(
     ],
 )
 ```
+
+## Tool Spec Description Bounds (`0.20.1+`)
+
+`validate_tool_descriptions(...)` (`litestar_mcp.utils`) and `litestar mcp export-tool-spec --strict-bounds` enforce character length caps (`max_tool_description_length=1000`, `max_param_description_length=750`, `max_output_field_description_length=300`) recursively across nested `$defs`, `definitions`, `properties`, `items`, `prefixItems`, `additionalProperties`, `anyOf`, `oneOf`, and `allOf` branches (keeping root `inputSchema` / `outputSchema` summary descriptions exempt).

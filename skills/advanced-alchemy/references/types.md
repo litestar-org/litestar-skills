@@ -41,6 +41,7 @@ class Event(UUIDAuditBase):
 
 - Always pass timezone-aware datetimes when writing; naive datetimes raise `TypeError`
 - Reads always return `datetime` with `tzinfo=timezone.utc`, including backends that store naive UTC internally
+- On MySQL/MariaDB and Oracle, pass `fsp=0..6` (or `precision=0..6`) explicitly (for example `DateTimeUTC(fsp=6)`): omitting `fsp` emits a 1.13 deprecation warning and defaults to whole seconds in 1.x (scheduled to default to `6` in 2.0)
 
 ---
 
@@ -100,6 +101,7 @@ class OracleModel(UUIDAuditBase):
 ```
 
 - Use when targeting Oracle as a primary or secondary database.
+- Pass `ORA_JSONB(use_blob=True)` when mapping an existing BLOB column on Oracle 21c+ / SQLAlchemy 2.1+.
 - Keep the fallback path in mind for SQLAlchemy 2.0.x, Oracle 19c, offline DDL, or first-connect flows without server version information.
 
 ---
@@ -204,6 +206,7 @@ Automatic password hashing on write with verification support. The column stores
 ```python
 from advanced_alchemy.types import PasswordHash
 from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+from advanced_alchemy.types.password_hash.bcrypt import BcryptHasher
 from advanced_alchemy.types.password_hash.passlib import PasslibHasher
 from advanced_alchemy.types.password_hash.pwdlib import PwdlibHasher
 ```
@@ -213,6 +216,7 @@ from advanced_alchemy.types.password_hash.pwdlib import PwdlibHasher
 | Backend | Library | Import path | Notes |
 | --- | --- | --- | --- |
 | `Argon2Hasher` | `argon2-cffi` | `advanced_alchemy.types.password_hash.argon2` | Recommended — memory-hard, resistant to GPU attacks |
+| `BcryptHasher` | `bcrypt` (`[bcrypt]` extra) | `advanced_alchemy.types.password_hash.bcrypt` | Standard bcrypt hashing (`rounds=12`, `prefix=b"2b"`) |
 | `PwdlibHasher` | `pwdlib` | `advanced_alchemy.types.password_hash.pwdlib` | Modern wrapper supporting argon2 / bcrypt |
 | `PasslibHasher` | `passlib` | `advanced_alchemy.types.password_hash.passlib` | Legacy support, many algorithms |
 

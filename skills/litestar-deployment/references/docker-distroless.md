@@ -96,7 +96,7 @@ RUN groupadd --system --gid 65532 nonroot \
     && mkdir -p /workspace/app \
     && chown -R nonroot:nonroot /workspace
 
-# Create venv with copied Python (not symlinked — distroless has no system Python)
+# Create venv with copied Python (not symlinked; distroless has no system Python)
 RUN python -m venv --copies /workspace/app/.venv
 
 COPY --from=builder --chown=65532:65532 /workspace/app/requirements.txt /tmp/requirements.txt

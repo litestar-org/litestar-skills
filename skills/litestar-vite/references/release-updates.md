@@ -1,6 +1,6 @@
-# litestar-vite - Release Updates 0.26.0 to 0.33.0
+# litestar-vite - Release Updates 0.26.0 to 0.34.0
 
-This guidance is audited against `litestar-vite` `0.33.0` and covers release changes from `0.26.0` through `0.33.0`.
+This guidance is audited against `litestar-vite` `0.34.0` and covers release changes from `0.26.0` through `0.34.0`.
 
 ## Release Anchors
 
@@ -39,6 +39,8 @@ This guidance is audited against `litestar-vite` `0.33.0` and covers release cha
 | `0.33.0` | QuickJS WASM SSR transport (`WasmIPCTransport`), `resolve_ssr_transport()`, and `RuntimeConfig.ssr_transport`. | `ssr_transport` (`"auto" \| "stdio" \| "wasm"`, default `"auto"`) uses `StdioIPCTransport` (`resolve_ssr_command` for `node`/`bun`/`deno`) when a runtime binary or custom `command` is available, or falls back to in-process QuickJS `WasmIPCTransport` (`litestar-vite[wasm]`). |
 | `0.33.0` | Lockfile JS runtime auto-detection, `RuntimeConfig.provisioning_mode`, and PEP 425 runtime wheels. | Omit `executor` to auto-detect `bun`/`deno`/`pnpm`/`yarn`/`npm` via `detect_runtime` (`bun.lock*`, `deno.lock`, `deno.json*`, `pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`, `package.json#packageManager`), override with `LITESTAR_VITE_RUNTIME` / `VITE_EXECUTOR`, and control wheel/nodeenv/PATH discovery with `provisioning_mode` (`"auto" \| "wheel" \| "nodeenv" \| "system"`). React auto-detection also inspects `deno.json` / `deno.jsonc` import maps. |
 | `0.33.0` | RFC 8288 `Link` preload headers, `103 Early Hints`, immutable cache headers, & static metadata guards. | Production HTML responses emit `Link` preload/modulepreload headers (`RuntimeConfig.link_preload_headers=True`, `ViteAssetLoader.render_preload_headers()`) and optional ASGI `103 Early Hints` (`early_hints=False`, `EarlyHintsASGIResponse`). `immutable_cache_headers=True` sets `Cache-Control: public, max-age=31536000, immutable` on hashed `assets/*` while blocking static requests to `manifest.json`, `.litestar.json`, and `hot`. |
+| `0.33.1` | Static routing exclusion & SvelteKit 3 / Astro 7 scaffold alignment. | Non-dev static mounts omit `resource_dir` under `asset_url`; scaffolds update SvelteKit 3, Astro 7, `@hey-api/openapi-ts ^0.99.0`, and `vite ^7.3.7 \|\| >=8.3.3` with `jinja2>=3.1.6`. |
+| `0.34.0` | Loopback dev server, strict redirect/CSRF/HTML sanitization, narrowed native static, & `TypeGenConfig` route filters. | Vite dev server defaults to `127.0.0.1` (`VITE_ALLOW_REMOTE=1` to keep non-loopback `VITE_HOST`), `VITE_AUTO_DEV_MODE`, `DeployConfig.delete_orphaned`, `DeployConfig.include_manifest`, and `DeployConfig.include_sourcemaps` default to `False`, `litestar assets generate-types` removes the `npx` fallback (`litestar-vite-typegen` must be in `node_modules/.bin` or `PATH`), `InertiaRedirect` / `InertiaBack` allow only leading-slash relative or same-origin HTTP(S) URLs, `StaticPlacement.NATIVE` mounts `<asset_url>/assets` when `bundle_dir` has manifest metadata and falls back to `ASGI` without a clean `assets/` directory, `TypeGenConfig` adds `only_routes` / `exclude_routes`, `RuntimeConfig` adds `wasm_memory_limit` / `wasm_max_stack_size`, `escape_json_for_html` + `inertia_page` (`Markup`) harden script/HTML serialization, `generate_routes_ts` emits double-quoted JSON string literals (`"..."`), and `csrfFetch` / `sanitizeHtml` enforce same-origin/`trustedOrigins` and an allowlist. |
 
 ## Inertia Protocol Boundary
 
@@ -73,7 +75,8 @@ and `--overwrite` only after reviewing collisions.
 - `v0.31.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.31.0>
 - `v0.32.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.32.0>
 - `v0.33.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.33.0>
-- Tagged changelog: <https://github.com/litestar-org/litestar-vite/blob/v0.33.0/docs/changelog.rst>
-- Tagged configuration: <https://github.com/litestar-org/litestar-vite/tree/v0.33.0/src/py/litestar_vite/config>
-- Tagged Inertia tests: <https://github.com/litestar-org/litestar-vite/tree/v0.33.0/src/py/tests/unit/inertia>
-- Tagged CLI tests: <https://github.com/litestar-org/litestar-vite/tree/v0.33.0/src/py/tests>
+- `v0.34.0`: <https://github.com/litestar-org/litestar-vite/tree/v0.34.0>
+- Tagged changelog: <https://github.com/litestar-org/litestar-vite/blob/v0.34.0/docs/changelog.rst>
+- Tagged configuration: <https://github.com/litestar-org/litestar-vite/tree/v0.34.0/src/py/litestar_vite/config>
+- Tagged Inertia tests: <https://github.com/litestar-org/litestar-vite/tree/v0.34.0/src/py/tests/unit/inertia>
+- Tagged CLI tests: <https://github.com/litestar-org/litestar-vite/tree/v0.34.0/src/py/tests>

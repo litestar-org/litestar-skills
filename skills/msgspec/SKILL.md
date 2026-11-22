@@ -109,34 +109,7 @@ assert msgspec.json.encode(patch) == b'{"email":null}'
 
 ### Validation Constraints
 
-```python
-from datetime import datetime
-from typing import Annotated
-
-import msgspec
-from msgspec import Meta
-
-
-class Product(msgspec.Struct):
-    name: Annotated[str, Meta(min_length=1, max_length=100)]
-    price: Annotated[float, Meta(gt=0)]
-    quantity: Annotated[int, Meta(ge=0, le=10_000)]
-    sku: Annotated[str, Meta(pattern=r"^[A-Z]{2}-\d{4}$")]
-    batch_size: Annotated[int, Meta(multiple_of=5)]
-    expires_at: Annotated[datetime, Meta(tz=True)]
-
-
-# Reusable constraint aliases
-PositiveInt = Annotated[int, Meta(gt=0)]
-NonEmptyStr = Annotated[str, Meta(min_length=1)]
-Percentage = Annotated[float, Meta(ge=0.0, le=100.0)]
-
-
-class Order(msgspec.Struct):
-    id: PositiveInt
-    label: NonEmptyStr
-    discount: Percentage = 0.0
-```
+Apply constraints via `Annotated[Type, Meta(...)]` (`gt`, `ge`, `lt`, `le`, `multiple_of`, `min_length`, `max_length`, `pattern`, `tz`); direct Struct instantiation ignores `Meta`, while `decode()` and `convert()` validate all constraints. Mix neither `gt`+`ge` nor `lt`+`le`, and see [Meta Constraints Reference](references/constraints.md) for numeric, string, bytes, and OpenAPI schema parameters.
 
 ### Serialization (`json`, `msgpack`, `yaml`, `toml`) and `Raw`
 
@@ -213,46 +186,10 @@ hook propagate directly without being wrapped in another `ValidationError` (0.21
 Always catch `ValidationError` before `DecodeError` when distinguishing schema validation errors
 from malformed wire syntax.
 
-### Canonical Litestar serializers (match-your-stack)
+### Canonical Litestar Serializers (Match Your Stack)
 
-Litestar apps typically need `to_json(value, as_bytes=True)` that handles UUID / datetime / Enum / Decimal for Channels broadcasts, log contexts, and JSONB writes. Pick the branch that matches your project.
-
-**Branch A — sqlspec is in-stack.** Re-export sqlspec's serializer; it already installs an `enc_hook` covering UUID, datetime, Enum, Decimal, Pydantic, dataclasses, attrs, and msgspec.Struct.
-
-```python
-# myapp/utils/serialization.py
-from sqlspec.utils.serializers import from_json, to_json
-
-__all__ = ("from_json", "to_json")
-```
-
-Usage:
-
-```python
-from myapp.utils.serialization import to_json
-
-payload = to_json(order, as_bytes=True)
-await backend.publish(payload, channels=[f"orders:{order.id}:events"])
-```
-
-**Branch B — sqlspec is not in-stack.** Use a plain msgspec `Encoder`; the package natively
-handles UUID, datetime, date, time, timedelta, Decimal, Enum, dataclasses, attrs classes, and Structs.
-
-```python
-# myapp/utils/serialization.py
-from typing import Any
-
-import msgspec
-
-
-_encoder = msgspec.json.Encoder()
-
-
-def to_json(value: Any) -> bytes:
-    if isinstance(value, bytes):
-        return value
-    return _encoder.encode(value)
-```
+- **`sqlspec` in-stack**: re-export `from sqlspec.utils.serializers import from_json, to_json` (handles UUID, datetime, Enum, Decimal, Pydantic, dataclasses, attrs, and Structs).
+- **No `sqlspec`**: use a singleton `msgspec.json.Encoder()` (natively handles UUID, datetime, date, time, timedelta, Decimal, Enum, dataclasses, attrs, and Structs). See [Litestar Patterns](references/litestar-patterns.md) for `CamelizedBaseStruct`, `PatchBaseStruct`, and serializer helpers.
 
 ### Type Coercion with `convert()` and `to_builtins()`
 
@@ -346,56 +283,22 @@ FlexModel = msgspec.defstruct("FlexModel", fields_with_defaults)
 
 ### Tagged Unions (Discriminated Unions)
 
+Declare `tag=True`, `tag="value"`, or integer tags alongside `tag_field="..."` (default `"type"`) so `msgspec` resolves union variants before validating fields:
+
 ```python
-import msgspec
-
-
-# Default tag field is "type", tag value is the qualified class name
-class Dog(msgspec.Struct, tag=True):
-    name: str
-    breed: str
-
-
-class Cat(msgspec.Struct, tag=True):
-    name: str
-    indoor: bool
-
-
-Animal = Dog | Cat
-
-# Deserialize: inspects "type" field to pick correct class
-animal = msgspec.json.decode(b'{"type":"Dog","name":"Rex","breed":"Lab"}', type=Animal)
-
-
-# Custom tag values
-class CreateEvent(msgspec.Struct, tag="create"):
+class CreateEvent(msgspec.Struct, tag="create", tag_field="event_type"):
     resource: str
 
 
-class DeleteEvent(msgspec.Struct, tag="delete"):
+class DeleteEvent(msgspec.Struct, tag="delete", tag_field="event_type"):
     resource: str
     soft: bool = True
 
 
 Event = CreateEvent | DeleteEvent
-
-
-# Custom tag field name
-class V1Request(msgspec.Struct, tag="v1", tag_field="version"):
-    payload: str
-
-
-class V2Request(msgspec.Struct, tag="v2", tag_field="version"):
-    payload: str
-    metadata: dict[str, str] = {}
-
-
-Request = V1Request | V2Request
 ```
 
-All Struct variants in a multi-Struct union must be tagged, use the same `tag_field`, use unique
-tag values, and use one tag type (`str` or `int`) consistently. A union may contain non-Struct
-types, but it may contain at most one untagged Struct.
+All Struct variants in a union must share the same `tag_field`, unique tag values, and one tag type (`str` or `int`); see [Tagged Union Patterns](references/tagged-unions.md) for callable tags, inheritance opt-out (`tag=False`), and nested unions.
 
 ### Validation Rules
 

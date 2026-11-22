@@ -1,6 +1,6 @@
 # Pagination and Filters — Per-Stack Patterns
 
-Never hand-roll `limit` / `offset` query params inside a route handler. Both `advanced-alchemy` and `sqlspec` provide declarative Litestar filter dependency generators (`create_filter_dependencies`) and typed pagination envelopes (`OffsetPagination[T]`, plus `CursorPagination[T]` in `sqlspec`). Pick the branch that matches your project's data stack.
+Never hand-roll `limit` / `offset` query params inside a route handler. Both `advanced-alchemy` (`1.13+`) and `sqlspec` provide declarative Litestar filter dependency generators (`create_filter_dependencies`), typed pagination envelopes (`OffsetPagination[T]` and `CursorPagination[T]`), and `CursorFilter`. Pick the branch that matches your project's data stack.
 
 ## Filter & Pagination Symbol Matrix (`advanced-alchemy` vs `sqlspec`)
 
@@ -9,15 +9,16 @@ Do not mix filter imports across libraries — their class names and module path
 | Concern | `advanced-alchemy` (`advanced_alchemy.filters` / `advanced_alchemy.service`) | `sqlspec` (`sqlspec.core` / `sqlspec.core.filters`) |
 | --- | --- | --- |
 | Filter union type | `FilterTypes` (`advanced_alchemy.filters`) | `FilterTypes` (`sqlspec.core`) |
-| Limit / offset filter | `LimitOffset(limit, offset)` | `LimitOffsetFilter(limit, offset)` |
-| Cursor / keyset filter | *(not supported)* | `CursorFilter(keys=..., cursor=..., limit=..., secret=...)`, `CursorKey`, `CursorKeys` |
-| Order-by filter | `OrderBy(field_name, sort_order)` | `OrderByFilter(field_name, sort_order)` |
+| Limit / offset filter | `LimitOffsetFilter(limit, offset)` | `LimitOffsetFilter(limit, offset)` |
+| Cursor / keyset filter | `CursorFilter(keys=..., limit=..., cursor=..., secret=..., encrypted=...)`, `CursorKey` | `CursorFilter(keys=..., cursor=..., limit=..., secret=...)`, `CursorKey`, `CursorKeys` |
+| Order-by filter | `OrderByFilter(field_name, sort_order)` | `OrderByFilter(field_name, sort_order)` |
 | Search filter | `SearchFilter`, `NotInSearchFilter` | `SearchFilter`, `NotInSearchFilter` |
-| Timestamp range filter | `BeforeAfter`, `OnBeforeAfter` | `BeforeAfterFilter`, `OnBeforeAfterFilter` |
-| Collection `IN` / `NOT IN` | `CollectionFilter`, `NotInCollectionFilter` | `InCollectionFilter`, `NotInCollectionFilter`, `AnyCollectionFilter`, `NotAnyCollectionFilter` |
+| Timestamp range filter | `BeforeAfterFilter`, `OnBeforeAfterFilter` | `BeforeAfterFilter`, `OnBeforeAfterFilter` |
+| Collection `IN` / `NOT IN` | `InCollectionFilter`, `NotInCollectionFilter` | `InCollectionFilter`, `NotInCollectionFilter`, `AnyCollectionFilter`, `NotAnyCollectionFilter` |
+| Relationship / declarative set | `RelationshipFilter`, `FilterSet[Model]` | *(raw SQL / builder)* |
 | Boolean / choice / null filters | `BooleanFilter`, `ChoicesFilter`, `NullFilter`, `NotNullFilter` | `BooleanFilter`, `ChoicesFilter`, `NullFilter`, `NotNullFilter` |
 | Offset pagination envelope | `OffsetPagination[T]` (`advanced_alchemy.service`) | `OffsetPagination[T]` (`sqlspec.core`) |
-| Cursor pagination envelope | *(not supported)* | `CursorPagination[T]` (`sqlspec.core`) |
+| Cursor pagination envelope | `CursorPagination[T]` (`advanced_alchemy.service`) | `CursorPagination[T]` (`sqlspec.core`) |
 | Litestar DI provider factory | `create_service_dependencies`, `create_filter_dependencies` (`advanced_alchemy.extensions.litestar.providers`) | `create_filter_dependencies` (`sqlspec.extensions.litestar.providers`) |
 
 > [!IMPORTANT]
@@ -106,7 +107,7 @@ class UserController(Controller):
 }
 ```
 
-Clients page by passing `?currentPage=2&pageSize=20` in the query string. The `limit_offset_filter` dependency translates `currentPage` and `pageSize` into `LimitOffset(limit=page_size, offset=page_size * (current_page - 1))`.
+Clients page by passing `?currentPage=2&pageSize=20` in the query string. The `limit_offset_filter` dependency translates `currentPage` and `pageSize` into `LimitOffsetFilter(limit=page_size, offset=page_size * (current_page - 1))`.
 
 ### `advanced-alchemy` `FilterConfig` catalog
 
@@ -114,17 +115,22 @@ Clients page by passing `?currentPage=2&pageSize=20` in the query string. The `l
 
 | Key | Type | Query parameters exposed | Purpose |
 | --- | --- | --- | --- |
-| `id_filter` | `type[UUID \| int \| str]` | `?ids=...` | `CollectionFilter` (`IN (...)`) on `id_field` |
+| `id_filter` | `type[UUID \| int \| str]` | `?ids=...` | `InCollectionFilter` (`IN (...)`) on `id_field` |
 | `id_field` | `str` | — | Column name for `id_filter` / `not_in_fields` (default `"id"`) |
-| `pagination_type` | `Literal["limit_offset"]` | `?currentPage=1&pageSize=20` | Enables `LimitOffset` filter dependency |
+| `pagination_type` | `Literal["limit_offset", "cursor"]` | `?currentPage=1&pageSize=20` or `?cursor=...&pageSize=20` | Enables `LimitOffsetFilter` or `CursorFilter` dependency |
 | `pagination_size` | `int` | — | Default `pageSize` (default `20`) |
+| `pagination_max_size` | `int \| None` | — | Upper bound on `pageSize` enforced in OpenAPI and validation |
+| `pagination_cursor_secret` | `str \| bytes \| None` | — | Required signing/encryption secret for cursor pagination |
+| `pagination_cursor_ttl` | `int \| float \| timedelta \| None` | — | Optional cursor token expiration |
+| `pagination_cursor_encrypted` | `bool` | — | Encrypt cursor tokens with AES-256-GCM (`[cryptography]`) |
+| `filter_fields` / `sort_fields` | `FilterFieldsSpec` / `Collection[str]` | `?<path>__<op>=...`, `?orderBy=...` | Declarative relationship/field filters and sort allowlist |
 | `search` | `str \| set[str] \| list[str]` | `?searchString=...&searchIgnoreCase=...` | `SearchFilter` (`LIKE` / `ILIKE`) across the listed columns |
 | `search_ignore_case` | `bool` | — | Default for `searchIgnoreCase` (default `False`) |
-| `sort_field` | `str \| set[str] \| list[str]` | `?orderBy=...&sortOrder=asc\|desc` | Default sort column(s) for `OrderBy` |
+| `sort_field` | `str \| set[str] \| list[str]` | `?orderBy=...&sortOrder=asc\|desc` | Default sort column(s) for `OrderByFilter` |
 | `sort_order` | `Literal["asc", "desc"]` | — | Default sort direction (default `"desc"`) |
-| `created_at` | `bool` | `?createdBefore=...&createdAfter=...` | `BeforeAfter` filter on `created_at` |
-| `updated_at` | `bool` | `?updatedBefore=...&updatedAfter=...` | `BeforeAfter` filter on `updated_at` |
-| `in_fields` | `FieldNameType \| set[FieldNameType] \| list[FieldNameType]` | `?{field}In=...` | Additional `CollectionFilter` fields |
+| `created_at` | `bool` | `?createdBefore=...&createdAfter=...` | `BeforeAfterFilter` filter on `created_at` |
+| `updated_at` | `bool` | `?updatedBefore=...&updatedAfter=...` | `BeforeAfterFilter` filter on `updated_at` |
+| `in_fields` | `FieldNameType \| set[FieldNameType] \| list[FieldNameType]` | `?{field}In=...` | Additional `InCollectionFilter` fields |
 | `not_in_fields` | `FieldNameType \| set[FieldNameType] \| list[FieldNameType]` | `?{field}NotIn=...` | `NotInCollectionFilter` (`NOT IN (...)`) fields |
 | `boolean_fields` | `str \| set[str] \| list[str]` | `?{field}=true\|false` | Exact boolean column filters (`BooleanFilter`) |
 | `choice_fields` | `ChoiceField \| Sequence[ChoiceField]` | `?{field}=...` | Enum/literal constrained filters (`ChoicesFilter`) |

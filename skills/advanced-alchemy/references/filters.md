@@ -6,26 +6,30 @@ Advanced Alchemy provides a composable filter and pagination system that integra
 
 ```python
 from advanced_alchemy.filters import (
-    BeforeAfter,
+    BeforeAfterFilter,
     BooleanFilter,
     ChoicesFilter,
-    CollectionFilter,
     ComparisonFilter,
+    CursorFilter,
+    CursorKey,
     ExistsFilter,
     FilterGroup,
+    FilterSet,
     FilterTypes,
-    LimitOffset,
+    InCollectionFilter,
+    LimitOffsetFilter,
     MultiFilter,
     NotExistsFilter,
     NotInCollectionFilter,
     NotInSearchFilter,
     NotNullFilter,
     NullFilter,
-    OnBeforeAfter,
-    OrderBy,
+    OnBeforeAfterFilter,
+    OrderByFilter,
+    RelationshipFilter,
     SearchFilter,
 )
-from advanced_alchemy.service.pagination import OffsetPagination
+from advanced_alchemy.service.pagination import CursorPagination, OffsetPagination
 ```
 
 ---
@@ -48,35 +52,35 @@ async def list_items(self, *filters: FilterTypes) -> list[Model]:
 
 ### Filtering by Primary Key
 
-To filter by a list of primary key values, use `CollectionFilter` with `field_name="id"` (generates an `IN` clause on the `id` column).
+To filter by a list of primary key values, use `InCollectionFilter` with `field_name="id"` (generates an `IN` clause on the `id` column; `CollectionFilter` is a deprecated alias removed in 2.0).
 
 ```python
-from advanced_alchemy.filters import CollectionFilter
+from advanced_alchemy.filters import InCollectionFilter
 
 results = await service.get_many(
-    CollectionFilter(field_name="id", values=[id1, id2, id3]),
+    InCollectionFilter(field_name="id", values=[id1, id2, id3]),
 )
 ```
 
-### CollectionFilter
+### InCollectionFilter
 
-Filter where a column's value is in a given collection (`IN` clause on any field).
+Filter where a column's value is in a given collection (`IN` clause on any field or dotted relationship attribute).
 
 ```python
-from advanced_alchemy.filters import CollectionFilter
+from advanced_alchemy.filters import InCollectionFilter
 
 results = await service.get_many(
-    CollectionFilter(field_name="status", values=["active", "pending"]),
+    InCollectionFilter(field_name="status", values=["active", "pending"]),
 )
 
 results = await service.get_many(
-    CollectionFilter(field_name="team_id", values=[team1_id, team2_id]),
+    InCollectionFilter(field_name="team_id", values=[team1_id, team2_id]),
 )
 ```
 
 ### NotInCollectionFilter
 
-Inverse of `CollectionFilter` — excludes rows where the field value is in the collection (`NOT IN`).
+Inverse of `InCollectionFilter` — excludes rows where the field value is in the collection (`NOT IN`).
 
 ```python
 from advanced_alchemy.filters import NotInCollectionFilter
@@ -124,16 +128,16 @@ results = await service.get_many(
 )
 ```
 
-### BeforeAfter
+### BeforeAfterFilter
 
-Filter a datetime column by a range (before and/or after a given timestamp).
+Filter a datetime column by a range (before and/or after a given timestamp; `BeforeAfter` is deprecated in 1.13).
 
 ```python
 from datetime import datetime, timezone
-from advanced_alchemy.filters import BeforeAfter
+from advanced_alchemy.filters import BeforeAfterFilter
 
 results = await service.get_many(
-    BeforeAfter(
+    BeforeAfterFilter(
         field_name="created_at",
         before=datetime(2025, 12, 31, tzinfo=timezone.utc),
         after=datetime(2025, 1, 1, tzinfo=timezone.utc),
@@ -141,22 +145,22 @@ results = await service.get_many(
 )
 
 results = await service.get_many(
-    BeforeAfter(field_name="expires_at", before=datetime.now(timezone.utc), after=None),
+    BeforeAfterFilter(field_name="expires_at", before=datetime.now(timezone.utc), after=None),
 )
 ```
 
 - Uses strict inequality: `after < column < before`
 
-### OnBeforeAfter
+### OnBeforeAfterFilter
 
-Like `BeforeAfter` but uses inclusive inequality (`>=` and `<=`).
+Like `BeforeAfterFilter` but uses inclusive inequality (`>=` and `<=`; `OnBeforeAfter` is deprecated in 1.13).
 
 ```python
 from datetime import datetime, timezone
-from advanced_alchemy.filters import OnBeforeAfter
+from advanced_alchemy.filters import OnBeforeAfterFilter
 
 results = await service.get_many(
-    OnBeforeAfter(
+    OnBeforeAfterFilter(
         field_name="scheduled_at",
         on_or_before=datetime(2025, 12, 31, tzinfo=timezone.utc),
         on_or_after=datetime(2025, 1, 1, tzinfo=timezone.utc),
@@ -166,49 +170,49 @@ results = await service.get_many(
 
 ### Filtering on Audit Columns
 
-To filter on the `created_at` and `updated_at` audit columns provided by `*AuditBase` classes, use `BeforeAfter` (or `OnBeforeAfter`) with the appropriate `field_name`.
+To filter on the `created_at` and `updated_at` audit columns provided by `*AuditBase` classes, use `BeforeAfterFilter` (or `OnBeforeAfterFilter`) with the appropriate `field_name`.
 
 ```python
 from datetime import datetime, timezone
-from advanced_alchemy.filters import BeforeAfter
+from advanced_alchemy.filters import BeforeAfterFilter
 
 results = await service.get_many(
-    BeforeAfter(field_name="created_at", before=None, after=datetime(2025, 6, 1, tzinfo=timezone.utc)),
+    BeforeAfterFilter(field_name="created_at", before=None, after=datetime(2025, 6, 1, tzinfo=timezone.utc)),
 )
 
 results = await service.get_many(
-    BeforeAfter(field_name="updated_at", before=datetime(2025, 1, 1, tzinfo=timezone.utc), after=None),
+    BeforeAfterFilter(field_name="updated_at", before=datetime(2025, 1, 1, tzinfo=timezone.utc), after=None),
 )
 ```
 
-### OrderBy
+### OrderByFilter
 
-Sort results by a column, model attribute, or SQL expression.
+Sort results by a column, model attribute, or SQL expression (`OrderBy` is deprecated in 1.13).
 
 ```python
-from advanced_alchemy.filters import OrderBy
+from advanced_alchemy.filters import OrderByFilter
 
 results = await service.get_many(
-    OrderBy(field_name="created_at", sort_order="desc", nulls="last"),
+    OrderByFilter(field_name="created_at", sort_order="desc", nulls="last"),
 )
 ```
 
 - `sort_order`: `"asc"` (default) or `"desc"`
 - `nulls`: `"first"`, `"last"`, or `None` (default, database-specific). Compiles to native `NULLS FIRST` / `NULLS LAST` on PostgreSQL, SQLite, Oracle, DuckDB, CockroachDB, and Spanner, and emulates non-native placements on MySQL, MariaDB, and SQL Server (MSSQL) with a leading `CASE WHEN ... IS NULL` sort key.
 
-### LimitOffset
+### LimitOffsetFilter
 
-Pagination via limit and offset.
+Pagination via limit and offset (`LimitOffset` is deprecated in 1.13).
 
 ```python
-from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.filters import LimitOffsetFilter
 
 results, total = await service.get_many_and_count(
-    LimitOffset(limit=20, offset=0),
+    LimitOffsetFilter(limit=20, offset=0),
 )
 
 results, total = await service.get_many_and_count(
-    LimitOffset(limit=20, offset=20),
+    LimitOffsetFilter(limit=20, offset=20),
 )
 ```
 
@@ -281,6 +285,30 @@ results = await service.get_many(group)
 
 > Filter values may also be SQLAlchemy func expressions (1.8+), e.g. comparing against `func.lower(...)`.
 
+### RelationshipFilter & FilterSet[Model] (1.13+)
+
+`RelationshipFilter` compiles correlated `EXISTS` / `NOT EXISTS` subqueries across one-to-many, many-to-one, many-to-many, self-referential, joined-table inheritance, and multi-hop relationships while honoring `SoftDeleteMixin` loader criteria (`MultiFilter` also accepts `"relationship"` nodes with `allowed_relationships`, `max_relationship_depth`, `allowed_fields`, `max_depth`, and `strict` validation guards).
+
+```python
+from advanced_alchemy.filters import ComparisonFilter, FilterSet, RelationshipFilter
+
+results = await service.get_many(
+    RelationshipFilter(
+        relationship="orders",
+        filters=[ComparisonFilter(field_name="total", operator="ge", value=100)],
+    ),
+)
+
+
+class UserFilterSet(FilterSet[User]):
+    filter_fields = ("email", "orders.total")
+    sort_fields = ("created_at", "id")
+    pagination_type = "cursor"
+    pagination_max_size = 100
+```
+
+`FilterSet[Model]` exposes typed double-underscore query params (`orders__total__ge=100`) and infers relationship loading automatically while preserving explicit `load=` options.
+
 ---
 
 ## Composing Filters
@@ -290,23 +318,23 @@ Filters are passed as positional arguments and are combined with AND logic:
 ```python
 from datetime import datetime, timezone
 from advanced_alchemy.filters import (
-    BeforeAfter,
-    CollectionFilter,
-    LimitOffset,
-    OrderBy,
+    BeforeAfterFilter,
+    InCollectionFilter,
+    LimitOffsetFilter,
+    OrderByFilter,
     SearchFilter,
 )
 
 results, total = await service.get_many_and_count(
     SearchFilter(field_name="name", value="acme", ignore_case=True),
-    CollectionFilter(field_name="status", values=["active", "trial"]),
-    BeforeAfter(
+    InCollectionFilter(field_name="status", values=["active", "trial"]),
+    BeforeAfterFilter(
         field_name="created_at",
         before=datetime(2025, 12, 31, tzinfo=timezone.utc),
         after=datetime(2025, 1, 1, tzinfo=timezone.utc),
     ),
-    OrderBy(field_name="name", sort_order="asc"),
-    LimitOffset(limit=25, offset=0),
+    OrderByFilter(field_name="name", sort_order="asc"),
+    LimitOffsetFilter(limit=25, offset=0),
 )
 ```
 
@@ -319,7 +347,7 @@ results, total = await service.get_many_and_count(
 Standard offset-based pagination response object for API endpoints.
 
 ```python
-from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.filters import LimitOffsetFilter
 from advanced_alchemy.service import OffsetPagination
 
 
@@ -329,7 +357,7 @@ async def list_users(
     limit: int = 20,
     offset: int = 0,
 ) -> OffsetPagination[UserSchema]:
-    filters = [LimitOffset(limit=limit, offset=offset)]
+    filters = [LimitOffsetFilter(limit=limit, offset=offset)]
     results, total = await user_service.get_many_and_count(*filters)
     return user_service.to_schema(
         results,
@@ -346,23 +374,31 @@ async def list_users(
 - `limit`: page size
 - `offset`: current offset
 
-### Cursor-Based Pagination
+### CursorFilter & CursorPagination (1.13+)
 
-Advanced Alchemy ships `OffsetPagination` out of the box. For cursor-style pagination over large datasets, build the response manually using a `BeforeAfter` (or comparison) filter on a sortable column such as `created_at` or a UUIDv7 `id`, plus a `LimitOffset(limit=page_size, offset=0)` to cap the page. The "next cursor" is the last item's sortable value:
+`CursorFilter` implements first-party keyset pagination (`CursorPagination[T]` with `next_cursor`, `previous_cursor`, `has_next`, `has_previous`) using ordered keys plus a primary-key tiebreaker, optional HMAC signing (`secret`), expiration (`ttl`), and AES-256-GCM encryption (`encrypted=True` via `advanced-alchemy[cryptography]`):
 
 ```python
-from advanced_alchemy.filters import BeforeAfter, LimitOffset, OrderBy
+from advanced_alchemy.filters import CursorFilter, CursorKey
+from advanced_alchemy.service import CursorPagination
 
-results = await service.get_many(
-    BeforeAfter(field_name="created_at", before=None, after=last_seen_created_at),
-    OrderBy(field_name="created_at", sort_order="asc"),
-    LimitOffset(limit=page_size, offset=0),
+cursor_filter = CursorFilter(
+    keys=[CursorKey("created_at", sort_order="desc"), "id"],
+    limit=25,
+    cursor=request_cursor,
+    secret=cursor_secret,
+    encrypted=True,
 )
-next_cursor = results[-1].created_at if results else None
+results, total = await service.get_many_and_count(cursor_filter)
+page: CursorPagination[UserSchema] = service.to_schema(
+    results,
+    total,
+    filters=[cursor_filter],
+    schema_type=UserSchema,
+)
 ```
 
-- Avoids `OFFSET` performance degradation on large tables.
-- Works well for append-mostly tables (logs, events, feeds) where rows may be inserted between pages.
+In `FilterConfig` and `FilterSet`, set `pagination_type="cursor"`, `pagination_max_size`, and `pagination_cursor_secret` (or `ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET` / `SECRET_KEY`); framework cursor providers reject unsigned tokens.
 
 ---
 
@@ -410,11 +446,16 @@ filter_deps = create_filter_dependencies(
 | `search_escape_wildcards` | `bool` | Escapes `%` and `_` in `SearchFilter` (no extra query param) |
 | `created_at` | `bool` | `createdBefore`, `createdAfter` |
 | `updated_at` | `bool` | `updatedBefore`, `updatedAfter` |
-| `pagination_type` | `Literal["limit_offset"]` | `currentPage`, `pageSize` |
+| `pagination_type` | `Literal["limit_offset", "cursor"]` | `currentPage` / `pageSize` or `cursor` / `pageSize` |
 | `pagination_size` | `int` (default `20`) | Default `pageSize` value |
+| `pagination_max_size` | `int \| None` | Optional upper bound on `pageSize` (enforced in OpenAPI and validation) |
+| `pagination_cursor_secret` | `str \| bytes \| None` | Signing/encryption secret for `cursor` pagination (required by providers; falls back to `ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET` / `SECRET_KEY`) |
+| `pagination_cursor_ttl` | `int \| float \| timedelta \| None` | Optional cursor token expiration |
+| `pagination_cursor_encrypted` | `bool` | Encrypt cursor tokens with AES-256-GCM (`advanced-alchemy[cryptography]`) |
+| `filter_fields` / `sort_fields` | `FilterFieldsSpec` / `Collection[str]` | Declarative dotted-path filter fields and repeatable `orderBy` allowlist |
 | `sort_field` | `str \| set[str] \| list[str]` | `orderBy` |
 | `sort_order` | `Literal["asc", "desc"]` | `sortOrder` |
-| `sort_nulls` | `Literal["first", "last"] \| None` | Pins `OrderBy(nulls=...)` placement |
+| `sort_nulls` | `Literal["first", "last"] \| None` | Pins `OrderByFilter(nulls=...)` placement |
 | `in_fields` | `FieldNameConfig` | `<field>In` (camelCase by default, e.g. `teamIdIn`) |
 | `not_in_fields` | `FieldNameConfig` | `<field>NotIn` (camelCase by default, e.g. `roleNotIn`) |
 | `boolean_fields` | `FieldNameConfig` | `<field>` boolean query param (camelCase by default, e.g. `isActive`) |
@@ -484,13 +525,13 @@ class UserController(Controller):
 Create domain-specific filters by building on existing filter types:
 
 ```python
-from advanced_alchemy.filters import FilterTypes, CollectionFilter, BeforeAfter
+from advanced_alchemy.filters import FilterTypes, InCollectionFilter, BeforeAfterFilter
 
 
 def active_users_filter() -> list[FilterTypes]:
     """Pre-built filter for active users."""
     return [
-        CollectionFilter(field_name="is_active", values=[True]),
+        InCollectionFilter(field_name="is_active", values=[True]),
     ]
 
 
@@ -498,7 +539,7 @@ def recent_items_filter(days: int = 30) -> list[FilterTypes]:
     """Filter for items created in the last N days."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     return [
-        BeforeAfter(field_name="created_at", before=None, after=cutoff),
+        BeforeAfterFilter(field_name="created_at", before=None, after=cutoff),
     ]
 
 
@@ -522,8 +563,8 @@ Common pattern for mapping frontend data-table query parameters to AA filters:
 ```python
 from advanced_alchemy.filters import (
     FilterTypes,
-    LimitOffset,
-    OrderBy,
+    LimitOffsetFilter,
+    OrderByFilter,
     SearchFilter,
 )
 
@@ -539,10 +580,10 @@ def build_filters(
 ) -> list[FilterTypes]:
     """Convert frontend table params to AA filters."""
     filters: list[FilterTypes] = [
-        LimitOffset(limit=page_size, offset=(page - 1) * page_size),
+        LimitOffsetFilter(limit=page_size, offset=(page - 1) * page_size),
     ]
     if sort_field:
-        filters.append(OrderBy(field_name=sort_field, sort_order=sort_order))
+        filters.append(OrderByFilter(field_name=sort_field, sort_order=sort_order))
     if search:
         filters.append(
             SearchFilter(field_name=search_field, value=search, ignore_case=True),

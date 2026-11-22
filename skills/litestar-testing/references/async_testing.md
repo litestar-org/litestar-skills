@@ -433,3 +433,55 @@ async def test_live_subprocess_server(tmp_path: Path) -> None:
 - [2.25 RequestFactory](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/testing/request_factory.py)
 - [2.25 WebSocketTestSession](https://github.com/litestar-org/litestar/blob/v2.25.0/litestar/testing/websocket_test_session.py)
 - [2.25 dependency replacement guidance](https://github.com/litestar-org/litestar/blob/v2.25.0/docs/onboarding/fastapi.rst)
+
+### Integration with `pytest-databases`
+
+Combine `pytest-databases` fixtures with the app fixture (see `../../pytest-databases/SKILL.md`):
+
+```python
+pytest_plugins = ["pytest_databases.docker.postgres"]
+
+
+@pytest.fixture
+async def app(postgres_service) -> Litestar:
+    from app import create_app
+    from app.config import Settings
+
+    settings = Settings(
+        database_url=f"postgresql+asyncpg://{postgres_service.user}:{postgres_service.password}@{postgres_service.host}:{postgres_service.port}/{postgres_service.database}"
+    )
+    return create_app(settings=settings)
+```
+
+### Request Bodies, Headers, and Parametrize
+
+| Body Type | Pass via |
+| --- | --- |
+| JSON | `client.post("/", json={...})` |
+| Form | `client.post("/", data={...})` |
+| Multipart (file upload) | `client.post("/", files={"file": ("name.txt", b"content", "text/plain")})` |
+| Raw bytes | `client.post("/", content=b"...")` |
+| Custom content-type | `client.post("/", content=b"...", headers={"Content-Type": "..."})` |
+
+```python
+import pytest
+
+
+@pytest.mark.parametrize(
+    "payload, expected_status",
+    [
+        ({"name": "valid", "email": "a@b.co"}, 201),
+        ({"name": "", "email": "a@b.co"}, 400),
+        ({"name": "valid", "email": "not-email"}, 400),
+    ],
+)
+@pytest.mark.anyio
+async def test_create_user_validation(async_client, payload, expected_status):
+    resp = await async_client.post("/api/users", json=payload)
+    assert resp.status_code == expected_status
+```
+
+```bash
+pytest --cov=src --cov-report=html
+pytest --cov=src --cov-fail-under=90
+```

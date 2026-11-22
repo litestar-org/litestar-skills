@@ -1,6 +1,6 @@
 # SQLSpec ADK Extension
 
-`sqlspec.extensions.adk` is the SQL-backed storage layer for Google's **Agent Development Kit (ADK)** session, event, and memory abstractions. ADK defines abstract services (`BaseSessionService`, `BaseMemoryService`, `BaseArtifactService`); SQLSpec ships session/event and memory implementations for supported adapters plus artifact service contracts for deployments that provide a concrete artifact metadata store.
+`sqlspec.extensions.adk` targets `google-adk>=2.14.1` and is the SQL-backed storage layer for Google's **Agent Development Kit (ADK)** session, event, and memory abstractions. ADK defines abstract services (`BaseSessionService`, `BaseMemoryService`, `BaseArtifactService`); SQLSpec ships session/event and memory implementations for supported adapters plus artifact service contracts for deployments that provide a concrete artifact metadata store.
 
 ## What ADK Is
 
@@ -98,6 +98,8 @@ Each store owns its DDL. Call `ensure_tables()` or `create_tables()` when bootst
 - `memory_table` (default `"adk_memory"`)
 - `artifact_table` (default `"adk_artifact"`)
 - `owner_id_column` — optional DDL fragment (e.g. `"tenant_id INTEGER REFERENCES tenants(id)"`) for owner scoping when the store call path supplies owner IDs
+- `migration_mode` — `"reconcile"` (default additive schema reconciliation) or `"versioned"` (`ExtensionMigrationMode`)
+- `enable_replica_reads` / `default_replica_group` — route ADK read queries to a configured `ReplicaGroup` when enabled
 
 Migrations check that the selected adapter has the session and memory store classes before generating schema. Built-in ADK migrations cover initial schema creation (`0001_create_adk_tables`) and backfilling memory storage on existing `mssql_python` deployments (`0002_create_mssql_python_memory`).
 
@@ -217,9 +219,10 @@ Top-level exports from `sqlspec.extensions.adk`:
 - `StoredSession`, `StoredEvent`, `StoredMemory`, `StoredArtifact`
 - `PruneReport`, `SessionOrderBy`
 - `prune_sessions`, `prune_events`, `prune_memory`, `prune_artifacts`, `prune_user_state`
+- `resolve_adk_config`, `resolve_adk_store_class`, `resolve_adk_memory_store_class`, `resolve_adk_artifact_store_class`
 - `ADKConfig` (TypedDict describing `extension_config["adk"]`)
 
-`SQLSpecSessionService.append_event()` uses the store's `append_event_and_update_state()` as the durable write boundary. The event insert, session state update, and app/user scoped-state upserts succeed together. `temp:` state is stripped before persistence; `app:` and `user:` state live in separate tables and are merged back when sessions load.
+`SQLSpecSessionService.append_event()` uses the store's `append_event_and_update_state(app_state_delta=..., user_state_delta=...)` as the durable write boundary, and `create_session()` accepts explicit `app_state_delta` / `user_state_delta` updates. The event insert, session state update, and app/user scoped-state deltas succeed together. `temp:` state is stripped before persistence; `app:` and `user:` state live in separate tables and are merged back when sessions load.
 
 ## Cross References
 

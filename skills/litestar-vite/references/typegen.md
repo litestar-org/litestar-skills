@@ -30,6 +30,8 @@ TypeGenConfig(
     generate_page_props=True,
     generate_channels=True,
     global_route=False,
+    only_routes=(),
+    exclude_routes=(),
     fail_on_error=None,
     output="src/generated",
 )
@@ -57,7 +59,7 @@ litestar assets export-routes --only users,posts --except admin
 litestar assets export-routes --typescript  # routes.ts only
 ```
 
-The Python pipeline first writes `.litestar.json`, exports metadata (`openapi.json`, `routes.json`, `routes.ts`, `inertia-pages.json`, and `asyncapi.json` when enabled), runs `extra_commands` (resolved via the configured JS executor in `node_modules/.bin` or `npx`/`bunx`/`pnpm dlx`/`yarn dlx`/`deno run`), and finally invokes `litestar-vite-typegen`.
+The Python pipeline first writes `.litestar.json`, exports metadata (`openapi.json`, `routes.json`, `routes.ts`, `inertia-pages.json`, and `asyncapi.json` when enabled), runs `extra_commands` (resolved via the configured JS executor in `node_modules/.bin` or `npx`/`bunx`/`pnpm dlx`/`yarn dlx`/`deno run`), and finally invokes `litestar-vite-typegen` directly from `node_modules/.bin` or `PATH` (in `0.34.0+`, `litestar assets generate-types` fails if the binary is absent rather than falling back to `npx`).
 
 ## Frontend Use
 

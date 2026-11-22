@@ -1,6 +1,6 @@
 ---
 name: sqlspec
-description: "Use when working with sqlspec, SQLSpec, SQLFileLoader, drivers, query builders, named SQL, filters, pagination, Arrow, framework extensions, ADK stores, or observers. Not for ORM repositories — use advanced-alchemy."
+description: "Use when working with sqlspec, SQLSpec, SQLFileLoader, drivers, query builders, named SQL, filters, pagination, read replicas, tenant isolation, Arrow, framework extensions, ADK stores, or observers. Not for ORM repositories — use advanced-alchemy."
 ---
 
 # SQLSpec Skill
@@ -74,8 +74,11 @@ merge_stmt = (
     sql.merge("inventory", dialect="postgres")
     .using("updates")
     .on("inventory.product_id = updates.product_id")
-    .when_matched_then_update(qty="updates.qty")
-    .when_not_matched_then_insert(product_id="updates.product_id", qty="updates.qty")
+    .when_matched_then_update(qty=sql.col("qty", "updates"))
+    .when_not_matched_then_insert(
+        product_id=sql.col("product_id", "updates"),
+        qty=sql.col("qty", "updates"),
+    )
     .to_statement()
 )
 ```
@@ -133,9 +136,11 @@ await db.load_from_records("users", [{"id": 1, "name": "Ada"}])
 | Oracle | `oracledb` | NAMED_COLON params, sync+async |
 | IBM Db2 | `db2` | QMARK params, sync+async via `ibm_db`, `SYSCAT` catalog reflection |
 | SQL Server / Sybase / SQL Anywhere | `mssql_python`, `pymssql`, `sybase`, `sqlanywhere` | T-SQL (`tsql`), Sybase ASE (`sybase`), and SAP SQL Anywhere (`sqlanywhere`) dialects |
-| BigQuery / Spanner | `bigquery`, `spanner` | NAMED_AT params, cloud job/session controls, Spanner sync+async drivers, Property Graph & Vector/Search index AST |
+| BigQuery / Spanner / Snowflake / Teradata | `bigquery`, `spanner`, `snowflake`, `teradata` | NAMED_AT / PYFORMAT / QMARK params, cloud job/session controls, Spanner sync+async & Property Graph/Vector AST, Snowflake (`snowflake`), Teradata (`vantage`) |
+| Read Replicas & Routing | `ReplicaGroup`, `ReplicaSpec` | Primary/replica pools across all 24 adapters, read-after-write primary pinning, `provide_replica_session()` / `provide_routing_session()` |
+| Tenant Isolation | `TenantContext`, `SQLSpecTenantMiddleware` | Request-scoped `tenant_id` session variables, RLS/bind routing, `tenant_bypass()` |
 | Raw SQL strings | Driver methods | `select()`, `execute()` |
-| Dynamic queries | Query builder | `sql.select()...to_statement()`, `sql.update()...from_()`, `sql.upsert()` |
+| Dynamic queries | Query builder | `sql.select()...to_statement()`, `sql.func()`, `sql.col()` / `sql.c`, `sql.var()`, `sql.update()...from_()`, `sql.upsert()` |
 | SQL from files | `SQLFileLoader` | Metadata directives, `-- param:`, `-- fragment:`, `/* include: */`, `/* slot: */`, caching |
 | High-volume ingest/export | Storage bridge | Check the adapter matrix before selecting `load_from_arrow()`, `load_from_storage()`, `load_from_records()`, or `select_to_storage()` |
 
@@ -170,7 +175,8 @@ Run through the validation checkpoint below before considering the work complete
 - **Never concatenate SQL strings** -- use parameterized queries, query builder expressions, or declared `/* slot: <name> */` fragments
 - **Never hold connections outside context managers** -- connection leaks exhaust the pool; prefer config-backed services (`SQLSpecAsyncService(config=...)`) when operations should hold a connection only for the duration of a single query or `begin_transaction()` block
 - **Match parameter style to adapter**: `$1` for asyncpg, `%s` for psycopg, `?` for sqlite/duckdb/db2, `:name` for oracledb
-- **Cloud adapter controls** -- BigQuery job controls live in `driver_features`; Spanner request controls live in `driver_features` or `provide_session()` kwargs
+- **Cloud & framework controls** -- BigQuery requires `commit_mode="manual"` (rejects `"autocommit"` / `"autocommit_include_redirect"`) while other framework integrations default to `"autocommit"` with lazy connection checkout; Spanner request controls live in `driver_features` or `provide_session()` kwargs
+- **Merge & Expression columns** -- in `sql.merge().when_matched_then_update(...)` / `when_not_matched_then_insert(...)`, pass column references via `sql.col("col", "src")` / `sql.c.col` and raw SQL expressions via `sql.var(...)` because plain strings bind as literal values
 - **Adapter config / driver modules avoid `from __future__ import annotations`**. Consumer app modules MAY use it.
 
 </guardrails>

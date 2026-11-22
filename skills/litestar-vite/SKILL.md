@@ -13,7 +13,7 @@ The runtime has four canonical modes: `spa`, `template`, `hybrid`, and `framewor
 
 The plugin pairs with the npm package [`litestar-vite-plugin`](https://www.npmjs.com/package/litestar-vite-plugin) on the JS side. Python `ViteConfig` is the source of truth; the generated `.litestar.json` bridge lets JS config normally keep only `litestar({ input: [...] })`.
 
-This guidance targets `litestar-vite` 0.33.0. Features include server-rendered UI component fragments, persistent stdio and QuickJS WASM (`WasmIPCTransport`) SSR transports with circuit-breaker fallback, lockfile JS runtime auto-detection (`detect_runtime`), RFC 8288 `Link` preload / `103 Early Hints` / immutable cache headers, AsyncAPI 3.0 typed channel generation, Vite 7+ support, and single-port development proxying. See [Release Updates](references/release-updates.md).
+This guidance targets `litestar-vite` 0.34.0. Features include server-rendered UI component fragments, persistent stdio and QuickJS WASM (`WasmIPCTransport`) SSR transports with circuit-breaker and memory/stack caps, lockfile JS runtime auto-detection (`detect_runtime`), RFC 8288 `Link` preload / `103 Early Hints` / immutable cache headers, route-filtered AsyncAPI/TypeGen (`only_routes`/`exclude_routes`), Vite 7+/8+ support, and loopback-first single-port dev proxying (`VITE_ALLOW_REMOTE=1` for remote hosts). See [Release Updates](references/release-updates.md).
 
 ## Code Style Rules
 
@@ -108,7 +108,7 @@ vite_config = ViteConfig(
     ),
     runtime=RuntimeConfig(
         port=5173,
-        host="localhost",
+        host="127.0.0.1",
         protocol="http",
         executor="bun",
     ),
@@ -118,6 +118,8 @@ vite_config = ViteConfig(
         generate_routes=True,
         generate_schemas=True,
         generate_page_props=False,
+        only_routes=(),
+        exclude_routes=(),
         output="src/generated",
     ),
 )
@@ -267,7 +269,7 @@ litestar assets status           # Read-only status summary
 - **Do not assume `useForm` adds CSRF headers** — wire `csrfHeaders()` from `litestar-vite-plugin/helpers` into `createInertiaApp({ defaults: { visitOptions } })`.
 - **Read flash messages from `usePage().flash`, not `usePage().props.flash`** — `flash` is a top-level key on the Inertia page object (`Record<string, string[]>`) so flash notifications do not survive in browser history state.
 - **Pass callables, not invoked results, to `defer`, `lazy`, `optional`, and `once`** — write `defer("stats", fetch_stats)`, never `defer("stats", fetch_stats())`; do not stage async special props in `share()` before an `InertiaRedirect` / `InertiaBack`.
-- **Use `InertiaExternalRedirect` for cross-origin URLs** — `InertiaRedirect` and `InertiaBack` enforce same-origin validation and fall back to `request.base_url` to prevent open redirects.
+- **Use `InertiaExternalRedirect` for cross-origin URLs** — `InertiaRedirect` and `InertiaBack` restrict targets to leading-slash relative paths or same-origin HTTP(S) URLs and fall back to `request.base_url` to prevent open redirects. Also wire `csrfFetch` only to same-origin or explicit `trustedOrigins` (`litestar-vite-plugin/helpers`).
 - **Commit generated types** OR regenerate in CI and check no diff — a drift between OpenAPI and `schemas.ts` is a runtime error.
 - **Never serve `manifest.json` with long-TTL caching** — frontend deploys depend on it being current.
 - **One `vite.config.ts` per frontend project** — multiple configs in one repo confuse the plugin's path resolution.
@@ -374,7 +376,7 @@ export default defineConfig({
 ```
 
 ```bash
-# Dev — Litestar boots Vite alongside the ASGI server
+# Dev - Litestar boots Vite alongside the ASGI server
 litestar --app app:app run
 
 # Prod build
@@ -399,7 +401,7 @@ For deep-dives on specific surfaces, see:
 - **[Streams](references/streams.md)** — WebSocket/SSE helpers, `createTypedChannels`, `<litestar-stream>`, React/Vue/Svelte adapters, stream auth.
 - **[Deployment](references/deployment.md)** — Production build, Granian native static serving, static hosting, CDN patterns, cache strategy.
 - **[Troubleshooting](references/troubleshooting.md)** — Common errors and fixes.
-- **[Release Updates](references/release-updates.md)** — Audited `0.26.0` through `0.33.0` release behavior changes.
+- **[Release Updates](references/release-updates.md)** — Audited `0.26.0` through `0.34.0` release behavior changes.
 
 ## Cross-References
 
